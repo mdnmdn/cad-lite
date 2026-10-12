@@ -98,8 +98,10 @@ with defaults 14px, weight 400, black, line height `1.2 * FontSize`
   are overridden (`StyleRefinement.TextSet` bit set), so a child's
   `TextColor` keeps the ancestor's size. `StyledText` runs with `FontSize == 0`
   use the resolved style of the `StyledText`; other runs are used as given.
-  Limit: rows of a `UniformList` are laid out outside the walk and do not
-  inherit.
+  Rows of a `UniformList` inherit the style enclosing the list refined by the
+  list's own text fields, as do the children of a custom container built
+  with `Window.RequestLayoutWithChildren` (its `style.TextStyle` overrides
+  the fields that are non-zero and differ from `DefaultTextStyle()`).
 - **Bold.** Any `FontWeight >= 600` selects a bold face. The font manager
   looks for the family's bold file, then a bold sibling of the default font
   (`NameBold.ttf`), then well-known bold system fonts; if none exists the
@@ -157,7 +159,8 @@ shadows after it and clipped to the border box (`paintBox` in
 
 `Opacity(f)` (clamped to 0..1) multiplies the alpha of **every primitive** the
 element and its descendants paint (quads, borders, gradients, shadows, glyphs);
-nested opacities multiply. It is not a group layer: where two children overlap
+nested opacities multiply. It is honoured on `Div`, `UniformList`, `Text`
+and `StyledText`. It is not a group layer: where two children overlap
 inside a translucent parent, both are blended individually and the overlap is
 denser than a flattened layer would be.
 
@@ -183,11 +186,15 @@ btn := gpui.NewDiv().ID("save").TabIndex(0).P(8).Bg(gpui.Blue500).
 - Precedence: base style, then `Focus`, then `FocusVisible`, then `Hover`.
 
 They are resolved at paint (`paintOpacity` in `gpui/div.go`), so layout
-fields set in them (size, padding, margin, flex) have **no effect**. Text
-refinements (`TextColor` etc.) change that div's own paint style only; they do
-not cascade to descendant `Text` (the cascade is built in `RequestLayout`).
-Visual-only properties (`Bg`, `Border`, `Rounded`, `Shadow`, `Opacity`) are the
-intended use. There is no `active()` style.
+fields set in them (size, padding, margin, flex) have **no effect**. Their
+`TextColor` and `TextStrikethrough` do reach descendant text: while painting
+the div's subtree the window keeps a paint-time text-override stack, and
+`Text`/`StyledText` apply it over the style resolved at layout, except for
+fields the text element (or a nearer ancestor `Div`/`UniformList`) sets
+itself. Text fields that affect layout (`TextSize`, `FontWeight`,
+`FontFamily`, `TextLineHeight`) in an interaction style are ignored for
+descendant text. Visual-only properties (`Bg`, `Border`, `Rounded`, `Shadow`,
+`Opacity`, text colour) are the intended use. There is no `active()` style.
 
 The older manual pattern still works and is the way to change layout or text
 on hover: store `hovered` in your view, set it from
@@ -225,8 +232,9 @@ gpui.NewDiv().FontFamily("Menlo").TextSize(12).TextColor(gpui.Gray600).Child(
     gpui.NewText("keeps family+size").TextColor(gpui.Red500))
 ```
 
-Limits: rows built by a `UniformList` render callback do not inherit (they are
-laid out outside the ancestor walk); set the style on the row element itself.
+Rows built by a `UniformList` render callback inherit too: the list captures
+the text style at `RequestLayout` (enclosing style refined by its own
+`TextColor` etc.) and pushes it while measuring item 0 and laying out rows.
 
 ## Font family and fallback
 

@@ -81,14 +81,16 @@ func newEntity[T any](a *App, build func(cx *Context[T]) T) Entity[T] {
 	gen := a.generation[idx] + 1
 	a.generation[idx] = gen
 	id := EntityID{index: idx, generation: gen}
-	cx := &Context[T]{App: a, entity: id}
-	v := build(cx)
-	a.entities[idx] = &entitySlot{
-		value:      &v,
+	// The slot exists before build runs so that Observe and OnRelease called
+	// from build attach to it; Read during build sees no value yet.
+	s := &entitySlot{
 		generation: gen,
 		refs:       1,
 		typeID:     reflect.TypeOf((*T)(nil)).Elem(),
 	}
+	a.entities[idx] = s
+	v := build(&Context[T]{App: a, entity: id})
+	s.value = &v
 	return Entity[T]{id: id, app: a}
 }
 
@@ -154,7 +156,7 @@ func (e Entity[T]) Clone() Entity[T] {
 
 // Release drops one strong reference. When the last one is gone the entity
 // is released at the end of the current effect flush (immediately, via a
-// flush, when called outside Update): its slot is freed, its OnRelease
+// flush, when called outside Update and outside a flush): its slot is freed, its OnRelease
 // callbacks run, its observers and event listeners are dropped and the
 // subscriptions it created are closed. Releasing a dead entity is a no-op.
 func (e Entity[T]) Release(cx *App) {

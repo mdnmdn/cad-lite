@@ -158,7 +158,9 @@ You need a custom `Element` only when you must paint your own primitives
   `LayoutNode(id)` looks a registered node up);
 - `RequestLayoutWithChildren(style, children, cx) (LayoutID, *ChildLayout)`
   runs `RequestLayout` on every child, builds a node with your style over the
-  children's nodes and registers it.
+  children's nodes and registers it. The children inherit the enclosing text
+  style, overridden by the fields of `style.TextStyle` that are non-zero and
+  differ from `DefaultTextStyle()`.
 
 A container must also implement `ParentElementChildren`
 (`ElementChildren() []AnyElement`, returning the same children) and return
@@ -250,4 +252,6 @@ Notes for authors:
 - Retained state across frames: `Window.SetElementState(gid, v)` /
   `ElementState(gid, &out)` keyed by `GlobalElementID`; `Prepaint`/`Paint` do
   not receive the global id directly (`id` is the path, so
-  `gpui.GlobalElementID{Path: id.Path}` is the key).
+  `gpui.GlobalElementID{Path: id.Path}` is the key). State that is not read
+  or written during a frame is dropped at the end of that frame (as in
+  GPUI), so access it every frame the element is drawn.

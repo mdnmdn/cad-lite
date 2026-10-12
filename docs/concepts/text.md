@@ -87,7 +87,9 @@ break opportunities (`go-text/typesetting/segmenter`) over shaped clusters:
 
 `MeasureWrapped` returns the widest line and `lines * ts.ResolvedLineHeight()`,
 the same line height `Text` paints with (`Shaper.Measure(text, face, w)`, which
-has no style, uses `1.2 * size`).
+has no style, uses `1.2 * size`). Each painted line centres its glyph box
+(ascent + descent) in that line height (CSS half-leading), so a larger
+`TextLineHeight` adds equal space above and below the glyphs.
 
 Layout asks for three widths: max-content (`MaxFloat32`), a bounded wrap width,
 and min-content (`<= 0`, implemented in `measureText` as the longest word).

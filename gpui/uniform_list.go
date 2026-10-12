@@ -44,11 +44,13 @@ func (u *UniformList) IntoElement() Element { return uniformListElement{u: u} }
 // uniformListElement adapts *UniformList to Element.
 type uniformListElement struct{ u *UniformList }
 
-// uniformListLayout is the RequestLayout state: the leaf node plus a
+// uniformListLayout is the RequestLayout state: the leaf node, the text
+// style rows inherit (the enclosing one refined by the list's) and a
 // per-frame cache of item-0 measurements keyed by width.
 type uniformListLayout struct {
-	node     *LayoutNode
-	measured map[float32]Size
+	node      *LayoutNode
+	textStyle TextStyle
+	measured  map[float32]Size
 }
 
 // ID returns the list's id.
@@ -73,6 +75,8 @@ func (e uniformListElement) measureItem(w *Window, cx *App, st *uniformListLayou
 		return s
 	}
 	var size Size
+	w.pushTextStyle(st.textStyle)
+	defer w.popTextStyle()
 	items := u.render(0, 1, w, cx)
 	if len(items) > 0 {
 		if el := IntoElementOf(items[0]); el != nil {
@@ -94,8 +98,9 @@ func (e uniformListElement) measureItem(w *Window, cx *App, st *uniformListLayou
 // item 0's height.
 func (e uniformListElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	style := e.u.ResolvedStyle(DefaultStyle())
+	style.TextStyle = e.u.style.RefineText(w.currentTextStyle())
 	node := &LayoutNode{Style: style, Text: "uniform_list"}
-	st := &uniformListLayout{node: node, measured: map[float32]Size{}}
+	st := &uniformListLayout{node: node, textStyle: style.TextStyle, measured: map[float32]Size{}}
 	node.Measure = func(_ string, _ TextStyle, maxWidth float32) (float32, float32) {
 		s := e.measureItem(w, cx, st, maxWidth)
 		return float32(s.W), float32(s.H) * float32(e.u.count)
@@ -105,10 +110,18 @@ func (e uniformListElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 
 // uniformListPrepaint is the per-frame prepaint state.
 type uniformListPrepaint struct {
-	bounds   Bounds
-	style    Style
-	children []*renderNode
-	scroll   *scrollbarInfo
+	bounds    Bounds
+	style     Style
+	textStyle TextStyle
+	textSet   TextFields
+	children  []*renderNode
+	scroll    *scrollbarInfo
+}
+
+// paintTextOverride re-asserts the list's own text paint fields, so an
+// ancestor's hover/focus text style does not recolour rows the list styles.
+func (st *uniformListPrepaint) paintTextOverride() (textOverride, bool) {
+	return textOverride{set: st.textSet & paintTextFields, ts: st.textStyle}, false
 }
 
 func (st *uniformListPrepaint) clipsChildren() bool            { return true }
@@ -128,10 +141,10 @@ func (e uniformListElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bo
 	gid := w.currentElementID
 	ls, _ := layoutState.(*uniformListLayout)
 	if ls == nil {
-		ls = &uniformListLayout{measured: map[float32]Size{}}
+		ls = &uniformListLayout{textStyle: u.style.RefineText(DefaultTextStyle()), measured: map[float32]Size{}}
 	}
 	style := u.ResolvedStyle(DefaultStyle())
-	st := &uniformListPrepaint{bounds: bounds, style: style}
+	st := &uniformListPrepaint{bounds: bounds, style: style, textStyle: ls.textStyle, textSet: u.style.textSet()}
 	pad := style.Padding
 	content := bounds.Inset(pad)
 	contentW := float32(maxPixels(0, content.Size.W))
@@ -139,7 +152,7 @@ func (e uniformListElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bo
 
 	total := itemH*Pixels(u.count) + pad.Vertical()
 	limit := Size{H: maxPixels(0, total-bounds.Size.H)}
-	off := w.syncScroll(gid, u.scrollHandle, bounds, pad, limit, func(ix int) (Bounds, bool) {
+	off := w.syncScroll(gid, u.scrollHandle, bounds, pad, limit, AxisY, func(ix int) (Bounds, bool) {
 		if ix < 0 || ix >= u.count || itemH <= 0 {
 			return Bounds{}, false
 		}
@@ -166,6 +179,8 @@ func (e uniformListElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bo
 	if start == end {
 		return st
 	}
+	w.pushTextStyle(ls.textStyle)
+	defer w.popTextStyle()
 	items := u.render(start, end, w, cx)
 	for j, it := range items {
 		el := IntoElementOf(it)

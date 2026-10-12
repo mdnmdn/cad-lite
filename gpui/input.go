@@ -135,7 +135,7 @@ func (e inputElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, 
 
 // Paint delegates to the div, then draws the caret when focused.
 func (e inputElement) Paint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState, prepaintState any) {
-	e.div.paint(w, bounds, layoutState)
+	e.div.paint(w, bounds, prepaintState)
 	if e.ti.focus != nil && e.ti.focus.IsFocused(w) {
 		e.paintCaret(w, bounds, layoutState)
 	}

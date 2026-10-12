@@ -186,7 +186,10 @@ shadows are not clipped), and `ContentSize` records the content
 extent. `LayoutNode.ScrollMax()` is `max(0, ContentSize - Rect.Size)` per axis.
 `OverflowScroll` additionally stores an offset updated by wheel events
 (`Window.dispatchScroll`) and clamped to that range; children are shifted by it
-when the render tree is built. Give a scroll container an `.ID(...)` so its
+when the render tree is built. The range is 0 on axes outside the
+container's `ScrollAxes` (and on both axes of an `OverflowHidden` node), so
+`ScrollHandle.SetOffset`, `ScrollToItem` and `Window.SetScrollOffset` cannot
+move a non-scrolling axis either. Give a scroll container an `.ID(...)` so its
 offset survives re-renders. Children of an `OverflowVisible` node that spill
 past it extend its `ContentSize`.
 

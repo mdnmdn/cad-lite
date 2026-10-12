@@ -442,17 +442,17 @@ func (m *FontManager) fontIndexLocked() map[string]string {
 }
 
 // genericFamilies maps CSS generic family names to ordered candidate families;
-// a nil list means "use the default font".
+// a nil list means "use the default font". Keys are normalizeFontName forms.
 var genericFamilies = map[string][]string{
-	"sansserif":    nil,
-	"systemui":     nil,
-	"default":      nil,
-	"applesystem":  nil,
-	"monospace":    {"menlo", "sfnsmono", "consolas", "dejavusansmono", "liberationmonoregular", "couriernew", "courier"},
-	"serif":        {"times", "timesnewroman", "georgia", "dejavuserif", "liberationserifregular"},
-	"cursive":      {"markerfelt", "comicsansms"},
-	"fantasy":      nil,
-	"ui-monospace": {"menlo", "sfnsmono", "consolas", "dejavusansmono"},
+	"sansserif":   nil,
+	"systemui":    nil,
+	"default":     nil,
+	"applesystem": nil,
+	"monospace":   {"menlo", "sfnsmono", "consolas", "dejavusansmono", "liberationmonoregular", "couriernew", "courier"},
+	"serif":       {"times", "timesnewroman", "georgia", "dejavuserif", "liberationserifregular"},
+	"cursive":     {"markerfelt", "comicsansms"},
+	"fantasy":     nil,
+	"uimonospace": {"menlo", "sfnsmono", "consolas", "dejavusansmono"},
 }
 
 // familyLocked resolves a family name to its regular and bold fonts through

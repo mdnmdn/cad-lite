@@ -201,8 +201,11 @@ focus.IsFocused(w); w.Focus()       // query
 Focus is a single `FocusID` per window. A mouse press focuses the innermost
 focusable element on the hit path (a div with `TrackFocus` or `TabIndex`); an
 element that is not focusable needs an `OnMouseDown` that calls
-`focus.Focus(w)`. There is no focus-parent chain (`ContainsFocused` equals
-`IsFocused`). Handles are never released.
+`focus.Focus(w)`. A handler that moves focus wins: once an `OnMouseDown` on
+the path changed focus, no focusable ancestor re-focuses itself. There is no
+focus-parent chain (`ContainsFocused` equals `IsFocused`). Handles are never
+released, except the implicit handle of a `TabIndex` div, which is dropped
+with the div's element state when the div is not drawn in a frame.
 
 Tab order: `TabIndex(i)` (div) or `FocusHandle.SetTabIndex` / `SetTabStop`
 register tab stops; `Window.FocusNext()` / `FocusPrev()` move focus through the

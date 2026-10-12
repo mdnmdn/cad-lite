@@ -43,7 +43,9 @@ the effect queue:
 2. `Defer` effects run their `func(*App)`;
 3. `Emit` effects deliver events to subscribers;
 4. `RefreshWindows` effects mark every window invalid;
-5. effects queued while draining are processed in the same flush;
+5. effects queued while draining are processed in the same flush (an
+   `Update` called from a callback during the flush does not start a nested
+   one; `Window.DispatchEvent` itself runs inside `Update`);
 6. entities whose last strong reference was released are released (their
    release callbacks may queue more effects, which are drained too);
 7. every window still `invalid` gets a frame requested.
@@ -125,7 +127,10 @@ Facts that differ from Rust GPUI (all intentional POC simplifications):
   handles: they do not count and must not be released (releasing a copy
   twice would release the entity early). When the count reaches 0 the entity
   is released at the end of the current effect flush (immediately when
-  `Release` is called outside `Update`).
+  `Release` is called outside `Update`; an observer, event handler or other
+  callback running inside a flush only schedules it). Observers and
+  `OnRelease` callbacks registered from `NewEntity`'s build function belong
+  to the new entity.
 - **Automatic redraw, GPUI-style.** Every `Entity.Read`/`Update` that happens
   while a window draws is recorded on that window. `Notify` on such an entity
   (via `Context.Notify`, `Entity.Notify` or `App.Notify`) marks the window

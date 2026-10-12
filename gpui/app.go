@@ -265,6 +265,10 @@ func (a *App) Windows() []*Window { return a.windows }
 // observers, defers or emits) are processed in the same flush, so cascading
 // notifies terminate only when no new work appears.
 func (a *App) flushEffects() {
+	// Callbacks run below may call Update (or Release); counting the flush
+	// as an Update keeps them from starting a nested flush.
+	a.pendingUpdates++
+	defer func() { a.pendingUpdates-- }()
 	for len(a.pendingEffects) > 0 || len(a.pendingRelease) > 0 {
 		if len(a.pendingEffects) == 0 {
 			releases := a.pendingRelease

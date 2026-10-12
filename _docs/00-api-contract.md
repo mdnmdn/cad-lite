@@ -286,8 +286,9 @@ The margin and flex-basis builders above that are not declared in
 
 Per-axis overflow follows CSS: when one axis scrolls the other is clipped
 too (`visible` computes to `auto`), so a single `Overflow` kind drives
-clipping and layout and `ScrollAxes` only restricts which axes take wheel
-input. *Div, *Text and *UniformList forward the common methods so a chain
+clipping and layout and `ScrollAxes` restricts which axes scroll: wheel
+input and programmatic offsets (`ScrollHandle`, `Window.SetScrollOffset`)
+are clamped to 0 on the other axis (`OverflowHidden` scrolls on neither). *Div, *Text and *UniformList forward the common methods so a chain
 keeps its concrete type.
 
 ## 3b. `background.go`, `shadow.go` — fills, gradients, shadows, opacity
@@ -355,9 +356,9 @@ blur 15 spread −3 + (0,4) blur 6 spread −4, a.1; `xl` (0,20) blur 25 spread
 −5 + (0,8) blur 10 spread −6, a.1; `2xl` (0,25) blur 50 spread −12 a.25.
 
 Div paint order: outset shadows, background, inset shadows, border, then the
-children. `Opacity` is honoured by *Div and *UniformList (elements whose
-prepaint state resolves a paint scope); on *Text it is ignored, as GPUI text
-is not styled. Opacity is GPUI's element opacity: the window keeps a running
+children. `Opacity` is honoured by *Div, *UniformList, *Text and
+*StyledText (elements whose prepaint state resolves a paint scope; a text
+leaf returns one only when its opacity is below 1). Opacity is GPUI's element opacity: the window keeps a running
 product of the ancestors' `Opacity` and multiplies the alpha of every
 primitive painted inside the subtree (overlapping children are not
 composited as a group, exactly as in GPUI). Opacity 1 changes nothing.
@@ -551,7 +552,10 @@ func (w *Window) RegisterLayoutNode(n *LayoutNode) LayoutID
 func (w *Window) LayoutNode(id LayoutID) *LayoutNode
 // RequestLayoutWithChildren runs RequestLayout on every child, builds a
 // node with style and those children, registers it and returns its id plus
-// the *ChildLayout state to return from the element's RequestLayout.
+// the *ChildLayout state to return from the element's RequestLayout. The
+// children inherit the enclosing text style overridden by the fields of
+// style.TextStyle that are non-zero and differ from DefaultTextStyle (so a
+// DefaultStyle() container inherits everything).
 func (w *Window) RequestLayoutWithChildren(style Style, children []AnyElement, cx *App) (LayoutID, *ChildLayout)
 ```
 
@@ -601,7 +605,11 @@ func (d *Div) TabStop(b bool) *Div
 // Interaction style refinements (GPUI .hover/.focus/.focus_visible). f gets
 // an empty StyledMixin and returns it; the set fields override the base
 // style at paint. Applied in the order base, Focus, FocusVisible, Hover.
-// They are paint-time only: layout fields set in them are ignored.
+// They are paint-time only: layout fields set in them are ignored. Their
+// TextColor/TextStrikethrough reach descendant Text/StyledText through a
+// paint-time text-override stack (fields a text element, or a nearer
+// Div/UniformList, sets itself win); layout-affecting text fields (size,
+// weight, family, line height) are ignored for descendants.
 func (d *Div) Hover(f func(*StyledMixin) *StyledMixin) *Div
 func (d *Div) Focus(f func(*StyledMixin) *StyledMixin) *Div
 func (d *Div) FocusVisible(f func(*StyledMixin) *StyledMixin) *Div
@@ -617,7 +625,9 @@ Focus semantics:
 - A div with `TrackFocus(h)` is focusable: a mouse-down on it (or on a
   descendant that is not itself focusable) focuses it — the innermost
   focusable element on the hit path wins, after that element's
-  `OnMouseDown` ran, unless propagation was stopped before reaching it.
+  `OnMouseDown` ran, unless propagation was stopped before reaching it or
+  an `OnMouseDown` handler on the path already moved focus (an explicit
+  focus change in a handler is never overridden).
 - `TabIndex(i)` without `TrackFocus` gives the div an implicit focus handle,
   retained per GlobalElementID (GPUI's stateful-div focus handle).
 - Tab stops: the effective tab index is the div's `TabIndex` if set, else
@@ -678,7 +688,8 @@ Px_, Py_, Bg, Rounded, Border, Opacity, TextColor to keep the chain typed.
 Rows get GlobalElementIDs keyed by their absolute index (stable while
 scrolling) and are laid out with `Definite(contentWidth, rowHeight)`. With an
 `Auto` height the list sizes to `count * rowHeight` (+ padding). Overflow is
-Scroll on Y; padding is honoured.
+Scroll on Y; padding is honoured. Item 0's measurement and the rows inherit
+the text style enclosing the list, refined by the list's own text fields.
 
 ### `text_elem.go`
 
@@ -707,7 +718,11 @@ func NewStyledText(runs ...TextRun) *StyledText
 
 Both implement `Element`. `Text` sizes itself by calling the window's text
 shaper (`w.shapeLine` / `w.measureText`) with the wrap width supplied by the
-layout constraint. Painting emits `GlyphSprite`s into the scene.
+layout constraint. Painting emits `GlyphSprite`s into the scene. Lines
+advance by `ResolvedLineHeight()`; each line's glyph box (ascent + descent)
+is centred in its line box (half-leading), so the baseline is
+`top + (lineHeight - (ascent + descent))/2 + ascent`. `Opacity` below 1
+makes Prepaint return a paint scope carrying it.
 
 Also provide `func (s String) IntoElement() Element` equivalent: a helper
 `func Str(s string) IntoElement` returning a `*Text` so `Child(Str("hi"))` works.
@@ -1121,6 +1136,9 @@ type Entity[T any] struct {
     id  EntityID
     app *App
 }
+// NewEntity allocates the slot before build runs, so Context.Observe and
+// Context.OnRelease called from build attach to the new entity (Read
+// returns nil until build returns).
 func NewEntity[T any](cx *App, build func(cx *Context[T]) T) Entity[T]
 func (e Entity[T]) ID() EntityID
 func (e Entity[T]) Read(cx *App) *T
@@ -1130,7 +1148,9 @@ func (e Entity[T]) Notify(cx *App)
 func (e Entity[T]) SubscribeEvent[E any](cx *App, f func(ev *E)) *Subscription
 // Clone returns a new strong reference (refcount +1). Release drops one;
 // when the count reaches 0 the entity is released at the end of the current
-// effect flush (Release outside Update flushes immediately). Go has no Drop:
+// effect flush (Release outside both Update and a flush flushes
+// immediately; inside an observer, event handler or other effect it only
+// schedules). Go has no Drop:
 // plain copies of an Entity, Context.Entity() and WeakEntity.Upgrade() are
 // borrowed (uncounted) handles and must not be Released.
 func (e Entity[T]) Clone() Entity[T]
@@ -1240,7 +1260,11 @@ window invalid. Entities whose refcount reached 0 are released after the
 queue drains (their release callbacks may queue more effects, which are
 drained too). After the queue empties it calls
 `scheduleFrame()` on every window whose `invalid` flag is set. Nested
-`Update` calls only flush at the outermost (`pendingUpdates` counter).
+`Update` calls only flush at the outermost (`pendingUpdates` counter); the
+flush itself counts as an `Update`, so `Update`/`Release` from a callback
+running inside it never starts a nested flush. `Window.DispatchEvent` runs
+inside `App.Update` (as GPUI dispatches inside `cx.update`), so effects
+queued by handlers flush once, after dispatch.
 
 `Subscription`:
 
@@ -1295,6 +1319,10 @@ func (w *Window) PushContentMask(m ContentMask)    // rect + corner radii, inter
 func (w *Window) PopClip()
 func (w *Window) CurrentClip() Bounds
 func (w *Window) CurrentContentMask() ContentMask  // what Paint* fill an unset mask with
+// Element state not accessed (ElementState/SetElementState, scroll state,
+// implicit TabIndex focus handles, whose focus id is then released) between
+// the end of one Draw and the end of the next is dropped, as GPUI drops
+// state not accessed during a frame.
 func (w *Window) ElementState(id GlobalElementID, out any) bool   // retained state lookup
 func (w *Window) SetElementState(id GlobalElementID, v any)
 func (w *Window) DispatchEvent(input PlatformInput, cx *App)

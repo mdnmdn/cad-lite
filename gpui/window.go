@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // TextMeasurer is implemented by the window's text backend. It is satisfied
@@ -48,12 +49,19 @@ type Window struct {
 	// frames, keyed by the string encoding of the element's global id (a
 	// GlobalElementID contains a slice and so cannot be a Go map key).
 	elementStates map[string]any
+	// stateSeen holds the elementStates keys accessed since the last Draw
+	// finished; Draw drops the others (GPUI drops element state not
+	// accessed during a frame).
+	stateSeen map[string]struct{}
 
 	clipStack []ContentMask
 
 	text TextMeasurer
 	// textStyles is the inherited text-style stack of the RequestLayout walk.
 	textStyles []TextStyle
+	// paintTexts is the paint-time text-override stack (interaction text
+	// styles of the ancestors being painted); see paintTextStyle.
+	paintTexts []textOverride
 	app        *App
 
 	background Rgba
@@ -457,10 +465,12 @@ func (w *Window) ElementState(id GlobalElementID, out any) bool {
 	if out == nil || w.elementStates == nil {
 		return false
 	}
-	v, ok := w.elementStates[globalIDKey(id)]
+	key := globalIDKey(id)
+	v, ok := w.elementStates[key]
 	if !ok {
 		return false
 	}
+	w.touchState(key)
 	ov := reflect.ValueOf(out)
 	if ov.Kind() != reflect.Ptr || ov.IsNil() {
 		return false
@@ -479,13 +489,43 @@ func (w *Window) SetElementState(id GlobalElementID, v any) {
 	if w.elementStates == nil {
 		w.elementStates = make(map[string]any)
 	}
-	w.elementStates[globalIDKey(id)] = v
+	key := globalIDKey(id)
+	w.elementStates[key] = v
+	w.touchState(key)
+}
+
+// touchState marks an elementStates key as accessed, keeping it past the
+// next Draw.
+func (w *Window) touchState(key string) {
+	if w.stateSeen == nil {
+		w.stateSeen = make(map[string]struct{})
+	}
+	w.stateSeen[key] = struct{}{}
+}
+
+// pruneElementStates drops the element states not accessed since the last
+// prune, releasing the focus id of a dropped implicit focus handle.
+func (w *Window) pruneElementStates() {
+	for k, v := range w.elementStates {
+		if _, ok := w.stateSeen[k]; ok {
+			continue
+		}
+		if h, ok := v.(*FocusHandle); ok && strings.HasSuffix(k, implicitFocusSuffix) && w.app != nil {
+			w.app.focusMap.release(h.id)
+		}
+		delete(w.elementStates, k)
+	}
+	clear(w.stateSeen)
 }
 
 // ScrollOffset returns the scroll offset previously stored for id, or the
 // zero point.
 func (w *Window) ScrollOffset(id GlobalElementID) Point {
-	st, _ := w.elementStates[globalIDKey(id)].(scrollState)
+	key := globalIDKey(id)
+	st, _ := w.elementStates[key].(scrollState)
+	if _, ok := w.elementStates[key]; ok {
+		w.touchState(key)
+	}
 	return st.offset
 }
 
@@ -495,6 +535,7 @@ func (w *Window) ScrollOffset(id GlobalElementID) Point {
 func (w *Window) SetScrollOffset(id GlobalElementID, p Point) {
 	key := globalIDKey(id)
 	st, _ := w.elementStates[key].(scrollState)
+	w.touchState(key)
 	st.offset = Point{X: clampf(p.X, 0, st.maxW), Y: clampf(p.Y, 0, st.maxH)}
 	if st.handle != nil {
 		st.handle.SetOffset(st.offset)
@@ -537,10 +578,16 @@ func (w *Window) LayoutNode(id LayoutID) *LayoutNode { return w.layoutNodes[id] 
 // RequestLayoutWithChildren runs RequestLayout on each non-nil child, builds
 // a node with style whose children are the children's nodes, registers it
 // and returns its id plus the state to return from RequestLayout (pair it
-// with ParentElementChildren so the window walks the children).
+// with ParentElementChildren so the window walks the children). The
+// children inherit the enclosing text style overridden by the fields of
+// style.TextStyle that are non-zero and differ from DefaultTextStyle (so
+// DefaultStyle() inherits everything); the node records the result.
 func (w *Window) RequestLayoutWithChildren(style Style, children []AnyElement, cx *App) (LayoutID, *ChildLayout) {
+	style.TextStyle = inheritTextStyle(w.currentTextStyle(), style.TextStyle)
 	node := &LayoutNode{Style: style}
 	st := &ChildLayout{Node: node}
+	w.pushTextStyle(style.TextStyle)
+	defer w.popTextStyle()
 	for _, c := range children {
 		cel := c.Element()
 		if cel == nil {
@@ -554,6 +601,31 @@ func (w *Window) RequestLayoutWithChildren(style Style, children []AnyElement, c
 		}
 	}
 	return w.registerLayoutNode(node), st
+}
+
+// inheritTextStyle overlays the fields of ts that are set (non-zero and
+// different from DefaultTextStyle) onto inherited.
+func inheritTextStyle(inherited, ts TextStyle) TextStyle {
+	def := DefaultTextStyle()
+	if ts.FontFamily != "" && ts.FontFamily != def.FontFamily {
+		inherited.FontFamily = ts.FontFamily
+	}
+	if ts.FontSize > 0 && ts.FontSize != def.FontSize {
+		inherited.FontSize = ts.FontSize
+	}
+	if ts.FontWeight > 0 && ts.FontWeight != def.FontWeight {
+		inherited.FontWeight = ts.FontWeight
+	}
+	if ts.Color != (Rgba{}) && ts.Color != def.Color {
+		inherited.Color = ts.Color
+	}
+	if ts.LineHeight > 0 && ts.LineHeight != def.LineHeight {
+		inherited.LineHeight = ts.LineHeight
+	}
+	if ts.Strikethrough {
+		inherited.Strikethrough = true
+	}
+	return inherited
 }
 
 // renderNode is one element's slot in the resolved render tree the draw
@@ -583,6 +655,7 @@ func (w *Window) Draw(cx *App) {
 	w.keyStack = w.keyStack[:0]
 	w.opacity = 1
 	w.textStyles = w.textStyles[:0]
+	w.paintTexts = w.paintTexts[:0]
 	w.paintHoverValid = false
 
 	var prevDrawing *Window
@@ -611,6 +684,7 @@ func (w *Window) Draw(cx *App) {
 		cx.drawing = prevDrawing
 		w.renderedEntities, w.nextEntities = w.nextEntities, w.renderedEntities
 	}
+	w.pruneElementStates()
 
 	w.renderedFrame, w.nextFrame = w.nextFrame, w.renderedFrame
 	w.nextFrame.reset()
@@ -728,7 +802,11 @@ func (w *Window) buildRenderNode(el Element, gid GlobalElementID, node *LayoutNo
 			h = de.d.scrollHandle
 		}
 		mw, mh := node.ScrollMax()
-		off := w.syncScroll(gid, h, rn.bounds, node.Style.Padding, Size{W: mw, H: mh}, func(ix int) (Bounds, bool) {
+		var axes Axes
+		if node.Style.Overflow == OverflowScroll {
+			axes = node.Style.ScrollAxes
+		}
+		off := w.syncScroll(gid, h, rn.bounds, node.Style.Padding, Size{W: mw, H: mh}, axes, func(ix int) (Bounds, bool) {
 			if ix < 0 || ix >= len(node.Children) || node.Children[ix] == nil {
 				return Bounds{}, false
 			}
@@ -882,6 +960,13 @@ func (w *Window) paintTree(n *renderNode, cx *App) {
 	if opacity < 1 {
 		w.opacity *= max(opacity, 0)
 	}
+	pushedText := false
+	if ts, ok := n.prepaint.(paintTextStyler); ok {
+		if o, active := ts.paintTextOverride(); o.set != 0 && (active || len(w.paintTexts) > 0) {
+			w.paintTexts = append(w.paintTexts, o)
+			pushedText = true
+		}
+	}
 	n.elem.Paint(w, cx, ElementID{Path: n.id.Path}, n.bounds, n.state, n.prepaint)
 	if pushed {
 		m := ContentMask{Bounds: n.bounds}
@@ -899,23 +984,43 @@ func (w *Window) paintTree(n *renderNode, cx *App) {
 	if pushed {
 		w.PopClip()
 	}
+	if pushedText {
+		w.paintTexts = w.paintTexts[:len(w.paintTexts)-1]
+	}
 	w.opacity = prevOpacity
 }
 
 // DispatchEvent routes one platform input event through the rendered frame.
+// It runs inside App.Update, so effects queued by handlers (including entity
+// releases) flush once, after dispatch.
 func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 	if cx == nil {
 		cx = w.app
 	}
+	if cx == nil {
+		w.dispatchEvent(input, nil)
+		return
+	}
+	cx.Update(func(cx *App) { w.dispatchEvent(input, cx) })
+}
+
+// dispatchEvent is DispatchEvent's body.
+func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	switch e := input.(type) {
 	case MouseDownEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
 		w.setFocusVisible(false)
 		ev := e
+		// Auto-focus is skipped once a handler moved focus itself (GPUI's
+		// focus-on-mouse-down defers to an explicit focus change).
 		focused := false
+		start := w.focus
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseDown != nil {
 				l.OnMouseDown(&ev, w, cx)
+			}
+			if w.focus != start {
+				focused = true
 			}
 			if !focused && l.focusID != 0 {
 				focused = true

@@ -65,12 +65,27 @@ func revealSpan(off, start, end, view, padStart, padEnd Pixels) Pixels {
 	return off
 }
 
+// scrollMaxOn zeroes the components of max on axes that do not scroll, so
+// neither input nor programmatic scrolling can move them.
+func scrollMaxOn(max Size, axes Axes) Size {
+	if !axes.Has(AxisX) {
+		max.W = 0
+	}
+	if !axes.Has(AxisY) {
+		max.H = 0
+	}
+	return max
+}
+
 // syncScroll resolves a scroll container's offset for this frame: it
-// applies a pending handle request, clamps to max and records the result in
-// both the retained element state and the handle. itemSpan returns the
-// content-space rect of item ix for ScrollToItem (ok false if none).
-func (w *Window) syncScroll(gid GlobalElementID, h *ScrollHandle, bounds Bounds, pad Edges, max Size, itemSpan func(ix int) (Bounds, bool)) Point {
+// applies a pending handle request, clamps to max (zero on axes the
+// container does not scroll) and records the result in both the retained
+// element state and the handle. itemSpan returns the content-space rect of
+// item ix for ScrollToItem (ok false if none).
+func (w *Window) syncScroll(gid GlobalElementID, h *ScrollHandle, bounds Bounds, pad Edges, max Size, axes Axes, itemSpan func(ix int) (Bounds, bool)) Point {
+	max = scrollMaxOn(max, axes)
 	key := globalIDKey(gid)
+	w.touchState(key)
 	st, _ := w.elementStates[key].(scrollState)
 	off := st.offset
 	if h != nil {
@@ -114,6 +129,7 @@ func (w *Window) applyWheel(l *MouseListener, e ScrollWheelEvent) bool {
 		dy = 0
 	}
 	key := globalIDKey(l.elementID)
+	w.touchState(key)
 	st, _ := w.elementStates[key].(scrollState)
 	st.maxW, st.maxH = l.scrollMax.W, l.scrollMax.H
 	old := st.offset

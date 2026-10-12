@@ -40,6 +40,44 @@ func (t *Text) resolvedStyle(inherited TextStyle) Style {
 	return st
 }
 
+// paintTextFields are the text fields interaction styles (Hover, Focus,
+// FocusVisible) can change at paint time; the others affect layout, which is
+// already done, so they are ignored there.
+const paintTextFields = TextFieldColor | TextFieldStrikethrough
+
+// textOverride is one entry of the paint-time text-style stack: the paint
+// fields an ancestor sets, with their values.
+type textOverride struct {
+	set TextFields
+	ts  TextStyle
+}
+
+// paintTextStyler is implemented by prepaint states of elements whose text
+// style descendants inherit; active reports that an interaction style
+// (hover/focus) contributed to o.
+type paintTextStyler interface {
+	paintTextOverride() (o textOverride, active bool)
+}
+
+// paintTextStyle applies the paint-time text overrides of the ancestors
+// being painted to ts (a style resolved at layout), skipping the fields in
+// own that the text element sets itself.
+func (w *Window) paintTextStyle(ts TextStyle, own TextFields) TextStyle {
+	need := paintTextFields &^ own
+	for i := len(w.paintTexts) - 1; i >= 0 && need != 0; i-- {
+		o := &w.paintTexts[i]
+		f := o.set & need
+		if f&TextFieldColor != 0 {
+			ts.Color = o.ts.Color
+		}
+		if f&TextFieldStrikethrough != 0 {
+			ts.Strikethrough = o.ts.Strikethrough
+		}
+		need &^= f
+	}
+	return ts
+}
+
 // currentTextStyle is the text style inherited at this point of the
 // RequestLayout walk: the innermost Div's resolved style, or the default.
 func (w *Window) currentTextStyle() TextStyle {
@@ -91,8 +129,24 @@ func (e textElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	return w.registerLayoutNode(node), st
 }
 
-// Prepaint is a no-op: text leaves register no hitboxes or listeners.
+// Prepaint registers nothing (text leaves have no hitboxes or listeners);
+// it returns a paint scope carrying the element's opacity when below 1.
 func (e textElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState any) any {
+	return textOpacityScope(layoutStyle(layoutState, func() Style { return e.t.resolvedStyle(DefaultTextStyle()) }))
+}
+
+// textPrepaint is the prepaint state of a text leaf with Opacity < 1.
+type textPrepaint struct{ opacity float32 }
+
+func (p *textPrepaint) clipsChildren() bool          { return false }
+func (p *textPrepaint) paintOpacity(*Window) float32 { return p.opacity }
+
+// textOpacityScope returns the prepaint state of a text leaf painted with
+// style: nil unless its opacity is below 1.
+func textOpacityScope(style Style) any {
+	if style.Opacity < 1 {
+		return &textPrepaint{opacity: style.Opacity}
+	}
 	return nil
 }
 
@@ -108,7 +162,7 @@ func (t *Text) paint(w *Window, bounds Bounds, layoutState any) {
 		return
 	}
 	style := layoutStyle(layoutState, func() Style { return t.resolvedStyle(DefaultTextStyle()) })
-	ts := style.TextStyle
+	ts := w.paintTextStyle(style.TextStyle, t.style.textSet())
 	lines := shapeWrapped(w, t.text, ts, paintWrapWidth(bounds, style))
 	paintShapedLines(w, bounds.Origin.X+style.Padding.Left, bounds.Origin.Y+style.Padding.Top, ts, lines)
 }
@@ -189,11 +243,12 @@ func shapeWrapped(w *Window, text string, ts TextStyle, maxWidth float32) []Shap
 }
 
 // paintShapedLines draws shaped lines starting at (x, y), stacking lines
-// vertically by the style's line height.
+// vertically by the style's line height. Each line's glyph box (ascent +
+// descent) is centred in its line box (CSS half-leading), as GPUI does.
 func paintShapedLines(w *Window, x, y Pixels, ts TextStyle, lines []ShapedLineOut) {
 	lh := ts.ResolvedLineHeight()
 	for _, line := range lines {
-		baseY := y + line.Ascent
+		baseY := y + (lh-(line.Ascent+line.Descent))/2 + line.Ascent
 		for _, g := range line.Glyphs {
 			m := g.Mask
 			if m == nil || m.W <= 0 || m.H <= 0 || len(m.Pix) == 0 {
@@ -282,9 +337,9 @@ func (e styledTextElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	return w.registerLayoutNode(node), st
 }
 
-// Prepaint is a no-op: text leaves register no hitboxes or listeners.
+// Prepaint registers nothing; like Text it carries Opacity < 1.
 func (e styledTextElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState any) any {
-	return nil
+	return textOpacityScope(layoutStyle(layoutState, func() Style { return e.s.resolvedStyle(DefaultTextStyle()) }))
 }
 
 // Paint delegates to the StyledText.
@@ -322,7 +377,7 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 		}
 		ts := r.Style
 		if ts.FontSize <= 0 {
-			ts = style.TextStyle
+			ts = w.paintTextStyle(style.TextStyle, s.style.textSet())
 		}
 		lines := shapeWrapped(w, r.Text, ts, wrapW)
 		paintShapedLines(w, x, y, ts, lines)

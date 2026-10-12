@@ -221,18 +221,14 @@ func (d *Div) FocusVisible(f func(*StyledMixin) *StyledMixin) *Div {
 	return d
 }
 
-// interactionStyle runs f on a fresh mixin whose text style starts from
-// the div's, so text tweaks keep the other text properties.
+// interactionStyle runs f on a fresh mixin. Its text setters record only
+// the fields they touch (TextSet), so merging it keeps the div's other text
+// properties and descendants see only what the interaction changes.
 func (d *Div) interactionStyle(f func(*StyledMixin) *StyledMixin) *StyleRefinement {
 	if f == nil {
 		return nil
 	}
 	m := &StyledMixin{}
-	if d.style.TextStyle != nil {
-		ts := *d.style.TextStyle
-		m.style.TextStyle = &ts
-		m.style.TextSet = d.style.TextSet
-	}
 	if r := f(m); r != nil {
 		m = r
 	}
@@ -469,7 +465,13 @@ type divPrepaint struct {
 	// resolved by paintOpacity (resolved reports that it ran).
 	style    Style
 	resolved bool
+	// text is the div's paint-time text override, set by paintOpacity;
+	// textActive reports that an interaction style contributed to it.
+	text       textOverride
+	textActive bool
 }
+
+func (st *divPrepaint) paintTextOverride() (textOverride, bool) { return st.text, st.textActive }
 
 func (st *divPrepaint) clipsChildren() bool { return st.clipped }
 
@@ -479,23 +481,42 @@ func (st *divPrepaint) paintOpacity(w *Window) float32 {
 	d := st.d
 	focused := st.focusID != 0 && w.focus == st.focusID
 	hovered := d.hoverStyle != nil && w.isHoveredHitbox(st.hitbox)
+	r := &d.style
+	var active TextFields
 	if (focused && (d.focusStyle != nil || d.focusVisibleStyle != nil)) || hovered {
-		r := d.style
+		m := d.style
 		if focused {
-			r.merge(d.focusStyle)
+			m.merge(d.focusStyle)
+			active |= d.focusStyle.interactionText()
 			if w.focusVisible {
-				r.merge(d.focusVisibleStyle)
+				m.merge(d.focusVisibleStyle)
+				active |= d.focusVisibleStyle.interactionText()
 			}
 		}
 		if hovered {
-			r.merge(d.hoverStyle)
+			m.merge(d.hoverStyle)
+			active |= d.hoverStyle.interactionText()
 		}
-		st.style = r.Refine(DefaultStyle())
+		st.style = m.Refine(DefaultStyle())
+		r = &m
 	} else {
 		st.style = d.resolvedStyle()
 	}
+	st.text, st.textActive = textOverride{}, active != 0
+	if set := r.textSet() & paintTextFields; set != 0 {
+		st.text = textOverride{set: set, ts: *r.TextStyle}
+	}
 	st.resolved = true
 	return st.style.Opacity
+}
+
+// interactionText returns the paint-time text fields an interaction
+// refinement sets (nil-safe).
+func (r *StyleRefinement) interactionText() TextFields {
+	if r == nil {
+		return 0
+	}
+	return r.textSet() & paintTextFields
 }
 
 func (st *divPrepaint) paintScrollbar(w *Window) {
@@ -504,13 +525,18 @@ func (st *divPrepaint) paintScrollbar(w *Window) {
 	}
 }
 
+// implicitFocusSuffix marks the elementStates key of an implicit focus
+// handle.
+const implicitFocusSuffix = "#focus"
+
 // implicitFocusHandle returns the focus handle a TabIndex div without
 // TrackFocus owns, retained per element id.
 func (d *Div) implicitFocusHandle(w *Window, cx *App, gid GlobalElementID) *FocusHandle {
 	if cx == nil {
 		return nil
 	}
-	key := globalIDKey(gid) + "#focus"
+	key := globalIDKey(gid) + implicitFocusSuffix
+	w.touchState(key)
 	if h, ok := w.elementStates[key].(*FocusHandle); ok && h.IsValid() && cx.focusMap.alive(h.id) {
 		return h
 	}
@@ -561,7 +587,9 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 		}
 		if node != nil {
 			mw, mh := node.ScrollMax()
-			ml.scrollMax = Size{W: mw, H: mh}
+			if ml.scrollable {
+				ml.scrollMax = scrollMaxOn(Size{W: mw, H: mh}, style.ScrollAxes)
+			}
 		}
 		if ml.scrollable && d.showScrollbar {
 			sst, _ := w.elementStates[globalIDKey(gid)].(scrollState)
