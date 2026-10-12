@@ -42,9 +42,13 @@ func (c *Counter) button(id, label string, base, hover gpui.Rgba, delta int) *gp
 		bg = hover
 	}
 	b := gpui.NewDiv().ID(id).SizeWH(56, 56).Bg(bg).Rounded(12).ItemsCenter().
-		OnMouseMove(func(_ *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
-			if c.hovered != id {
-				c.hovered = id
+		OnHoverStart(func(w *gpui.Window, _ *gpui.App) {
+			c.hovered = id
+			w.Refresh()
+		}).
+		OnHoverEnd(func(w *gpui.Window, _ *gpui.App) {
+			if c.hovered == id {
+				c.hovered = ""
 				w.Refresh()
 			}
 		}).
@@ -58,12 +62,6 @@ func (c *Counter) button(id, label string, base, hover gpui.Rgba, delta int) *gp
 func (c *Counter) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	root := gpui.NewDiv().KeyContext("counter").
 		FlexCol().SizeFull().Gap(20).Bg(gpui.Gray50).ItemsCenter().
-		OnMouseMove(func(_ *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
-			if c.hovered != "" {
-				c.hovered = ""
-				w.Refresh()
-			}
-		}).
 		OnAction(incAction{}, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { c.add(1, w) }).
 		OnAction(decAction{}, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { c.add(-1, w) }).
 		Child(
