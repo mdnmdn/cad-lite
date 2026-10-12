@@ -108,7 +108,7 @@ any goroutine, and the next `Update` terminates the loop:
 time.AfterFunc(2*time.Second, cx.Quit) // as the examples' -smoke flag does
 ```
 
-Caveat (`_docs/wip.md`): the interactive window has not been run in the CI
+Caveat (`_docs/roadmap.md`): the interactive window has not been run in the CI
 environment (no GPU/Metal device); headless rendering is what is covered by
 tests.
 
@@ -254,3 +254,5 @@ Checklist (mirrors what `ebitenplatform` does):
 7. **Single goroutine.** Call into `gpui` only from the loop's goroutine.
 8. **Present** gets premultiplied RGBA; convert if your display wants straight
    alpha or a different channel order.
+
+See also: [reference/platform.md](../reference/platform.md), [guides/testing.md](../guides/testing.md) (headless tests, snapshots, benchmarks) and troubleshooting for the [display/pixel-format error](../guides/troubleshooting.md#metal-or-gl-pixel-format-error).

@@ -208,3 +208,5 @@ past it extend its `ContentSize`.
   rectangles (not to rounded corners).
 - Layout is recomputed from scratch each frame (with per-call measure
   memoization); there is no incremental layout.
+
+See also: [reference/style-builders.md](../reference/style-builders.md) (layout, sizing, spacing and flex builders), [reference/geometry-and-color.md](../reference/geometry-and-color.md) (`Length`, `Available`, enums) and the [cookbook](../guides/cookbook.md#modal-overlay-with-paint-order) for overlap with negative margins.

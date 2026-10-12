@@ -276,7 +276,7 @@ frames. The headless window does not implement `FrameRequester`: a
   SDF. The buffer itself is reset and every primitive redrawn on every frame -
   there is no damage tracking. The known gap: the 1:1 sprite blit loops over
   the clip window intersected with the sprite rather than only the sprite's
-  bounds (noted in `_docs/wip.md`).
+  bounds (noted in `_docs/roadmap.md`).
 - **Buffer reuse.** The `Rasterizer` and the device-scale scratch `Scene` are
   reused while the window size is unchanged; at scale 1 `scaleScene` returns
   the scene without copying.
@@ -291,3 +291,5 @@ frames. The headless window does not implement `FrameRequester`: a
   Hover and pointer motion only redraw if a handler calls `Refresh`.
 - **Hit testing** is a linear scan over the frame's hitboxes (highest paint
   order wins), which is fine at POC scale.
+
+See also: [reference/app-window.md](reference/app-window.md) and [reference/platform.md](reference/platform.md) for the exported API behind these stages, [guides/testing.md](guides/testing.md) for exercising the pipeline headlessly, and [guides/troubleshooting.md](guides/troubleshooting.md#slow-frames) for performance symptoms.

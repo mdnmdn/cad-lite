@@ -55,6 +55,8 @@ PNGs are gitignored (`*.png`).
 ## Common gaps
 
 Across the ports the same missing features recur; they are tracked as open
-follow-ups in `_docs/wip.md`: absolute positioning, `flex-wrap`, `active()`
+follow-ups in `_docs/roadmap.md`: absolute positioning, `flex-wrap`, `active()`
 styles, an animation API, `img`/`svg`, colour emoji, CSS grid, cursor styles,
 drag and drop, dashed borders and italic faces.
+
+See also: the [cookbook](guides/cookbook.md) for small compiling recipes, [contributing](guides/contributing.md#example-conventions) for example conventions, and the [API reference](reference/README.md).

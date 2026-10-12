@@ -1,0 +1,280 @@
+# Roadmap
+
+Single source of truth for project status, completed work and open work.
+It replaces the former first-wave plan and work-in-progress notes
+(activity registry). Contract: [api-contract.md](api-contract.md) (change
+signatures there first). Layout of the repo: [project-structure.md](project-structure.md).
+
+Last updated: 2026-10-12.
+
+## 1. Status summary
+
+What works today:
+
+- Core UI in `gpui/` (stdlib + `x/image` + `go-text/typesetting`): geometry,
+  colour, flexbox layout (grow/shrink/basis, margins incl. auto, gaps, min/max),
+  `Div`, `Text`, `StyledText`, `TextInput`, `UniformList`, scroll containers
+  with display-only scrollbars, borders, rounded corners and clips, linear
+  gradients (sRGB/Oklab), box shadows (outset/inset), opacity, hover / focus /
+  focus-visible styles, text style inheritance, font families with system
+  fallback, HarfBuzz shaping and wrapping.
+- Retained entities with observe/emit/release, keymap + actions + key contexts,
+  tab order, focus handles, mouse/keyboard events, clipboard (OS tools).
+- CPU rasterizer (Scene to premultiplied RGBA), PNG output, headless platform
+  with synthetic input injection.
+- Ebiten backend (`gpui/ebitenplatform`): window, input mapping, present loop,
+  clipboard, snapshot key (`cmd/ctrl-shift-s`).
+- 17 examples, each with `-png PATH` headless rendering; user docs in `docs/`.
+
+Not yet working: see section 3 (animation, images/SVG, absolute positioning,
+flex-wrap, grid, `Active()`, colour emoji, IME, multi-window, drag and drop,
+italic/intermediate weights, key chords). The interactive ebiten window has
+never been run in the agent environment (no Metal device); headless rendering is
+what the tests cover.
+
+Verification commands (all must be clean before a change is done):
+
+```
+gofmt -l .          # no output
+go vet ./...
+go test ./...
+go mod tidy         # after adding imports
+go run ./examples/todo -png _tmp/todo.png   # pipeline smoke test
+```
+
+## 2. Done
+
+Commit hashes from `git log --oneline` (oldest first within a group).
+
+### Core port
+
+| Commit | What |
+|--------|------|
+| `36b319e` | Baseline: gpui core (geometry, colour, style/styled, layout, element, div, scene, raster, bounds, events, keymap, focus, entity, context, app, subscription, window, platform, font/text shaper), text elements, `TextInput` |
+| `fbd8f5f` | Flexbox layout fixes, text wrapping, flipped glyphs, bold faces, hover events, fluent wrappers |
+| `182a5db` | Review fixes: dispatch paths, hover, click identity, modifiers, clipboard timeouts, flex resolution, retina glyphs, NRGBA output |
+
+### Platform and headless
+
+| Commit | What |
+|--------|------|
+| `e6b9568` | Headless platform (`RenderToPNG`/`RenderToImage`, `HeadlessWindow`), clipboard (pbpaste/pbcopy, powershell, wl-clipboard/xclip/xsel), ebiten backend |
+| `8fdf9a2` | `Window.Draw` rasterizes and presents; input handler, `HitTest`, scale refresh |
+| `74e1df8` | Default text shaper installed for every window, not just headless |
+| `cb6d403` | Ebiten snapshot key (`cmd/ctrl-shift-s`, `WithSnapshotKey`) |
+
+### Examples
+
+| Commit | What |
+|--------|------|
+| `b62b0fc` | `todo`, `counter`, `gallery` |
+| `94c6d73` | Counter hover via `OnHoverStart/End` |
+| `f29241c` | gpui-ce ports: `hello_world`, `actions_and_keybinds`, `layout`, `styling`, `text`, `tree`, `interactive_elements` |
+| `6fcdcb2` | gpui-ce ports: `scrollable`, `uniform_list`, `opacity`, `border_and_shadow_backgrounds`, `tab_stop`, `focus_visible`, `gradient` |
+
+### Performance
+
+| Commit | What |
+|--------|------|
+| `cb6d403` | Bounds-limited rasterizer fills (2.5 s to 1 ms/frame at 2x), shaping cache |
+
+### Feature waves
+
+| Commit | What |
+|--------|------|
+| `f0b549e` | Linear gradients, box shadows, element opacity, scroll containers + `ScrollHandle` + scrollbars, `UniformList`, tab stops (`FocusNext/FocusPrev`), `Hover`/`Focus`/`FocusVisible` styles |
+| `5dbd7ea` | Text style inheritance, line height, newlines, font family + fallback; margins and auto margins, `Flex1` basis 0 / `FlexAuto` / `FlexNone` / `FlexBasis`, rounded child clips, scene-order paint, action keys + bare-key bindings, entity release, custom element layout |
+| `69be5b1` | `TextInput` keeps placeholder and height when focused and empty; caret centred |
+
+### Review waves
+
+| Commit | What |
+|--------|------|
+| `182a5db` | First review wave (see Core port) |
+| `1e6fbfd` | Entity slot created before `build`; `Release` during a flush only schedules; effect flush counts as an `Update`; `DispatchEvent` runs inside `App.Update`; `UniformList` / `RequestLayoutWithChildren` text inheritance; paint-time hover/focus text overrides (colour/strikethrough); mouse-down auto-focus skipped if a handler moved focus; text `Opacity`; `"ui-monospace"` family; scroll offsets limited to scroll axes; half-leading baseline; `TextInput` paint fix; element-state pruning |
+
+Notable correction (in `36b319e`..`182a5db` era): `onKeyDown` treated a
+collapsed selection as a range (backspace/delete no-ops); fixed. `IntRange` is
+UTF-16 code unit offsets (contract section 10).
+
+### gpui-ce ports
+
+Covered in Examples above. See section 3.6 for the per-example port table.
+
+### Docs
+
+| Commit | What |
+|--------|------|
+| `b840748` | `docs/` architecture and concepts |
+| `e850904` | README, getting started, examples index, styling update |
+| `c51c8a1` | Docs audit against code after the review-fix wave |
+| this commit | `_docs/` restructure (`api-contract.md` rename, this roadmap, `project-structure.md`, `index.md`), `docs/` reference and guides, consistency pass |
+
+## 3. Open work
+
+Size: S under half a day, M about a day or two, L larger or cross-cutting.
+Priority: P1 (blocks real apps), P2 (valuable), P3 (nice to have). IDs are
+stable; "Deps" lists IDs that should land first. Every milestone also needs the
+standard verification (section 1) and a contract update when signatures change.
+
+### 3.1 Layout
+
+| ID | Pri | Size | Deps | Milestone | Acceptance criteria |
+|----|-----|------|------|-----------|---------------------|
+| L1 | P1 | M | - | Absolute positioning (`position: absolute`, `Top/Left/Right/Bottom`, inset) | Child removed from flex flow and placed relative to the parent box; overlapping paint order follows scene order; unit tests in `layout_test.go`; `layout` and `opacity` examples use real overlap instead of staggered padding |
+| L2 | P1 | M | - | `flex-wrap` (`FlexWrap`, wrap-reverse optional, row/column gaps) | Items wrap by main-axis size; gap and `align-content` handled; tests; `styling` and `border_and_shadow_backgrounds` use it instead of hand-split rows |
+| L3 | P3 | L | L1, L2 | CSS grid (`grid_cols`, `col_span`, `row_span`) - decide first whether to ship at all | Decision recorded here; if shipped, fixed and fractional tracks, spans, gap; `layout`, `interactive_elements`, `text` use it |
+| L4 | P2 | S | - | Borders included in layout sizes (currently not) | A bordered box with fixed width keeps content width minus border; tests |
+| L5 | P3 | S | - | Resize and scale-change test coverage and API. Handling itself exists: `ebitenplatform` `Layout` re-reads the monitor scale and size every frame, updates the window bounds and requests a redraw, and `Window.Draw` re-reads `ScaleFactor` | `HeadlessWindow` has a `Resize` (and scale setter) so a test can resize, relayout and re-rasterize; test covers relayout at a new size and scale; optionally a resize callback for apps |
+| L6 | P3 | M | - | `StyledText` runs wrap jointly (currently wrap independently) | A paragraph of multiple runs breaks lines across run boundaries; test |
+| L7 | P3 | S | - | `TextInput` measures text at the window scale (currently scale 1) | Caret x matches rendered glyphs at scale 2; test |
+
+### 3.2 Styling and painting
+
+| ID | Pri | Size | Deps | Milestone | Acceptance criteria |
+|----|-----|------|------|-----------|---------------------|
+| S1 | P1 | M | - | `Active()` (pressed) style | Applies while the mouse is down inside the element; cleared on release or leave; works with hover; `gradient` and `styling` examples use it |
+| S2 | P2 | M | - | Size/weight/family/line-height in `Hover`/`Focus`/`FocusVisible` refinements | Refinements that change text metrics trigger relayout (or are documented as unsupported with a panic-free no-op); tests |
+| S3 | P2 | S | - | Hover text override inside custom `RequestLayoutWithChildren` containers | Custom containers push and pop paint-time overrides so they can re-assert their own colour; test |
+| S4 | P2 | S | - | `Text`/`StyledText` Bg/Border/Shadow: paint the box, or drop the builders | Decision recorded; either the box paints (test with pixel check) or the builders are removed from `Text` and the contract |
+| S5 | P2 | M | - | Hitboxes clipped to rounded corners | A click in the transparent corner of a rounded box misses it; test |
+| S6 | P3 | M | - | Italic faces and intermediate weights (THIN..MEDIUM, SEMIBOLD..BLACK) | Font loader picks the nearest face; `text` example shows all weights |
+| S7 | P3 | S | - | Dashed borders, gradient borders/shadows, rounded smoothing | Dashed style paints; `hello_world`/`border_and_shadow_backgrounds` updated |
+| S8 | P3 | S | - | Underline colour and strikethrough colour, wavy decoration | `text` example drops its 1px-bar emulation |
+| S9 | P3 | S | - | Sprite raster loop iterates sprite bounds rather than the clip window | Benchmark in `bench_test.go` shows no regression; perf only |
+| S10 | P2 | M | - | Colour emoji (bitmap/COLR fonts currently draw as tofu) | Emoji row in `opacity` renders glyphs; raster supports RGBA glyph sprites |
+
+### 3.3 Interaction and input
+
+| ID | Pri | Size | Deps | Milestone | Acceptance criteria |
+|----|-----|------|------|-----------|---------------------|
+| I1 | P1 | M | - | Scrollbar thumb drag and track click | Dragging the thumb scrolls proportionally; headless test injects press/move/release |
+| I2 | P1 | M | - | `TextInput` selection highlight, drag/double-click/triple-click selection, Home/End, shift-arrows | Highlight painted; gestures covered by dispatch tests |
+| I3 | P2 | L | I2 | Multi-line text area (`TextArea`) | Enter inserts newline, up/down caret movement, wrapping, scroll to caret; example |
+| I4 | P2 | M | - | IME/composition (marked text UI, candidate window position via `PlatformInputHandler`) | Composition text rendered underlined; platform reports caret bounds; documented per platform |
+| I5 | P2 | M | - | Drag and drop API (`OnDrag`, `OnDrop`, drag preview, drag-over style) | `interactive_elements` uses the real API instead of mouse-down/up emulation |
+| I6 | P2 | S | - | Cursor styles (pointer, text, resize ...) | `Div.Cursor(...)` forwarded to `Platform`; ebiten sets `ebiten.SetCursorShape`; stub records it |
+| I7 | P2 | S | - | `Keystroke.String` prints `ModPlatform` per OS (`cmd-` on macOS, `super-`/`win-` elsewhere) | Table-driven test with GOOS override |
+| I8 | P3 | S | - | Key chords (multi-keystroke bindings) | `ctrl-k ctrl-c` style bindings dispatch; pending-state API |
+| I9 | P2 | S | - | Windows clipboard clear (`ClipboardWrite("")` cannot clear today) | Clearing works on Windows or is documented; test on the fake tool path |
+
+### 3.4 Elements and runtime
+
+| ID | Pri | Size | Deps | Milestone | Acceptance criteria |
+|----|-----|------|------|-----------|---------------------|
+| E1 | P1 | L | - | Animation frames and timers: request-next-frame API, `Timer`/`After`, `Animation` with easing | An element animates without the caller calling `Refresh` in `Render`; headless test advances a fake clock; platform contract gains the hook |
+| E2 | P2 | M | E1 | Style transitions (`transitions`, `style_transitions`, `motion_showcase`) | Hover colour fades over a duration; test samples intermediate frames |
+| E3 | P1 | L | - | Images: PNG/JPEG via `image/*`, `Img` element, object-fit, asset source | `Img` loads and scales; raster supports image sprites; example; golden test |
+| E4 | P2 | L | E3 | SVG element (rasterized to image sprites; stdlib-only subset or an approved dependency) | `svg` legacy example renders; dependency decision recorded |
+| E5 | P1 | L | - | Async tasks / executor (`cx.Spawn`, background executor, results back on the main loop) | `async_tasks` port runs; entity safety rules preserved; race-detector test |
+| E6 | P2 | L | L1 | Overlays: tooltips, popovers, deferred and anchored elements | Overlay paints above siblings regardless of tree order; anchored to a bounds with edge snapping; hover tooltip example |
+| E7 | P2 | M | - | `List` with variable row heights (virtualized) next to `UniformList` | Measures visible rows only; scroll-to-index; test with mixed heights |
+| E8 | P3 | M | E1 | Blur, corner smoothing, custom drawing (canvas / paint_path) | Per-example acceptance as in 3.6 |
+| E9 | P2 | L | - | Multi-window in the ebiten backend (`OpenWindow` more than once) | Two windows open, receive their own input, close independently; ebiten limits documented; headless already supports it |
+| E10 | P2 | S | - | Headless keyboard-focus seeding `RenderOption` (`WithFocus(id)`, keyboard modality) | `focus_visible` and `tab_stop` drop their `-focus` flag emulation |
+
+### 3.5 Tooling, CI and verification
+
+| ID | Pri | Size | Deps | Milestone | Acceptance criteria |
+|----|-----|------|------|-----------|---------------------|
+| T1 | P1 | S | - | CI (GitHub Actions): `gofmt -l`, `go vet`, `go test ./...` on linux/macOS/windows | Workflow green on a PR; caches modules |
+| T2 | P1 | M | T1 | Golden-image test harness: render each example headless and compare to `testdata/golden/*.png` with a tolerance; `-update` flag | Each example has a golden; a one-pixel layout change fails; fonts pinned or tolerance justified for CI |
+| T3 | P1 | S | - | Real-window verification checklist (run on a machine with a display) | Checklist in this file (below) executed and results recorded per OS |
+| T4 | P3 | S | T1 | Benchmark tracking (`bench_test.go`) in CI as non-blocking | Numbers uploaded as artifact |
+
+Real-window checklist (T3), to run manually per OS:
+
+1. `go run ./examples/todo`: window opens, typing works, Enter adds, click toggles.
+2. Retina/HiDPI: text sharp, no blur; move window between displays.
+3. Resize window: relayout works; automated coverage is L5.
+4. Scroll wheel and trackpad in `scrollable` and `uniform_list`; direction correct.
+5. Hover, focus, tab order in `tab_stop` and `focus_visible`.
+6. Clipboard: cmd/ctrl-c/v/x in `TextInput`.
+7. `cmd/ctrl-shift-s` writes a snapshot PNG.
+8. Close button quits cleanly (`ebiten.Termination`).
+
+### 3.6 gpui-ce examples
+
+Source: <https://github.com/gpui-ce/gpui-ce/tree/main/crates/gpui/examples>
+(checked 2026-10-12). Notes on partial ports are the "Not ported" comments at the
+top of each `examples/*/main.go`.
+
+| gpui-ce example | Status | Local example | Blocked by / not ported |
+|-----------------|--------|---------------|--------------------------|
+| `border_and_shadow_backgrounds` | ported | `border_and_shadow_backgrounds` | gradient borders/shadows (S7), rounded smoothing (E8), flex-wrap (L2) |
+| `learn/actions_and_keybinds` | ported | `actions_and_keybinds` | - |
+| `learn/interactive_elements` | ported | `interactive_elements` | drag API (I5), dashed border (S7), cursors (I6), grid (L3) |
+| `learn/layout` | ported | `layout` | grid (L3), absolute (L1) |
+| `learn/styling` | ported | `styling` | `Active()` (S1), cursors (I6), flex-wrap (L2), app menu |
+| `learn/text` | ported | `text` | italic/weights (S6), underline/strike colour (S8), ellipsis/line-clamp, grid (L3), tofu glyphs |
+| `learn/uniform_list` | ported | `uniform_list` | `Colors::for_appearance` |
+| `legacy/focus_visible` | ported | `focus_visible` | cursor_pointer (I6), E10 |
+| `legacy/gradient` | ported | `gradient` | canvas/paint_path (E8), `Active()` (S1) |
+| `legacy/hello_world` | ported | `hello_world` | shadow_lg root, dashed borders (S7) |
+| `legacy/opacity` | ported | `opacity` | img/svg (E3, E4), emoji (S10), wavy decoration (S8), absolute (L1) |
+| `legacy/scrollable` | ported | `scrollable` | example font loader |
+| `legacy/tab_stop` | ported | `tab_stop` | E10 |
+| `legacy/tree` | ported | `tree` | - |
+| `learn/animation` | todo | - | E1 |
+| `learn/async_tasks` | todo | - | E5 |
+| `learn/blur` | todo | - | E8 |
+| `learn/corner_smoothing` | todo | - | E8 |
+| `learn/creating_components` | todo (likely portable now) | - | - |
+| `learn/custom_drawing` | todo | - | E8 |
+| `learn/haptic_feedback`, `learn/keyring` | skip | - | OS specific, out of scope |
+| `learn/motion_showcase`, `learn/style_transitions`, `learn/transitions` | todo | - | E1, E2 |
+| `legacy/gif_viewer`, `legacy/image`, `legacy/image_loading` | todo | - | E3 |
+| `legacy/svg` | todo | - | E4 |
+| `legacy/inline_layout` | todo | - | S4, L6 |
+| `legacy/window`, `legacy/window_positioning`, `legacy/window_shadow` | todo | - | E9, L5 |
+| `legacy/layer_shell`, `legacy/on_window_close_quit` | skip / todo | - | layer_shell is Wayland only; close-quit needs E9 |
+| `direction`, `text_system`, `text_transform_preview` | todo | - | `text_system` needs S6; others likely portable |
+| `system_notifications`, `window_movable`, `window_visibility` | skip / later | - | Platform features outside the POC scope |
+| `view_example/*` (editor, input, text_area) | todo | - | I2, I3 |
+| `bench/*` (data_table, paths_bench, pattern, shadow) | todo | - | E7; perf references for `bench_test.go` |
+
+Local-only examples (not from gpui-ce): `counter`, `gallery`, `todo`.
+
+## 4. Known limitations and POC deviations from GPUI
+
+- `TextInput` is a plain struct owned by the root view, not an `Entity[T]`
+  (contract section 10); `ID`-based focus works but it cannot be observed as an entity.
+- Scroll offsets are positive (distance scrolled), unlike GPUI's negative
+  offsets. `OverflowHidden` is not programmatically scrollable.
+- CPU rasterizer only: no GPU path, no shader effects; the ebiten backend uploads
+  premultiplied pixels with `WritePixels` and skips frames when not dirty.
+- Go has no overloading: fluent builders (`ID(string) *Div`) coexist with the
+  `Element` interface through adapter types (`divElement`).
+- `New()` in `ebitenplatform` returns `gpui.Platform` (an interface).
+- Hover/focus text refinements cascade at paint time for colour and
+  strikethrough only (`paintTextFields`); see S2, S3.
+- Hitboxes are rectangles (S5); borders are not part of layout sizes (L4).
+- `StyledText` runs wrap independently (L6); `TextInput` measures at scale 1 (L7).
+- Only regular and bold faces; no italics (S6). Missing glyphs render as tofu.
+- Single window in the ebiten backend (E9); no animation clock (E1).
+- `Keystroke.String` prints `cmd-` for `ModPlatform` everywhere (I7).
+- Interactive ebiten window never run in the agent environment (T3).
+
+## 5. Process
+
+Picking work:
+
+1. Choose an open milestone in section 3 whose dependencies are done; prefer
+   P1, then smaller size.
+2. Note in the commit or PR description which ID you are working on. Keep one
+   milestone per commit where practical.
+3. If the milestone is blocked or you decide to drop it, record the decision
+   in this file instead of leaving it implicit.
+
+Contract first: if an exported signature changes or is added, edit
+[api-contract.md](api-contract.md) before the code, then the code, then the
+user docs under `docs/` (snippets must compile; see `_tmp/docchk2/` in
+[project-structure.md](project-structure.md)).
+
+Verification: the commands in section 1, plus a `-png` render of any example
+you touched. Add tests in `gpui/*_test.go` (package `gpui_test` unless internal
+access is needed).
+
+Commits: small, imperative subject (see `git log --oneline`), no commit
+until the user asks. When a milestone lands, move its row to section 2 with the
+commit hash and update the status summary and the examples table.

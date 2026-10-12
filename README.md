@@ -8,7 +8,7 @@ straight to a PNG, which makes UI snapshots and headless tests cheap.
 
 Status: POC. The core (`gpui/`) is covered by tests and 17 examples render
 headless; the interactive ebiten window has not been exercised in the agent
-CI environment (no Metal device). See [_docs/wip.md](_docs/wip.md).
+CI environment (no Metal device). See [_docs/roadmap.md](_docs/roadmap.md).
 
 ## Quick start
 
@@ -64,7 +64,7 @@ Not supported yet: animation API (examples step state in `Render`), images and
 SVG, absolute positioning, `flex-wrap`, CSS grid, `Active()` style, colour
 emoji, IME composition UI, multiple windows in the ebiten backend, italic and
 intermediate font weights, drag and drop, key chords. The full list is in
-`_docs/wip.md` ("Open follow-ups").
+`_docs/roadmap.md` (section 3, "Open work").
 
 ## Layout of the repo
 
@@ -73,7 +73,7 @@ gpui/                core package (stdlib + x/image + go-text/typesetting)
 gpui/ebitenplatform/ ebiten window backend, clipboard, snapshot key
 examples/            17 runnable programs (docs/examples.md)
 docs/                user documentation
-_docs/               internal contract, plan, work registry
+_docs/               internal index, contract, roadmap, project structure
 AGENTS.md            rules for AI agents working in the repo
 ```
 
@@ -84,5 +84,7 @@ AGENTS.md            rules for AI agents working in the repo
 - [docs/examples.md](docs/examples.md) - the 17 examples and what each shows.
 - [docs/README.md](docs/README.md) - index: architecture and per-subsystem
   concept pages.
+- [_docs/index.md](_docs/index.md) - entry point for internal docs: API
+  contract, roadmap, project structure.
 
 Verify a checkout with `gofmt -l .`, `go vet ./...`, `go test ./...`.

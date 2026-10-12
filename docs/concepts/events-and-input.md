@@ -291,3 +291,5 @@ characters dropped); copy needs a focused handler with a non-empty selection;
 cut also deletes the text, but only if the write succeeded and the selection
 is unchanged. These shortcuts are handled by the platform and are not
 dispatched as key events.
+
+See also: [reference/events.md](../reference/events.md) (event fields, keymap and focus API), [cookbook](../guides/cookbook.md#keyboard-shortcuts-with-key-contexts) recipes for shortcuts and tab navigation, [testing](../guides/testing.md#dispatching-input) for synthetic input, and troubleshooting for [key bindings](../guides/troubleshooting.md#key-binding-not-firing) and [focus](../guides/troubleshooting.md#focus-not-moving).

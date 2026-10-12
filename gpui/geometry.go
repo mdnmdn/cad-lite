@@ -39,6 +39,7 @@ type Corners struct {
 	BottomRight Pixels
 }
 
+// NewBounds returns Bounds with origin (x, y) and size w by h.
 func NewBounds(x, y, w, h float32) Bounds {
 	return Bounds{
 		Origin: Point{X: Pixels(x), Y: Pixels(y)},
@@ -46,33 +47,42 @@ func NewBounds(x, y, w, h float32) Bounds {
 	}
 }
 
+// Min returns the top-left corner.
 func (b Bounds) Min() Point { return b.Origin }
 
+// Max returns the bottom-right corner (origin plus size).
 func (b Bounds) Max() Point {
 	return Point{X: b.Origin.X + b.Size.W, Y: b.Origin.Y + b.Size.H}
 }
 
+// Width returns the width.
 func (b Bounds) Width() Pixels { return b.Size.W }
 
+// Height returns the height.
 func (b Bounds) Height() Pixels { return b.Size.H }
 
+// IsEmpty reports whether the width or height is not positive.
 func (b Bounds) IsEmpty() bool { return b.Size.W <= 0 || b.Size.H <= 0 }
 
+// Contains reports whether p lies inside b; the right and bottom edges are exclusive.
 func (b Bounds) Contains(p Point) bool {
 	return p.X >= b.Origin.X && p.X < b.Origin.X+b.Size.W &&
 		p.Y >= b.Origin.Y && p.Y < b.Origin.Y+b.Size.H
 }
 
+// ContainsBounds reports whether o lies entirely inside b.
 func (b Bounds) ContainsBounds(o Bounds) bool {
 	return o.Origin.X >= b.Origin.X && o.Origin.Y >= b.Origin.Y &&
 		o.Max().X <= b.Max().X && o.Max().Y <= b.Max().Y
 }
 
+// Intersects reports whether b and o overlap with non-zero area.
 func (b Bounds) Intersects(o Bounds) bool {
 	return b.Origin.X < o.Max().X && o.Origin.X < b.Max().X &&
 		b.Origin.Y < o.Max().Y && o.Origin.Y < b.Max().Y
 }
 
+// Intersection returns the overlap of b and o, or the zero Bounds when they do not intersect.
 func (b Bounds) Intersection(o Bounds) Bounds {
 	if !b.Intersects(o) {
 		return Bounds{}
@@ -87,6 +97,7 @@ func (b Bounds) Intersection(o Bounds) Bounds {
 	}
 }
 
+// Translate returns b moved by d.
 func (b Bounds) Translate(d Point) Bounds {
 	return Bounds{
 		Origin: Point{X: b.Origin.X + d.X, Y: b.Origin.Y + d.Y},
@@ -105,6 +116,7 @@ func (b Bounds) Inset(e Edges) Bounds {
 	}
 }
 
+// Union returns the smallest Bounds containing both b and o; an empty operand is ignored.
 func (b Bounds) Union(o Bounds) Bounds {
 	if b.IsEmpty() {
 		return o
@@ -122,6 +134,7 @@ func (b Bounds) Union(o Bounds) Bounds {
 	}
 }
 
+// Center returns the middle point of b.
 func (b Bounds) Center() Point {
 	return Point{
 		X: b.Origin.X + b.Size.W/2,
@@ -129,16 +142,21 @@ func (b Bounds) Center() Point {
 	}
 }
 
+// Horizontal returns Left + Right.
 func (e Edges) Horizontal() Pixels { return e.Left + e.Right }
 
+// Vertical returns Top + Bottom.
 func (e Edges) Vertical() Pixels { return e.Top + e.Bottom }
 
+// Sum returns the total of all four edges.
 func (e Edges) Sum() Pixels { return e.Horizontal() + e.Vertical() }
 
+// All returns Edges with every side set to v; the receiver is ignored.
 func (e Edges) All(v float32) Edges {
 	return Edges{Top: Pixels(v), Right: Pixels(v), Bottom: Pixels(v), Left: Pixels(v)}
 }
 
+// Uniform returns Corners with every radius set to v; the receiver is ignored.
 func (c Corners) Uniform(v float32) Corners {
 	return Corners{
 		TopLeft:     Pixels(v),
@@ -148,10 +166,12 @@ func (c Corners) Uniform(v float32) Corners {
 	}
 }
 
+// Max returns the largest corner radius.
 func (c Corners) Max() Pixels {
 	return maxf(c.TopLeft, maxf(c.TopRight, maxf(c.BottomLeft, c.BottomRight)))
 }
 
+// IsEmpty reports whether every radius is zero or negative.
 func (c Corners) IsEmpty() bool { return c.Max() <= 0 }
 
 func maxPixels(a, b Pixels) Pixels {

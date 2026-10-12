@@ -126,3 +126,5 @@ thickness of `max(1, FontSize/14)`.
   complex-script shaping, no colour emoji.
 - `StyledText` runs wrap independently and never share a line.
 - `TextInput` measures at scale 1.
+
+See also: [reference/text-and-fonts.md](../reference/text-and-fonts.md) and troubleshooting for [missing text](../guides/troubleshooting.md#no-text-in-the-window) and [blurry text](../guides/troubleshooting.md#blurry-text).

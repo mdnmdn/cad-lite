@@ -6,13 +6,16 @@ Guidance for AI agents working in this repo.
 
 POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
 (stdlib-only); the GPU/display backend lives in `gpui/ebitenplatform`
-(ebiten, no cgo). Contract: `_docs/00-api-contract.md`. Status and follow-ups: `_docs/wip.md`
-(`_docs/plan.md` is the original plan, kept for history).
+(ebiten, no cgo).
+
+Start at `_docs/index.md`. Contract: `_docs/api-contract.md`. Status, open work
+and process: `_docs/roadmap.md`. Repo map and where to add things:
+`_docs/project-structure.md`.
 
 ## Rules
 
 1. **Contract first.** If a signature must change, edit
-   `_docs/00-api-contract.md` before the code.
+   `_docs/api-contract.md` before the code.
 2. **Dependency boundaries.** `gpui` imports only stdlib (+ `x/image` and
    `go-text/typesetting` in `font.go`/`text.go`). Ebiten only in
    `gpui/ebitenplatform/`.
@@ -29,7 +32,7 @@ POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
    the same pattern for new elements.
 7. **Entity safety.** Never hold a `*T` from an entity across a call that can
    re-enter the same entity — upgrade the weak handle at invoke time
-   (`Context.Listener`).
+   (package function `gpui.Listener(ctx, f)`).
 
 ## Layout
 
@@ -46,6 +49,7 @@ POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
 - `docs/` — user documentation (getting started, examples, architecture,
   concepts); describes what the code does, so update it with behaviour changes.
   Snippets must compile.
-- `_docs/` — contract, WIP registry (`wip.md`) and the historical plan.
+- `_docs/` — `index.md` (entry point), `api-contract.md`, `roadmap.md`
+  (status, done, open work), `project-structure.md`.
 - `_tmp/` — gitignored scratch (e.g. `_tmp/docchk2/`, a throwaway module with
   `replace go-gpui => ../..` for compiling doc snippets). Never commit it.

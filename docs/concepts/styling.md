@@ -247,3 +247,5 @@ the text style at `RequestLayout` (enclosing style refined by its own
 the default with `GPUI_FONT`). Glyphs the chosen face lacks are drawn from
 system fallback fonts (`FontManager.Fallback`), so CJK and symbols usually
 render; colour emoji do not (bitmap fonts: tofu). Details in [text.md](text.md).
+
+See also: [reference/style-builders.md](../reference/style-builders.md) (every builder with signature and meaning), [reference/geometry-and-color.md](../reference/geometry-and-color.md) and the [cookbook](../guides/cookbook.md#card-with-shadow-and-gradient).

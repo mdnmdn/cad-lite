@@ -127,11 +127,19 @@ gpui.ObserveOn(cx, counter, func(e gpui.Entity[Counter], cx *gpui.App) {
 })
 build := func(*gpui.Window, *gpui.App) gpui.EntityRoot { return gpui.EntityView(counter) }
 _ = cx.OpenWindow(gpui.DefaultWindowOptions(), build)
-counter.Update(cx, func(c *Counter, cx *gpui.Context[Counter]) {
-	c.count = 10
-	cx.Notify()
+cx.Update(func(cx *gpui.App) {
+	counter.Update(cx, func(c *Counter, cx *gpui.Context[Counter]) {
+		c.count = 10
+		cx.Notify()
+	})
 })
 ```
+
+`Entity.Update` does not flush effects itself: observers and window redraws
+run when the outermost `App.Update` returns. Event listeners already run
+inside one; code outside any listener, such as the launch callback, wraps its
+mutations in `cx.Update` as above, otherwise the `ObserveOn` callback does not
+fire until some later update completes.
 
 `EntityView` renders the entity as a window root and releases it when the
 window closes. Details and the re-entrancy rule:
@@ -206,8 +214,11 @@ func (f *Form) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 ```
 
 Clicking the field focuses it. `OnSubmit` fires on Enter, `OnChange` on every
-edit. The field lives in the `"textbox"` key context, which is what
-`examples/todo` uses to bind `enter`/`escape`.
+edit. The field lives in the `"textbox"` key context. `TextInput` handles
+`enter` (runs `OnSubmit`) and `escape` (blurs) itself and stops propagation,
+so key bindings for them in that context never fire while the field is
+focused. `examples/todo` still binds `enter`/`escape` in `"textbox"`, but those
+bindings are redundant; `OnSubmit` is enough.
 
 ## Rendering to PNG
 
@@ -228,8 +239,10 @@ the `-png PATH` flag every example has. In a running window, press
 `snapshot-YYYYMMDD-HHMMSS.png` in the working directory; configure with
 `ebitenplatform.WithSnapshotKey` ([concepts/platform.md](concepts/platform.md)).
 
-Headless rendering has no pointer or focus state; examples that want to show a
-focused or scrolled state seed it from a flag (`-focus`, `-scroll`).
+Headless rendering has no pointer state, and a window starts unfocused.
+Examples that want to show a focused or scrolled state seed it from a flag
+(`-focus`, `-scroll`); focus is seeded by calling `w.RequestFocus` during the
+first `Render` (see `examples/tab_stop`).
 
 ## Headless testing
 
@@ -265,10 +278,13 @@ Notes:
   then a `KeyDownEvent` per character with `PreferCharacterInput: true` and
   `Keystroke.KeyChar` set; non-printable keys (`"enter"`, `"backspace"`) need
   only `Keystroke.Key`.
-- A window starts with no focus, and `RenderToPNG` cannot seed one yet
-  (tracked in `_docs/wip.md`).
+- A window starts with no focus. Seed it by calling `w.RequestFocus(handle)`
+  in the first `Render` (as `examples/tab_stop` does), which works for both
+  `RenderToPNG` and tests.
 
 ## Where next
 
 [examples.md](examples.md) lists all 17 example programs; the
 [concepts](README.md) pages cover each subsystem in depth.
+
+See also: [cookbook](guides/cookbook.md) for ready-made recipes, [testing](guides/testing.md) for headless tests and snapshots, [porting from Rust GPUI](guides/porting-from-gpui.md), [troubleshooting](guides/troubleshooting.md) and the [API reference](reference/README.md).

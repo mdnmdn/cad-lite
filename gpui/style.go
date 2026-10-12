@@ -52,10 +52,15 @@ const (
 type Justify uint8
 
 const (
+	// JustifyStart packs children at the start of the main axis.
 	JustifyStart Justify = iota
+	// JustifyCenter centers children on the main axis.
 	JustifyCenter
+	// JustifyEnd packs children at the end of the main axis.
 	JustifyEnd
+	// JustifySpaceBetween spreads children with equal space between them and none at the ends.
 	JustifySpaceBetween
+	// JustifySpaceAround spreads children with equal space around each one.
 	JustifySpaceAround
 )
 
@@ -66,8 +71,11 @@ type Align uint8
 const (
 	// AlignStretch is the CSS initial value: children fill the line's cross size.
 	AlignStretch Align = iota
+	// AlignStart aligns children to the cross-axis start.
 	AlignStart
+	// AlignCenter centers children on the cross axis.
 	AlignCenter
+	// AlignEnd aligns children to the cross-axis end.
 	AlignEnd
 )
 

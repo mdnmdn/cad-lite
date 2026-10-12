@@ -8,8 +8,11 @@ import (
 
 // Action is any named, cloneable, comparable command.
 type Action interface {
+	// Name returns the action's identifier, used in diagnostics and bindings.
 	Name() string
+	// Clone returns an independent copy of the action.
 	Clone() Action
+	// Equals reports whether other is the same action.
 	Equals(other Action) bool
 }
 
@@ -19,7 +22,9 @@ type Action interface {
 // distinct, while any two values of a user-defined action type share a key
 // (a zero value can register the handler, as in GPUI).
 type ActionKey struct {
+	// Type is the action's concrete Go type.
 	Type reflect.Type
+	// Name is the NewAction name, or empty for user-defined action types.
 	Name string
 }
 
@@ -56,7 +61,9 @@ func (a namedAction) Equals(other Action) bool {
 // KeyBinding binds one keystroke to an action, active when the focused
 // element's key-context stack satisfies Context.
 type KeyBinding struct {
-	Action     Action
+	// Action is dispatched when the keystrokes match.
+	Action Action
+	// Keystrokes is the sequence that triggers the binding.
 	Keystrokes []Keystroke
 	// Context is a predicate over the context stack: "", bare keys and
 	// key=value leaves combined with "&&", "||", "!" and parentheses.

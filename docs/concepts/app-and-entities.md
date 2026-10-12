@@ -25,8 +25,7 @@ err := ebitenplatform.New().Run(func(cx *gpui.App) {
 })
 ```
 
-(There is no `App.Run` method, although the contract's example in
-`_docs/00-api-contract.md` §18 uses one.)
+(There is no `App.Run` method; the entry point is `Platform.Run`.)
 
 Useful `App` methods: `Update`, `Notify`, `RefreshWindows`, `Defer`,
 `Quit`/`IsQuitting`, `Keymap`, `NewFocusHandle`, `Windows`,
@@ -241,3 +240,5 @@ func button(cx *gpui.Context[Counter]) gpui.IntoElement {
 The same discipline applies to plain-struct roots: do not stash a pointer into
 state that a handler may replace; capture the root pointer and read fields at
 call time (as `examples/counter` does).
+
+See also: [reference/app-window.md](../reference/app-window.md) (every `App`, `Entity`, `Context` and `Window` method), [guides/porting-from-gpui.md](../guides/porting-from-gpui.md) (Rust mapping and the `Release` differences) and [guides/troubleshooting.md](../guides/troubleshooting.md#entity-read-returns-nil-after-release).

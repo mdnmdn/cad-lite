@@ -17,8 +17,10 @@ type Hsla struct {
 	H, S, L, A float32
 }
 
+// RgbaOf returns the color with the given channels.
 func RgbaOf(r, g, b, a uint8) Rgba { return Rgba{R: r, G: g, B: b, A: a} }
 
+// Gray returns an opaque gray with every channel set to v.
 func Gray(v uint8) Rgba { return Rgba{R: v, G: v, B: v, A: 255} }
 
 // ParseHex parses "#rgb", "#rgba", "#rrggbb" or "#rrggbbaa".
@@ -105,8 +107,10 @@ func (c Rgba) Opacity(f float32) Rgba {
 	}
 }
 
+// IsTransparent reports whether the alpha channel is zero.
 func (c Rgba) IsTransparent() bool { return c.A == 0 }
 
+// ToHsla converts c to hue/saturation/lightness form.
 func (c Rgba) ToHsla() Hsla {
 	r := float32(c.R) / 255
 	g := float32(c.G) / 255
@@ -140,6 +144,7 @@ func (c Rgba) ToHsla() Hsla {
 	return Hsla{H: h, S: s, L: l, A: float32(c.A) / 255}
 }
 
+// ToRgba converts c to 8-bit RGBA.
 func (c Hsla) ToRgba() Rgba {
 	if c.S == 0 {
 		v := uint8(clamp32(c.L, 0, 1) * 255)
@@ -193,6 +198,9 @@ func minf32(a, b float32) float32 {
 	return b
 }
 
+// Palette colors. White, Black and Transparent are fixed; GrayN is a neutral
+// ramp from light (50) to dark (900); the other names are Material-style
+// accents with the shade number as suffix.
 var (
 	White       = Rgba{R: 255, G: 255, B: 255, A: 255}
 	Black       = Rgba{A: 255}

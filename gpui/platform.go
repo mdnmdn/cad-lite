@@ -38,6 +38,7 @@ type PlatformWindow interface {
 // invoked when the window should draw. The Window registers its draw routine
 // here so the platform can drive frames without holding a *Window.
 type FrameRequester interface {
+	// OnRequestFrame registers f as the draw routine to call when a frame is due.
 	OnRequestFrame(f func())
 }
 
@@ -73,15 +74,21 @@ type PlatformInputHandler interface {
 
 // IntRange is a half-open [Start, End) range of UTF-16 code unit offsets.
 type IntRange struct {
-	Start, End int
+	// Start is the inclusive start offset.
+	Start int
+	// End is the exclusive end offset.
+	End int
 }
 
 // UTF16Selection is a selected range of UTF-16 code units plus its caret
 // orientation. IsNil marks "no selection" (as opposed to an empty one).
 type UTF16Selection struct {
-	Range    IntRange
+	// Range is the selected span.
+	Range IntRange
+	// Reversed is true when the caret is at the start of the range.
 	Reversed bool
-	IsNil    bool
+	// IsNil is true when there is no selection at all.
+	IsNil bool
 }
 
 // WindowOptions describes a window to be opened.

@@ -127,7 +127,7 @@ gpui.NewStyledText(
 - Both embed `StyledMixin`. Padding, size, margins, text style and `Opacity`
   take effect on a text leaf; `Bg`/`Border`/`Shadow` builders exist (via the
   mixin) but a text leaf paints **no box**: wrap it in a styled `Div` for a
-  background or border (tracked in `_docs/wip.md`). `Text` re-declares the style methods to keep a `*Text` chain; `StyledText`
+  background or border (tracked in `_docs/roadmap.md`). `Text` re-declares the style methods to keep a `*Text` chain; `StyledText`
   does not, so style it with statements on a variable or wrap it in a `Div`.
 - Text style set on an ancestor **`Div`** (`TextColor`, `TextSize`,
   `FontWeight`, `FontFamily`, `TextLineHeight`, `TextStrikethrough`) cascades
@@ -262,3 +262,5 @@ Notes for authors:
   `gpui.GlobalElementID{Path: id.Path}` is the key). State that is not read
   or written during a frame is dropped at the end of that frame (as in
   GPUI), so access it every frame the element is drawn.
+
+See also: [reference/elements.md](../reference/elements.md) (every exported element method), [reference/style-builders.md](../reference/style-builders.md) and the [cookbook](../guides/cookbook.md#custom-element-with-children) for a worked custom element.

@@ -1730,13 +1730,11 @@ Div().FlexCol().SizeFull().Gap(12).P(16).Bg(Gray50)
 func main() {
     flags: -png PATH, -width, -height, -smoke MS
     if *png != "" { gpui.RenderToPNG(...); return }
-    p := ebitenplatform.New()
-    app := gpui.NewAppWithPlatform(p)
-    app.Keymap().AddBindings(
-        gpui.NewKeyBinding("enter", gpui.NewAction("add-todo"), "textbox"),
-        gpui.NewKeyBinding("escape", gpui.NewAction("blur"), "textbox"),
-    )
-    app.Run(func(cx *gpui.App) {
+    err := ebitenplatform.New().Run(func(cx *gpui.App) {
+        cx.Keymap().AddBindings(
+            gpui.NewKeyBinding("enter", gpui.NewAction("add-todo"), "textbox"),
+            gpui.NewKeyBinding("escape", gpui.NewAction("blur"), "textbox"),
+        )
         cx.OpenWindow(opts, func(w *gpui.Window, cx *gpui.App) gpui.EntityRoot { return todoApp })
     })
 }
@@ -1757,4 +1755,4 @@ func main() {
 6. Prefer `float32` for geometry; convert to `int` only at raster/pixel boundaries.
 7. Never hold a `*T` from an entity across a call that can re-enter the same
    entity — upgrade the weak handle at invoke time instead (see
-   `Context.Listener`).
+   the package function `gpui.Listener(ctx, f)`).
