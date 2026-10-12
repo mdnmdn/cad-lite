@@ -995,8 +995,23 @@ type HeadlessWindow struct{ /* ... */ }
 func (w *HeadlessWindow) Pixels() []byte
 func (w *HeadlessWindow) Image() *image.RGBA
 func (w *HeadlessWindow) SavePNG(path string) error
-func (w *HeadlessWindow) Dispatch(input PlatformInput)  // feed synthetic input
+func (w *HeadlessWindow) Dispatch(input PlatformInput)  // feed synthetic input, then draw if invalidated
+
+// Additions (implemented):
+func (p *HeadlessPlatform) SetScaleFactor(s float32)     // scale of windows opened afterwards
+func (p *HeadlessPlatform) SetBackgroundColor(c Rgba)    // clear color of windows opened afterwards
+func (p *HeadlessPlatform) Windows() []*HeadlessWindow
+func (w *HeadlessWindow) Window() *Window
 ```
+
+Semantics: `w`,`h` are logical px; the output image is `round(w*scale) x
+round(h*scale)` device px. Default background is opaque white. HeadlessWindow
+rasterizes lazily (the window pipeline never calls `Present`): `Pixels()` /
+`Image()` / `Dispatch` draw if the window is invalid, scale the scene by the
+scale factor, rasterize, and `Present` to itself. `HeadlessWindow` implements
+no `FrameRequester`; `RequestFrame` only sets a pending flag, so redraws never
+re-enter an in-flight event dispatch. A text measurer is installed
+automatically when `DefaultFontPath() != ""`.
 
 `RenderToPNG` uses `image/png` from the standard library.
 
@@ -1063,6 +1078,8 @@ Default font resolution order (first existing path wins), overridable with the
 // Clipboard reads/writes the system clipboard via OS tools.
 func ClipboardRead() (string, error)
 func ClipboardWrite(s string) error
+// ClipboardAvailable reports whether an OS clipboard tool was found.
+func ClipboardAvailable() bool
 ```
 
 - darwin: `pbpaste` / `pbcopy`

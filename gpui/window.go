@@ -119,6 +119,10 @@ type scrollState struct {
 	maxW, maxH Pixels
 }
 
+// windowBinder is implemented by platform windows that need the owning
+// *Window (the headless window uses it to draw, rasterize and dispatch).
+type windowBinder interface{ bindWindow(*Window) }
+
 // newWindow wraps a PlatformWindow. It hooks the platform's frame callback
 // when the window implements FrameRequester.
 func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
@@ -135,6 +139,9 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 	if pw != nil {
 		if s := pw.ScaleFactor(); s > 0 {
 			w.scale = s
+		}
+		if wb, ok := pw.(windowBinder); ok {
+			wb.bindWindow(w)
 		}
 		if fr, ok := pw.(FrameRequester); ok {
 			fr.OnRequestFrame(func() {

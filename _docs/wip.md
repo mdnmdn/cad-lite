@@ -14,9 +14,9 @@ Last updated: 2026-10-12.
 | A1  | Core UI (geometry, color, style, flexbox layout, div, scene, raster, events, keymap, focus, entity/context/app, window pipeline, font shaper) | done | — | `gpui/{geometry,color,style,styled,layout,element,div,scene,raster,bounds,events,keymap,focus,entity,context,app,subscription,window,platform,font,text}.go` |
 | A2  | Text elements: `Text`, `StyledText`, `Str`, style helpers | done | A1 | `gpui/text_elem.go` |
 | A3  | TextInput (PlatformInputHandler, editing keys, submit/blur) | done | A1 | `gpui/input.go` |
-| A4  | Headless platform + `RenderToPNG`/`RenderToImage` | todo | A1 | `gpui/headless.go` (new) |
-| A5  | Clipboard via OS tools (pbpaste/pbcopy, powershell, wl/xclip/xsel) | todo | — | `gpui/clipboard.go` (new) |
-| A6  | Ebiten backend (`gpui.Platform`, input mapping, present/draw loop) | todo | A5 | `gpui/ebitenplatform/` (new) |
+| A4  | Headless platform + `RenderToPNG`/`RenderToImage` | done | A1 | `gpui/headless.go` (new) |
+| A5  | Clipboard via OS tools (pbpaste/pbcopy, powershell, wl/xclip/xsel) | done | — | `gpui/clipboard.go` (new) |
+| A6  | Ebiten backend (`gpui.Platform`, input mapping, present/draw loop) | done (see A6 notes: 3 core gaps) | A5 | `gpui/ebitenplatform/` (new) |
 | A7 | Todo app (`examples/todo`, `-png` headless + interactive modes) | todo | A2, A3, A4, A6 | `examples/todo/main.go` (new) |
 | A8 | Verification: `gofmt -l .`, `go vet ./...`, `go test ./...`, `go mod tidy`, PNG smoke test | todo | A4–A7 | — |
 
@@ -41,3 +41,13 @@ None. Pick the next `todo` activity with unmet dependencies; move its status to
 - A6 input mapping per contract §17: ebiten wheel Y is inverted (normalize to
   positive = scroll down); `KeyMeta` → `Platform` on darwin, `KeyControl` →
   `Platform` on windows/linux.
+- **A6 (2026-10-12):** `gpui/ebitenplatform/{platform,input}.go` + tests. Core
+  gaps found (not fixed, outside A6 scope): (1) `Window.Draw` never
+  rasterizes or calls `PlatformWindow.Present`, so nothing reaches the screen
+  until the core does `NewRasterizer(bounds*scale).Render(scene)` + `Present`;
+  (2) nothing calls `PlatformWindow.SetInputHandler`, so cmd/ctrl+c/x cannot
+  read the selection (paste works via character input); (3) `Window` exposes
+  no hitbox accessor, so Click is synthesized by press/release proximity
+  (4 logical px) rather than same-hitbox; also `Window.scale` is read once at
+  creation. Contract says `New() *gpui.Platform` but `gpui.Platform` is an
+  interface; implemented as `New() gpui.Platform`.
