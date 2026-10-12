@@ -880,6 +880,8 @@ func (w *Window) SetElementState(id GlobalElementID, v any)
 func (w *Window) DispatchEvent(input PlatformInput, cx *App)
 func (w *Window) Draw(cx *App)            // full pipeline; returns nothing
 func (w *Window) Scene() *Scene
+func (w *Window) SetBackground(c Rgba)   // clear color for rasterization; default opaque white
+func (w *Window) HitTest(p Point) (idx int, ok bool) // topmost hitbox of the rendered frame; idx stable until next Draw
 ```
 
 `Frame` (unexported fields, but exposed for tests via accessors):
@@ -925,6 +927,10 @@ func (f *Frame) HitTest(p Point) int
 6. `Paint` each element in tree order: emits quads/glyphs/underlines with the
    scene order incremented per primitive.
 7. Swap `nextFrame` into `renderedFrame`.
+8. If there is a `PlatformWindow`: re-read its `ScaleFactor()`, scale the scene
+   from logical to device px, rasterize (cleared to the background color) and
+   call `Present(pix, round(w*scale), round(h*scale))`; then call
+   `SetInputHandler(focusedInputHandler())` (nil when none is focused).
 
 `Prepaint` is where `Interactivity` decides hover/active/focus style refinements
 and where the content mask (for `Overflow`) is pushed onto a stack on the window.
@@ -1006,9 +1012,9 @@ func (w *HeadlessWindow) Window() *Window
 
 Semantics: `w`,`h` are logical px; the output image is `round(w*scale) x
 round(h*scale)` device px. Default background is opaque white. HeadlessWindow
-rasterizes lazily (the window pipeline never calls `Present`): `Pixels()` /
-`Image()` / `Dispatch` draw if the window is invalid, scale the scene by the
-scale factor, rasterize, and `Present` to itself. `HeadlessWindow` implements
+draws lazily: `Pixels()` /
+`Image()` / `Dispatch` draw if the window is invalid; `Window.Draw` rasterizes
+and `Present`s to the HeadlessWindow, which keeps the pixels. `HeadlessWindow` implements
 no `FrameRequester`; `RequestFrame` only sets a pending flag, so redraws never
 re-enter an in-flight event dispatch. A text measurer is installed
 automatically when `DefaultFontPath() != ""`.
@@ -1095,7 +1101,7 @@ package ebitenplatform
 import "go-gpui/gpui"
 
 type Platform struct{ /* ... */ }
-func New() *gpui.Platform    // returns a gpui.Platform
+func New() gpui.Platform     // gpui.Platform is an interface
 ```
 
 Implements `gpui.Platform`:
@@ -1118,7 +1124,8 @@ Implements `gpui.Platform`:
 Input mapping in `Update`:
 
 - `inpututil.IsMouseButtonJustPressed` → `MouseDownEvent`; `JustReleased` →
-  `MouseUpEvent` + a `ClickEvent` if the press started on the same hitbox;
+  `MouseUpEvent` + a `ClickEvent` if `Window.HitTest` yields the same hitbox
+  index at press and release;
   `ebiten.CursorPosition()` → `Position` each tick, synthesized into
   `MouseMoveEvent` when it changed.
 - `ebiten.Wheel()` → `ScrollWheelEvent` (note: ebiten's wheel y is typically
@@ -1128,8 +1135,8 @@ Input mapping in `Update`:
 - Special keys via `inpututil.IsKeyJustPressed` (only valid in `Update`):
   `KeyEnter→"enter"`, `KeyEscape→"escape"`, `KeyBackspace`, `KeyDelete`,
   `KeyLeft/Right/Up/Down`, `KeySpace→"space"`, `KeyTab→"tab"`, letters/digits.
-- Modifiers: `ebiten.IsKeyPressed(ebiten.KeyMeta)` → `Platform` (Cmd on macOS);
-  on Windows/Linux map `KeyControl` → `Platform` and `KeyMeta` → `Control`
+- Modifiers: `ebiten.IsKeyPressed(ebiten.KeyMeta)` → `ModPlatform` (Cmd on macOS);
+  on Windows/Linux map `KeyControl` → `ModPlatform` and `KeyMeta` → `Control`
   (so Cmd/Ctrl behave the same for the app author). Detect this with
   `runtime.GOOS`. `KeyShift`, `KeyAlt`.
 - Clipboard via `gpui.ClipboardRead/Write` for cmd/ctrl+c/v/x.

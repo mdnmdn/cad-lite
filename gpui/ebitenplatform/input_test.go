@@ -89,22 +89,22 @@ func TestClickTracker(t *testing.T) {
 	var c clickTracker
 	t0 := time.Now()
 	p := gpui.Point{X: 10, Y: 10}
-	if n := c.press(gpui.MouseLeft, p, t0); n != 1 {
+	if n := c.press(gpui.MouseLeft, p, 3, t0); n != 1 {
 		t.Fatalf("first press count %d", n)
 	}
-	if ok, _ := c.release(gpui.MouseLeft, gpui.Point{X: 12, Y: 11}); !ok {
-		t.Error("release near press should click")
+	if ok, _ := c.release(gpui.MouseLeft, 3); !ok {
+		t.Error("release on same hitbox should click")
 	}
-	if n := c.press(gpui.MouseLeft, p, t0.Add(100*time.Millisecond)); n != 2 {
+	if n := c.press(gpui.MouseLeft, p, 3, t0.Add(100*time.Millisecond)); n != 2 {
 		t.Errorf("double click count %d", n)
 	}
-	if ok, _ := c.release(gpui.MouseLeft, gpui.Point{X: 100, Y: 100}); ok {
-		t.Error("release far away should not click")
+	if ok, _ := c.release(gpui.MouseLeft, 4); ok {
+		t.Error("release on another hitbox should not click")
 	}
-	if n := c.press(gpui.MouseLeft, p, t0.Add(2*time.Second)); n != 1 {
+	if n := c.press(gpui.MouseLeft, p, 3, t0.Add(2*time.Second)); n != 1 {
 		t.Errorf("slow press count %d", n)
 	}
-	if ok, _ := c.release(gpui.MouseRight, p); ok {
+	if ok, _ := c.release(gpui.MouseRight, 3); ok {
 		t.Error("different button should not click")
 	}
 }

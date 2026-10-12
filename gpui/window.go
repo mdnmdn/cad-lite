@@ -2,6 +2,7 @@ package gpui
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 )
@@ -43,6 +44,9 @@ type Window struct {
 
 	text TextMeasurer
 	app  *App
+
+	background Rgba
+	raster     *Rasterizer
 
 	// currentElementID is the global id of the element currently being
 	// prepainted; the walker sets it before each Prepaint call.
@@ -131,6 +135,7 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 		options:        o,
 		app:            app,
 		scale:          1,
+		background:     White,
 		invalid:        true,
 		layoutNodes:    make(map[LayoutID]*LayoutNode),
 		nextLayoutID:   1,
@@ -433,6 +438,39 @@ func (w *Window) Draw(cx *App) {
 	w.renderedFrame, w.nextFrame = w.nextFrame, w.renderedFrame
 	w.nextFrame.reset()
 	w.invalid = false
+
+	if w.platformWindow != nil {
+		w.present()
+		w.platformWindow.SetInputHandler(w.focusedInputHandler())
+	}
+}
+
+// present rasterizes the rendered frame at device scale and hands it to the
+// platform window.
+func (w *Window) present() {
+	if s := w.platformWindow.ScaleFactor(); s > 0 {
+		w.scale = s
+	}
+	b := w.Bounds()
+	pw := int(math.Round(float64(b.Width()) * float64(w.scale)))
+	ph := int(math.Round(float64(b.Height()) * float64(w.scale)))
+	if w.raster == nil || w.raster.w != pw || w.raster.h != ph {
+		w.raster = NewRasterizer(pw, ph)
+	}
+	w.raster.Reset(w.background)
+	w.raster.Render(scaleScene(&w.renderedFrame.scene, w.scale))
+	w.platformWindow.Present(w.raster.Pixels(), pw, ph)
+}
+
+// SetBackground sets the color the frame is cleared to before rasterizing
+// (default opaque white).
+func (w *Window) SetBackground(c Rgba) { w.background = c }
+
+// HitTest hit-tests the last drawn frame at p (logical px) and returns the
+// index of the topmost hitbox, which is stable until the next Draw.
+func (w *Window) HitTest(p Point) (int, bool) {
+	i := w.renderedFrame.hitboxes.HitTest(p)
+	return i, i >= 0
 }
 
 // buildRenderNode correlates the element tree with the layout tree,

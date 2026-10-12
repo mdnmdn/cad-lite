@@ -310,3 +310,44 @@ func abs32(v float32) float32 {
 	}
 	return v
 }
+
+// scaleScene returns a copy of s with every primitive scaled from logical to
+// device pixels.
+func scaleScene(s *Scene, scale float32) *Scene {
+	k := Pixels(scale)
+	if scale == 1 {
+		return s
+	}
+	sb := func(b Bounds) Bounds {
+		return Bounds{
+			Origin: Point{X: b.Origin.X * k, Y: b.Origin.Y * k},
+			Size:   Size{W: b.Size.W * k, H: b.Size.H * k},
+		}
+	}
+	sm := func(m ContentMask) ContentMask {
+		if m.Bounds.Size.W >= 1e6 {
+			return m
+		}
+		return ContentMask{Bounds: sb(m.Bounds)}
+	}
+	out := &Scene{}
+	for _, q := range s.Quads {
+		q.Bounds = sb(q.Bounds)
+		q.ContentMask = sm(q.ContentMask)
+		q.BorderWidths = Edges{Top: q.BorderWidths.Top * k, Right: q.BorderWidths.Right * k, Bottom: q.BorderWidths.Bottom * k, Left: q.BorderWidths.Left * k}
+		q.CornerRadii = Corners{TopLeft: q.CornerRadii.TopLeft * k, TopRight: q.CornerRadii.TopRight * k, BottomLeft: q.CornerRadii.BottomLeft * k, BottomRight: q.CornerRadii.BottomRight * k}
+		out.Quads = append(out.Quads, q)
+	}
+	for _, u := range s.Underlines {
+		u.Bounds = sb(u.Bounds)
+		u.ContentMask = sm(u.ContentMask)
+		u.Thickness *= k
+		out.Underlines = append(out.Underlines, u)
+	}
+	for _, g := range s.Sprites {
+		g.Bounds = sb(g.Bounds)
+		g.ContentMask = sm(g.ContentMask)
+		out.Sprites = append(out.Sprites, g)
+	}
+	return out
+}

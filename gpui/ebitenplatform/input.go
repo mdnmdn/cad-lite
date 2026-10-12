@@ -164,7 +164,7 @@ func printableRunes(rs []rune) string {
 type clickTracker struct {
 	down     bool
 	button   gpui.MouseButton
-	pos      gpui.Point
+	hit      int
 	lastAt   time.Time
 	lastPos  gpui.Point
 	lastBtn  gpui.MouseButton
@@ -178,23 +178,23 @@ func near(a, b gpui.Point) bool {
 
 // press records a button press and returns its click count (1, 2, 3, ...
 // for presses in quick succession at the same spot).
-func (c *clickTracker) press(b gpui.MouseButton, p gpui.Point, now time.Time) int {
+func (c *clickTracker) press(b gpui.MouseButton, p gpui.Point, hit int, now time.Time) int {
 	if c.hasPrior && c.lastBtn == b && now.Sub(c.lastAt) <= multiClickGap && near(c.lastPos, p) {
 		c.count++
 	} else {
 		c.count = 1
 	}
-	c.down, c.button, c.pos = true, b, p
+	c.down, c.button, c.hit = true, b, hit
 	c.lastAt, c.lastPos, c.lastBtn, c.hasPrior = now, p, b, true
 	return c.count
 }
 
 // release ends a press and reports whether it completes a click, meaning the
-// pointer is still within the slop radius of where the button went down.
-func (c *clickTracker) release(b gpui.MouseButton, p gpui.Point) (clicked bool, count int) {
+// release landed on the same hitbox as the press.
+func (c *clickTracker) release(b gpui.MouseButton, hit int) (clicked bool, count int) {
 	if !c.down || c.button != b {
 		return false, 0
 	}
 	c.down = false
-	return near(c.pos, p), c.count
+	return c.hit == hit, c.count
 }

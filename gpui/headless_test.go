@@ -95,3 +95,46 @@ func TestHeadlessWindowDispatchClick(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type presentRecorder struct {
+	gpui.PlatformWindow
+	calls, w, h, n int
+}
+
+func (r *presentRecorder) Present(pix []byte, w, h int) {
+	r.calls++
+	r.w, r.h, r.n = w, h, len(pix)
+	r.PlatformWindow.Present(pix, w, h)
+}
+
+type recPlatform struct {
+	*gpui.HeadlessPlatform
+	rec *presentRecorder
+}
+
+func (p *recPlatform) OpenWindow(o gpui.WindowOptions) (gpui.PlatformWindow, error) {
+	pw, err := p.HeadlessPlatform.OpenWindow(o)
+	p.rec = &presentRecorder{PlatformWindow: pw}
+	return p.rec, err
+}
+
+func TestWindowDrawPresentsDeviceSizedFrame(t *testing.T) {
+	hp := gpui.NewHeadlessPlatform()
+	hp.SetScaleFactor(2)
+	p := &recPlatform{HeadlessPlatform: hp}
+	app := gpui.NewAppWithPlatform(p)
+	err := app.OpenWindow(gpui.WindowOptions{Width: 40, Height: 30}, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return tree(nil) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.rec.calls != 1 || p.rec.w != 80 || p.rec.h != 60 || p.rec.n != 4*80*60 {
+		t.Fatalf("present = %+v", *p.rec)
+	}
+	win := app.Windows()[0]
+	if _, ok := win.HitTest(gpui.Point{X: 5, Y: 5}); !ok {
+		t.Error("HitTest missed root hitbox")
+	}
+	if _, ok := win.HitTest(gpui.Point{X: 500, Y: 500}); ok {
+		t.Error("HitTest hit outside window")
+	}
+}

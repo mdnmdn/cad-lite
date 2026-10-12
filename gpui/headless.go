@@ -3,7 +3,6 @@ package gpui
 import (
 	"image"
 	"image/png"
-	"math"
 	"os"
 	"sync"
 )
@@ -164,6 +163,7 @@ type HeadlessWindow struct {
 
 func (hw *HeadlessWindow) bindWindow(w *Window) {
 	hw.win = w
+	w.SetBackground(hw.background)
 	if w.text == nil && DefaultFontPath() != "" {
 		w.SetTextMeasurer(NewShaper(NewFontManager()))
 	}
@@ -217,20 +217,9 @@ func (hw *HeadlessWindow) flush() {
 		return
 	}
 	if hw.win.invalid || hw.pending || hw.pix == nil {
-		hw.win.Draw(hw.win.app)
 		hw.pending = false
-		hw.win.invalid = false
-		hw.render()
+		hw.win.Draw(hw.win.app)
 	}
-}
-
-func (hw *HeadlessWindow) render() {
-	pw := int(math.Round(float64(hw.w) * float64(hw.scale)))
-	ph := int(math.Round(float64(hw.h) * float64(hw.scale)))
-	r := NewRasterizer(pw, ph)
-	r.Reset(hw.background)
-	r.Render(scaleScene(hw.win.Scene(), hw.scale))
-	hw.Present(r.Pixels(), pw, ph)
 }
 
 // Pixels returns the latest frame as premultiplied RGBA, 4*w*h bytes in
@@ -263,43 +252,4 @@ func (hw *HeadlessWindow) Image() *image.RGBA {
 // SavePNG writes the latest frame to path as a PNG.
 func (hw *HeadlessWindow) SavePNG(path string) error {
 	return writePNG(path, hw.Image())
-}
-
-func scaleScene(s *Scene, scale float32) *Scene {
-	k := Pixels(scale)
-	if scale == 1 {
-		return s
-	}
-	sb := func(b Bounds) Bounds {
-		return Bounds{
-			Origin: Point{X: b.Origin.X * k, Y: b.Origin.Y * k},
-			Size:   Size{W: b.Size.W * k, H: b.Size.H * k},
-		}
-	}
-	sm := func(m ContentMask) ContentMask {
-		if m.Bounds.Size.W >= 1e6 {
-			return m
-		}
-		return ContentMask{Bounds: sb(m.Bounds)}
-	}
-	out := &Scene{}
-	for _, q := range s.Quads {
-		q.Bounds = sb(q.Bounds)
-		q.ContentMask = sm(q.ContentMask)
-		q.BorderWidths = Edges{Top: q.BorderWidths.Top * k, Right: q.BorderWidths.Right * k, Bottom: q.BorderWidths.Bottom * k, Left: q.BorderWidths.Left * k}
-		q.CornerRadii = Corners{TopLeft: q.CornerRadii.TopLeft * k, TopRight: q.CornerRadii.TopRight * k, BottomLeft: q.CornerRadii.BottomLeft * k, BottomRight: q.CornerRadii.BottomRight * k}
-		out.Quads = append(out.Quads, q)
-	}
-	for _, u := range s.Underlines {
-		u.Bounds = sb(u.Bounds)
-		u.ContentMask = sm(u.ContentMask)
-		u.Thickness *= k
-		out.Underlines = append(out.Underlines, u)
-	}
-	for _, g := range s.Sprites {
-		g.Bounds = sb(g.Bounds)
-		g.ContentMask = sm(g.ContentMask)
-		out.Sprites = append(out.Sprites, g)
-	}
-	return out
 }

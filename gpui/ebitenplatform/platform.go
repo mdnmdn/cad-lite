@@ -235,11 +235,13 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 	}
 	for _, b := range buttons {
 		if inpututil.IsMouseButtonJustPressed(b.eb) {
-			n := g.clicks.press(b.gb, pos, time.Now())
+			hit, _ := win.HitTest(pos)
+			n := g.clicks.press(b.gb, pos, hit, time.Now())
 			win.DispatchEvent(gpui.MouseDownEvent{Position: pos, Button: b.gb, Modifiers: mods, ClickCount: n}, app)
 		}
 		if inpututil.IsMouseButtonJustReleased(b.eb) {
-			clicked, n := g.clicks.release(b.gb, pos)
+			hit, _ := win.HitTest(pos)
+			clicked, n := g.clicks.release(b.gb, hit)
 			up := gpui.MouseUpEvent{Position: pos, Button: b.gb, Modifiers: mods, ClickCount: n}
 			win.DispatchEvent(up, app)
 			if clicked {
