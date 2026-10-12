@@ -1,3 +1,4 @@
 *.png
 /bin/
 .DS_Store
+/_tmp/
