@@ -161,6 +161,11 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 		nextLayoutID:   1,
 		elementStates:  make(map[string]any),
 	}
+	if app != nil {
+		if sh := app.defaultShaper(); sh != nil {
+			w.text = sh
+		}
+	}
 	if pw != nil {
 		if s := pw.ScaleFactor(); s > 0 {
 			w.scale = s
@@ -416,6 +421,10 @@ func (w *Window) initScrollState(id GlobalElementID, max Size) {
 // SetTextMeasurer installs the window's text backend. A nil measurer makes
 // text elements fall back to a crude estimator.
 func (w *Window) SetTextMeasurer(t TextMeasurer) { w.text = t }
+
+// TextMeasurer returns the window's text backend, or nil when none is
+// installed.
+func (w *Window) TextMeasurer() TextMeasurer { return w.text }
 
 // Scene returns the last drawn frame's scene.
 func (w *Window) Scene() *Scene { return &w.renderedFrame.scene }

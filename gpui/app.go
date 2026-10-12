@@ -68,6 +68,9 @@ type App struct {
 	globals        map[reflect.Type]any
 	pendingUpdates int
 	quitting       atomic.Bool
+
+	shaper     *Shaper
+	shaperInit bool
 }
 
 // NewApp returns an App with a no-op stub platform, suitable for headless
@@ -228,6 +231,18 @@ func (a *App) OpenWindow(o WindowOptions, build func(*Window, *App) EntityRoot) 
 	a.windows = append(a.windows, w)
 	a.Update(func(*App) { w.Draw(a) })
 	return nil
+}
+
+// defaultShaper returns the App's shared shaper, creating it on first use. It
+// is nil when no system font is available.
+func (a *App) defaultShaper() *Shaper {
+	if !a.shaperInit {
+		a.shaperInit = true
+		if DefaultFontPath() != "" {
+			a.shaper = NewShaper(NewFontManager())
+		}
+	}
+	return a.shaper
 }
 
 // Windows returns the open windows in creation order.

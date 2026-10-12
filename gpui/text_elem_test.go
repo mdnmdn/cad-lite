@@ -57,6 +57,9 @@ func drawTextRoot(t *testing.T, w, h float32, root gpui.EntityRoot, withShaper b
 				w.SetTextMeasurer(gpui.NewShaper(m))
 			}
 		}
+		if !withShaper {
+			w.SetTextMeasurer(nil)
+		}
 		return root
 	}); err != nil {
 		t.Fatalf("OpenWindow: %v", err)
@@ -178,5 +181,35 @@ func TestStyledTextPaintsAllRuns(t *testing.T) {
 	}
 	if !seenBlue {
 		t.Error("no sprite painted with the second run's Blue500 color")
+	}
+}
+
+func TestNonHeadlessPlatformGetsDefaultShaper(t *testing.T) {
+	if !requireFontForShaper(t) {
+		t.Skip("no system font found on this machine")
+	}
+	p := &textFakePlatform{}
+	app := gpui.NewAppWithPlatform(p)
+	root := gpui.RenderFunc(func(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
+		return gpui.NewDiv().SizeWH(400, 300).Child(gpui.NewText("Hello").TextSize(24))
+	})
+	open := func() *gpui.Window {
+		if err := app.OpenWindow(gpui.WindowOptions{Width: 400, Height: 300}, func(w *gpui.Window, cx *gpui.App) gpui.EntityRoot {
+			if w.TextMeasurer() == nil {
+				t.Fatal("window on a non-headless platform has no text measurer")
+			}
+			return root
+		}); err != nil {
+			t.Fatalf("OpenWindow: %v", err)
+		}
+		return app.Windows()[len(app.Windows())-1]
+	}
+	w1 := open()
+	w1.Draw(app)
+	if len(w1.Scene().Sprites) == 0 {
+		t.Fatal("Text element painted no glyph sprites")
+	}
+	if w2 := open(); w2.TextMeasurer() != w1.TextMeasurer() {
+		t.Error("windows of one App should share the shaper")
 	}
 }

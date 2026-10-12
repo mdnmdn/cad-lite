@@ -164,9 +164,6 @@ type HeadlessWindow struct {
 func (hw *HeadlessWindow) bindWindow(w *Window) {
 	hw.win = w
 	w.SetBackground(hw.background)
-	if w.text == nil && DefaultFontPath() != "" {
-		w.SetTextMeasurer(NewShaper(NewFontManager()))
-	}
 }
 
 // Bounds returns the logical window size.

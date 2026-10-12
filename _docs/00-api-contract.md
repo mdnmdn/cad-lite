@@ -1079,8 +1079,10 @@ draws lazily: `Pixels()` /
 `Image()` / `Dispatch` draw if the window is invalid; `Window.Draw` rasterizes
 and `Present`s to the HeadlessWindow, which keeps the pixels. `HeadlessWindow` implements
 no `FrameRequester`; `RequestFrame` only sets a pending flag, so redraws never
-re-enter an in-flight event dispatch. A text measurer is installed
-automatically when `DefaultFontPath() != ""`.
+re-enter an in-flight event dispatch. Text shaping is not
+headless-specific: every window created through `App.OpenWindow` gets the
+App's shared `Shaper` (one `FontManager` per App) when `DefaultFontPath() != ""`;
+`Window.SetTextMeasurer` overrides it and `Window.TextMeasurer()` returns it.
 
 `RenderToPNG` uses `image/png` from the standard library.
 
