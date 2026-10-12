@@ -18,6 +18,9 @@ import (
 // clears the whole cache (a deliberately simple bound for this POC).
 const glyphMaskCacheLimit = 4096
 
+// shapeCacheLimit bounds the Shaper's shaped-run cache the same way.
+const shapeCacheLimit = 2048
+
 // Shaper shapes text into positioned glyphs and rasterizes glyphs to coverage
 // masks. A Shaper is not safe for concurrent use.
 type Shaper struct {
@@ -25,6 +28,54 @@ type Shaper struct {
 	hb    shaping.HarfbuzzShaper
 	buf   sfnt.Buffer                 // scratch buffer for outline loading
 	masks map[glyphMaskKey]*GlyphMask // rasterized glyph cache
+	runs  map[shapeKey]*shapedRun     // shaped text cache
+}
+
+// shapeKey identifies one cached shaping result.
+type shapeKey struct {
+	face *Font
+	text string
+}
+
+// shapedRun is the wrap-independent result of shaping a string with one
+// face: HarfBuzz glyphs (Cluster still a rune index), the final pen, and the
+// line-break data. It is immutable once cached.
+type shapedRun struct {
+	runes     []rune
+	glyphs    []ShapedGlyph
+	pen       fixed.Int26_6
+	byteOff   []int
+	clusters  []clusterSpan
+	allowed   map[int]bool
+	mandatory map[int]bool
+}
+
+// shaped returns the cached shaping of text with face, shaping it on a miss.
+// Layout measures the same strings many times per frame and every frame, so
+// this keeps HarfBuzz and the line segmenter off the steady-state path.
+func (s *Shaper) shaped(text string, face *Font) *shapedRun {
+	key := shapeKey{face: face, text: text}
+	if r := s.runs[key]; r != nil {
+		return r
+	}
+	runes := []rune(text)
+	out := s.shapeRunes(runes, face)
+	glyphs, pen := toShapedGlyphs(out.Glyphs)
+	allowed, mandatory := lineBreaks(runes)
+	r := &shapedRun{
+		runes:     runes,
+		glyphs:    glyphs,
+		pen:       pen,
+		byteOff:   runeByteOffsets(runes),
+		clusters:  groupClusters(glyphs),
+		allowed:   allowed,
+		mandatory: mandatory,
+	}
+	if s.runs == nil || len(s.runs) >= shapeCacheLimit {
+		s.runs = make(map[shapeKey]*shapedRun)
+	}
+	s.runs[key] = r
+	return r
 }
 
 // glyphMaskKey identifies one cached glyph mask: the face pointer selects the
@@ -63,15 +114,13 @@ func (s *Shaper) ShapeLine(text string, face *Font) ShapedLine {
 	if face == nil || face.shapeFace == nil {
 		return ShapedLine{Ascent: ascent, Descent: descent}
 	}
-	runes := []rune(text)
-	out := s.shapeRunes(runes, face)
-	glyphs, pen := toShapedGlyphs(out.Glyphs)
-	byteOff := runeByteOffsets(runes)
+	run := s.shaped(text, face)
+	glyphs := append([]ShapedGlyph(nil), run.glyphs...)
 	for i := range glyphs {
-		glyphs[i].Cluster = byteOff[glyphs[i].Cluster]
+		glyphs[i].Cluster = run.byteOff[glyphs[i].Cluster]
 	}
 	return ShapedLine{
-		Width:   px26(pen),
+		Width:   px26(run.pen),
 		Ascent:  ascent,
 		Descent: descent,
 		Glyphs:  glyphs,
@@ -88,12 +137,9 @@ func (s *Shaper) ShapeWrap(text string, face *Font, wrapWidth float32) []ShapedL
 	if face == nil || face.shapeFace == nil {
 		return []ShapedLine{{Ascent: ascent, Descent: descent}}
 	}
-	runes := []rune(text)
-	out := s.shapeRunes(runes, face)
-	glyphs, _ := toShapedGlyphs(out.Glyphs)
-	byteOff := runeByteOffsets(runes)
-	clusters := groupClusters(glyphs)
-	allowed, mandatory := lineBreaks(runes)
+	run := s.shaped(text, face)
+	runes, glyphs, byteOff := run.runes, run.glyphs, run.byteOff
+	clusters, allowed, mandatory := run.clusters, run.allowed, run.mandatory
 
 	var lines []ShapedLine
 	for k := 0; k < len(clusters); {

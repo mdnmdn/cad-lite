@@ -17,10 +17,20 @@ import (
 type Platform struct {
 	win  *window
 	quit atomic.Bool
+	// snapshotKey is the frame-snapshot binding; nil disables it.
+	snapshotKey *gpui.Keystroke
 }
 
-// New returns an ebiten-backed gpui.Platform.
-func New() gpui.Platform { return &Platform{} }
+// New returns an ebiten-backed gpui.Platform configured by opts. The
+// frame-snapshot shortcut defaults to DefaultSnapshotKey.
+func New(opts ...Option) gpui.Platform {
+	p := &Platform{}
+	WithSnapshotKey(DefaultSnapshotKey())(p)
+	for _, o := range opts {
+		o(p)
+	}
+	return p
+}
 
 // Name reports the host OS name: "macos", "windows" or "linux".
 func (p *Platform) Name() string {
@@ -108,9 +118,11 @@ func (w *window) RequestFrame() { w.pending = true }
 // OnRequestFrame registers the window's draw routine.
 func (w *window) OnRequestFrame(f func()) { w.onFrame = f }
 
-// Present stores the rasterized frame for the next ebiten Draw.
+// Present keeps a reference to the rasterized frame for the next ebiten Draw.
+// No copy is needed: the buffer only changes in Window.Draw, which runs inside
+// Update on the same goroutine as Draw.
 func (w *window) Present(pix []byte, pw, ph int) {
-	w.pix = append(w.pix[:0], pix...)
+	w.pix = pix
 	w.pixW, w.pixH = pw, ph
 	w.fresh = true
 }
@@ -139,6 +151,9 @@ type game struct {
 	keyBuf   []ebiten.Key
 	runeBuf  []rune
 	clip     *clipWorker
+	// swallowed holds keys whose press was consumed by the platform (the
+	// snapshot shortcut), so their release is not dispatched either.
+	swallowed map[ebiten.Key]bool
 }
 
 func (g *game) Layout(ow, oh int) (int, int) {
@@ -266,6 +281,10 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 func (g *game) pollKeys(win *gpui.Window, app *gpui.App, w *window, mods gpui.Modifiers) {
 	g.keyBuf = inpututil.AppendJustReleasedKeys(g.keyBuf[:0])
 	for _, k := range g.keyBuf {
+		if g.swallowed[k] {
+			delete(g.swallowed, k)
+			continue
+		}
 		if name, _, ok := keyName(k); ok {
 			win.DispatchEvent(gpui.KeyUpEvent{Keystroke: gpui.Keystroke{Modifiers: mods, Key: name}}, app)
 		}
@@ -287,6 +306,17 @@ func (g *game) pollKeys(win *gpui.Window, app *gpui.App, w *window, mods gpui.Mo
 			continue
 		}
 		ks := gpui.Keystroke{Modifiers: mods, Key: name}
+		if inpututil.KeyPressDuration(k) == 1 && isSnapshot(g.p.snapshotKey, ks) {
+			if g.swallowed == nil {
+				g.swallowed = make(map[ebiten.Key]bool)
+			}
+			g.swallowed[k] = true
+			snapshot(".", w.pix, w.pixW, w.pixH, time.Now())
+			continue
+		}
+		if g.swallowed[k] {
+			continue
+		}
 		if op := clipboardOp(runtime.GOOS, name, mods); op != "" &&
 			startClipboard(g.clip, op, w.handler, gpui.ClipboardRead, gpui.ClipboardWrite) {
 			continue

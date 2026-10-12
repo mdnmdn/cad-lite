@@ -1016,7 +1016,11 @@ type PlatformWindow interface {
     Bounds() (w, h Pixels)      // logical px
     ScaleFactor() float32
     RequestFrame()              // ask the platform to draw soon
-    Present(pix []byte, w, h int) // premultiplied RGBA, 4*w*h
+    // Present hands over a frame: premultiplied RGBA, 4*w*h. pix is the
+    // window's reusable raster buffer and is only valid until the next
+    // Window.Draw; a platform that needs it later (or off the main thread)
+    // must copy it.
+    Present(pix []byte, w, h int)
     // InputHandler is installed/removed as focus changes.
     SetInputHandler(h PlatformInputHandler)
     TakeInputHandler() PlatformInputHandler
@@ -1177,8 +1181,28 @@ package ebitenplatform
 import "go-gpui/gpui"
 
 type Platform struct{ /* ... */ }
-func New() gpui.Platform     // gpui.Platform is an interface
+func New(opts ...Option) gpui.Platform     // gpui.Platform is an interface
+
+// Option configures a Platform at construction.
+type Option func(*Platform)
+
+// WithSnapshotKey binds the frame-snapshot shortcut to keystroke, written in
+// keymap syntax ("cmd-shift-s"); "" disables the shortcut. It panics on a
+// malformed keystroke (a construction-time constant, like NewKeyBinding).
+func WithSnapshotKey(keystroke string) Option
+
+// DefaultSnapshotKey is the default binding: "cmd-shift-s" on darwin,
+// "ctrl-shift-s" elsewhere.
+func DefaultSnapshotKey() string
 ```
+
+Snapshot: when the bound keystroke is pressed, the last presented frame
+(device resolution) is copied on the game loop and encoded off it, to
+`./snapshot-YYYYMMDD-HHMMSS.png` (a `-N` suffix is added if the name
+exists); the path (or the error) is logged to stderr. The keystroke is
+consumed: neither its key-down nor its key-up nor any text input is
+dispatched to the app. A printable snapshot key only fires under the
+shortcut predicate (see input mapping below).
 
 Implements `gpui.Platform`:
 
@@ -1190,7 +1214,12 @@ Implements `gpui.Platform`:
   `DispatchEvent`, wrapped in `app.Update`.
 - `Draw` calls `screen.WritePixels(pix)` with premultiplied RGBA; skips the
   upload when not dirty. `ebiten.SetScreenClearedEveryFrame(false)` at startup.
-- `Present(pix, w, h)` stores the buffer for the next `Draw`.
+- `Present(pix, w, h)` keeps a reference to the buffer (no copy) for the
+  next `Draw`; this is safe because `Window.Draw` only runs inside `Update`,
+  on the same goroutine as `Draw`.
+- Idle cost: `Update` polls input every tick but only draws when
+  `RequestFrame` was called (or the size/scale changed); `Draw` uploads only
+  a fresh frame, so with nothing changing ebiten skips presenting.
 - `RequestFrame` sets a dirty flag that `Update`/`Draw` observe; the Window
   calls it from `flushEffects`.
 - Clean quit: return `ebiten.Termination` from `Update` when `app.IsQuitting()`.

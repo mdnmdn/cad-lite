@@ -297,3 +297,89 @@ func TestRasterImageUnpremultiplies(t *testing.T) {
 		t.Fatalf("un-premultiplied A = %d, want ~128", c.A)
 	}
 }
+
+// refFillRounded and refStrokeBorder evaluate the SDF at every pixel of the
+// clip window: the straightforward rasterization the span-optimized fast
+// paths must reproduce byte for byte.
+func refFillRounded(r *Rasterizer, b Bounds, radii Corners, clip Bounds, c Rgba) {
+	x0, y0, x1, y1, ok := r.clipWindow(clip)
+	if !ok {
+		return
+	}
+	pm := c.Premultiply()
+	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			if cov := roundedRectCoverage(b, radii, float32(x)+0.5, float32(y)+0.5); cov > 0 {
+				r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
+			}
+		}
+	}
+}
+
+func refStrokeBorder(r *Rasterizer, b Bounds, radii Corners, bw Edges, clip Bounds, c Rgba) {
+	inner := b.Inset(bw)
+	innerRadii := Corners{
+		TopLeft:     maxPixels(0, radii.TopLeft-minPixels(bw.Left, bw.Top)),
+		TopRight:    maxPixels(0, radii.TopRight-minPixels(bw.Right, bw.Top)),
+		BottomLeft:  maxPixels(0, radii.BottomLeft-minPixels(bw.Left, bw.Bottom)),
+		BottomRight: maxPixels(0, radii.BottomRight-minPixels(bw.Right, bw.Bottom)),
+	}
+	x0, y0, x1, y1, ok := r.clipWindow(clip)
+	if !ok {
+		return
+	}
+	pm := c.Premultiply()
+	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			px, py := float32(x)+0.5, float32(y)+0.5
+			cov := roundedRectCoverage(b, radii, px, py)
+			if cov <= 0 {
+				continue
+			}
+			if !inner.IsEmpty() {
+				cov -= roundedRectCoverage(inner, innerRadii, px, py)
+			}
+			if cov <= 0 {
+				continue
+			}
+			r.blend(x, y, pr*min(cov, 1), pg*min(cov, 1), pb*min(cov, 1), pa*min(cov, 1))
+		}
+	}
+}
+
+func TestRoundedFastPathsMatchReference(t *testing.T) {
+	seed := uint32(12345)
+	rnd := func(n float32) float32 {
+		seed = seed*1664525 + 1013904223
+		return float32(seed>>8) / float32(1<<24) * n
+	}
+	colors := []Rgba{RgbaOf(30, 120, 220, 255), RgbaOf(200, 40, 40, 128), RgbaOf(10, 200, 90, 77)}
+	for i := 0; i < 400; i++ {
+		b := NewBounds(rnd(40)-5, rnd(40)-5, rnd(70), rnd(70))
+		radii := Corners{TopLeft: Pixels(rnd(30)), TopRight: Pixels(rnd(30)), BottomLeft: Pixels(rnd(30)), BottomRight: Pixels(rnd(30))}
+		if i%4 == 0 {
+			radii = Corners{}
+		}
+		bw := Edges{Top: Pixels(rnd(6)), Right: Pixels(rnd(6)), Bottom: Pixels(rnd(6)), Left: Pixels(rnd(6))}
+		clip := NewBounds(rnd(20), rnd(20), 30+rnd(70), 30+rnd(70))
+		if i%3 == 0 {
+			clip = InfiniteContentMask().Bounds
+		}
+		c := colors[i%len(colors)]
+		got, want := NewRasterizer(90, 90), NewRasterizer(90, 90)
+		got.Reset(Gray(240))
+		want.Reset(Gray(240))
+		got.fillRounded(b, radii, clip, c)
+		refFillRounded(want, b, radii, clip, c)
+		got.strokeBorder(b, radii, bw, clip, colors[(i+1)%len(colors)])
+		refStrokeBorder(want, b, radii, bw, clip, colors[(i+1)%len(colors)])
+		for j := range got.pix {
+			if got.pix[j] != want.pix[j] {
+				t.Fatalf("case %d: b=%v radii=%v bw=%v clip=%v: byte %d (px %d,%d) = %d, want %d",
+					i, b, radii, bw, clip, j, (j/4)%90, j/4/90, got.pix[j], want.pix[j])
+			}
+		}
+	}
+}

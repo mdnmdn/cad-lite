@@ -1,12 +1,11 @@
 package gpui
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"slices"
 	"sort"
-	"strings"
+	"strconv"
 )
 
 // TextMeasurer is implemented by the window's text backend. It is satisfied
@@ -57,6 +56,8 @@ type Window struct {
 
 	background Rgba
 	raster     *Rasterizer
+	// deviceScene is scratch space for the scene scaled to device pixels.
+	deviceScene Scene
 
 	// currentElementID is the global id of the element currently being
 	// prepainted; the walker sets it before each Prepaint call.
@@ -353,11 +354,15 @@ func (w *Window) CurrentClip() Bounds {
 // globalIDKey encodes a GlobalElementID as a comparable string. It is
 // required because GlobalElementID contains a slice and cannot be a map key.
 func globalIDKey(id GlobalElementID) string {
-	var b strings.Builder
+	var buf [64]byte
+	b := buf[:0]
 	for _, k := range id.Path {
-		fmt.Fprintf(&b, "/%d:%s", k.Index, k.Key)
+		b = append(b, '/')
+		b = strconv.AppendInt(b, int64(k.Index), 10)
+		b = append(b, ':')
+		b = append(b, k.Key...)
 	}
-	return b.String()
+	return string(b)
 }
 
 // ElementState copies the retained state stored for id into out, which must
@@ -517,7 +522,7 @@ func (w *Window) present() {
 		w.raster = NewRasterizer(pw, ph)
 	}
 	w.raster.Reset(w.background)
-	w.raster.Render(scaleScene(&w.renderedFrame.scene, w.scale))
+	w.raster.Render(scaleScene(&w.renderedFrame.scene, w.scale, &w.deviceScene))
 	w.platformWindow.Present(w.raster.Pixels(), pw, ph)
 }
 

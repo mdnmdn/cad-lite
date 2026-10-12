@@ -1,15 +1,21 @@
 package gpui
 
 import (
+	"cmp"
 	"image"
 	"math"
-	"sort"
+	"slices"
 )
 
 // Rasterizer paints a Scene into a premultiplied RGBA byte buffer.
 type Rasterizer struct {
 	pix  []byte // premultiplied RGBA, 4*w*h
 	w, h int
+
+	// scratch slices reused across Render calls for the sorted primitives.
+	quads      []Quad
+	underlines []Underline
+	sprites    []GlyphSprite
 }
 
 // NewRasterizer allocates a w×h rasterizer whose buffer starts fully
@@ -32,12 +38,13 @@ func (r *Rasterizer) Pixels() []byte { return r.pix }
 
 // Reset fills the buffer with the premultiplied form of clear.
 func (r *Rasterizer) Reset(clear Rgba) {
+	if len(r.pix) < 4 {
+		return
+	}
 	c := clear.Premultiply()
-	for i := 0; i < len(r.pix); i += 4 {
-		r.pix[i] = c.R
-		r.pix[i+1] = c.G
-		r.pix[i+2] = c.B
-		r.pix[i+3] = c.A
+	r.pix[0], r.pix[1], r.pix[2], r.pix[3] = c.R, c.G, c.B, c.A
+	for n := 4; n < len(r.pix); n *= 2 {
+		copy(r.pix[n:], r.pix[:n])
 	}
 }
 
@@ -48,23 +55,30 @@ func (r *Rasterizer) Render(s *Scene) {
 	if s == nil {
 		return
 	}
-	quads := append([]Quad(nil), s.Quads...)
-	sort.SliceStable(quads, func(i, j int) bool { return quads[i].Order < quads[j].Order })
-	for _, q := range quads {
-		r.drawQuad(q)
+	r.quads = sortByOrder(append(r.quads[:0], s.Quads...), func(q Quad) uint32 { return q.Order })
+	for i := range r.quads {
+		r.drawQuad(r.quads[i])
 	}
 
-	underlines := append([]Underline(nil), s.Underlines...)
-	sort.SliceStable(underlines, func(i, j int) bool { return underlines[i].Order < underlines[j].Order })
-	for _, u := range underlines {
-		r.drawUnderline(u)
+	r.underlines = sortByOrder(append(r.underlines[:0], s.Underlines...), func(u Underline) uint32 { return u.Order })
+	for i := range r.underlines {
+		r.drawUnderline(r.underlines[i])
 	}
 
-	sprites := append([]GlyphSprite(nil), s.Sprites...)
-	sort.SliceStable(sprites, func(i, j int) bool { return sprites[i].Order < sprites[j].Order })
-	for _, g := range sprites {
-		r.drawSprite(g)
+	r.sprites = sortByOrder(append(r.sprites[:0], s.Sprites...), func(g GlyphSprite) uint32 { return g.Order })
+	for i := range r.sprites {
+		r.drawSprite(r.sprites[i])
 	}
+}
+
+// sortByOrder stably sorts v by order, skipping the sort when v is already
+// in order (the common case: primitives are inserted in paint order).
+func sortByOrder[T any](v []T, order func(T) uint32) []T {
+	byOrder := func(a, b T) int { return cmp.Compare(order(a), order(b)) }
+	if !slices.IsSortedFunc(v, byOrder) {
+		slices.SortStableFunc(v, byOrder)
+	}
+	return v
 }
 
 // Image returns a copy of the current frame as a non-premultiplied
@@ -125,14 +139,10 @@ func (r *Rasterizer) drawUnderline(u Underline) {
 
 func (r *Rasterizer) drawSprite(g GlyphSprite) {
 	m := g.Mask
-	if m == nil || m.W <= 0 || m.H <= 0 || len(m.Pix) == 0 {
+	if m == nil || m.W <= 0 || m.H <= 0 || len(m.Pix) < m.W*m.H {
 		return
 	}
 	if g.Color.IsTransparent() || g.Bounds.IsEmpty() {
-		return
-	}
-	x0, y0, x1, y1, ok := r.clipWindow(g.ContentMask.Bounds)
-	if !ok {
 		return
 	}
 	pm := g.Color.Premultiply()
@@ -140,10 +150,31 @@ func (r *Rasterizer) drawSprite(g GlyphSprite) {
 	minX, minY := float32(g.Bounds.Origin.X), float32(g.Bounds.Origin.Y)
 	maxX, maxY := float32(g.Bounds.Max().X), float32(g.Bounds.Max().Y)
 	if abs32(maxX-minX-float32(m.W)) < 0.01 && abs32(maxY-minY-float32(m.H)) < 0.01 {
-		ox := float32(math.Round(float64(minX)))
-		oy := float32(math.Round(float64(minY)))
-		minX, maxX = ox, ox+float32(m.W)
-		minY, maxY = oy, oy+float32(m.H)
+		// 1:1 blit: every destination pixel maps onto exactly one texel.
+		ox := int(math.Round(float64(minX)))
+		oy := int(math.Round(float64(minY)))
+		x0, y0, x1, y1, ok := r.clipWindow(g.ContentMask.Bounds)
+		if !ok {
+			return
+		}
+		x0, y0 = max(x0, ox), max(y0, oy)
+		x1, y1 = min(x1, ox+m.W), min(y1, oy+m.H)
+		for y := y0; y < y1; y++ {
+			row := m.Pix[(y-oy)*m.W : (y-oy+1)*m.W]
+			for x := x0; x < x1; x++ {
+				t := row[x-ox]
+				if t == 0 {
+					continue
+				}
+				cov := float32(t) / 255
+				r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
+			}
+		}
+		return
+	}
+	x0, y0, x1, y1, ok := r.coverWindow(g.Bounds, g.ContentMask.Bounds)
+	if !ok {
+		return
 	}
 	sx := float32(m.W) / (maxX - minX)
 	sy := float32(m.H) / (maxY - minY)
@@ -161,29 +192,56 @@ func (r *Rasterizer) drawSprite(g GlyphSprite) {
 }
 
 // fillRounded fills the rounded rect b with color, anti-aliased via signed
-// distance coverage, restricting the pixel loop to clip.
+// distance coverage, restricting the pixel loop to b (plus a one-pixel AA
+// margin) within clip. Pixels whose coverage is certainly 1 skip the SDF.
 func (r *Rasterizer) fillRounded(b Bounds, radii Corners, clip Bounds, color Rgba) {
-	x0, y0, x1, y1, ok := r.clipWindow(clip)
+	x0, y0, x1, y1, ok := r.coverWindow(b, clip)
 	if !ok {
 		return
 	}
 	pm := color.Premultiply()
 	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
+	rr := newRRect(b, radii)
 	for y := y0; y < y1; y++ {
 		py := float32(y) + 0.5
-		for x := x0; x < x1; x++ {
-			cov := roundedRectCoverage(b, radii, float32(x)+0.5, py)
-			if cov <= 0 {
-				continue
+		a, z := rr.solidRow(py, x0, x1)
+		for x := x0; x < a; x++ {
+			if cov := rr.coverage(float32(x)+0.5, py); cov > 0 {
+				r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
 			}
-			r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
 		}
+		if pm.A == 255 {
+			r.fillSpan(y, a, z, pm)
+		} else {
+			for x := a; x < z; x++ {
+				r.blend(x, y, pr, pg, pb, pa)
+			}
+		}
+		for x := z; x < x1; x++ {
+			if cov := rr.coverage(float32(x)+0.5, py); cov > 0 {
+				r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
+			}
+		}
+	}
+}
+
+// fillSpan overwrites pixels [a, z) of row y with the opaque premultiplied
+// color c (identical to blending c at full coverage).
+func (r *Rasterizer) fillSpan(y, a, z int, c Rgba) {
+	if a >= z {
+		return
+	}
+	row := r.pix[4*(y*r.w+a) : 4*(y*r.w+z)]
+	row[0], row[1], row[2], row[3] = c.R, c.G, c.B, c.A
+	for n := 4; n < len(row); n *= 2 {
+		copy(row[n:], row[:n])
 	}
 }
 
 // strokeBorder draws the border as the ring between the outer rounded rect
 // and the inner rounded rect (bounds inset by the border widths, corner radii
-// reduced by the adjacent border widths).
+// reduced by the adjacent border widths). Pixels where the inner rect fully
+// covers (ring coverage 0) are skipped without evaluating the SDF.
 func (r *Rasterizer) strokeBorder(b Bounds, radii Corners, bw Edges, clip Bounds, color Rgba) {
 	inner := b.Inset(bw)
 	innerRadii := Corners{
@@ -192,22 +250,34 @@ func (r *Rasterizer) strokeBorder(b Bounds, radii Corners, bw Edges, clip Bounds
 		BottomLeft:  maxPixels(0, radii.BottomLeft-minPixels(bw.Left, bw.Bottom)),
 		BottomRight: maxPixels(0, radii.BottomRight-minPixels(bw.Right, bw.Bottom)),
 	}
-	x0, y0, x1, y1, ok := r.clipWindow(clip)
+	x0, y0, x1, y1, ok := r.coverWindow(b, clip)
 	if !ok {
 		return
 	}
+	hasInner := !inner.IsEmpty()
+	outerRR, innerRR := newRRect(b, radii), newRRect(inner, innerRadii)
 	pm := color.Premultiply()
 	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
 	for y := y0; y < y1; y++ {
 		py := float32(y) + 0.5
+		a, z := x1, x1
+		if hasInner {
+			a, z = innerRR.solidRow(py, x0, x1) // ring coverage 0 there
+		}
 		for x := x0; x < x1; x++ {
+			if x == a {
+				x = z
+				if x >= x1 {
+					break
+				}
+			}
 			px := float32(x) + 0.5
-			cov := roundedRectCoverage(b, radii, px, py)
+			cov := outerRR.coverage(px, py)
 			if cov <= 0 {
 				continue
 			}
-			if !inner.IsEmpty() {
-				cov -= roundedRectCoverage(inner, innerRadii, px, py)
+			if hasInner {
+				cov -= innerRR.coverage(px, py)
 			}
 			if cov <= 0 {
 				continue
@@ -218,6 +288,77 @@ func (r *Rasterizer) strokeBorder(b Bounds, radii Corners, bw Edges, clip Bounds
 			r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
 		}
 	}
+}
+
+// coverWindow is clipWindow further restricted to the pixels that can have
+// non-zero coverage from b: its pixel span grown by one pixel on each side
+// (a pixel center 1.5px outside b has coverage 0 under the SDF rule).
+func (r *Rasterizer) coverWindow(b, clip Bounds) (x0, y0, x1, y1 int, ok bool) {
+	x0, y0, x1, y1, ok = r.clipWindow(clip)
+	if !ok {
+		return
+	}
+	x0 = max(x0, floorInt(b.Origin.X)-1)
+	y0 = max(y0, floorInt(b.Origin.Y)-1)
+	x1 = min(x1, ceilInt(b.Max().X)+1)
+	y1 = min(y1, ceilInt(b.Max().Y)+1)
+	return x0, y0, x1, y1, x0 < x1 && y0 < y1
+}
+
+// solidRow returns the pixel span [a, z) of the row whose centers are at py
+// where coverage is certainly exactly 1 (signed distance <= -1, a 0.5 margin
+// over the clamp threshold that absorbs float error), clamped to [x0, x1). An
+// empty span is returned as a == z == x1.
+func (r rrect) solidRow(py float32, x0, x1 int) (a, z int) {
+	rl, rr := r.rBL, r.rBR
+	if py < r.cy {
+		rl, rr = r.rTL, r.rTR
+	}
+	dy := abs32(py - r.cy)
+	al, okl := solidReach(dy-(r.hh-rl), rl)
+	ar, okr := solidReach(dy-(r.hh-rr), rr)
+	if !okl || !okr {
+		return x1, x1
+	}
+	lo := r.cx - r.hw + rl - al
+	hi := r.cx + r.hw - rr + ar
+	a = min(max(ceilInt(Pixels(lo-0.5)), x0), x1)
+	z = min(max(floorInt(Pixels(hi-0.5))+1, a), x1)
+	if a == z {
+		return x1, x1
+	}
+	return a, z
+}
+
+// solidReach returns how far past the straight edge (qx in the SDF) a pixel
+// center may lie and still have signed distance <= -1, for a row at vertical
+// SDF offset qy against a corner of radius rad; ok is false when no pixel of
+// the row qualifies.
+func solidReach(qy, rad float32) (reach float32, ok bool) {
+	t := rad - 1
+	if qy > t {
+		return 0, false
+	}
+	if qy <= 0 {
+		return t, true
+	}
+	return float32(math.Sqrt(float64(t*t - qy*qy))), true
+}
+
+// floorInt and ceilInt convert to int, saturating far outside any buffer.
+func floorInt(v Pixels) int { return satInt(math.Floor(float64(v))) }
+func ceilInt(v Pixels) int  { return satInt(math.Ceil(float64(v))) }
+
+func satInt(f float64) int {
+	switch {
+	case f != f:
+		return 0
+	case f < -1<<30:
+		return -1 << 30
+	case f > 1<<30:
+		return 1 << 30
+	}
+	return int(f)
 }
 
 // clipWindow maps a clip rect to the inclusive-exclusive integer pixel range
@@ -257,31 +398,57 @@ func (r *Rasterizer) blend(x, y int, sr, sg, sb, sa float32) {
 // center (px, py) against the rounded rect b with the given per-corner radii,
 // via the signed-distance rule alpha = clamp(0.5 - d, 0, 1).
 func roundedRectCoverage(b Bounds, radii Corners, px, py float32) float32 {
+	return newRRect(b, radii).coverage(px, py)
+}
+
+// rrect is a rounded rect with its SDF constants precomputed, so per-pixel
+// coverage skips the per-call setup.
+type rrect struct {
+	hw, hh, cx, cy     float32
+	rTL, rTR, rBL, rBR float32
+}
+
+func newRRect(b Bounds, radii Corners) rrect {
 	minX, minY := float32(b.Origin.X), float32(b.Origin.Y)
 	maxX, maxY := float32(b.Max().X), float32(b.Max().Y)
 	hw := (maxX - minX) / 2
 	hh := (maxY - minY) / 2
-	cx, cy := (minX+maxX)/2, (minY+maxY)/2
 	maxR := minf32(hw, hh)
-	rTL := clamp32(float32(radii.TopLeft), 0, maxR)
-	rTR := clamp32(float32(radii.TopRight), 0, maxR)
-	rBL := clamp32(float32(radii.BottomLeft), 0, maxR)
-	rBR := clamp32(float32(radii.BottomRight), 0, maxR)
+	return rrect{
+		hw: hw, hh: hh, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2,
+		rTL: clamp32(float32(radii.TopLeft), 0, maxR),
+		rTR: clamp32(float32(radii.TopRight), 0, maxR),
+		rBL: clamp32(float32(radii.BottomLeft), 0, maxR),
+		rBR: clamp32(float32(radii.BottomRight), 0, maxR),
+	}
+}
+
+// coverage is roundedRectCoverage for the precomputed rect.
+func (r rrect) coverage(px, py float32) float32 {
 	var rad float32
 	switch {
-	case px < cx && py < cy:
-		rad = rTL
-	case px >= cx && py < cy:
-		rad = rTR
-	case px < cx && py >= cy:
-		rad = rBL
+	case px < r.cx && py < r.cy:
+		rad = r.rTL
+	case px >= r.cx && py < r.cy:
+		rad = r.rTR
+	case px < r.cx && py >= r.cy:
+		rad = r.rBL
 	default:
-		rad = rBR
+		rad = r.rBR
 	}
-	qx := abs32(px-cx) - (hw - rad)
-	qy := abs32(py-cy) - (hh - rad)
-	d := math.Hypot(float64(maxf32(qx, 0)), float64(maxf32(qy, 0))) +
-		float64(minf32(maxf32(qx, qy), 0)) - float64(rad)
+	qx := abs32(px-r.cx) - (r.hw - rad)
+	qy := abs32(py-r.cy) - (r.hh - rad)
+	ox, oy := maxf32(qx, 0), maxf32(qy, 0)
+	var outside float64
+	switch {
+	case oy == 0:
+		outside = float64(ox) // math.Hypot(x, 0) == x exactly
+	case ox == 0:
+		outside = float64(oy)
+	default:
+		outside = math.Hypot(float64(ox), float64(oy))
+	}
+	d := outside + float64(minf32(maxf32(qx, qy), 0)) - float64(rad)
 	return clamp32(0.5-float32(d), 0, 1)
 }
 
@@ -317,9 +484,9 @@ func abs32(v float32) float32 {
 	return v
 }
 
-// scaleScene returns a copy of s with every primitive scaled from logical to
-// device pixels.
-func scaleScene(s *Scene, scale float32) *Scene {
+// scaleScene returns s with every primitive scaled from logical to device
+// pixels, written into out (reusing its slices); at scale 1 it returns s.
+func scaleScene(s *Scene, scale float32, out *Scene) *Scene {
 	k := Pixels(scale)
 	if scale == 1 {
 		return s
@@ -336,7 +503,7 @@ func scaleScene(s *Scene, scale float32) *Scene {
 		}
 		return ContentMask{Bounds: sb(m.Bounds)}
 	}
-	out := &Scene{}
+	out.Clear()
 	for _, q := range s.Quads {
 		q.Bounds = sb(q.Bounds)
 		q.ContentMask = sm(q.ContentMask)

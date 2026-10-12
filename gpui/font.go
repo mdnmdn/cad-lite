@@ -40,6 +40,7 @@ type FontManager struct {
 	mu    sync.Mutex
 	base  map[string]*Font  // parsed fonts keyed by path
 	faces map[faceKey]*Font // sized faces keyed by path, size and weight
+	bold  map[string]*Font  // bold file per base path; nil value = none found
 	def   *Font             // memoized result of DefaultFont
 }
 
@@ -265,9 +266,22 @@ func (m *FontManager) defaultLocked() (*Font, error) {
 	return f, nil
 }
 
-// boldLocked returns a loadable bold font file for base, or nil. Callers must
-// hold m.mu.
+// boldLocked returns a loadable bold font file for base, or nil, memoizing
+// the (filesystem-probing) lookup per base path. Callers must hold m.mu.
 func (m *FontManager) boldLocked(base *Font) *Font {
+	if f, ok := m.bold[base.path]; ok {
+		return f
+	}
+	f := m.findBoldLocked(base)
+	if m.bold == nil {
+		m.bold = make(map[string]*Font)
+	}
+	m.bold[base.path] = f
+	return f
+}
+
+// findBoldLocked probes boldCandidates for base. Callers must hold m.mu.
+func (m *FontManager) findBoldLocked(base *Font) *Font {
 	for _, p := range boldCandidates(base.path) {
 		if p == "" || p == base.path {
 			continue
