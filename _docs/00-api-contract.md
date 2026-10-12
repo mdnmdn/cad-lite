@@ -480,7 +480,12 @@ type GlyphMask struct {
     // mask covers exactly this rect expanded by one pixel on every side,
     // screen-oriented: row 0 is the top of the ink. GlyphSprite.Bounds is
     // derived from these at paint time.
-    MinX, MinY, MaxX, MaxY float32
+    MinX, MinY, MaxX, MaxY float32 // logical px (device ink / Scale)
+    // Scale is the device scale the mask was rasterized at (W, H and Pix are
+    // in device px); 0 means 1. X0, Y0 are the mask's top-left in device px
+    // relative to the pen position / baseline (y-down), valid when Scale > 0.
+    Scale  float32
+    X0, Y0 int
 }
 
 type Underline struct {
@@ -519,14 +524,16 @@ func (r *Rasterizer) Size() (w, h int)
 func (r *Rasterizer) Pixels() []byte            // premultiplied, tightly packed
 func (r *Rasterizer) Reset(clear Rgba)          // fill with premultiplied clear color
 func (r *Rasterizer) Render(s *Scene)           // draw all primitives in Order
-func (r *Rasterizer) Image() *image.RGBA        // non-premultiplied view (for png.Encode)
+func (r *Rasterizer) Image() *image.NRGBA       // non-premultiplied copy (for png.Encode)
 ```
 
 Clipping: each primitive is intersected with its `ContentMask.Bounds` and drawn
 with that clip rect. Corner radii are drawn by an anti-aliased rounded-rect
 mask; borders are drawn as four strips (or as a rounded-rect stroke). Text is
-drawn by alpha-blending the `GlyphMask` scaled to `GlyphSprite.Bounds` with
-bilinear sampling.
+drawn by alpha-blending the `GlyphMask` into `GlyphSprite.Bounds` with
+bilinear sampling; when the device-space bounds size equals the mask size
+(masks rasterized at the window scale) the mask is blitted 1:1, snapped to
+whole device pixels, so text stays crisp on HiDPI.
 
 `raster.go` may import `image`, `image/draw`, `image/color`, `math`, but **not**
 `golang.org/x/*` or ebiten.
@@ -569,7 +576,8 @@ const (
     Shift   Modifiers = 1 << iota
     Control
     Alt
-    Platform // Cmd on macOS, Ctrl on Windows/Linux
+    Platform // GPUI convention: Cmd on macOS, Super/Win (ebiten KeyMeta) on
+             // Windows/Linux. Physical Ctrl is always Control.
     Function
 )
 
@@ -910,8 +918,33 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App)
 func (w *Window) Draw(cx *App)            // full pipeline; returns nothing
 func (w *Window) Scene() *Scene
 func (w *Window) SetBackground(c Rgba)   // clear color for rasterization; default opaque white
-func (w *Window) HitTest(p Point) (idx int, ok bool) // topmost hitbox of the rendered frame; idx stable until next Draw
+// HitTest returns the GlobalElementID of the element owning the topmost
+// hitbox of the rendered frame at p. Unlike a hitbox index it is stable across
+// frames (as long as the element keeps its path), so platforms can compare a
+// press and a release that straddle a redraw. Compare with Equal.
+func (w *Window) HitTest(p Point) (id GlobalElementID, ok bool)
 ```
+
+Event dispatch (GPUI semantics):
+
+- Each hitbox records its parent hitbox (the nearest ancestor element that
+  registered one). A mouse event's *hit path* is the ancestor chain of the
+  topmost hitbox under the pointer. Element listeners (`OnMouseDown`,
+  `OnClick`, `OnKeyDown`, ...) are bubble-phase, as in GPUI (GPUI's
+  `capture_*` variants are not ported, so the capture phase has no
+  listeners): they run innermost-first over the path, each exactly once,
+  until `StopPropagation`. Siblings that are not on the path are never
+  invoked.
+- Key events follow the *focus path*: the ancestor chain of the key node whose
+  `FocusID` is focused. With nothing focused (or the focused node not in the
+  frame) the path is the root element's key node only, matching GPUI's
+  dispatch-from-root. Keymap context stack and `OnAction` use the same path.
+- Hover: after every mouse move *and after every Draw* (using the last known
+  pointer position) the hovered set — hit-path elements with hover callbacks,
+  keyed by GlobalElementID — is diffed against the previous one. Callbacks are
+  looked up in the current rendered frame when fired (an element no longer in
+  the frame gets no `OnHoverEnd`). Ends fire first, leaves-first (deepest
+  first); then starts, root-first.
 
 `Frame` (unexported fields, but exposed for tests via accessors):
 
@@ -1012,8 +1045,9 @@ func WithBackgroundColor(c Rgba) RenderOption
 func WithKeymap(k *Keymap) RenderOption
 func WithTitle(t string) RenderOption
 
-// RenderToImage is the same but returns the image.
-func RenderToImage(w, h int, scale float32, root EntityRoot, opts ...RenderOption) (*image.RGBA, error)
+// RenderToImage is the same but returns the image (non-premultiplied, hence
+// *image.NRGBA: *image.RGBA is premultiplied by definition).
+func RenderToImage(w, h int, scale float32, root EntityRoot, opts ...RenderOption) (*image.NRGBA, error)
 
 // HeadlessPlatform implements Platform with no window; used by RenderToPNG
 // and by tests that need to drive frames and dispatch synthetic input.
@@ -1028,7 +1062,7 @@ func (p *HeadlessPlatform) Name() string
 // the last presented pixels and exposes helpers for tests.
 type HeadlessWindow struct{ /* ... */ }
 func (w *HeadlessWindow) Pixels() []byte
-func (w *HeadlessWindow) Image() *image.RGBA
+func (w *HeadlessWindow) Image() *image.NRGBA
 func (w *HeadlessWindow) SavePNG(path string) error
 func (w *HeadlessWindow) Dispatch(input PlatformInput)  // feed synthetic input, then draw if invalidated
 
@@ -1092,6 +1126,12 @@ func (s *Shaper) ShapeWrap(text string, face *Font, wrapWidth float32) []ShapedL
 func (s *Shaper) Measure(text string, face *Font, wrapWidth float32) (w, h Pixels)
 // GlyphMask rasterizes a single glyph into a grayscale mask at the given size.
 func (s *Shaper) GlyphMask(face *Font, glyphID uint32, size float32) *GlyphMask
+// GlyphMaskScaled rasterizes at size*scale device px (scale is part of the
+// cache key); sprite bounds stay logical (mask W/H divided by scale).
+func (s *Shaper) GlyphMaskScaled(face *Font, glyphID uint32, size, scale float32) *GlyphMask
+// ShapeWrappedScaled is ShapeWrapped with masks rasterized at scale. Window
+// uses it (via an optional interface on the TextMeasurer) at its ScaleFactor.
+func (s *Shaper) ShapeWrappedScaled(text string, ts TextStyle, maxWidth, scale float32) []ShapedLineOut
 ```
 
 `font.go`/`text.go` may import `github.com/go-text/typesetting/...` and
@@ -1120,7 +1160,12 @@ func ClipboardAvailable() bool
 - darwin: `pbpaste` / `pbcopy`
 - windows: `powershell -NoProfile -Command Get-Clipboard` /
   `Set-Clipboard -Value ...` (pass via stdin to avoid quoting bugs)
-- linux: prefer `wl-paste`/`wl-copy`, fall back to `xclip`, then `xsel`
+- linux: `wl-paste`/`wl-copy` only when `WAYLAND_DISPLAY` is set, then
+  `xclip`, then `xsel`; a tool that is missing or fails falls through to the
+  next one.
+- Every tool runs via `exec.CommandContext` with a ~1s timeout.
+- PowerShell commands force UTF-8 (`[Console]::OutputEncoding` /
+  `InputEncoding`) and read/write raw text (no added trailing newline).
 
 ## 17. `gpui/ebitenplatform/`
 
@@ -1153,22 +1198,32 @@ Implements `gpui.Platform`:
 Input mapping in `Update`:
 
 - `inpututil.IsMouseButtonJustPressed` → `MouseDownEvent`; `JustReleased` →
-  `MouseUpEvent` + a `ClickEvent` if `Window.HitTest` yields the same hitbox
-  index at press and release;
+  `MouseUpEvent` + a `ClickEvent` if `Window.HitTest` yields the same
+  `GlobalElementID` at press and release (press state tracked per button);
   `ebiten.CursorPosition()` → `Position` each tick, synthesized into
   `MouseMoveEvent` when it changed.
 - `ebiten.Wheel()` → `ScrollWheelEvent` (note: ebiten's wheel y is typically
   inverted relative to scroll-down-positive; normalize so positive `DeltaY`
   means scroll down / content moves up).
-- `ebiten.AppendInputChars` → `KeyDownEvent{PreferCharacterInput:true}` per rune.
+- `ebiten.AppendInputChars` → `KeyDownEvent{PreferCharacterInput:true}` per
+  rune, always — except while a shortcut modifier is held: Cmd on darwin,
+  Super elsewhere (`ModPlatform`), or Ctrl unless it is AltGr (Ctrl+Alt on
+  Windows/Linux). Alt/Option alone never suppresses text (Option-produced
+  characters like `@ # [ ]` on non-US Mac layouts must reach text input).
+  Printable keys are dispatched as plain `KeyDownEvent`s (for keybindings)
+  only under that same shortcut predicate.
 - Special keys via `inpututil.IsKeyJustPressed` (only valid in `Update`):
   `KeyEnter→"enter"`, `KeyEscape→"escape"`, `KeyBackspace`, `KeyDelete`,
   `KeyLeft/Right/Up/Down`, `KeySpace→"space"`, `KeyTab→"tab"`, letters/digits.
-- Modifiers: `ebiten.IsKeyPressed(ebiten.KeyMeta)` → `ModPlatform` (Cmd on macOS);
-  on Windows/Linux map `KeyControl` → `ModPlatform` and `KeyMeta` → `Control`
-  (so Cmd/Ctrl behave the same for the app author). Detect this with
-  `runtime.GOOS`. `KeyShift`, `KeyAlt`.
-- Clipboard via `gpui.ClipboardRead/Write` for cmd/ctrl+c/v/x.
+- Modifiers (GPUI convention, identical on every OS): `KeyControl` →
+  `Control`, `KeyMeta` → `ModPlatform` (Cmd on macOS, Super/Win elsewhere),
+  `KeyShift` → `Shift`, `KeyAlt` → `Alt`. Keybindings that should be
+  "Cmd on mac, Ctrl elsewhere" must be registered per OS by the app.
+- Clipboard via `gpui.ClipboardRead/Write` for cmd-c/v/x on darwin and
+  ctrl-c/v/x elsewhere. The OS tools run on a goroutine; results are posted
+  back over a channel and applied in a later `Update` (paste → character
+  input; cut deletes the selection only if it is unchanged and the write
+  succeeded).
 
 ## 18. `examples/todo/`
 

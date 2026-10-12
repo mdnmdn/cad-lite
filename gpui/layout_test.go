@@ -362,3 +362,28 @@ func TestTextElementWrapsAtLayoutWidth(t *testing.T) {
 		t.Errorf("text did not wrap onto several lines (glyph y range %v..%v)", minY, maxY)
 	}
 }
+
+func TestLayoutFlexGrowContentSizedRowKeepsBases(t *testing.T) {
+	a := textNode("hello world foo")
+	b := textNode("bar baz")
+	for _, n := range []*gpui.LayoutNode{a, b} {
+		n.Style.FlexGrow = 1
+	}
+	r := node(func(s *gpui.Style) { row(s); s.AlignItems = gpui.AlignStart }, a, b)
+	root := node(func(s *gpui.Style) { s.AlignItems = gpui.AlignStart }, r)
+	gpui.Layout(root, gpui.Definite(400, 400))
+
+	wantRect(t, "a", a.Rect, 0, 0, 150, 20)
+	wantRect(t, "b", b.Rect, 150, 0, 70, 20)
+}
+
+func TestLayoutFlexMaxWidthViolationRedistributes(t *testing.T) {
+	g1 := node(func(s *gpui.Style) { s.Width = gpui.Flex(1); s.MaxWidth = gpui.Px(50); s.Height = gpui.Px(10) })
+	g2 := node(func(s *gpui.Style) { s.Width = gpui.Flex(1); s.Height = gpui.Px(10) })
+	r := node(func(s *gpui.Style) { row(s) }, g1, g2)
+	root := node(nil, r)
+	gpui.Layout(root, gpui.Definite(300, 300))
+
+	wantRect(t, "g1", g1.Rect, 0, 0, 50, 10)
+	wantRect(t, "g2", g2.Rect, 50, 0, 250, 10)
+}

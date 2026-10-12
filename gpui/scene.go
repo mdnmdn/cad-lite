@@ -72,6 +72,12 @@ type GlyphMask struct {
 	// screen-oriented: row 0 is the top of the ink. GlyphSprite.Bounds is
 	// derived from these at paint time.
 	MinX, MinY, MaxX, MaxY float32
+	// Scale is the device scale the mask was rasterized at: W, H and Pix are
+	// in device pixels. 0 means 1.
+	Scale float32
+	// X0 and Y0 are the mask's top-left in device pixels relative to the pen
+	// position and baseline (y-down); valid when Scale > 0.
+	X0, Y0 int
 }
 
 // At returns the coverage at (x, y); out-of-bounds lookups return 0.

@@ -37,17 +37,40 @@ func TestKeyName(t *testing.T) {
 }
 
 func TestModifiersFor(t *testing.T) {
-	if got := modifiersFor("darwin", true, false, false, true); got != gpui.Shift|gpui.ModPlatform {
-		t.Errorf("darwin shift+cmd = %v", got)
+	// GPUI convention on every OS: Ctrl is Control, Cmd/Super is Platform.
+	if got := modifiersFor(true, false, false, true); got != gpui.Shift|gpui.ModPlatform {
+		t.Errorf("shift+meta = %v", got)
 	}
-	if got := modifiersFor("darwin", false, true, false, false); got != gpui.Control {
-		t.Errorf("darwin ctrl = %v", got)
+	if got := modifiersFor(false, true, false, false); got != gpui.Control {
+		t.Errorf("ctrl = %v", got)
 	}
-	if got := modifiersFor("linux", false, true, true, false); got != gpui.ModPlatform|gpui.Alt {
-		t.Errorf("linux ctrl+alt = %v", got)
+	if got := modifiersFor(false, true, true, false); got != gpui.Control|gpui.Alt {
+		t.Errorf("ctrl+alt = %v", got)
 	}
-	if got := modifiersFor("windows", false, false, false, true); got != gpui.Control {
-		t.Errorf("windows meta = %v", got)
+}
+
+func TestIsShortcut(t *testing.T) {
+	cases := []struct {
+		goos string
+		m    gpui.Modifiers
+		want bool
+	}{
+		{"darwin", 0, false},
+		{"darwin", gpui.Shift, false},
+		{"darwin", gpui.Alt, false},
+		{"darwin", gpui.Alt | gpui.Shift, false},
+		{"darwin", gpui.ModPlatform, true},
+		{"darwin", gpui.Control, true},
+		{"linux", gpui.Control, true},
+		{"linux", gpui.Control | gpui.Alt, false},
+		{"windows", gpui.Control | gpui.Alt | gpui.Shift, false},
+		{"windows", gpui.Alt, false},
+		{"linux", gpui.ModPlatform, true},
+	}
+	for _, c := range cases {
+		if got := isShortcut(c.goos, c.m); got != c.want {
+			t.Errorf("isShortcut(%s, %v) = %v, want %v", c.goos, c.m, got, c.want)
+		}
 	}
 }
 
@@ -71,10 +94,21 @@ func TestShouldFire(t *testing.T) {
 }
 
 func TestClipboardOp(t *testing.T) {
-	if clipboardOp("v", gpui.ModPlatform) != "paste" || clipboardOp("c", gpui.ModPlatform) != "copy" || clipboardOp("x", gpui.ModPlatform) != "cut" {
-		t.Error("platform+c/v/x")
+	if clipboardOp("darwin", "v", gpui.ModPlatform) != "paste" || clipboardOp("darwin", "c", gpui.ModPlatform) != "copy" || clipboardOp("darwin", "x", gpui.ModPlatform) != "cut" {
+		t.Error("darwin cmd+c/v/x")
 	}
-	if clipboardOp("v", gpui.ModPlatform|gpui.Shift) != "" || clipboardOp("v", 0) != "" || clipboardOp("a", gpui.ModPlatform) != "" {
+	if clipboardOp("darwin", "v", gpui.Control) != "" {
+		t.Error("darwin ctrl+v must not paste")
+	}
+	for _, goos := range []string{"linux", "windows"} {
+		if clipboardOp(goos, "v", gpui.Control) != "paste" || clipboardOp(goos, "c", gpui.Control) != "copy" || clipboardOp(goos, "x", gpui.Control) != "cut" {
+			t.Errorf("%s ctrl+c/v/x", goos)
+		}
+		if clipboardOp(goos, "v", gpui.ModPlatform) != "" {
+			t.Errorf("%s super+v must not paste", goos)
+		}
+	}
+	if clipboardOp("darwin", "v", gpui.ModPlatform|gpui.Shift) != "" || clipboardOp("darwin", "v", 0) != "" || clipboardOp("darwin", "a", gpui.ModPlatform) != "" {
 		t.Error("non-clipboard combos must not match")
 	}
 }
@@ -85,26 +119,58 @@ func TestPrintableRunes(t *testing.T) {
 	}
 }
 
+func gid(keys ...string) gpui.GlobalElementID {
+	var id gpui.GlobalElementID
+	for i, k := range keys {
+		id.Path = append(id.Path, gpui.ElementPathKey{Index: i, Key: k})
+	}
+	return id
+}
+
 func TestClickTracker(t *testing.T) {
 	var c clickTracker
 	t0 := time.Now()
 	p := gpui.Point{X: 10, Y: 10}
-	if n := c.press(gpui.MouseLeft, p, 3, t0); n != 1 {
+	btn := gid("root", "btn")
+	if n := c.press(gpui.MouseLeft, p, btn, true, t0); n != 1 {
 		t.Fatalf("first press count %d", n)
 	}
-	if ok, _ := c.release(gpui.MouseLeft, 3); !ok {
-		t.Error("release on same hitbox should click")
+	// A redraw between press and release yields a fresh but equal id.
+	if ok, _ := c.release(gpui.MouseLeft, gid("root", "btn"), true); !ok {
+		t.Error("release on same element should click")
 	}
-	if n := c.press(gpui.MouseLeft, p, 3, t0.Add(100*time.Millisecond)); n != 2 {
+	if n := c.press(gpui.MouseLeft, p, btn, true, t0.Add(100*time.Millisecond)); n != 2 {
 		t.Errorf("double click count %d", n)
 	}
-	if ok, _ := c.release(gpui.MouseLeft, 4); ok {
-		t.Error("release on another hitbox should not click")
+	if ok, _ := c.release(gpui.MouseLeft, gid("root", "other"), true); ok {
+		t.Error("release on another element should not click")
 	}
-	if n := c.press(gpui.MouseLeft, p, 3, t0.Add(2*time.Second)); n != 1 {
+	if n := c.press(gpui.MouseLeft, p, btn, true, t0.Add(2*time.Second)); n != 1 {
 		t.Errorf("slow press count %d", n)
 	}
-	if ok, _ := c.release(gpui.MouseRight, 3); ok {
+	if ok, _ := c.release(gpui.MouseRight, btn, true); ok {
 		t.Error("different button should not click")
+	}
+	if ok, _ := c.release(gpui.MouseLeft, btn, true); !ok {
+		t.Error("left release after stray right release should still click")
+	}
+	c.press(gpui.MouseLeft, p, gpui.GlobalElementID{}, false, t0.Add(5*time.Second))
+	if ok, _ := c.release(gpui.MouseLeft, gpui.GlobalElementID{}, false); ok {
+		t.Error("press and release on nothing should not click")
+	}
+}
+
+func TestClickTrackerPerButton(t *testing.T) {
+	var c clickTracker
+	t0 := time.Now()
+	p := gpui.Point{X: 10, Y: 10}
+	a, b := gid("a"), gid("b")
+	c.press(gpui.MouseLeft, p, a, true, t0)
+	c.press(gpui.MouseRight, p, b, true, t0)
+	if ok, _ := c.release(gpui.MouseRight, b, true); !ok {
+		t.Error("right click on b lost")
+	}
+	if ok, n := c.release(gpui.MouseLeft, a, true); !ok || n != 1 {
+		t.Errorf("left click on a lost by interleaved right press: ok=%v n=%d", ok, n)
 	}
 }

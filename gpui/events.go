@@ -27,7 +27,8 @@ const (
 	Control
 	// Alt is the alt/option key.
 	Alt
-	// ModPlatform is Cmd on macOS, Ctrl on Windows/Linux.
+	// ModPlatform is Cmd on macOS and Super/Win on Windows/Linux (GPUI's
+	// convention); physical Ctrl is always Control.
 	ModPlatform
 	// Function is the fn/function key.
 	Function

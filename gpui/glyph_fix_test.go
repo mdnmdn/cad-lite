@@ -65,3 +65,67 @@ func TestBoldIsHeavier(t *testing.T) {
 		t.Errorf("synthetic bold l coverage %d not above regular %d", ss, rs)
 	}
 }
+
+func TestPaintWrapWidthNeverBelowMeasuredWidth(t *testing.T) {
+	pads := []Pixels{0.1, 0.3, 7.7, 13.37}
+	for _, pad := range pads {
+		style := DefaultStyle()
+		style.Padding = Edges{Left: pad, Right: pad / 3}
+		for i := 1; i < 3000; i++ {
+			measured := Pixels(float32(i) * 0.37)
+			b := Bounds{Size: Size{W: measured + style.Padding.Horizontal()}}
+			if got := paintWrapWidth(b, style); got < float32(measured) {
+				t.Fatalf("pad %v measured %v: wrap width %v is below measured width", pad, measured, got)
+			}
+		}
+	}
+}
+
+func TestShapeWrappedScaledRasterizesAtDeviceSize(t *testing.T) {
+	_, s, _, _ := textFixture(t)
+	ts := TextStyle{FontSize: 16}
+	face := s.resolveFace(ts)
+	l1 := s.ShapeWrappedScaled("Hg", ts, math.MaxFloat32, 1)
+	l2 := s.ShapeWrappedScaled("Hg", ts, math.MaxFloat32, 2)
+	if len(l1) == 0 || len(l2) == 0 {
+		t.Fatal("no lines")
+	}
+	for i, g := range l2[0].Glyphs {
+		m := g.Mask
+		if m.Scale != 2 {
+			t.Fatalf("mask scale = %v, want 2", m.Scale)
+		}
+		direct := s.rasterizeGlyph(face, g.GlyphID, faceSize(face)*2, 1)
+		if m.W != direct.W || m.H != direct.H || string(m.Pix) != string(direct.Pix) {
+			t.Fatalf("glyph %d: scale-2 mask differs from direct size*2 mask", i)
+		}
+		m1 := l1[0].Glyphs[i].Mask
+		if m.W < 2*m1.W-4 || m.H < 2*m1.H-4 {
+			t.Fatalf("glyph %d: mask %dx%d not ~2x of %dx%d", i, m.W, m.H, m1.W, m1.H)
+		}
+	}
+}
+
+func TestRasterizerBlitsMatchingMaskOneToOne(t *testing.T) {
+	m := &GlyphMask{W: 4, H: 4, Pix: make([]uint8, 16)}
+	for i := range m.Pix {
+		m.Pix[i] = uint8(i*16 + 7)
+	}
+	r := NewRasterizer(10, 10)
+	r.Reset(Rgba{0, 0, 0, 0})
+	sc := &Scene{}
+	sc.Sprites = append(sc.Sprites, GlyphSprite{
+		Bounds:      Bounds{Origin: Point{X: 1.3, Y: 1.7}, Size: Size{W: 4, H: 4}},
+		ContentMask: ContentMask{Bounds: Bounds{Size: Size{W: 10, H: 10}}},
+		Mask:        m,
+		Color:       Rgba{0, 0, 0, 255},
+	})
+	r.Render(sc)
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			if got := r.Pixels()[4*((y+2)*10+x+1)+3]; got != m.Pix[y*4+x] {
+				t.Fatalf("pixel (%d,%d) alpha = %d, want %d", x, y, got, m.Pix[y*4+x])
+			}
+		}
+	}
+}

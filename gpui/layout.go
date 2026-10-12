@@ -605,8 +605,11 @@ func resolveFlex(st *flexState, M Pixels, gapsTotal Pixels) {
 		free := M - gapsTotal
 		var sumf float32
 		for i := range st.base {
+			if !frozen[i] {
+				st.target[i] = st.base[i]
+			}
 			if frozen[i] {
-				free -= st.hyp[i]
+				free -= st.target[i]
 			} else {
 				free -= st.base[i]
 				if grow {
@@ -674,6 +677,8 @@ func resolveFlex(st *flexState, M Pixels, gapsTotal Pixels) {
 		want := Pixels(0)
 		if total > 0 {
 			want = 1
+		} else if total < 0 {
+			want = -1
 		}
 		for i := range st.base {
 			if frozen[i] {

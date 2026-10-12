@@ -33,6 +33,7 @@ type glyphMaskKey struct {
 	face    *Font
 	glyphID uint32
 	size    float32
+	scale   float32
 }
 
 // NewShaper returns a Shaper that resolves faces through m. A nil manager is
@@ -144,6 +145,15 @@ func (s *Shaper) Measure(text string, face *Font, wrapWidth float32) (w, h Pixel
 // GlyphMask rasterizes one glyph of face at size into an alpha coverage mask,
 // caching the result by (face, glyphID, size).
 func (s *Shaper) GlyphMask(face *Font, glyphID uint32, size float32) *GlyphMask {
+	return s.GlyphMaskScaled(face, glyphID, size, 1)
+}
+
+// GlyphMaskScaled rasterizes one glyph at size*scale device pixels, caching by
+// (face, glyphID, size, scale). The mask's ink bounds stay in logical pixels.
+func (s *Shaper) GlyphMaskScaled(face *Font, glyphID uint32, size, scale float32) *GlyphMask {
+	if scale <= 0 {
+		scale = 1
+	}
 	if face == nil || face.sfntFont == nil {
 		return nil
 	}
@@ -153,11 +163,11 @@ func (s *Shaper) GlyphMask(face *Font, glyphID uint32, size float32) *GlyphMask 
 	if s.masks == nil {
 		s.masks = make(map[glyphMaskKey]*GlyphMask)
 	}
-	key := glyphMaskKey{face: face, glyphID: glyphID, size: size}
+	key := glyphMaskKey{face: face, glyphID: glyphID, size: size, scale: scale}
 	if m := s.masks[key]; m != nil {
 		return m
 	}
-	m := s.rasterizeGlyph(face, glyphID, size)
+	m := s.rasterizeGlyph(face, glyphID, size, scale)
 	if len(s.masks) >= glyphMaskCacheLimit {
 		s.masks = make(map[glyphMaskKey]*GlyphMask)
 	}
@@ -196,6 +206,12 @@ func (s *Shaper) MeasureWrapped(text string, ts TextStyle, maxWidth float32) (w,
 // the default text size; when no system font is available it returns an empty
 // slice rather than panicking.
 func (s *Shaper) ShapeWrapped(text string, ts TextStyle, maxWidth float32) []ShapedLineOut {
+	return s.ShapeWrappedScaled(text, ts, maxWidth, 1)
+}
+
+// ShapeWrappedScaled is ShapeWrapped with glyph masks rasterized at size*scale
+// device pixels so they can be drawn 1:1 on a HiDPI target.
+func (s *Shaper) ShapeWrappedScaled(text string, ts TextStyle, maxWidth, scale float32) []ShapedLineOut {
 	face := s.resolveFace(ts)
 	if face == nil {
 		return []ShapedLineOut{}
@@ -211,7 +227,7 @@ func (s *Shaper) ShapeWrapped(text string, ts TextStyle, maxWidth float32) []Sha
 				Y:       g.Y,
 				Advance: g.Advance,
 				Cluster: g.Cluster,
-				Mask:    s.GlyphMask(face, g.GlyphID, faceSize(face)),
+				Mask:    s.GlyphMaskScaled(face, g.GlyphID, faceSize(face), scale),
 			}
 		}
 		out[i] = ShapedLineOut{Width: l.Width, Ascent: l.Ascent, Descent: l.Descent, Glyphs: glyphs}
@@ -393,8 +409,8 @@ func lineMetrics(f *Font) (ascent, descent Pixels) {
 // coverage. The path is translated so the mask's (0,0) is the top-left of the
 // glyph ink's bounds minus a one-pixel pad in screen orientation (row 0 is
 // the top), keeping anti-aliased edges unclipped.
-func (s *Shaper) rasterizeGlyph(face *Font, glyphID uint32, size float32) *GlyphMask {
-	ppem := fixed.Int26_6(math.Round(float64(size) * 64))
+func (s *Shaper) rasterizeGlyph(face *Font, glyphID uint32, size, scale float32) *GlyphMask {
+	ppem := fixed.Int26_6(math.Round(float64(size) * float64(scale) * 64))
 	segs, err := face.sfntFont.LoadGlyph(&s.buf, sfnt.GlyphIndex(glyphID), ppem, nil)
 	if err != nil || len(segs) == 0 {
 		return &GlyphMask{}
@@ -448,23 +464,26 @@ func (s *Shaper) rasterizeGlyph(face *Font, glyphID uint32, size float32) *Glyph
 	r.Draw(dst, dst.Bounds(), image.NewUniform(color.Alpha{A: 0xff}), image.Point{})
 	pix := dst.Pix
 	if face.synthBold {
-		pix = embolden(pix, w, h)
+		pix = embolden(pix, w, h, max(1, int(math.Round(float64(scale)))))
 	}
 	return &GlyphMask{
 		Pix:  pix,
 		W:    w,
 		H:    h,
-		MinX: float32(b.Min.X) / 64,
-		MinY: -float32(b.Max.Y) / 64,
-		MaxX: float32(b.Max.X) / 64,
-		MaxY: -float32(b.Min.Y) / 64,
+		MinX: float32(b.Min.X) / 64 / scale,
+		MinY: -float32(b.Max.Y) / 64 / scale,
+		MaxX: float32(b.Max.X) / 64 / scale,
+		MaxY: -float32(b.Min.Y) / 64 / scale,
+
+		Scale: scale,
+		X0:    x0,
+		Y0:    y0,
 	}
 }
 
 // embolden synthesizes a bold weight by smearing coverage one pixel to the
 // right (the mask's one-pixel pad absorbs the growth).
-func embolden(pix []uint8, w, h int) []uint8 {
-	const n = 1
+func embolden(pix []uint8, w, h, n int) []uint8 {
 	out := make([]uint8, len(pix))
 	for y := 0; y < h; y++ {
 		row := pix[y*w : (y+1)*w]

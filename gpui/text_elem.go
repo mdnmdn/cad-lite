@@ -80,18 +80,21 @@ func (t *Text) paint(w *Window, bounds Bounds, layoutState any) {
 	}
 	style := t.resolvedStyle()
 	ts := style.TextStyle
-	lines := w.text.ShapeWrapped(t.text, ts, paintWrapWidth(bounds, style))
+	lines := shapeWrapped(w, t.text, ts, paintWrapWidth(bounds, style))
 	paintShapedLines(w, bounds.Origin.X+style.Padding.Left, bounds.Origin.Y+style.Padding.Top, ts, lines)
 }
 
+const wrapEpsilon = 0.01
+
 // paintWrapWidth is the wrap width text paints with: the laid-out content
 // width, which is the width the layout engine last measured the leaf at. A
-// zero-width box (never laid out) paints unwrapped.
+// zero-width box (never laid out) paints unwrapped. A small epsilon absorbs
+// float32 rounding in bounds - padding so the last word never wraps at paint.
 func paintWrapWidth(bounds Bounds, style Style) float32 {
 	if bounds.Size.W <= 0 {
 		return math.MaxFloat32
 	}
-	return float32(maxPixels(0, bounds.Size.W-style.Padding.Horizontal()))
+	return float32(maxPixels(0, bounds.Size.W-style.Padding.Horizontal())) + wrapEpsilon
 }
 
 // measureText sizes text through the window's measurer, falling back to a
@@ -145,6 +148,17 @@ func estimateText(text string, ts TextStyle, maxWidth float32) (float32, float32
 	return maxf32(widest, cur), float32(lines) * lh
 }
 
+// shapeWrapped shapes through the window's text backend, rasterizing masks at
+// the window scale when the backend supports it.
+func shapeWrapped(w *Window, text string, ts TextStyle, maxWidth float32) []ShapedLineOut {
+	if sc, ok := w.text.(interface {
+		ShapeWrappedScaled(text string, ts TextStyle, maxWidth, scale float32) []ShapedLineOut
+	}); ok {
+		return sc.ShapeWrappedScaled(text, ts, maxWidth, w.scale)
+	}
+	return w.text.ShapeWrapped(text, ts, maxWidth)
+}
+
 // paintShapedLines draws shaped lines starting at (x, y), stacking lines
 // vertically by the style's line height.
 func paintShapedLines(w *Window, x, y Pixels, ts TextStyle, lines []ShapedLineOut) {
@@ -156,16 +170,23 @@ func paintShapedLines(w *Window, x, y Pixels, ts TextStyle, lines []ShapedLineOu
 			if m == nil || m.W <= 0 || m.H <= 0 || len(m.Pix) == 0 {
 				continue
 			}
-			w.PaintGlyph(GlyphSprite{
-				Bounds: Bounds{
-					Origin: Point{
-						X: x + g.X + Pixels(math.Floor(float64(m.MinX))) - 1,
-						Y: baseY - Pixels(math.Ceil(float64(m.MaxY))) - 1,
-					},
-					Size: Size{W: Pixels(m.W), H: Pixels(m.H)},
+			bounds := Bounds{
+				Origin: Point{
+					X: x + g.X + Pixels(math.Floor(float64(m.MinX))) - 1,
+					Y: baseY - Pixels(math.Ceil(float64(m.MaxY))) - 1,
 				},
-				Mask:  m,
-				Color: ts.Color,
+				Size: Size{W: Pixels(m.W), H: Pixels(m.H)},
+			}
+			if k := Pixels(m.Scale); k > 0 {
+				bounds = Bounds{
+					Origin: Point{X: x + g.X + Pixels(m.X0)/k, Y: baseY + Pixels(m.Y0)/k},
+					Size:   Size{W: Pixels(m.W) / k, H: Pixels(m.H) / k},
+				}
+			}
+			w.PaintGlyph(GlyphSprite{
+				Bounds: bounds,
+				Mask:   m,
+				Color:  ts.Color,
 			})
 		}
 		if ts.Strikethrough && line.Width > 0 {
@@ -269,7 +290,7 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 		if ts.FontSize <= 0 {
 			ts = DefaultTextStyle()
 		}
-		lines := w.text.ShapeWrapped(r.Text, ts, wrapW)
+		lines := shapeWrapped(w, r.Text, ts, wrapW)
 		paintShapedLines(w, x, y, ts, lines)
 		rw := Pixels(0)
 		for _, l := range lines {

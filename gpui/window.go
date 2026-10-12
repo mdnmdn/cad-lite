@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
+	"sort"
 	"strings"
 )
 
@@ -26,9 +28,16 @@ type Window struct {
 	invalid        bool
 	focus          FocusID
 	mousePosition  Point
+	hasMouse       bool
 	propagateEvent bool
-	capturedHitbox int
-	hovered        map[string]func(*Window, *App) // hover-end callbacks of currently hovered elements
+	// hovered maps the global-id key of each currently hovered element to its
+	// hitbox depth; callbacks are looked up in the rendered frame when fired.
+	hovered map[string]int
+
+	// hitboxStack and keyStack hold the indices of the innermost enclosing
+	// hitbox / key node while prepainting, giving each new one its parent.
+	hitboxStack []int
+	keyStack    []int
 
 	renderedFrame Frame
 	nextFrame     Frame
@@ -62,9 +71,11 @@ type Frame struct {
 	hitboxes       BoundsTree
 	mouseListeners []MouseListener
 	keyNodes       []keyNode
-	inputHandlers  []PlatformInputHandler
-	elementStates  map[string]any
-	order          uint32
+	// rootKey is the index of the root element's key node, or -1.
+	rootKey       int
+	inputHandlers []PlatformInputHandler
+	elementStates map[string]any
+	order         uint32
 }
 
 // reset empties the frame for a new draw.
@@ -73,6 +84,7 @@ func (f *Frame) reset() {
 	f.hitboxes.Clear()
 	f.mouseListeners = f.mouseListeners[:0]
 	f.keyNodes = f.keyNodes[:0]
+	f.rootKey = -1
 	f.inputHandlers = f.inputHandlers[:0]
 	f.elementStates = nil
 	f.order = 0
@@ -108,6 +120,9 @@ type MouseListener struct {
 	scrollable bool
 	// scrollMax is the container's scrollable extent, captured at prepaint.
 	scrollMax Size
+	// parent is the index of the nearest ancestor hitbox, or -1; depth is
+	// the number of ancestor hitboxes.
+	parent, depth int
 }
 
 // keyNode is the per-element keyboard dispatch table recorded during
@@ -118,6 +133,8 @@ type keyNode struct {
 	OnKeyDown  func(*KeyDownEvent, *Window, *App)
 	OnKeyUp    func(*KeyUpEvent, *Window, *App)
 	OnAction   map[reflect.Type]func(Action, *Window, *App)
+	// parent is the index of the nearest ancestor key node, or -1.
+	parent int
 }
 
 // scrollState is the retained scroll offset of one scroll container.
@@ -255,9 +272,28 @@ func (w *Window) focusedInputHandler() PlatformInputHandler {
 // returns its index, which pairs with the frame's MouseListener slice.
 func (w *Window) InsertHitbox(b Bounds) int {
 	idx := w.nextFrame.hitboxes.Insert(Hitbox{Bounds: b, Order: w.nextFrame.order})
-	w.nextFrame.mouseListeners = append(w.nextFrame.mouseListeners, MouseListener{Bounds: b})
+	parent := -1
+	if n := len(w.hitboxStack); n > 0 {
+		parent = w.hitboxStack[n-1]
+	}
+	w.nextFrame.mouseListeners = append(w.nextFrame.mouseListeners, MouseListener{
+		Bounds:    b,
+		elementID: w.currentElementID,
+		parent:    parent,
+		depth:     len(w.hitboxStack),
+	})
 	w.nextFrame.order++
 	return idx
+}
+
+// insertKeyNode records an element's key dispatch table for the frame being
+// built, linking it to the enclosing key node.
+func (w *Window) insertKeyNode(kn keyNode) {
+	kn.parent = -1
+	if n := len(w.keyStack); n > 0 {
+		kn.parent = w.keyStack[n-1]
+	}
+	w.nextFrame.keyNodes = append(w.nextFrame.keyNodes, kn)
 }
 
 // PaintQuad inserts a quad into the frame being built, filling an unset
@@ -419,6 +455,8 @@ func (w *Window) Draw(cx *App) {
 	w.layoutNodes = make(map[LayoutID]*LayoutNode)
 	w.nextLayoutID = 1
 	w.clipStack = w.clipStack[:0]
+	w.hitboxStack = w.hitboxStack[:0]
+	w.keyStack = w.keyStack[:0]
 
 	var el Element
 	if w.root != nil {
@@ -434,7 +472,7 @@ func (w *Window) Draw(cx *App) {
 			Layout(rootNode, Definite(float32(b.Width()), float32(b.Height())))
 		}
 		rn := w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
-		w.prepaintTree(rn, cx)
+		w.prepaintTree(rn, cx, true)
 		w.paintTree(rn, cx)
 	}
 
@@ -445,6 +483,15 @@ func (w *Window) Draw(cx *App) {
 	if w.platformWindow != nil {
 		w.present()
 		w.platformWindow.SetInputHandler(w.focusedInputHandler())
+	}
+
+	// The tree under a stationary pointer may have changed: re-run hover.
+	if w.hasMouse {
+		if cx != nil {
+			cx.Update(func(cx *App) { w.updateHover(w.mousePosition, cx) })
+		} else {
+			w.updateHover(w.mousePosition, nil)
+		}
 	}
 }
 
@@ -470,10 +517,15 @@ func (w *Window) present() {
 func (w *Window) SetBackground(c Rgba) { w.background = c }
 
 // HitTest hit-tests the last drawn frame at p (logical px) and returns the
-// index of the topmost hitbox, which is stable until the next Draw.
-func (w *Window) HitTest(p Point) (int, bool) {
+// global id of the element owning the topmost hitbox. The id is stable across
+// frames while the element keeps its path; compare ids with Equal.
+func (w *Window) HitTest(p Point) (GlobalElementID, bool) {
 	i := w.renderedFrame.hitboxes.HitTest(p)
-	return i, i >= 0
+	if i < 0 {
+		return GlobalElementID{}, false
+	}
+	id := w.renderedFrame.mouseListeners[i].elementID
+	return GlobalElementID{Path: append([]ElementPathKey(nil), id.Path...)}, true
 }
 
 // buildRenderNode correlates the element tree with the layout tree,
@@ -544,17 +596,37 @@ func (w *Window) buildRenderNode(el Element, gid GlobalElementID, node *LayoutNo
 
 // prepaintTree walks the render tree in order, letting each element register
 // hitboxes, listeners and input handlers for the frame being built.
-func (w *Window) prepaintTree(n *renderNode, cx *App) {
+// The first hitbox and key node an element registers become the parents of
+// those its descendants register, which is what dispatch paths follow.
+func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
 	if n == nil || n.elem == nil {
 		return
 	}
 	if n.layout != nil && !n.layout.Style.Display {
 		return
 	}
+	hb, kb := len(w.nextFrame.mouseListeners), len(w.nextFrame.keyNodes)
 	w.currentElementID = n.id
 	n.prepaint = n.elem.Prepaint(w, cx, ElementID{Path: n.id.Path}, n.bounds, n.state)
+	pushedHitbox := len(w.nextFrame.mouseListeners) > hb
+	pushedKey := len(w.nextFrame.keyNodes) > kb
+	if pushedHitbox {
+		w.hitboxStack = append(w.hitboxStack, hb)
+	}
+	if pushedKey {
+		w.keyStack = append(w.keyStack, kb)
+		if isRoot {
+			w.nextFrame.rootKey = kb
+		}
+	}
 	for _, c := range n.children {
-		w.prepaintTree(c, cx)
+		w.prepaintTree(c, cx, false)
+	}
+	if pushedHitbox {
+		w.hitboxStack = w.hitboxStack[:len(w.hitboxStack)-1]
+	}
+	if pushedKey {
+		w.keyStack = w.keyStack[:len(w.keyStack)-1]
 	}
 }
 
@@ -591,7 +663,7 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 	}
 	switch e := input.(type) {
 	case MouseDownEvent:
-		w.mousePosition = e.Position
+		w.mousePosition, w.hasMouse = e.Position, true
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseDown != nil {
@@ -599,7 +671,7 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 			}
 		})
 	case MouseUpEvent:
-		w.mousePosition = e.Position
+		w.mousePosition, w.hasMouse = e.Position, true
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseUp != nil {
@@ -607,7 +679,7 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 			}
 		})
 	case MouseMoveEvent:
-		w.mousePosition = e.Position
+		w.mousePosition, w.hasMouse = e.Position, true
 		w.updateHover(e.Position, cx)
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
@@ -637,62 +709,85 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 	}
 }
 
-// dispatchMouse hit-tests the rendered frame and runs call over the hit
-// path: capture front-to-back (ancestors only), then bubble back-to-front
-// (innermost first), honoring StopPropagation. The innermost target runs
-// once, in the bubble phase, matching DOM semantics.
-func (w *Window) dispatchMouse(pos Point, cx *App, call func(*MouseListener)) {
+// hitPath returns the rendered frame's hitbox indices under pos, innermost
+// first: the topmost hitbox followed by its ancestor chain.
+func (w *Window) hitPath(pos Point) []int {
 	idx := w.renderedFrame.hitboxes.HitTest(pos)
-	w.capturedHitbox = idx
-	if idx < 0 {
-		return
+	var path []int
+	for i := idx; i >= 0; i = w.renderedFrame.mouseListeners[i].parent {
+		path = append(path, i)
 	}
+	return path
+}
+
+// dispatchMouse runs call over the hit path at pos, innermost first, each
+// listener once, until StopPropagation. All element mouse listeners are
+// bubble-phase (GPUI's capture_* listeners are not ported).
+func (w *Window) dispatchMouse(pos Point, cx *App, call func(*MouseListener)) {
 	w.propagateEvent = true
-	for i := 0; i < idx && w.propagateEvent; i++ {
-		call(&w.renderedFrame.mouseListeners[i])
-	}
-	for i := idx; i >= 0 && w.propagateEvent; i-- {
+	for _, i := range w.hitPath(pos) {
+		if !w.propagateEvent {
+			return
+		}
 		call(&w.renderedFrame.mouseListeners[i])
 	}
 }
 
-// updateHover diffs the set of hover-aware elements under pos against the set
-// seen at the previous move: newly entered elements get OnHoverStart, left
-// ones get OnHoverEnd (leaves first). An element counts as hovered when its
-// hitbox is at or below the topmost hit in paint order and its bounds contain
-// pos, so a parent stays hovered while the pointer is over its child.
+// updateHover diffs the hover-aware elements on the hit path at pos against
+// the previously hovered set. Ends fire first, deepest first; then starts,
+// root first. Callbacks come from the current rendered frame, so an element
+// that is no longer drawn gets no OnHoverEnd.
 func (w *Window) updateHover(pos Point, cx *App) {
-	type entry struct {
-		start, end func(*Window, *App)
-	}
-	now := map[string]entry{}
-	if idx := w.renderedFrame.hitboxes.HitTest(pos); idx >= 0 {
-		for i := 0; i <= idx; i++ {
-			l := &w.renderedFrame.mouseListeners[i]
-			if (l.OnHoverStart == nil && l.OnHoverEnd == nil) || !l.Bounds.Contains(pos) {
-				continue
-			}
-			now[globalIDKey(l.elementID)] = entry{l.OnHoverStart, l.OnHoverEnd}
+	ls := w.renderedFrame.mouseListeners
+	path := w.hitPath(pos)
+	now := make(map[string]int, len(path))
+	for _, i := range path {
+		if ls[i].OnHoverStart != nil || ls[i].OnHoverEnd != nil {
+			now[globalIDKey(ls[i].elementID)] = i
 		}
 	}
-	for k, end := range w.hovered {
+
+	type gone struct {
+		key   string
+		depth int
+	}
+	var ended []gone
+	for k, d := range w.hovered {
 		if _, ok := now[k]; !ok {
-			delete(w.hovered, k)
-			if end != nil {
-				end(w, cx)
+			ended = append(ended, gone{k, d})
+		}
+	}
+	sort.Slice(ended, func(a, b int) bool {
+		if ended[a].depth != ended[b].depth {
+			return ended[a].depth > ended[b].depth
+		}
+		return ended[a].key < ended[b].key
+	})
+	for _, g := range ended {
+		delete(w.hovered, g.key)
+		for i := range ls {
+			if ls[i].OnHoverEnd != nil && globalIDKey(ls[i].elementID) == g.key {
+				ls[i].OnHoverEnd(w, cx)
+				break
 			}
 		}
 	}
-	for k, e := range now {
+
+	for j := len(path) - 1; j >= 0; j-- {
+		l := &ls[path[j]]
+		k := globalIDKey(l.elementID)
+		if _, ok := now[k]; !ok {
+			continue
+		}
 		if _, ok := w.hovered[k]; ok {
 			continue
 		}
 		if w.hovered == nil {
-			w.hovered = make(map[string]func(*Window, *App))
+			w.hovered = make(map[string]int)
 		}
-		w.hovered[k] = e.end
-		if e.start != nil {
-			e.start(w, cx)
+		w.hovered[k] = l.depth
+		if l.OnHoverStart != nil {
+			l.OnHoverStart(w, cx)
 		}
 	}
 }
@@ -702,50 +797,60 @@ func (w *Window) updateHover(pos Point, cx *App) {
 // cursor and requests a redraw.
 func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 	ev := e
-	w.mousePosition = e.Position
+	w.mousePosition, w.hasMouse = e.Position, true
 	w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 		if l.OnScrollWheel != nil {
 			l.OnScrollWheel(&ev, w, cx)
 		}
 	})
-	idx := w.renderedFrame.hitboxes.HitTest(e.Position)
-	for i := idx; i >= 0; i-- {
+	for _, i := range w.hitPath(e.Position) {
 		l := &w.renderedFrame.mouseListeners[i]
 		if !l.scrollable {
 			continue
 		}
 		key := globalIDKey(l.elementID)
 		st, _ := w.elementStates[key].(scrollState)
+		st.maxW, st.maxH = l.scrollMax.W, l.scrollMax.H
 		st.offset.X = clampf(st.offset.X+e.DeltaX, 0, st.maxW)
 		st.offset.Y = clampf(st.offset.Y+e.DeltaY, 0, st.maxH)
-		st.maxW, st.maxH = l.scrollMax.W, l.scrollMax.H
-		st.offset.X = clampf(st.offset.X, 0, st.maxW)
-		st.offset.Y = clampf(st.offset.Y, 0, st.maxH)
 		w.elementStates[key] = st
 		w.Refresh()
 		return
 	}
 }
 
-// keyPath returns the key nodes a key event should traverse: the focus path
-// (root to the focused node) when something is focused, otherwise every key
-// node. The last entry is the event target.
+// keyPath returns the key nodes a key event traverses, root first; the last
+// entry is the target. It is the ancestor chain of the focused key node, or,
+// when nothing focused is in the frame, the root element's key node alone
+// (GPUI dispatches from the root).
 func (w *Window) keyPath() []keyNode {
 	nodes := w.renderedFrame.keyNodes
-	if w.focus == 0 {
-		return nodes
-	}
-	for i := range nodes {
-		if nodes[i].FocusID != 0 && nodes[i].FocusID == w.focus {
-			return nodes[:i+1]
+	target := -1
+	if w.focus != 0 {
+		for i := range nodes {
+			if nodes[i].FocusID == w.focus {
+				target = i
+				break
+			}
 		}
 	}
-	return nodes
+	if target < 0 {
+		if r := w.renderedFrame.rootKey; r >= 0 && r < len(nodes) {
+			return nodes[r : r+1]
+		}
+		return nil
+	}
+	var rev []keyNode
+	for i := target; i >= 0; i = nodes[i].parent {
+		rev = append(rev, nodes[i])
+	}
+	slices.Reverse(rev)
+	return rev
 }
 
 // dispatchKeyDown delivers a key press to a focused text input when it wants
-// character input; otherwise it runs OnKeyDown over the focus path
-// (capture then bubble) and finally consults the keymap, dispatching any
+// character input; otherwise it runs OnKeyDown over the focus path (target
+// first, bubble-phase) and finally consults the keymap, dispatching any
 // matched action to OnAction handlers along the same path.
 func (w *Window) dispatchKeyDown(e KeyDownEvent, cx *App) {
 	ev := e
@@ -765,11 +870,6 @@ func (w *Window) dispatchKeyDown(e KeyDownEvent, cx *App) {
 		return
 	}
 	w.propagateEvent = true
-	for i := 0; i < len(path)-1 && w.propagateEvent; i++ {
-		if path[i].OnKeyDown != nil {
-			path[i].OnKeyDown(&ev, w, cx)
-		}
-	}
 	for i := len(path) - 1; i >= 0 && w.propagateEvent; i-- {
 		if path[i].OnKeyDown != nil {
 			path[i].OnKeyDown(&ev, w, cx)
@@ -798,19 +898,11 @@ func (w *Window) dispatchKeyDown(e KeyDownEvent, cx *App) {
 	}
 }
 
-// dispatchKeyUp runs OnKeyUp over the focus path, capture then bubble.
+// dispatchKeyUp runs OnKeyUp over the focus path, target first.
 func (w *Window) dispatchKeyUp(e KeyUpEvent, cx *App) {
 	ev := e
 	path := w.keyPath()
-	if len(path) == 0 {
-		return
-	}
 	w.propagateEvent = true
-	for i := 0; i < len(path)-1 && w.propagateEvent; i++ {
-		if path[i].OnKeyUp != nil {
-			path[i].OnKeyUp(&ev, w, cx)
-		}
-	}
 	for i := len(path) - 1; i >= 0 && w.propagateEvent; i-- {
 		if path[i].OnKeyUp != nil {
 			path[i].OnKeyUp(&ev, w, cx)

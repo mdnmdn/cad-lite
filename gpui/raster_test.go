@@ -275,7 +275,7 @@ func TestRasterImageUnpremultiplies(t *testing.T) {
 	if img.Bounds().Dx() != 10 || img.Bounds().Dy() != 10 {
 		t.Fatalf("Image bounds = %v, want 10×10", img.Bounds())
 	}
-	c := img.RGBAAt(2, 2)
+	c := img.NRGBAAt(2, 2)
 	if c.R != 255 || c.G != 0 || c.B != 0 || c.A != 255 {
 		t.Fatalf("opaque red image pixel = %v, want {255 0 0 255}", c)
 	}
@@ -286,7 +286,7 @@ func TestRasterImageUnpremultiplies(t *testing.T) {
 		t.Fatalf("premultiplied buffer = %v, want {128 0 0 128}", got)
 	}
 	img = r.Image()
-	c = img.RGBAAt(0, 0)
+	c = img.NRGBAAt(0, 0)
 	if diff := int(c.R) - 255; diff > 2 || diff < -2 {
 		t.Fatalf("un-premultiplied R = %d, want ~255", c.R)
 	}

@@ -1,7 +1,9 @@
 package gpui_test
 
 import (
+	"bytes"
 	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +21,7 @@ func tree(onClick func()) gpui.EntityRoot {
 	})
 }
 
-func want(c gpui.Rgba) color.RGBA { return color.RGBA{c.R, c.G, c.B, c.A} }
+func want(c gpui.Rgba) color.NRGBA { return color.NRGBA{c.R, c.G, c.B, c.A} }
 
 func TestRenderToImagePixels(t *testing.T) {
 	img, err := gpui.RenderToImage(200, 150, 1, tree(nil))
@@ -33,7 +35,7 @@ func TestRenderToImagePixels(t *testing.T) {
 		x, y int
 		c    gpui.Rgba
 	}{{25, 25, gpui.Red500}, {75, 75, gpui.Blue500}, {150, 120, gpui.White}} {
-		if got := img.RGBAAt(c.x, c.y); got != want(c.c) {
+		if got := img.NRGBAAt(c.x, c.y); got != want(c.c) {
 			t.Errorf("(%d,%d) = %v, want %v", c.x, c.y, got, want(c.c))
 		}
 	}
@@ -48,13 +50,13 @@ func TestRenderOptionsAndScale(t *testing.T) {
 	if b := img.Bounds(); b.Dx() != 300 || b.Dy() != 300 {
 		t.Fatalf("size = %v, want 300x300", b)
 	}
-	if got := img.RGBAAt(80, 80); got != want(gpui.Red500) {
+	if got := img.NRGBAAt(80, 80); got != want(gpui.Red500) {
 		t.Errorf("(80,80) = %v, want red", got)
 	}
-	if got := img.RGBAAt(150, 150); got != want(gpui.Blue500) {
+	if got := img.NRGBAAt(150, 150); got != want(gpui.Blue500) {
 		t.Errorf("(150,150) = %v, want blue", got)
 	}
-	if got := img.RGBAAt(290, 290); got != want(bg) {
+	if got := img.NRGBAAt(290, 290); got != want(bg) {
 		t.Errorf("(290,290) = %v, want bg", got)
 	}
 }
@@ -136,5 +138,29 @@ func TestWindowDrawPresentsDeviceSizedFrame(t *testing.T) {
 	}
 	if _, ok := win.HitTest(gpui.Point{X: 500, Y: 500}); ok {
 		t.Error("HitTest hit outside window")
+	}
+}
+
+func TestRenderToImagePNGRoundTripSemiTransparent(t *testing.T) {
+	bg := gpui.RgbaOf(200, 100, 50, 128)
+	img, err := gpui.RenderToImage(20, 20, 1, gpui.RenderFunc(func(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
+		return gpui.NewDiv().SizeWH(20, 20)
+	}), gpui.WithBackgroundColor(bg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	dec, err := png.Decode(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := color.NRGBAModel.Convert(dec.At(5, 5)).(color.NRGBA)
+	for _, d := range []int{int(got.R) - 200, int(got.G) - 100, int(got.B) - 50, int(got.A) - 128} {
+		if d > 2 || d < -2 {
+			t.Fatalf("PNG round-trip pixel = %v, want ~{200 100 50 128}", got)
+		}
 	}
 }

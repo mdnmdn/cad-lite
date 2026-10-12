@@ -68,9 +68,9 @@ func (r *Rasterizer) Render(s *Scene) {
 }
 
 // Image returns a copy of the current frame as a non-premultiplied
-// *image.RGBA (suitable for png.Encode). The copy is un-premultiplied; the
+// *image.NRGBA (suitable for png.Encode). The copy is un-premultiplied; the
 // rasterizer's own buffer stays premultiplied end to end.
-func (r *Rasterizer) Image() *image.RGBA {
+func (r *Rasterizer) Image() *image.NRGBA {
 	pix := make([]byte, len(r.pix))
 	for i := 0; i < len(r.pix); i += 4 {
 		a := uint32(r.pix[i+3])
@@ -88,7 +88,7 @@ func (r *Rasterizer) Image() *image.RGBA {
 		}
 		pix[i+3] = r.pix[i+3]
 	}
-	return &image.RGBA{Pix: pix, Stride: 4 * r.w, Rect: image.Rect(0, 0, r.w, r.h)}
+	return &image.NRGBA{Pix: pix, Stride: 4 * r.w, Rect: image.Rect(0, 0, r.w, r.h)}
 }
 
 func (r *Rasterizer) drawQuad(q Quad) {
@@ -139,6 +139,12 @@ func (r *Rasterizer) drawSprite(g GlyphSprite) {
 	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
 	minX, minY := float32(g.Bounds.Origin.X), float32(g.Bounds.Origin.Y)
 	maxX, maxY := float32(g.Bounds.Max().X), float32(g.Bounds.Max().Y)
+	if abs32(maxX-minX-float32(m.W)) < 0.01 && abs32(maxY-minY-float32(m.H)) < 0.01 {
+		ox := float32(math.Round(float64(minX)))
+		oy := float32(math.Round(float64(minY)))
+		minX, maxX = ox, ox+float32(m.W)
+		minY, maxY = oy, oy+float32(m.H)
+	}
 	sx := float32(m.W) / (maxX - minX)
 	sy := float32(m.H) / (maxY - minY)
 	for y := y0; y < y1; y++ {
@@ -282,8 +288,8 @@ func roundedRectCoverage(b Bounds, radii Corners, px, py float32) float32 {
 // sampleBilinear samples the mask at texel-space coords (u, v) — the pixel
 // center of texel i is at u = i — with edge clamping.
 func sampleBilinear(m *GlyphMask, u, v float32) float32 {
-	fu := clamp32(u+0.5, 0, float32(m.W))
-	fv := clamp32(v+0.5, 0, float32(m.H))
+	fu := clamp32(u, 0, float32(m.W-1))
+	fv := clamp32(v, 0, float32(m.H-1))
 	x0, y0 := int(fu), int(fv)
 	if x0 >= m.W {
 		x0 = m.W - 1

@@ -71,7 +71,7 @@ func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	if onLaunch != nil {
 		onLaunch(app)
 	}
-	g := &game{p: p, app: app}
+	g := &game{p: p, app: app, clip: newClipWorker()}
 	err := ebiten.RunGame(g)
 	if errors.Is(err, ebiten.Termination) {
 		return nil
@@ -138,6 +138,7 @@ type game struct {
 	clicks   clickTracker
 	keyBuf   []ebiten.Key
 	runeBuf  []rune
+	clip     *clipWorker
 }
 
 func (g *game) Layout(ow, oh int) (int, int) {
@@ -177,6 +178,9 @@ func (g *game) Update() error {
 	}
 	win := wins[0]
 	g.app.Update(func(app *gpui.App) {
+		g.clip.drain(func(r clipResult) {
+			applyClipboard(r, w.handler, func(ev gpui.PlatformInput) { win.DispatchEvent(ev, app) })
+		})
 		g.pollInput(win, app, w)
 	})
 	if g.p.quit.Load() || g.app.IsQuitting() {
@@ -204,7 +208,7 @@ func (g *game) Draw(screen *ebiten.Image) {
 }
 
 func (g *game) modifiers() gpui.Modifiers {
-	return modifiersFor(runtime.GOOS,
+	return modifiersFor(
 		ebiten.IsKeyPressed(ebiten.KeyShift),
 		ebiten.IsKeyPressed(ebiten.KeyControl),
 		ebiten.IsKeyPressed(ebiten.KeyAlt),
@@ -236,13 +240,13 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 	}
 	for _, b := range buttons {
 		if inpututil.IsMouseButtonJustPressed(b.eb) {
-			hit, _ := win.HitTest(pos)
-			n := g.clicks.press(b.gb, pos, hit, time.Now())
+			hit, ok := win.HitTest(pos)
+			n := g.clicks.press(b.gb, pos, hit, ok, time.Now())
 			win.DispatchEvent(gpui.MouseDownEvent{Position: pos, Button: b.gb, Modifiers: mods, ClickCount: n}, app)
 		}
 		if inpututil.IsMouseButtonJustReleased(b.eb) {
-			hit, _ := win.HitTest(pos)
-			clicked, n := g.clicks.release(b.gb, hit)
+			hit, ok := win.HitTest(pos)
+			clicked, n := g.clicks.release(b.gb, hit, ok)
 			up := gpui.MouseUpEvent{Position: pos, Button: b.gb, Modifiers: mods, ClickCount: n}
 			win.DispatchEvent(up, app)
 			if clicked {
@@ -276,85 +280,30 @@ func (g *game) pollKeys(win *gpui.Window, app *gpui.App, w *window, mods gpui.Mo
 		if !shouldFire(inpututil.KeyPressDuration(k), !printable) {
 			continue
 		}
-		if printable && !isShortcut(mods) {
+		if printable && !isShortcut(runtime.GOOS, mods) {
 			continue
 		}
 		if printable && inpututil.KeyPressDuration(k) != 1 {
 			continue
 		}
 		ks := gpui.Keystroke{Modifiers: mods, Key: name}
-		if op := clipboardOp(name, mods); op != "" && g.clipboard(win, app, w, op) {
+		if op := clipboardOp(runtime.GOOS, name, mods); op != "" &&
+			startClipboard(g.clip, op, w.handler, gpui.ClipboardRead, gpui.ClipboardWrite) {
 			continue
 		}
 		win.DispatchEvent(gpui.KeyDownEvent{Keystroke: ks}, app)
 	}
 
-	if !isShortcut(mods) {
+	if !isShortcut(runtime.GOOS, mods) {
 		g.runeBuf = ebiten.AppendInputChars(g.runeBuf[:0])
+		// Shift, Alt/Option and AltGr's Ctrl were consumed composing the rune.
+		charMods := mods &^ (gpui.Shift | gpui.Alt | gpui.Control)
 		for _, r := range printableRunes(g.runeBuf) {
 			s := string(r)
 			win.DispatchEvent(gpui.KeyDownEvent{
-				Keystroke:            gpui.Keystroke{Modifiers: mods &^ gpui.Shift, Key: s, KeyChar: &s},
+				Keystroke:            gpui.Keystroke{Modifiers: charMods, Key: s, KeyChar: &s},
 				PreferCharacterInput: true,
 			}, app)
 		}
 	}
-}
-
-// clipboard performs a clipboard shortcut and reports whether it consumed the
-// key press. Paste is delivered as character input so it reaches the focused
-// text field through the normal dispatch path; copy and cut need the installed
-// input handler to read the selection.
-func (g *game) clipboard(win *gpui.Window, app *gpui.App, w *window, op string) bool {
-	switch op {
-	case "paste":
-		text, err := gpui.ClipboardRead()
-		if err != nil || text == "" {
-			return false
-		}
-		text = printableLine(text)
-		if text == "" {
-			return false
-		}
-		win.DispatchEvent(gpui.KeyDownEvent{
-			Keystroke:            gpui.Keystroke{Key: text, KeyChar: &text},
-			PreferCharacterInput: true,
-		}, app)
-		return true
-	case "copy", "cut":
-		h := w.handler
-		if h == nil {
-			return false
-		}
-		sel, ok := h.SelectedTextRange()
-		if !ok || sel.IsNil || sel.Range.Start == sel.Range.End {
-			return false
-		}
-		text, ok := h.TextForRange(sel.Range)
-		if !ok {
-			return false
-		}
-		if gpui.ClipboardWrite(text) != nil {
-			return false
-		}
-		if op == "cut" {
-			r := sel.Range
-			h.ReplaceTextInRange(&r, "")
-		}
-		return true
-	}
-	return false
-}
-
-func printableLine(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		switch {
-		case r == '\n' || r == '\r' || r == '\t':
-			out = append(out, ' ')
-		case r >= 0x20 && r != 0x7f:
-			out = append(out, r)
-		}
-	}
-	return string(out)
 }

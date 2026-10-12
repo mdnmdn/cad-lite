@@ -394,7 +394,7 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 			OnKeyUp:    d.onKeyUp,
 			OnAction:   d.onAction,
 		}
-		w.nextFrame.keyNodes = append(w.nextFrame.keyNodes, kn)
+		w.insertKeyNode(kn)
 	}
 	return st
 }

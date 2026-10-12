@@ -43,7 +43,7 @@ func RenderToPNG(path string, w, h int, scale float32, root EntityRoot, opts ...
 }
 
 // RenderToImage is RenderToPNG but returns the non-premultiplied image.
-func RenderToImage(w, h int, scale float32, root EntityRoot, opts ...RenderOption) (*image.RGBA, error) {
+func RenderToImage(w, h int, scale float32, root EntityRoot, opts ...RenderOption) (*image.NRGBA, error) {
 	cfg := renderConfig{background: White, title: "gpui"}
 	for _, o := range opts {
 		o(&cfg)
@@ -230,7 +230,7 @@ func (hw *HeadlessWindow) Pixels() []byte {
 }
 
 // Image returns the latest frame as a non-premultiplied image.
-func (hw *HeadlessWindow) Image() *image.RGBA {
+func (hw *HeadlessWindow) Image() *image.NRGBA {
 	hw.flush()
 	pix := make([]byte, len(hw.pix))
 	for i := 0; i < len(pix); i += 4 {
@@ -246,7 +246,7 @@ func (hw *HeadlessWindow) Image() *image.RGBA {
 			pix[i+3] = hw.pix[i+3]
 		}
 	}
-	return &image.RGBA{Pix: pix, Stride: 4 * hw.pw, Rect: image.Rect(0, 0, hw.pw, hw.ph)}
+	return &image.NRGBA{Pix: pix, Stride: 4 * hw.pw, Rect: image.Rect(0, 0, hw.pw, hw.ph)}
 }
 
 // SavePNG writes the latest frame to path as a PNG.

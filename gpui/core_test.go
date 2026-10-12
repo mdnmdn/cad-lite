@@ -186,13 +186,13 @@ func TestStopPropagationHaltsBubble(t *testing.T) {
 	var order []string
 	root := RenderFunc(func(w *Window, cx *App) IntoElement {
 		inner := NewDiv().ID("inner").SizeWH(100, 100).Bg(Blue500).
-			OnMouseDown(func(*MouseDownEvent, *Window, *App) {
+			OnMouseDown(func(_ *MouseDownEvent, w *Window, _ *App) {
 				order = append(order, "inner")
+				w.StopPropagation()
 			})
 		outer := NewDiv().ID("outer").SizeWH(200, 200).Bg(Gray200).
-			OnMouseDown(func(_ *MouseDownEvent, w *Window, _ *App) {
+			OnMouseDown(func(*MouseDownEvent, *Window, *App) {
 				order = append(order, "outer")
-				w.StopPropagation()
 			})
 		return outer.FlexCol().Child(inner)
 	})
@@ -200,15 +200,10 @@ func TestStopPropagationHaltsBubble(t *testing.T) {
 	win.Draw(app)
 	win.DispatchEvent(MouseDownEvent{Position: Point{X: 20, Y: 20}, Button: MouseLeft}, app)
 
-	if len(order) == 0 {
-		t.Fatal("no mouse-down listener ran")
-	}
-	// Capture runs outer then inner; bubble runs inner then outer. The outer
-	// handler calls StopPropagation, so the bubble phase must not reach inner.
-	for _, s := range order {
-		if s == "inner" {
-			t.Errorf("inner ran despite outer calling StopPropagation; order = %v", order)
-		}
+	// Listeners are bubble-phase: inner runs first and stops the bubble
+	// before it reaches outer.
+	if len(order) != 1 || order[0] != "inner" {
+		t.Errorf("order = %v, want [inner]", order)
 	}
 }
 
