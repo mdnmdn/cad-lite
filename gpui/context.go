@@ -74,11 +74,33 @@ func Emit[T, E any](c *Context[T], event *E) {
 // Observe registers f to run when other is notified. Activation is immediate
 // for the POC: the subscription is live as soon as Observe returns, rather
 // than being deferred to the next effect flush as in GPUI.
+//
+// The subscription is owned by this context's entity: it is closed when the
+// entity is released (GPUI drops a view's subscriptions with the view).
 func (c *Context[T]) Observe(other Entity[T], f func(Entity[T], *App)) *Subscription {
 	if c == nil || c.App == nil {
 		return NewSubscription(nil)
 	}
-	return ObserveOn[T](c.App, other, f)
+	sub := ObserveOn[T](c.App, other, f)
+	if s := c.App.slot(c.entity); s != nil {
+		s.owned = append(s.owned, sub)
+	}
+	return sub
+}
+
+// OnRelease registers f to run when this context's entity is released.
+// Closing the returned subscription cancels it.
+func (c *Context[T]) OnRelease(f func(*App)) *Subscription {
+	if c == nil || c.App == nil || f == nil {
+		return NewSubscription(nil)
+	}
+	s := c.App.slot(c.entity)
+	if s == nil {
+		return NewSubscription(nil)
+	}
+	h := &releaseHook{f: f}
+	s.onRelease = append(s.onRelease, h)
+	return NewSubscription(func() { h.closed = true })
 }
 
 // Subscribe registers f to run when an E event is emitted on e, using the

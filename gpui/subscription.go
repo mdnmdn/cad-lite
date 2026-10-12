@@ -115,6 +115,22 @@ func (s *SubscriberSet[K, T]) Remove(key K) {
 	delete(s.entries, key)
 }
 
+// RemoveWhere deactivates and drops every callback whose key satisfies
+// match.
+func (s *SubscriberSet[K, T]) RemoveWhere(match func(K) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, es := range s.entries {
+		if !match(k) {
+			continue
+		}
+		for _, e := range es {
+			e.closed = true
+		}
+		delete(s.entries, k)
+	}
+}
+
 // Len returns the number of live callbacks across all keys, pruning
 // deactivated ones first.
 func (s *SubscriberSet[K, T]) Len() int {

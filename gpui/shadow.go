@@ -95,7 +95,7 @@ func shadowPrimitive(s BoxShadow, bounds Bounds, radii Corners) Shadow {
 // paintBox paints an element's box: outset shadows, background, inset
 // shadows, then the border.
 func paintBox(w *Window, bounds Bounds, style Style) {
-	mask := ContentMask{Bounds: w.CurrentClip()}
+	mask := w.CurrentContentMask()
 	for _, s := range style.BoxShadows {
 		if !s.Inset {
 			w.PaintShadow(shadowPrimitive(s, bounds, style.CornerRadii))

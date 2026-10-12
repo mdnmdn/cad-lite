@@ -74,10 +74,36 @@ func (m *StyledMixin) FlexShrink(v float32) *StyledMixin {
 	return m
 }
 
-// Flex1 grows and shrinks to consume the available main-axis space.
+// Flex1 is GPUI's flex_1, CSS `flex: 1 1 0%`: grow and shrink from a zero
+// basis, so siblings with Flex1 share the space equally regardless of their
+// content (each still stops at its automatic minimum size).
 func (m *StyledMixin) Flex1() *StyledMixin {
 	m.style.FlexGrow = float32Ptr(1)
 	m.style.FlexShrink = float32Ptr(1)
+	m.style.FlexBasis = lengthPtr(Px(0))
+	return m
+}
+
+// FlexAuto is CSS `flex: 1 1 auto`: grow and shrink from the content (or
+// main) size, so free space is added on top of each item's content.
+func (m *StyledMixin) FlexAuto() *StyledMixin {
+	m.style.FlexGrow = float32Ptr(1)
+	m.style.FlexShrink = float32Ptr(1)
+	m.style.FlexBasis = lengthPtr(Auto())
+	return m
+}
+
+// FlexNone is CSS `flex: none`: neither grow nor shrink, auto basis.
+func (m *StyledMixin) FlexNone() *StyledMixin {
+	m.style.FlexGrow = float32Ptr(0)
+	m.style.FlexShrink = float32Ptr(0)
+	m.style.FlexBasis = lengthPtr(Auto())
+	return m
+}
+
+// FlexBasis sets a definite flex base size in pixels.
+func (m *StyledMixin) FlexBasis(v float32) *StyledMixin {
+	m.style.FlexBasis = lengthPtr(Px(v))
 	return m
 }
 
@@ -166,8 +192,86 @@ func (m *StyledMixin) Pl(v float32) *StyledMixin {
 // M sets margin on all four edges.
 func (m *StyledMixin) M(v float32) *StyledMixin {
 	m.style.Margin = edgesAll(v)
+	m.style.MarginAuto = &AutoEdges{}
 	return m
 }
+
+// setMargin sets the selected margin edges to v and clears their auto flag.
+func (m *StyledMixin) setMargin(v float32, top, right, bottom, left bool) *StyledMixin {
+	e := m.style.Margin.unwrap()
+	var a AutoEdges
+	if m.style.MarginAuto != nil {
+		a = *m.style.MarginAuto
+	}
+	p := Pixels(v)
+	if top {
+		e.Top, a.Top = p, false
+	}
+	if right {
+		e.Right, a.Right = p, false
+	}
+	if bottom {
+		e.Bottom, a.Bottom = p, false
+	}
+	if left {
+		e.Left, a.Left = p, false
+	}
+	m.style.Margin, m.style.MarginAuto = &e, &a
+	return m
+}
+
+// setMarginAuto marks the selected margin edges auto.
+func (m *StyledMixin) setMarginAuto(top, right, bottom, left bool) *StyledMixin {
+	var a AutoEdges
+	if m.style.MarginAuto != nil {
+		a = *m.style.MarginAuto
+	}
+	a.Top = a.Top || top
+	a.Right = a.Right || right
+	a.Bottom = a.Bottom || bottom
+	a.Left = a.Left || left
+	m.style.MarginAuto = &a
+	return m
+}
+
+// Mx sets the left and right margins.
+func (m *StyledMixin) Mx(v float32) *StyledMixin { return m.setMargin(v, false, true, false, true) }
+
+// My sets the top and bottom margins.
+func (m *StyledMixin) My(v float32) *StyledMixin { return m.setMargin(v, true, false, true, false) }
+
+// Mt sets the top margin.
+func (m *StyledMixin) Mt(v float32) *StyledMixin { return m.setMargin(v, true, false, false, false) }
+
+// Mr sets the right margin.
+func (m *StyledMixin) Mr(v float32) *StyledMixin { return m.setMargin(v, false, true, false, false) }
+
+// Mb sets the bottom margin.
+func (m *StyledMixin) Mb(v float32) *StyledMixin { return m.setMargin(v, false, false, true, false) }
+
+// Ml sets the left margin.
+func (m *StyledMixin) Ml(v float32) *StyledMixin { return m.setMargin(v, false, false, false, true) }
+
+// MAuto makes every margin auto (centers the element in its parent).
+func (m *StyledMixin) MAuto() *StyledMixin { return m.setMarginAuto(true, true, true, true) }
+
+// MxAuto makes the left and right margins auto.
+func (m *StyledMixin) MxAuto() *StyledMixin { return m.setMarginAuto(false, true, false, true) }
+
+// MyAuto makes the top and bottom margins auto.
+func (m *StyledMixin) MyAuto() *StyledMixin { return m.setMarginAuto(true, false, true, false) }
+
+// MtAuto makes the top margin auto.
+func (m *StyledMixin) MtAuto() *StyledMixin { return m.setMarginAuto(true, false, false, false) }
+
+// MrAuto makes the right margin auto.
+func (m *StyledMixin) MrAuto() *StyledMixin { return m.setMarginAuto(false, true, false, false) }
+
+// MbAuto makes the bottom margin auto.
+func (m *StyledMixin) MbAuto() *StyledMixin { return m.setMarginAuto(false, false, true, false) }
+
+// MlAuto makes the left margin auto.
+func (m *StyledMixin) MlAuto() *StyledMixin { return m.setMarginAuto(false, false, false, true) }
 
 // Bg sets the background fill: an Rgba, an Hsla, or a Background such as
 // LinearGradient(...).
@@ -224,6 +328,7 @@ func (m *StyledMixin) TextColor(c Rgba) *StyledMixin {
 	t := m.textStyle()
 	t.Color = c
 	m.style.TextStyle = &t
+	m.style.TextSet |= TextFieldColor
 	return m
 }
 
@@ -232,6 +337,7 @@ func (m *StyledMixin) TextSize(px float32) *StyledMixin {
 	t := m.textStyle()
 	t.FontSize = Pixels(px)
 	m.style.TextStyle = &t
+	m.style.TextSet |= TextFieldSize
 	return m
 }
 
@@ -240,6 +346,7 @@ func (m *StyledMixin) FontWeight(w int) *StyledMixin {
 	t := m.textStyle()
 	t.FontWeight = w
 	m.style.TextStyle = &t
+	m.style.TextSet |= TextFieldWeight
 	return m
 }
 
@@ -248,6 +355,7 @@ func (m *StyledMixin) FontFamily(name string) *StyledMixin {
 	t := m.textStyle()
 	t.FontFamily = name
 	m.style.TextStyle = &t
+	m.style.TextSet |= TextFieldFamily
 	return m
 }
 
@@ -256,6 +364,7 @@ func (m *StyledMixin) TextStrikethrough() *StyledMixin {
 	t := m.textStyle()
 	t.Strikethrough = true
 	m.style.TextStyle = &t
+	m.style.TextSet |= TextFieldStrikethrough
 	return m
 }
 
@@ -264,6 +373,7 @@ func (m *StyledMixin) TextLineHeight(px float32) *StyledMixin {
 	t := m.textStyle()
 	t.LineHeight = Pixels(px)
 	m.style.TextStyle = &t
+	m.style.TextSet |= TextFieldLineHeight
 	return m
 }
 

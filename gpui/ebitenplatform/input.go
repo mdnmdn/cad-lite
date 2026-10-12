@@ -164,6 +164,23 @@ func printableRunes(rs []rune) string {
 	return string(out)
 }
 
+// charKeystroke builds the keystroke of a typed character so that bare
+// bindings match it (GPUI's key vs key_char): space is "space", an ASCII
+// capital is its lower-case key plus Shift, anything else is the character
+// itself. KeyChar always carries the character for text input.
+func charKeystroke(r rune, mods gpui.Modifiers) gpui.Keystroke {
+	s := string(r)
+	key := s
+	switch {
+	case r == ' ':
+		key = "space"
+	case r >= 'A' && r <= 'Z':
+		key = string(r - 'A' + 'a')
+		mods |= gpui.Shift
+	}
+	return gpui.Keystroke{Modifiers: mods, Key: key, KeyChar: &s}
+}
+
 // buttonPress is the pending press of one mouse button.
 type buttonPress struct {
 	down   bool

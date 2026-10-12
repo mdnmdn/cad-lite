@@ -85,8 +85,8 @@ them. Style a `StyledText` through a variable (`st.StyleRef()` /
 
 Event/focus builders on `Div`: `OnMouseDown`, `OnMouseUp`, `OnMouseMove`,
 `OnClick`, `OnScrollWheel`, `OnKeyDown`, `OnKeyUp`, `OnHoverStart`,
-`OnHoverEnd`, `OnAction`, `TrackFocus`, `KeyContext`, `TabIndex` (stored, not
-yet used for traversal). Each setter holds one handler; a second call replaces
+`OnHoverEnd`, `OnAction` (keyed by `ActionKeyOf`), `TrackFocus`, `KeyContext`,
+`TabIndex`. Each setter holds one handler; a second call replaces
 the first. See [events-and-input.md](events-and-input.md).
 
 What a Div does per phase:
@@ -97,7 +97,9 @@ What a Div does per phase:
   if it has key handlers, actions, a key context or a focus handle; scroll
   extent for non-visible overflow.
 - **Paint:** background quad (if alpha > 0) and border quad (if border width
-  and colour are set). The border is painted inside the bounds.
+  and colour are set). The border is painted inside the bounds. An
+  `OverflowHidden`/`OverflowScroll` div clips its **children** (not its own
+  box) to its bounds, rounded by its corner radii.
 
 ## Text, StyledText, Str
 
@@ -148,18 +150,24 @@ method called from the parent's `Render` every frame (this is how
 ## Writing a custom element
 
 You need a custom `Element` only when you must paint your own primitives
-(a chart, a swatch, a caret). Constraints of the current API:
+(a chart, a swatch, a caret) or lay out children your own way. Two hooks on
+`Window` make this possible from outside the package:
 
-- The window walks children through an unexported interface
-  (`hasChildren`, implemented by `*Div` adapters), so a custom element is
-  effectively a **leaf**: its children are not visited.
-- `RequestLayout` must return a `LayoutID`, and the only way to obtain one is
-  the unexported `Window.registerLayoutNode`. From outside the package the
-  practical approach is to **delegate to a childless `Div`'s element** for
-  `ID`/`RequestLayout`/`Prepaint`, and add your own painting in `Paint`.
-  (Inside package `gpui` you can build a `LayoutNode` directly, as `Text` does.)
+- `RegisterLayoutNode(n *LayoutNode) LayoutID` registers a node you built
+  yourself (a leaf, or one whose children you already registered;
+  `LayoutNode(id)` looks a registered node up);
+- `RequestLayoutWithChildren(style, children, cx) (LayoutID, *ChildLayout)`
+  runs `RequestLayout` on every child, builds a node with your style over the
+  children's nodes and registers it.
 
-A leaf element that paints a filled square, compiled against the current API:
+A container must also implement `ParentElementChildren`
+(`ElementChildren() []AnyElement`, returning the same children) and return
+the `*ChildLayout` (or a struct embedding it) as its layout state: the window
+then walks the children exactly as for a `Div`, prepainting and painting each
+after the container itself with its own laid-out bounds (hitboxes, focus,
+text, everything works).
+
+A leaf that paints a filled square:
 
 ```go
 type Swatch struct {
@@ -167,42 +175,76 @@ type Swatch struct {
     size  float32
 }
 
-func NewSwatch(c gpui.Rgba, size float32) *Swatch { return &Swatch{color: c, size: size} }
+func (s *Swatch) IntoElement() gpui.Element { return swatchElement{s} }
 
-// IntoElement returns the adapter, which carries the Element methods.
-func (s *Swatch) IntoElement() gpui.Element {
-    return swatchElement{s: s, inner: gpui.NewDiv().SizeWH(s.size, s.size).IntoElement()}
-}
+type swatchElement struct{ s *Swatch }
 
-type swatchElement struct {
-    s     *Swatch
-    inner gpui.Element
-}
-
-func (e swatchElement) ID() (gpui.ElementID, bool) { return e.inner.ID() }
+func (e swatchElement) ID() (gpui.ElementID, bool) { return gpui.ElementID{}, false }
 
 func (e swatchElement) RequestLayout(w *gpui.Window, cx *gpui.App) (gpui.LayoutID, any) {
-    return e.inner.RequestLayout(w, cx)
+    st := gpui.DefaultStyle()
+    st.Width, st.Height = gpui.Px(e.s.size), gpui.Px(e.s.size)
+    return w.RegisterLayoutNode(&gpui.LayoutNode{Style: st}), nil
 }
 
 func (e swatchElement) Prepaint(w *gpui.Window, cx *gpui.App, id gpui.ElementID, b gpui.Bounds, ls any) any {
-    return e.inner.Prepaint(w, cx, id, b, ls) // registers the hitbox
+    return nil
 }
 
 func (e swatchElement) Paint(w *gpui.Window, cx *gpui.App, id gpui.ElementID, b gpui.Bounds, ls, ps any) {
-    e.inner.Paint(w, cx, id, b, ls, ps)
     w.PaintQuad(gpui.Quad{Bounds: b, Background: gpui.BackgroundSolid, Fill: e.s.color})
 }
 ```
 
-Use it like any child: `gpui.NewDiv().P(10).Child(NewSwatch(gpui.Red500, 40))`.
+A container that lays its children out in a padded row and frames them:
+
+```go
+type Frame struct{ children []gpui.AnyElement }
+
+func (f *Frame) Child(c gpui.IntoElement) *Frame {
+    f.children = append(f.children, gpui.NewAnyElement(c))
+    return f
+}
+func (f *Frame) IntoElement() gpui.Element { return frameElement{f} }
+
+type frameElement struct{ f *Frame }
+
+func (e frameElement) ID() (gpui.ElementID, bool)          { return gpui.ElementID{}, false }
+func (e frameElement) ElementChildren() []gpui.AnyElement { return e.f.children }
+
+func (e frameElement) RequestLayout(w *gpui.Window, cx *gpui.App) (gpui.LayoutID, any) {
+    st := gpui.DefaultStyle()
+    st.Direction, st.Gap, st.Padding = gpui.DirectionRow, 8, gpui.Edges{}.All(4)
+    return w.RequestLayoutWithChildren(st, e.f.children, cx)
+}
+
+func (e frameElement) Prepaint(w *gpui.Window, cx *gpui.App, id gpui.ElementID, b gpui.Bounds, ls any) any {
+    return nil
+}
+
+func (e frameElement) Paint(w *gpui.Window, cx *gpui.App, id gpui.ElementID, b gpui.Bounds, ls, ps any) {
+    w.PaintQuad(gpui.Quad{Bounds: b, BorderColor: gpui.Gray400, BorderWidths: gpui.Edges{}.All(1)})
+}
+```
+
+Limits: a custom container cannot clip its children or register an
+`OnScrollWheel`-driven scroll offset (those paths are `Div`-only); wrap the
+children in a `Div` with `OverflowHidden()` for that. Delegating to a
+childless `Div`'s element (as before these hooks existed) still works when
+you want a `Div`'s hitbox and listeners on your leaf.
 
 Notes for authors:
 
 - `bounds` are absolute logical pixels, already shifted by scroll offsets and
   ancestors. Paint primitives in those coordinates.
-- `PaintQuad`/`PaintGlyph`/`PaintUnderline` fill an unset `ContentMask` with
-  the current clip; you normally leave `ContentMask` zero.
+- `PaintQuad`/`PaintGlyph`/`PaintUnderline`/`PaintShadow` fill an unset
+  `ContentMask` with `Window.CurrentContentMask()` (the current clip rect and,
+  inside a rounded `OverflowHidden` container, its corner radii); you normally
+  leave `ContentMask` zero. `PushClip`/`PushContentMask`/`PopClip` push your
+  own masks.
+- Primitives are drawn in the order you emit them, across kinds: a quad
+  painted after a glyph covers it (see `Scene` in
+  [platform.md](platform.md)).
 - Text: `Window.TextMeasurer()` exposes `MeasureWrapped` / `ShapeWrapped`;
   it is `nil` when no system font was found.
 - Retained state across frames: `Window.SetElementState(gid, v)` /

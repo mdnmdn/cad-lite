@@ -4,11 +4,14 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"strings"
+	"unicode"
 
 	"github.com/go-text/typesetting/di"
 	"github.com/go-text/typesetting/language"
 	"github.com/go-text/typesetting/segmenter"
 	"github.com/go-text/typesetting/shaping"
+	"golang.org/x/image/font"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 	"golang.org/x/image/vector"
@@ -59,8 +62,7 @@ func (s *Shaper) shaped(text string, face *Font) *shapedRun {
 		return r
 	}
 	runes := []rune(text)
-	out := s.shapeRunes(runes, face)
-	glyphs, pen := toShapedGlyphs(out.Glyphs)
+	glyphs, pen := s.shapeAll(runes, face)
 	allowed, mandatory := lineBreaks(runes)
 	r := &shapedRun{
 		runes:     runes,
@@ -76,6 +78,87 @@ func (s *Shaper) shaped(text string, face *Font) *shapedRun {
 	}
 	s.runs[key] = r
 	return r
+}
+
+// shapeAll shapes runes with face, switching to a fallback face for runs of
+// runes the face lacks. Glyph clusters are rune indices.
+func (s *Shaper) shapeAll(runes []rune, face *Font) ([]ShapedGlyph, fixed.Int26_6) {
+	type seg struct {
+		start, end int
+		face       *Font
+	}
+	var segs []seg
+	cur := (*Font)(nil)
+	for i, r := range runes {
+		f := cur
+		if !neutralRune(r) && !s.covers(face, r) {
+			f = nil
+			if s.fonts != nil {
+				f = s.fonts.Fallback(r, faceSize(face), face.weight)
+			}
+		} else if !neutralRune(r) {
+			f = nil
+		}
+		if len(segs) == 0 || f != cur {
+			segs = append(segs, seg{start: i, face: f})
+			cur = f
+		}
+		segs[len(segs)-1].end = i + 1
+	}
+	if len(segs) == 0 {
+		segs = []seg{{face: nil}}
+	}
+	var all []ShapedGlyph
+	var total fixed.Int26_6
+	for _, sg := range segs {
+		f := face
+		if sg.face != nil {
+			f = sg.face
+		}
+		out := s.shapeRange(runes, sg.start, sg.end, f)
+		s.unkernBeforeSpace(out.Glyphs, runes, f)
+		gs, pen := toShapedGlyphs(out.Glyphs)
+		for i := range gs {
+			gs[i].X += px26(total)
+			gs[i].Face = sg.face
+		}
+		all = append(all, gs...)
+		total += pen
+	}
+	return all, total
+}
+
+// neutralRune reports runes that never trigger fallback and join the
+// surrounding run: whitespace, controls, joiners and variation selectors.
+func neutralRune(r rune) bool {
+	return unicode.IsSpace(r) || unicode.IsControl(r) ||
+		(r >= 0x200B && r <= 0x200F) || (r >= 0xFE00 && r <= 0xFE0F)
+}
+
+// covers reports whether face has a glyph for r.
+func (s *Shaper) covers(face *Font, r rune) bool {
+	gi, err := face.sfntFont.GlyphIndex(&s.buf, r)
+	return err == nil && gi != 0
+}
+
+// unkernBeforeSpace restores the nominal advance of a single-rune glyph that
+// precedes a space. Some fonts (SF) kern "." against " " so tightly that the
+// word gap looks missing.
+func (s *Shaper) unkernBeforeSpace(gs []shaping.Glyph, runes []rune, face *Font) {
+	ppem := fixed.Int26_6(math.Round(float64(faceSize(face)) * 64))
+	for i := 0; i+1 < len(gs); i++ {
+		g, n := gs[i], gs[i+1]
+		if runes[n.ClusterIndex] != ' ' || g.ClusterIndex == n.ClusterIndex {
+			continue
+		}
+		if i > 0 && gs[i-1].ClusterIndex == g.ClusterIndex {
+			continue
+		}
+		adv, err := face.sfntFont.GlyphAdvance(&s.buf, sfnt.GlyphIndex(g.GlyphID), ppem, font.HintingNone)
+		if err == nil && adv > 0 && adv > g.Advance {
+			gs[i].Advance = adv
+		}
+	}
 }
 
 // glyphMaskKey identifies one cached glyph mask: the face pointer selects the
@@ -105,6 +188,9 @@ type ShapedGlyph struct {
 	X, Y    Pixels // pen position, relative to the line's origin on the baseline
 	Advance Pixels
 	Cluster int // byte offset into the source string
+	// Face is the fallback face that owns GlyphID; nil means the face the
+	// line was shaped with.
+	Face *Font
 }
 
 // ShapeLine shapes text into a single line with no wrapping. Empty text
@@ -133,6 +219,26 @@ func (s *Shaper) ShapeLine(text string, face *Font) ShapedLine {
 // and only then mid-cluster as a last resort, so a shaping cluster (ligature,
 // combining marks) never straddles two lines.
 func (s *Shaper) ShapeWrap(text string, face *Font, wrapWidth float32) []ShapedLine {
+	if !strings.Contains(text, "\n") {
+		return s.shapeParagraph(text, face, wrapWidth)
+	}
+	var out []ShapedLine
+	off := 0
+	for _, para := range strings.Split(text, "\n") {
+		ls := s.shapeParagraph(strings.TrimSuffix(para, "\r"), face, wrapWidth)
+		for i := range ls {
+			for j := range ls[i].Glyphs {
+				ls[i].Glyphs[j].Cluster += off
+			}
+		}
+		out = append(out, ls...)
+		off += len(para) + 1
+	}
+	return out
+}
+
+// shapeParagraph wraps text that contains no hard line break.
+func (s *Shaper) shapeParagraph(text string, face *Font, wrapWidth float32) []ShapedLine {
 	ascent, descent := lineMetrics(face)
 	if face == nil || face.shapeFace == nil {
 		return []ShapedLine{{Ascent: ascent, Descent: descent}}
@@ -244,7 +350,12 @@ func (s *Shaper) MeasureWrapped(text string, ts TextStyle, maxWidth float32) (w,
 	if face == nil {
 		return 0, 0
 	}
-	return s.Measure(text, face, maxWidth)
+	lines := s.ShapeWrap(text, face, maxWidth)
+	for _, l := range lines {
+		w = maxPixels(w, l.Width)
+	}
+	ts.FontSize = Pixels(faceSize(face))
+	return w, Pixels(len(lines)) * ts.ResolvedLineHeight()
 }
 
 // ShapeWrapped resolves ts against the shaper's FontManager, wraps the text to
@@ -273,12 +384,20 @@ func (s *Shaper) ShapeWrappedScaled(text string, ts TextStyle, maxWidth, scale f
 				Y:       g.Y,
 				Advance: g.Advance,
 				Cluster: g.Cluster,
-				Mask:    s.GlyphMaskScaled(face, g.GlyphID, faceSize(face), scale),
+				Mask:    s.GlyphMaskScaled(glyphFace(g.Face, face), g.GlyphID, faceSize(face), scale),
 			}
 		}
 		out[i] = ShapedLineOut{Width: l.Width, Ascent: l.Ascent, Descent: l.Descent, Glyphs: glyphs}
 	}
 	return out
+}
+
+// glyphFace returns the fallback face when set, else the line's face.
+func glyphFace(fb, face *Font) *Font {
+	if fb != nil {
+		return fb
+	}
+	return face
 }
 
 // resolveFace maps a TextStyle to a face through the FontManager, substituting
@@ -299,13 +418,13 @@ func (s *Shaper) resolveFace(ts TextStyle) *Font {
 	return face
 }
 
-// shapeRunes runs the HarfBuzz shaper over runes at the face's size. Script is
+// shapeRange runs the HarfBuzz shaper over runes at the face's size. Script is
 // fixed to Latin: per-run script detection is not implemented in this POC.
-func (s *Shaper) shapeRunes(runes []rune, face *Font) shaping.Output {
+func (s *Shaper) shapeRange(runes []rune, start, end int, face *Font) shaping.Output {
 	in := shaping.Input{
 		Text:      runes,
-		RunStart:  0,
-		RunEnd:    len(runes),
+		RunStart:  start,
+		RunEnd:    end,
 		Direction: di.DirectionLTR,
 		Face:      face.shapeFace,
 		Size:      fixed.Int26_6(math.Round(float64(faceSize(face)) * 64)),

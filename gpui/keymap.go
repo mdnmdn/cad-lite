@@ -2,6 +2,7 @@ package gpui
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -10,6 +11,29 @@ type Action interface {
 	Name() string
 	Clone() Action
 	Equals(other Action) bool
+}
+
+// ActionKey is the identity OnAction handlers are registered under: the
+// action's concrete type (GPUI's TypeId) plus, for actions built with
+// NewAction, their name. NewAction("a") and NewAction("b") are therefore
+// distinct, while any two values of a user-defined action type share a key
+// (a zero value can register the handler, as in GPUI).
+type ActionKey struct {
+	Type reflect.Type
+	Name string
+}
+
+// ActionKeyOf returns the OnAction registration key of a; nil yields the
+// zero key.
+func ActionKeyOf(a Action) ActionKey {
+	if a == nil {
+		return ActionKey{}
+	}
+	k := ActionKey{Type: reflect.TypeOf(a)}
+	if n, ok := a.(namedAction); ok {
+		k.Name = n.name
+	}
+	return k
 }
 
 // namedAction is the trivial value-type Action built by NewAction.
@@ -83,8 +107,8 @@ func (k *Keymap) Len() int { return len(k.bindings) }
 // Clear removes every binding.
 func (k *Keymap) Clear() { k.bindings = nil }
 
-// MatchKeystroke returns the action of the binding whose last keystroke equals
-// typed and whose context predicate is satisfied by ctxStack, or nil if none
+// MatchKeystroke returns the action of the binding whose last keystroke
+// Matches typed and whose context predicate is satisfied by ctxStack, or nil if none
 // matches. Bindings are scanned in reverse insertion order, so a binding added
 // later wins over an earlier one for the same keystroke and context (later
 // bindings are the more specific/override ones).
@@ -95,7 +119,7 @@ func (k *Keymap) MatchKeystroke(typed Keystroke, ctxStack []string) Action {
 			continue
 		}
 		last := b.Keystrokes[len(b.Keystrokes)-1]
-		if !last.Equals(typed) {
+		if !last.Matches(typed) {
 			continue
 		}
 		p, err := parseKeyContext(b.Context)

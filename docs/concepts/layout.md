@@ -62,20 +62,35 @@ gpui.Layout(root, gpui.Definite(350, 100))
 | `Px(v)` | Definite border-box length. |
 | `Flex(g)` | CSS `flex: g` - basis 0, grow `g`, shrink 1. Main axis only for flexing; on the **cross** axis it means "fill the line". |
 
-Do not confuse the builders: `Flex1()` is grow 1 / shrink 1 with an **auto**
-basis (`flex: 1 1 auto`), while `SizeFull()` sets both axes to `Flex(1)` and
-both minimums to `Px(0)` (a stand-in for `100%`). `Flex()`, `FlexCol()` and
-`FlexRow()` merely set the direction; they do not change sizes.
+Do not confuse the builders:
+
+| Builder | CSS | Effect |
+|---|---|---|
+| `Flex1()` | `flex: 1 1 0%` (GPUI `flex_1`) | grow 1, shrink 1, `FlexBasis = Px(0)`: siblings share the space **equally**, whatever their content (each still stops at its automatic minimum size, i.e. its min-content) |
+| `FlexAuto()` | `flex: 1 1 auto` | grow 1, shrink 1, auto basis: free space is added **on top of** each item's content size |
+| `FlexGrow(1)` | `flex-grow: 1` | the same as `FlexAuto()` with the default shrink 1 |
+| `FlexNone()` | `flex: none` | grow 0, shrink 0, auto basis |
+| `FlexBasis(v)` | `flex-basis: v px` | a definite base size that overrides the main size |
+
+`SizeFull()` sets both axes to `Flex(1)` and both minimums to `Px(0)` (a
+stand-in for `100%`). `Flex()`, `FlexCol()` and `FlexRow()` merely set the
+direction; they do not change sizes.
+
+`Style.FlexBasis` is `Auto()` by default (the base size is the main size or
+the content). In a content-sized container a basis-0 item still contributes
+its content size, so a `Flex1()` child does not collapse a row that has no
+definite width.
 
 ## Flex algorithm (per container)
 
 `layoutFlex` follows CSS Flexbox section 9, one line:
 
-1. **Base size and bounds per item.** Main length `Px` -> base = value, uses the
-   item's `FlexGrow`/`FlexShrink`. `Flex(g)` -> base 0, grow `g`, shrink 1.
-   `Auto` -> base = the item measured with an unbounded main axis (for text:
-   unwrapped width, or height at max-content). The hypothetical size clamps the
-   base by min/max.
+1. **Base size and bounds per item.** Main length `Flex(g)` -> base 0, grow
+   `g`, shrink 1. Otherwise a `Px` `FlexBasis` is the base (`Flex1()` sets
+   `Px(0)`); else a `Px` main length; else (`Auto`) the item measured with an
+   unbounded main axis (for text: unwrapped width, or height at max-content).
+   Non-`Flex` items use their `FlexGrow`/`FlexShrink`. The hypothetical size
+   clamps the base by min/max.
 2. **Automatic minimum size** (when `MinWidth`/`MinHeight` is `Auto`): a `Px`
    min wins; a scroll container (`OverflowHidden`/`OverflowScroll`) gets 0; a
    `Px` main size gives that size; otherwise **row**: min-content width (text:
@@ -114,6 +129,39 @@ both minimums to `Px(0)` (a stand-in for `100%`). `Flex()`, `FlexCol()` and
   no separate row/column gap).
 - Padding insets the content box on all four sides.
 
+### Margins
+
+`Style.Margin` (builders `M`, `Mx`, `My`, `Mt`, `Mr`, `Mb`, `Ml`) works as in
+CSS flexbox, without collapsing. `Rect` stays the border box; margins sit
+outside it:
+
+- main-axis margins are fixed space, subtracted like gaps before flexing and
+  justification, and they add to a content-sized container (and to
+  min-content widths);
+- cross-axis margins shrink the space an item stretches into and add to the
+  line's cross size when the container is content-sized;
+- negative margins are allowed (e.g. `Mt(-8)` pulls an item up over its
+  previous sibling); the root node's margins are ignored.
+
+**Auto margins** (`Style.MarginAuto`, builders `MAuto`, `MxAuto`, `MyAuto`,
+`MtAuto`, `MrAuto`, `MbAuto`, `MlAuto`; setting a pixel margin on an edge
+clears its auto flag):
+
+- main axis: positive free space left after flexing is split equally among
+  all auto margins on the line, before `Justify` (which then sees none).
+  `MlAuto()` on the last child of a row pushes it to the right edge;
+  `MxAuto()` centers a single child.
+- cross axis: an item with an auto cross margin does not stretch; the free
+  cross space goes to its auto margin(s) (both: centered), overriding
+  `AlignSelf`/`AlignItems`.
+
+```go
+gpui.NewDiv().FlexRow().Child(
+    gpui.NewText("Title"),
+    gpui.NewDiv().MlAuto().Child(gpui.NewText("right-aligned")),
+)
+```
+
 Verified example (row, width 300, three 40x20 `Px` children, `Gap(10)`,
 `JustifySpaceBetween`): x = 0, 130, 260 (free space 160 split into 80 per
 gap, plus the 10px gap).
@@ -132,7 +180,9 @@ independently and sums widths / takes the max height.
 
 `OverflowHidden` and `OverflowScroll` make a node a scroll container: its
 automatic minimum size is 0 (so it can be flexed smaller than its content),
-painting is clipped to its bounds, and `ContentSize` records the content
+painting of its **children** is clipped to its bounds (rounded by its
+`CornerRadii` when it has `Rounded(...)`; its own background, border and
+shadows are not clipped), and `ContentSize` records the content
 extent. `LayoutNode.ScrollMax()` is `max(0, ContentSize - Rect.Size)` per axis.
 `OverflowScroll` additionally stores an offset updated by wheel events
 (`Window.dispatchScroll`) and clamped to that range; children are shifted by it
@@ -142,18 +192,17 @@ past it extend its `ContentSize`.
 
 ## Known limits
 
-- **Margins are not implemented.** `Style.Margin` and `M(v)` are stored but the
-  layout engine ignores them (no margins on any side, no auto margins).
 - **Borders are not part of layout size.** `Border(...)` only paints inside the
   box; the layout engine does not inset content by the border width, so add
   matching padding yourself (`TextInput` does this with `P(8)` plus a 1px
   border).
-- No wrap (`flex-wrap`), no `order`, no separate `flex-basis`, no percentages,
+- No wrap (`flex-wrap`), no `order`, no margin collapsing, no percentages
+  (flex-basis is `Auto` or pixels only),
   no aspect ratio, no absolute/relative positioning, no row/column gap split,
   no baseline alignment, no RTL.
 - `Px`-sized items do not shrink.
-- Hit testing and clipping: clipping affects painting only; a child scrolled
-  outside its container's bounds still owns its hitbox.
+- Hit testing and clipping: hitboxes are clipped to the enclosing clip
+  rectangles (not to rounded corners).
 - Layout is recomputed from scratch each frame (with per-call measure
   memoization); there is no incremental layout.
 

@@ -86,22 +86,30 @@ A background with `A == 0` is not painted.
 with defaults 14px, weight 400, black, line height `1.2 * FontSize`
 (`ResolvedLineHeight()`).
 
-- Set them on the **`Text`**: `NewText("x").TextSize(18).FontWeight(700)
-  .TextColor(gpui.Gray600)`. The builders exist on `Div` too, but text style
-  does **not** cascade from a `Div` to its descendants today: each `Text`
-  starts from `DefaultStyle()`, so `Div.TextColor(...)` has no visible effect.
+- Set them on a `Text` (`NewText("x").TextSize(18).FontWeight(700)
+  .TextColor(gpui.Gray600)`) or on any ancestor `Div`: text style **cascades**.
+  During `RequestLayout` the window keeps a text-style stack; a `Div` pushes
+  its explicitly set fields (`TextColor`, `TextSize`, `FontWeight`,
+  `FontFamily`, `TextLineHeight`, `TextStrikethrough`) over the inherited
+  style, and `Text`, `Str`, `StyledText` and `TextInput` resolve own explicit
+  fields over inherited over `DefaultTextStyle()`. Only fields that were set
+  are overridden (`StyleRefinement.TextSet` bit set), so a child's
+  `TextColor` keeps the ancestor's size. `StyledText` runs with `FontSize == 0`
+  use the resolved style of the `StyledText`; other runs are used as given.
+  Limit: rows of a `UniformList` are laid out outside the walk and do not
+  inherit.
 - **Bold.** Any `FontWeight >= 600` selects a bold face. The font manager
-  looks for a bold sibling file of the default font (`NameBold.ttf`), then
-  well-known bold system fonts; if none exists the regular outlines are
-  emboldened at raster time with a one-pixel horizontal smear (synthetic
-  bold). Weights between 600 and 900 are all "bold"; there are no intermediate
-  weights.
-- **Family.** `FontFamily` is accepted but not honoured: every family resolves
-  to the platform default font (see [text.md](text.md)).
-- **Line height.** `TextLineHeight(px)` changes where lines are painted, but
-  the measured height of wrapped text is currently always
-  `lines * 1.2 * FontSize`, so a custom line height can overlap or leave a
-  gap relative to the layout box.
+  looks for the family's bold file, then a bold sibling of the default font
+  (`NameBold.ttf`), then well-known bold system fonts; if none exists the
+  regular outlines are emboldened at raster time with a one-pixel horizontal
+  smear (synthetic bold). There are no intermediate weights.
+- **Family.** `FontFamily` is looked up by name (case, spaces and dashes
+  ignored) in the system font directories by file name, e.g. `"Arial"`,
+  `"Menlo"`, `"DejaVu Sans"`; `"monospace"` and `"serif"` map to common
+  fonts. Unknown or generic (`"sans-serif"`, `"system-ui"`) families use the
+  default font. See [text.md](text.md).
+- **Line height.** `TextLineHeight(px)` sets the line height used by both
+  measurement and painting.
 - **Strikethrough** is drawn as a thin `Underline` primitive across each
   line's width.
 - `StyledText` takes a full `TextStyle` per run instead of the builder.

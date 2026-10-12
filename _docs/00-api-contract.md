@@ -112,10 +112,12 @@ type Style struct {
     MaxWidth, MaxHeight       Length // LengthAuto => no maximum
 
     Margin, Padding Edges
+    MarginAuto      AutoEdges // per-edge `margin: auto` (overrides Margin on that edge)
     Gap            Pixels // main-axis gutter between adjacent children
 
     FlexGrow   float32 // default 0
     FlexShrink float32 // default 1
+    FlexBasis  Length  // default Auto (= the main size); Px(v) overrides it
 
     Justify   Justify
     AlignItems Align
@@ -132,6 +134,9 @@ type Style struct {
 
     TextStyle TextStyle
 }
+
+// AutoEdges marks which margin edges are `auto`.
+type AutoEdges struct{ Top, Right, Bottom, Left bool }
 
 // Axes is a bit set of axes.
 type Axes uint8
@@ -150,8 +155,10 @@ type StyleRefinement struct {
     MinWidth, MinHeight       *Length
     MaxWidth, MaxHeight       *Length
     Margin, Padding           *Edges
+    MarginAuto                *AutoEdges
     Gap                       *Pixels
     FlexGrow, FlexShrink      *float32
+    FlexBasis                 *Length
     Justify                   *Justify
     AlignItems                *Align
     AlignSelf                 *Align
@@ -164,8 +171,32 @@ type StyleRefinement struct {
     Opacity                   *float32
     ScrollAxes                *Axes
     TextStyle                 *TextStyle
+    TextSet                   TextFields // which TextStyle fields are explicit
 }
 func (r *StyleRefinement) Refine(base Style) Style
+
+// TextFields is a bit set naming the TextStyle fields a refinement sets. The
+// text builders (TextColor, TextSize, FontWeight, FontFamily, TextLineHeight,
+// TextStrikethrough) set TextStyle's field and the matching bit. Refine copies
+// only set fields onto base.TextStyle; TextStyle non-nil with TextSet == 0 is
+// the legacy "replace the whole style" form.
+type TextFields uint8
+const (
+    TextFieldFamily TextFields = 1 << iota
+    TextFieldSize
+    TextFieldWeight
+    TextFieldColor
+    TextFieldLineHeight
+    TextFieldStrikethrough
+)
+
+// Text style cascade: TextStyle is inherited. During RequestLayout the window
+// keeps a text-style stack; a Div pushes its TextSet fields refined over the
+// current top (default: DefaultTextStyle()) for its children. Text, Str,
+// StyledText and TextInput resolve own explicit fields over the inherited
+// style; the result is stored in the element's LayoutNode.Style.TextStyle,
+// which is what Measure and Paint use. StyledText runs whose FontSize is 0
+// use the resolved style of the StyledText itself.
 
 type TextStyle struct {
     FontFamily  string // "" => default family
@@ -196,7 +227,10 @@ func (m *StyledMixin) SizeW(w float32) *T
 func (m *StyledMixin) SizeH(h float32) *T
 func (m *StyledMixin) FlexGrow(v float32) *T
 func (m *StyledMixin) FlexShrink(v float32) *T
-func (m *StyledMixin) Flex1() *T                    // FlexGrow(1)
+func (m *StyledMixin) Flex1() *T                    // GPUI flex_1: `flex: 1 1 0%` (grow 1, shrink 1, basis Px(0))
+func (m *StyledMixin) FlexAuto() *T                 // `flex: 1 1 auto` (grow 1, shrink 1, basis Auto = content)
+func (m *StyledMixin) FlexNone() *T                 // `flex: none` (grow 0, shrink 0, basis Auto)
+func (m *StyledMixin) FlexBasis(v float32) *T       // definite flex-basis in px
 func (m *StyledMixin) Flex() *T                     // display:flex, default DirectionColumn
 func (m *StyledMixin) FlexRow() *T                  // Direction=Row
 func (m *StyledMixin) FlexCol() *T                  // Direction=Column
@@ -208,6 +242,8 @@ func (m *StyledMixin) Pt(v float32) *T
 func (m *StyledMixin) Pr(v float32) *T
 func (m *StyledMixin) Pb(v float32) *T
 func (m *StyledMixin) M(v float32) *T
+func (m *StyledMixin) Mx(v float32) *T / My / Mt / Mr / Mb / Ml   // per-edge margins (clear `auto` on those edges)
+func (m *StyledMixin) MAuto() *T / MxAuto / MyAuto / MtAuto / MrAuto / MbAuto / MlAuto // `margin: auto` edges
 func (m *StyledMixin) Bg(f Fill) *T                 // Rgba, Hsla or a Background (e.g. LinearGradient)
 func (m *StyledMixin) Opacity(f float32) *T         // subtree opacity, see §3b
 func (m *StyledMixin) Shadow(s ...BoxShadow) *T     // replaces the shadow list
@@ -238,6 +274,10 @@ func (m *StyledMixin) MinH(v float32) *T
 func (m *StyledMixin) MaxW(v float32) *T
 func (m *StyledMixin) MaxH(v float32) *T
 ```
+
+The margin and flex-basis builders above that are not declared in
+`div.go`/`text_elem.go` (`Mx`..`Ml`, `*Auto`, `FlexAuto`, `FlexNone`,
+`FlexBasis`) are forwarded for `*Div` and `*Text` in `styled_layout.go`.
 
 > **Note on `SizeFull()`.** CSS `100%` is not modeled. `SizeFull()` sets
 > `Width=Flex(1)` and `Height=Flex(1)` when the parent is a flex container of the
@@ -363,9 +403,24 @@ func (n *LayoutNode) ScrollMax() (w, h Pixels)
 
 Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
 
-- One flex line, LTR, no wrap, no margins. `Display:false` children are
+- One flex line, LTR, no wrap. `Display:false` children are
   skipped entirely (zero rect, no gap). Sizes are border-box (padding
-  included); leaves include their padding too.
+  included); leaves include their padding too. `Rect` is the border box;
+  margins sit outside it.
+- **Margins** (CSS semantics, no collapsing): an item's *outer* size is its
+  border box plus its margins on that axis. Main-axis margins are fixed space
+  subtracted (like gaps) before flexing and justification and are added to
+  the container's content-based size and to min-content contributions;
+  cross-axis margins reduce the space the item may stretch into and are added
+  to the line's cross size. Negative margins are allowed. The root node's
+  margins are ignored.
+- **Auto margins** (`MarginAuto`): on the main axis, positive free space
+  (after flexing) is split equally between all auto margins of the line
+  before `justify-content`, which then sees no free space; with no positive
+  free space they are 0. On the cross axis, an item with an auto cross margin
+  does not stretch; the free cross space goes to its auto margin(s) (both:
+  centered), overriding `align-self`; negative free space puts it at the
+  start.
 - **Rects are parent-relative**: a child's `Rect.Origin` is measured from its
   parent's border-box origin. The window adds the parent origins when it
   builds the render tree.
@@ -376,7 +431,9 @@ Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
   whose `Length` is not `LengthPx` (a window root fills the window).
 - `Gap` is a fixed gutter: `gapsTotal = Gap*(k-1)`, always subtracted before
   `justify-content` sees free space, always re-added between items.
-- Flex base size: `LengthPx`→val; `LengthFlex(g)`→base 0, grow g, shrink 1;
+- Flex base size: `LengthFlex(g)` main length→base 0, grow g, shrink 1;
+  otherwise a `Px` `FlexBasis` wins (`Flex1()` = basis `Px(0)`), else
+  `LengthPx`→val, else
   `LengthAuto`→max-content main size, measured with an unbounded main axis and
   the cross size the item will get (the container's inner cross if it
   stretches and that is definite, else the cross space as a maximum).
@@ -393,8 +450,10 @@ Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
 - Resolve flexible lengths per CSS §9.7 (freeze inflexible items, iterate,
   fix min/max violations, freeze violators, repeat until all frozen) against
   the container's inner main size. That size is the definite main size if
-  there is one; otherwise the sum of the items' max-content contributions +
-  gaps, capped by a bounded available main length.
+  there is one; otherwise the sum of the items' max-content contributions
+  (for a `LengthFlex` length or a `Px` basis smaller than the content: the
+  clamped max-content size) + margins + gaps, capped by a bounded available
+  main length.
 - Cross size: if the container's cross is definite, `lineCross = innerCross`;
   else `lineCross = max_i(itemCross)` where each item's cross is measured at its
   final main size (content height, not the available height). `align-items:
@@ -463,6 +522,37 @@ func (a AnyElement) Element() Element
 
 // Normalize converts anything IntoElement into an Element.
 func IntoElementOf(e IntoElement) Element
+
+// ParentElementChildren is implemented by Elements that have child elements
+// (custom containers outside the package). The window walks the returned
+// children after the element itself, exactly as for a Div: each child is
+// prepainted and painted with its own laid-out bounds. The element's
+// RequestLayout must return the state from Window.RequestLayoutWithChildren
+// (or a value embedding *ChildLayout) so the walk can pair children with
+// their layout nodes.
+type ParentElementChildren interface {
+    Element
+    ElementChildren() []AnyElement
+}
+
+// ChildLayout is the RequestLayout state produced by
+// Window.RequestLayoutWithChildren: the node plus each child's LayoutID and
+// RequestLayout state (in children order, nil children skipped).
+type ChildLayout struct {
+    Node *LayoutNode
+    // unexported: child ids and states
+}
+
+// On *Window (window.go):
+// RegisterLayoutNode registers a caller-built LayoutNode (leaf or with
+// already-registered children) for this frame and returns its id.
+func (w *Window) RegisterLayoutNode(n *LayoutNode) LayoutID
+// LayoutNode returns the node registered under id this frame, or nil.
+func (w *Window) LayoutNode(id LayoutID) *LayoutNode
+// RequestLayoutWithChildren runs RequestLayout on every child, builds a
+// node with style and those children, registers it and returns its id plus
+// the *ChildLayout state to return from the element's RequestLayout.
+func (w *Window) RequestLayoutWithChildren(style Style, children []AnyElement, cx *App) (LayoutID, *ChildLayout)
 ```
 
 ### `div.go`
@@ -484,7 +574,7 @@ type Div struct {
     onKeyUp      func(*KeyUpEvent, *Window, *App)
     onHoverStart func(*Window, *App)
     onHoverEnd   func(*Window, *App)
-    onAction     map[reflect.Type]func(Action, *Window, *App)
+    onAction     map[ActionKey]func(Action, *Window, *App)
     focusHandle  *FocusHandle
     keyContext   string
     tracksFocus  bool
@@ -503,7 +593,7 @@ func (d *Div) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *Div
 func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div
 func (d *Div) OnHoverEnd(f func(*Window, *App)) *Div
-func (d *Div) OnAction(action Action, f func(Action, *Window, *App)) *Div
+func (d *Div) OnAction(action Action, f func(Action, *Window, *App)) *Div // keyed by ActionKeyOf(action)
 func (d *Div) TrackFocus(h *FocusHandle) *Div
 func (d *Div) KeyContext(ctx string) *Div
 func (d *Div) TabIndex(i int) *Div   // also makes the div a tab stop
@@ -554,7 +644,9 @@ func (h *ScrollHandle) ScrollToTop()
 func (h *ScrollHandle) ScrollToBottom()
 ```
 
-Scroll semantics: wheel deltas go to scroll containers on the hit path,
+Scroll semantics: `OnScrollWheel` listeners run first (bubble, innermost
+first); if one calls `Window.StopPropagation()` no container scrolls. Then
+wheel deltas go to scroll containers on the hit path,
 innermost first. A container takes the components on its `ScrollAxes`
 (a container scrolling X only maps `DeltaY` to X when `DeltaX == 0`, as
 GPUI does); if its offset changed the event stops, else it bubbles to the
@@ -623,7 +715,13 @@ Also provide `func (s String) IntoElement() Element` equivalent: a helper
 ## 6. `scene.go`, `raster.go`, `bounds.go`
 
 ```go
-type ContentMask struct{ Bounds Bounds } // clip rect; infinite = whole window
+// ContentMask is the clip applied to a primitive: a rect, optionally with
+// rounded corners (from an OverflowHidden/Scroll container with Rounded).
+// Zero CornerRadii = plain rect clip; infinite = whole window.
+type ContentMask struct {
+    Bounds      Bounds
+    CornerRadii Corners
+}
 
 type BackgroundKind uint8
 const (
@@ -724,15 +822,21 @@ func (r *Rasterizer) Render(s *Scene)           // draw all primitives in Order
 func (r *Rasterizer) Image() *image.NRGBA       // non-premultiplied copy (for png.Encode)
 ```
 
-`Render` draws quads and shadows merged by Order (one group), then
-underlines, then sprites. Shadow coverage is an analytic approximation:
+`Render` draws every primitive in scene order: quads, shadows, underlines
+and sprites are merged by `Order` (each kind stably sorted; on equal
+`Order`, shadow < quad < underline < sprite). Since Paint* hand out
+increasing auto orders and `PushLayer` jumps the counter, a later
+background (an overlay, a layer) covers earlier text, as in GPUI. Shadow coverage is an analytic approximation:
 `min(Φ(−sdf/σ), separable box blur)` with σ = BlurRadius/2 (exact for
 square corners, close for rounded ones), Φ from a lookup table, the pixel
 loop bounded by the shape grown by 3σ. Gradient fills use a 256-entry
 premultiplied color table per quad.
 
 Clipping: each primitive is intersected with its `ContentMask.Bounds` and drawn
-with that clip rect. Corner radii are drawn by an anti-aliased rounded-rect
+with that clip rect; when `ContentMask.CornerRadii` is non-zero every
+pixel's coverage is also multiplied by the anti-aliased rounded-rect mask
+(evaluated only in the corner squares, so the pixel loops stay bounded by
+the primitive and the clip rect). Corner radii are drawn by an anti-aliased rounded-rect
 mask; borders are drawn as four strips (or as a rounded-rect stroke). Text is
 drawn by alpha-blending the `GlyphMask` into `GlyphSprite.Bounds` with
 bilinear sampling; when the device-space bounds size equals the mask size
@@ -838,7 +942,12 @@ type Keystroke struct {
 }
 func ParseKeystroke(s string) (Keystroke, error) // "cmd-shift-p", "enter", "ctrl-a"
 func (k Keystroke) String() string
-func (k Keystroke) Equals(o Keystroke) bool
+func (k Keystroke) Equals(o Keystroke) bool // exact: modifiers, key and KeyChar
+// Matches reports whether typed satisfies this (binding) keystroke, as GPUI's
+// should_match: equal modifiers and either the same key (case-insensitive,
+// KeyChar ignored) or typed.KeyChar equal to this key (so a "?" binding
+// matches a typed "?" whatever the physical key).
+func (k Keystroke) Matches(typed Keystroke) bool
 
 // PlatformInput is any of the events above; the dispatcher type-switches.
 type PlatformInput interface{ isPlatformInput() }
@@ -873,9 +982,32 @@ type Keymap struct {
 }
 func NewKeymap() *Keymap
 func (k *Keymap) AddBindings(bindings ...KeyBinding)
-// MatchKeystroke finds the binding whose last keystroke equals typed and whose
+// MatchKeystroke finds the binding whose last keystroke Matches typed and whose
 // context predicate is satisfied by any entry in ctxStack. Returns nil if none.
 func (k *Keymap) MatchKeystroke(typed Keystroke, ctxStack []string) Action
+
+// ActionKey is the identity OnAction handlers are registered under: the
+// action's concrete type (GPUI's TypeId) plus, only for NewAction values,
+// the name. NewAction("a") and NewAction("b") are therefore distinct, while
+// all values of a user-defined action type share one key (a zero value may
+// register the handler).
+type ActionKey struct {
+    Type reflect.Type
+    Name string
+}
+func ActionKeyOf(a Action) ActionKey
+```
+
+Key-down dispatch order (window.go):
+
+1. If the event is character input (`PreferCharacterInput` with a `KeyChar`)
+   and the focused input handler accepts text, the keymap is consulted
+   first; when a binding matches and an `OnAction` handler on the focus path
+   ran, dispatch ends. Otherwise the text goes to the input handler.
+2. Otherwise `OnKeyDown` bubbles over the focus path, then (unless stopped)
+   the keymap is matched and the action dispatched along the same path.
+
+```go
 
 // KeyContext is a predicate. "editor && !readonly" is parsed into tokens.
 type keyContextPredicate struct{ /* ... */ }
@@ -996,12 +1128,31 @@ func (e Entity[T]) Update(cx *App, f func(state *T, cx *Context[T]))
 func (e Entity[T]) Downgrade() WeakEntity[T]
 func (e Entity[T]) Notify(cx *App)
 func (e Entity[T]) SubscribeEvent[E any](cx *App, f func(ev *E)) *Subscription
+// Clone returns a new strong reference (refcount +1). Release drops one;
+// when the count reaches 0 the entity is released at the end of the current
+// effect flush (Release outside Update flushes immediately). Go has no Drop:
+// plain copies of an Entity, Context.Entity() and WeakEntity.Upgrade() are
+// borrowed (uncounted) handles and must not be Released.
+func (e Entity[T]) Clone() Entity[T]
+func (e Entity[T]) Release(cx *App)
 
 type WeakEntity[T any] struct {
     id  EntityID
     app *App
 }
-func (w WeakEntity[T]) Upgrade() (Entity[T], bool)
+func (w WeakEntity[T]) Upgrade() (Entity[T], bool) // false once released
+
+// EntityView adapts an entity whose *T has a Render method into a window
+// root. It holds a strong reference (Clone) that Window.Close releases.
+func EntityView[T any, P interface{ *T; EntityRoot }](e Entity[T]) EntityRoot
+```
+
+Releasing an entity frees its slot (stale handles read nil, Upgrade fails),
+runs its `OnRelease` callbacks, drops the observers and event listeners
+registered on it, and closes the subscriptions it created through
+`Context.Observe`.
+
+```go
 
 // Context is the per-entity view handed to Render and Update.
 type Context[T any] struct {
@@ -1016,6 +1167,7 @@ func (c *Context[T]) Observe(other Entity[T], f func(Entity[T], *App)) *Subscrip
 func (c *Context[T]) Subscribe(other Entity[T], f func(*E)) *Subscription  // generic over E
 func (c *Context[T]) Spawn(f func() ) *Task
 func (c *Context[T]) Defer(f func(*App))
+func (c *Context[T]) OnRelease(f func(*App)) *Subscription // runs when this entity is released
 func (c *Context[T]) Listener[E any](f func(state *T, ev *E, w *Window, cx *App)) func(*E, *Window, *App)
 
 type Task struct{ /* ... */ }
@@ -1033,7 +1185,8 @@ func (a *App) Quit()           // goroutine-safe (atomic flag); Platform.Quit mu
 func (a *App) IsQuitting() bool // goroutine-safe
 func (a *App) OpenWindow(o WindowOptions, build func(*Window, *App) EntityRoot) error
 func (a *App) Windows() []*Window
-func (a *App) Notify(id EntityID)
+func (a *App) Notify(id EntityID)       // runs observers; invalidates windows that rendered id
+func (a *App) RefreshWindows()         // queues effectRefreshWindows: every window redraws
 func (a *App) Defer(f func(*App))
 func (a *App) Observe[T any](e Entity[T], f func(Entity[T], *App)) *Subscription
 func (a *App) Subscribe[T any, E any](e Entity[T], f func(Entity[T], *E)) *Subscription
@@ -1082,7 +1235,10 @@ type effect struct {
 ```
 
 `flushEffects` drains `pendingEffects` in a loop. On `effectNotify` it runs the
-observers registered for that `EntityID`. After the queue empties it calls
+observers registered for that `EntityID`; `effectRefreshWindows` marks every
+window invalid. Entities whose refcount reached 0 are released after the
+queue drains (their release callbacks may queue more effects, which are
+drained too). After the queue empties it calls
 `scheduleFrame()` on every window whose `invalid` flag is set. Nested
 `Update` calls only flush at the outermost (`pendingUpdates` counter).
 
@@ -1134,6 +1290,11 @@ func (w *Window) FocusPrev()
 // mouse press (false); see FocusHandle.IsFocusVisible.
 func (w *Window) FocusVisible() bool
 func (w *Window) PushLayer()
+func (w *Window) PushClip(b Bounds)                // rect content mask, intersected with the current one
+func (w *Window) PushContentMask(m ContentMask)    // rect + corner radii, intersected
+func (w *Window) PopClip()
+func (w *Window) CurrentClip() Bounds
+func (w *Window) CurrentContentMask() ContentMask  // what Paint* fill an unset mask with
 func (w *Window) ElementState(id GlobalElementID, out any) bool   // retained state lookup
 func (w *Window) SetElementState(id GlobalElementID, v any)
 func (w *Window) DispatchEvent(input PlatformInput, cx *App)
@@ -1145,7 +1306,21 @@ func (w *Window) SetBackground(c Rgba)   // clear color for rasterization; defau
 // frames (as long as the element keeps its path), so platforms can compare a
 // press and a release that straddle a redraw. Compare with Equal.
 func (w *Window) HitTest(p Point) (id GlobalElementID, ok bool)
+// Close removes the window from App.Windows, releases the entities it
+// retains (an EntityView root) and calls PlatformWindow.Quit. Idempotent.
+func (w *Window) Close()
 ```
+
+Clipping in the pipeline: an `OverflowHidden`/`OverflowScroll` element's
+children (not the element's own background, border or shadows, as in GPUI)
+are painted inside a content mask of its bounds; if it has `CornerRadii`
+the mask is rounded with them. Nested masks intersect; each corner of the
+intersection keeps the radius of the mask(s) that contribute it.
+
+Entity tracking: every entity read (`Entity.Read`/`Update`) while a window
+draws is recorded on that window; `App.Notify(id)` (and `Context.Notify`)
+marks every window that rendered `id` in its last frame invalid, so it
+redraws at the end of the effect flush without an explicit `Refresh`.
 
 Event dispatch (GPUI semantics):
 
@@ -1192,7 +1367,7 @@ type keyNode struct {
     focusID    FocusID
     onKeyDown  func(*KeyDownEvent, *Window, *App)
     onKeyUp    func(*KeyUpEvent, *Window, *App)
-    onAction   map[reflect.Type]func(Action, *Window, *App)
+    onAction   map[ActionKey]func(Action, *Window, *App)
 }
 func (f *Frame) SceneRef() *Scene
 func (f *Frame) HitboxCount() int
@@ -1324,7 +1499,13 @@ func NewFontManager() *FontManager
 // DefaultFontPath resolves the platform's default sans font. Honors the
 // GPUI_FONT environment variable. Candidate lists per runtime.GOOS.
 func DefaultFontPath() string
+// Face resolves family by name against the system font directories (file-name
+// match, regular and bold files, cached; generic names "monospace", "serif",
+// "sans-serif"); unknown or "" families use the default font.
 func (m *FontManager) Face(family string, size float32, weight int) (*Font, error)
+// Fallback returns a face (same size and weight) from a system fallback font
+// that has a glyph for r, or nil when none does.
+func (m *FontManager) Fallback(r rune, size float32, weight int) *Font
 func (m *FontManager) DefaultFace(size float32, weight int) (*Font, error)
 
 // Shaper shapes text into positioned glyphs.
@@ -1343,6 +1524,7 @@ type ShapedGlyph struct {
     X, Y    Pixels   // baseline-relative pen position
     Advance Pixels
     Cluster int      // byte offset into the source string
+    Face    *Font    // fallback face that owns GlyphID; nil = the line's face
 }
 
 // ShapeLine shapes text at a given size. It does not wrap.
@@ -1350,6 +1532,9 @@ func (s *Shaper) ShapeLine(text string, face *Font) ShapedLine
 // ShapeWrap shapes text, wrapping at wrapWidth (math.MaxFloat32 = no wrap),
 // returning one ShapedLine per visual line.
 func (s *Shaper) ShapeWrap(text string, face *Font, wrapWidth float32) []ShapedLine
+// ShapeWrap and Measure treat "\n" (and "\r\n") as hard line breaks.
+// Measure uses the default 1.2*size line height; MeasureWrapped (TextMeasurer)
+// uses ts.ResolvedLineHeight(), the same height Text paints with.
 // Measure returns the natural (w,h) of wrapped text.
 func (s *Shaper) Measure(text string, face *Font, wrapWidth float32) (w, h Pixels)
 // GlyphMask rasterizes a single glyph into a grayscale mask at the given size.

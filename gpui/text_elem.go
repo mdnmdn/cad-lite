@@ -32,8 +32,37 @@ func (t *Text) IntoElement() Element { return textElement{t: t} }
 // Str adapts a string for use as a child element, so Child(Str("hi")) works.
 func Str(s string) IntoElement { return NewText(s) }
 
-// resolvedStyle merges the refinement onto DefaultStyle.
-func (t *Text) resolvedStyle() Style { return t.ResolvedStyle(DefaultStyle()) }
+// resolvedStyle merges the refinement onto DefaultStyle, with the text style
+// resolved over inherited (the window's current text style).
+func (t *Text) resolvedStyle(inherited TextStyle) Style {
+	st := t.ResolvedStyle(DefaultStyle())
+	st.TextStyle = t.style.RefineText(inherited)
+	return st
+}
+
+// currentTextStyle is the text style inherited at this point of the
+// RequestLayout walk: the innermost Div's resolved style, or the default.
+func (w *Window) currentTextStyle() TextStyle {
+	if n := len(w.textStyles); n > 0 {
+		return w.textStyles[n-1]
+	}
+	return DefaultTextStyle()
+}
+
+// pushTextStyle makes ts the inherited text style until popTextStyle.
+func (w *Window) pushTextStyle(ts TextStyle) { w.textStyles = append(w.textStyles, ts) }
+
+// popTextStyle undoes the matching pushTextStyle.
+func (w *Window) popTextStyle() { w.textStyles = w.textStyles[:len(w.textStyles)-1] }
+
+// layoutStyle returns the style resolved at RequestLayout (including the
+// inherited text style) from an element's layout state, or def when absent.
+func layoutStyle(layoutState any, def func() Style) Style {
+	if tl, ok := layoutState.(*textLayout); ok && tl.node != nil {
+		return tl.node.Style
+	}
+	return def()
+}
 
 // textLayout is Text's RequestLayout state.
 type textLayout struct {
@@ -54,7 +83,7 @@ func (e textElement) ID() (ElementID, bool) { return ElementID{}, false }
 // measurer.
 func (e textElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	t := e.t
-	node := &LayoutNode{Style: t.resolvedStyle(), Text: t.text}
+	node := &LayoutNode{Style: t.resolvedStyle(w.currentTextStyle()), Text: t.text}
 	st := &textLayout{node: node}
 	node.Measure = func(text string, ts TextStyle, maxWidth float32) (float32, float32) {
 		return measureText(w, text, ts, maxWidth)
@@ -78,7 +107,7 @@ func (t *Text) paint(w *Window, bounds Bounds, layoutState any) {
 	if w == nil || w.text == nil || t.text == "" {
 		return
 	}
-	style := t.resolvedStyle()
+	style := layoutStyle(layoutState, func() Style { return t.resolvedStyle(DefaultTextStyle()) })
 	ts := style.TextStyle
 	lines := shapeWrapped(w, t.text, ts, paintWrapWidth(bounds, style))
 	paintShapedLines(w, bounds.Origin.X+style.Padding.Left, bounds.Origin.Y+style.Padding.Top, ts, lines)
@@ -223,8 +252,13 @@ func NewStyledText(runs ...TextRun) *StyledText {
 	return &StyledText{StyledMixin: NewStyledMixin(), runs: runs}
 }
 
-// resolvedStyle merges the refinement onto DefaultStyle.
-func (s *StyledText) resolvedStyle() Style { return s.ResolvedStyle(DefaultStyle()) }
+// resolvedStyle merges the refinement onto DefaultStyle; TextStyle is the
+// base style of runs that leave FontSize unset, resolved over inherited.
+func (s *StyledText) resolvedStyle(inherited TextStyle) Style {
+	st := s.ResolvedStyle(DefaultStyle())
+	st.TextStyle = s.style.RefineText(inherited)
+	return st
+}
 
 // IntoElement satisfies IntoElement via the styledTextElement adapter.
 func (s *StyledText) IntoElement() Element { return styledTextElement{s: s} }
@@ -240,10 +274,10 @@ func (e styledTextElement) ID() (ElementID, bool) { return ElementID{}, false }
 // treats it as a measurable leaf.
 func (e styledTextElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	s := e.s
-	node := &LayoutNode{Style: s.resolvedStyle(), Text: s.joinedText()}
+	node := &LayoutNode{Style: s.resolvedStyle(w.currentTextStyle()), Text: s.joinedText()}
 	st := &textLayout{node: node}
 	node.Measure = func(text string, ts TextStyle, maxWidth float32) (float32, float32) {
-		return measureRuns(w, s.runs, maxWidth)
+		return measureRuns(w, s.runs, ts, maxWidth)
 	}
 	return w.registerLayoutNode(node), st
 }
@@ -278,7 +312,7 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 	if w == nil || w.text == nil {
 		return
 	}
-	style := s.resolvedStyle()
+	style := layoutStyle(layoutState, func() Style { return s.resolvedStyle(DefaultTextStyle()) })
 	wrapW := paintWrapWidth(bounds, style)
 	x := bounds.Origin.X + style.Padding.Left
 	y := bounds.Origin.Y + style.Padding.Top
@@ -288,7 +322,7 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 		}
 		ts := r.Style
 		if ts.FontSize <= 0 {
-			ts = DefaultTextStyle()
+			ts = style.TextStyle
 		}
 		lines := shapeWrapped(w, r.Text, ts, wrapW)
 		paintShapedLines(w, x, y, ts, lines)
@@ -303,12 +337,12 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 // measureRuns sizes each run independently at maxWidth: the runs flow left to
 // right, so the width is the sum of the runs' widest lines and the height the
 // tallest run.
-func measureRuns(w *Window, runs []TextRun, maxWidth float32) (float32, float32) {
+func measureRuns(w *Window, runs []TextRun, base TextStyle, maxWidth float32) (float32, float32) {
 	var wsum, hmax float32
 	for _, r := range runs {
 		ts := r.Style
 		if ts.FontSize <= 0 {
-			ts = DefaultTextStyle()
+			ts = base
 		}
 		rw, rh := measureText(w, r.Text, ts, maxWidth)
 		wsum += rw

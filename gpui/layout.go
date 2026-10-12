@@ -211,6 +211,8 @@ func minContentWidth(n *LayoutNode) Pixels {
 			} else {
 				cw = minContentWidth(c)
 			}
+			ms, me, _, _ := c.Style.margins(true)
+			cw += ms + me
 			if isRow {
 				v += cw
 			} else {
@@ -234,6 +236,29 @@ type flexItem struct {
 	cross, mainPos    Pixels
 	crossMin, crossMx Pixels
 	crossPos          Pixels
+	// Margins: fixed main/cross start and end (auto edges count 0) and which
+	// edges are auto.
+	mStart, mEnd, cStart, cEnd Pixels
+	autoMS, autoME             bool
+	autoCS, autoCE             bool
+}
+
+// margins returns the left/right margins when horizontal, else the
+// top/bottom ones, with auto edges reported separately and counted as 0.
+func (s Style) margins(horizontal bool) (start, end Pixels, autoStart, autoEnd bool) {
+	m, a := s.Margin, s.MarginAuto
+	if horizontal {
+		start, end, autoStart, autoEnd = m.Left, m.Right, a.Left, a.Right
+	} else {
+		start, end, autoStart, autoEnd = m.Top, m.Bottom, a.Top, a.Bottom
+	}
+	if autoStart {
+		start = 0
+	}
+	if autoEnd {
+		end = 0
+	}
+	return start, end, autoStart, autoEnd
 }
 
 // layoutFlex runs the flexbox algorithm for a container. With place=false it
@@ -291,20 +316,21 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 		gapsTotal = s.Gap * Pixels(k-1)
 	}
 
-	// The space children see on the cross axis (a maximum unless definite) and
-	// on the main axis (unbounded: base sizes are max-content).
-	childAvail := func(main Pixels, mainBound bool) Available {
+	// The space an item sees on the cross axis (a maximum unless definite,
+	// less its cross margins) and on the main axis (unbounded: base sizes are
+	// max-content).
+	childAvail := func(main Pixels, mainBound bool, crossMargin Pixels) Available {
 		a := Available{}
+		cross := maxPixels(0, crossInner-crossMargin)
 		if isRow {
 			a.W, a.BoundedW = main, mainBound
-			a.H, a.BoundedH = crossInner, crossBounded
+			a.H, a.BoundedH = cross, crossBounded
 		} else {
 			a.H, a.BoundedH = main, mainBound
-			a.W, a.BoundedW = crossInner, crossBounded
+			a.W, a.BoundedW = cross, crossBounded
 		}
 		return a
 	}
-	unboundedMain := childAvail(0, false)
 
 	st := &flexState{
 		base: make([]Pixels, k), hyp: make([]Pixels, k),
@@ -313,6 +339,7 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 		target: make([]Pixels, k),
 	}
 	contrib := make([]Pixels, k)
+	var marginsMain Pixels
 
 	// Step 1: flex base size, automatic minimum, hypothetical main size.
 	for i := range items {
@@ -322,12 +349,17 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 		if it.align == AlignSelfAuto {
 			it.align = s.AlignItems
 		}
+		it.mStart, it.mEnd, it.autoMS, it.autoME = cs.margins(isRow)
+		it.cStart, it.cEnd, it.autoCS, it.autoCE = cs.margins(!isRow)
+		marginsMain += it.mStart + it.mEnd
+		cm := it.cStart + it.cEnd
+		unboundedMain := childAvail(0, false, cm)
 		crossLen := cs.resolveCross(isRow)
 		it.crossMin = resolveBound(cs.resolveMinCross(isRow), 0)
 		it.crossMx = resolveBound(cs.resolveMaxCross(isRow), infPixels)
-		it.fillCross = crossLen.IsFlex() || (crossLen.IsAuto() && it.align == AlignStretch)
+		it.fillCross = crossLen.IsFlex() || (crossLen.IsAuto() && it.align == AlignStretch && !it.autoCS && !it.autoCE)
 		if it.fillCross && crossDef {
-			it.forcedCross, it.hasForcedCross = clampLen(crossInner, it.crossMin, it.crossMx), true
+			it.forcedCross, it.hasForcedCross = clampLen(crossInner-cm, it.crossMin, it.crossMx), true
 		}
 		baseForced := forcedAxes(0, false, it.forcedCross, it.hasForcedCross, isRow)
 
@@ -349,13 +381,16 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 
 		mainLen := cs.resolveMain(isRow)
 		var base Pixels
-		switch mainLen.Kind {
-		case LengthPx:
-			base = mainLen.Val
-			st.grow[i], st.shrink[i] = cs.FlexGrow, cs.FlexShrink
-		case LengthFlex:
+		switch {
+		case mainLen.IsFlex():
 			base = 0
 			st.grow[i], st.shrink[i] = float32(mainLen.Val), 1
+		case cs.FlexBasis.IsPx():
+			base = cs.FlexBasis.Val
+			st.grow[i], st.shrink[i] = cs.FlexGrow, cs.FlexShrink
+		case mainLen.IsPx():
+			base = mainLen.Val
+			st.grow[i], st.shrink[i] = cs.FlexGrow, cs.FlexShrink
 		default:
 			base = measureNode(it.node, unboundedMain, baseForced).axis(isRow)
 			st.grow[i], st.shrink[i] = cs.FlexGrow, cs.FlexShrink
@@ -363,8 +398,12 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 		st.base[i], st.min[i], st.max[i] = base, minMain, maxMain
 		st.hyp[i] = clampLen(base, minMain, maxMain)
 		contrib[i] = st.hyp[i]
-		if mainLen.IsFlex() {
-			contrib[i] = clampLen(measureNode(it.node, unboundedMain, baseForced).axis(isRow), minMain, maxMain)
+		if mainLen.IsFlex() || cs.FlexBasis.IsPx() {
+			content := mainLen.Val
+			if !mainLen.IsPx() {
+				content = measureNode(it.node, unboundedMain, baseForced).axis(isRow)
+			}
+			contrib[i] = maxPixels(contrib[i], clampLen(content, minMain, maxMain))
 		}
 	}
 
@@ -376,16 +415,16 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 			sum += contrib[i]
 			mins += st.min[i]
 		}
-		M = sum + gapsTotal
+		M = sum + gapsTotal + marginsMain
 		if mainBounded && M > mainInner {
-			M = maxPixels(mainInner, mins+gapsTotal)
+			M = maxPixels(mainInner, mins+gapsTotal+marginsMain)
 		}
 		mp := s.mainPadding(isRow)
 		M = maxPixels(0, clampLength(M+mp, s.resolveMinMain(isRow), s.resolveMaxMain(isRow))-mp)
 	}
 
 	// Step 3: resolve flexible lengths.
-	resolveFlex(st, M, gapsTotal)
+	resolveFlex(st, M, gapsTotal+marginsMain)
 
 	// Step 4: item cross sizes at their final main sizes, then the line.
 	for i := range items {
@@ -399,21 +438,21 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 			it.cross = it.forcedCross
 		default:
 			ff := forcedAxes(st.target[i], true, 0, false, isRow)
-			it.cross = clampLen(measureNode(it.node, childAvail(st.target[i], true), ff).axis(!isRow), it.crossMin, it.crossMx)
+			it.cross = clampLen(measureNode(it.node, childAvail(st.target[i], true, it.cStart+it.cEnd), ff).axis(!isRow), it.crossMin, it.crossMx)
 		}
 	}
 	lineCross := crossInner
 	if !crossDef {
 		lineCross = 0
 		for i := range items {
-			lineCross = maxPixels(lineCross, items[i].cross)
+			lineCross = maxPixels(lineCross, items[i].cross+items[i].cStart+items[i].cEnd)
 		}
 		cp := s.crossPadding(isRow)
 		lineCross = maxPixels(0, clampLength(lineCross+cp, s.resolveMinCross(isRow), s.resolveMaxCross(isRow))-cp)
 		for i := range items {
 			it := &items[i]
 			if it.fillCross {
-				it.cross = clampLen(lineCross, it.crossMin, it.crossMx)
+				it.cross = clampLen(lineCross-it.cStart-it.cEnd, it.crossMin, it.crossMx)
 			}
 		}
 	}
@@ -444,10 +483,22 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 
 	// Step 5: main-axis placement.
 	var used Pixels
+	autos := 0
 	for i := range items {
 		used += st.target[i]
+		if items[i].autoMS {
+			autos++
+		}
+		if items[i].autoME {
+			autos++
+		}
 	}
-	free := M - used - gapsTotal
+	free := M - used - gapsTotal - marginsMain
+	var perAuto Pixels
+	if autos > 0 && free > 0 {
+		perAuto = free / Pixels(autos)
+		free = 0
+	}
 	mode := s.Justify
 	if k <= 1 || free <= 0 {
 		switch mode {
@@ -460,23 +511,40 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 	pos := s.mainPaddingStart(isRow) + firstOffset(mode, free, k)
 	between := betweenOffset(mode, free, k)
 	for i := range items {
-		items[i].mainPos = pos
-		pos += st.target[i] + s.Gap + between
+		it := &items[i]
+		pos += it.mStart
+		if it.autoMS {
+			pos += perAuto
+		}
+		it.mainPos = pos
+		pos += st.target[i] + it.mEnd + s.Gap + between
+		if it.autoME {
+			pos += perAuto
+		}
 	}
 
 	// Step 6: cross-axis placement, child rects, recursion, content size.
 	extentMain, extentCross := size.axis(isRow), size.axis(!isRow)
 	for i := range items {
 		it := &items[i]
-		cfree := lineCross - it.cross
+		cfree := lineCross - it.cStart - it.cEnd - it.cross
 		var off Pixels
-		switch it.align {
-		case AlignCenter:
+		switch {
+		case it.autoCS || it.autoCE:
+			if cfree > 0 {
+				switch {
+				case it.autoCS && it.autoCE:
+					off = cfree / 2
+				case it.autoCS:
+					off = cfree
+				}
+			}
+		case it.align == AlignCenter:
 			off = cfree / 2
-		case AlignEnd:
+		case it.align == AlignEnd:
 			off = cfree
 		}
-		it.crossPos = s.crossPaddingStart(isRow) + off
+		it.crossPos = s.crossPaddingStart(isRow) + it.cStart + off
 
 		c := it.node
 		if isRow {
@@ -486,8 +554,8 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 		}
 		arrangeNode(c)
 
-		endMain := it.mainPos + st.target[i]
-		endCross := it.crossPos + it.cross
+		endMain := it.mainPos + st.target[i] + it.mEnd
+		endCross := it.crossPos + it.cross + it.cEnd
 		if c.Style.Overflow == OverflowVisible {
 			endMain += maxPixels(0, c.ContentSize.axis(isRow)-c.Rect.Size.axis(isRow))
 			endCross += maxPixels(0, c.ContentSize.axis(!isRow)-c.Rect.Size.axis(!isRow))

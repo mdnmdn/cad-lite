@@ -1,7 +1,5 @@
 package gpui
 
-import "reflect"
-
 // Div is the generic box element: a styled, optionally-flex container with
 // optional mouse/key listeners, focus tracking and clipping.
 //
@@ -29,7 +27,7 @@ type Div struct {
 	onKeyUp       func(*KeyUpEvent, *Window, *App)
 	onHoverStart  func(*Window, *App)
 	onHoverEnd    func(*Window, *App)
-	onAction      map[reflect.Type]func(Action, *Window, *App)
+	onAction      map[ActionKey]func(Action, *Window, *App)
 
 	focusHandle *FocusHandle
 	tracksFocus bool
@@ -77,7 +75,6 @@ func NewDiv() *Div {
 		Background:   &base.Background,
 		Opacity:      &base.Opacity,
 		ScrollAxes:   &base.ScrollAxes,
-		TextStyle:    &base.TextStyle,
 	}
 	return d
 }
@@ -156,17 +153,16 @@ func (d *Div) OnHoverEnd(f func(*Window, *App)) *Div {
 }
 
 // OnAction registers a handler for an action dispatched through the keymap.
-// Handlers are keyed by the action's concrete reflect.Type, so two actions
-// built with NewAction share one type and cannot be told apart; define a
-// distinct type per action when they must differ.
+// Handlers are keyed by ActionKeyOf(action) (concrete type, plus the name for
+// NewAction values), so NewAction("a") and NewAction("b") are distinct.
 func (d *Div) OnAction(action Action, f func(Action, *Window, *App)) *Div {
 	if action == nil {
 		return d
 	}
 	if d.onAction == nil {
-		d.onAction = make(map[reflect.Type]func(Action, *Window, *App))
+		d.onAction = make(map[ActionKey]func(Action, *Window, *App))
 	}
-	d.onAction[reflect.TypeOf(action)] = f
+	d.onAction[ActionKeyOf(action)] = f
 	return d
 }
 
@@ -235,6 +231,7 @@ func (d *Div) interactionStyle(f func(*StyledMixin) *StyledMixin) *StyleRefineme
 	if d.style.TextStyle != nil {
 		ts := *d.style.TextStyle
 		m.style.TextStyle = &ts
+		m.style.TextSet = d.style.TextSet
 	}
 	if r := f(m); r != nil {
 		m = r
@@ -437,8 +434,12 @@ func (s *divLayout) childLayoutStates() []any { return s.childStates }
 // requestLayout builds the div's LayoutNode, recursing into children and
 // registering every node with the window.
 func (d *Div) requestLayout(w *Window, cx *App) (LayoutID, any) {
-	node := &LayoutNode{Style: d.resolvedStyle()}
+	style := d.resolvedStyle()
+	style.TextStyle = d.style.RefineText(w.currentTextStyle())
+	node := &LayoutNode{Style: style}
 	st := &divLayout{node: node}
+	w.pushTextStyle(style.TextStyle)
+	defer w.popTextStyle()
 	for _, c := range d.children {
 		cel := c.Element()
 		if cel == nil {

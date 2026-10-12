@@ -204,6 +204,20 @@ func (k Keystroke) Equals(o Keystroke) bool {
 	return *k.KeyChar == *o.KeyChar
 }
 
+// Matches reports whether typed satisfies this binding keystroke, as GPUI's
+// should_match: the modifiers are equal and either the keys are equal
+// (case-insensitively; typed.KeyChar is ignored) or typed.KeyChar equals this
+// key, so a "?" binding matches a typed "?" whatever the physical key.
+func (k Keystroke) Matches(typed Keystroke) bool {
+	if k.Modifiers != typed.Modifiers {
+		return false
+	}
+	if strings.EqualFold(k.Key, typed.Key) {
+		return true
+	}
+	return typed.KeyChar != nil && *typed.KeyChar == k.Key
+}
+
 // hasModifier reports whether any bit of m is set.
 func (k Keystroke) hasModifier(m Modifiers) bool { return k.Modifiers&m != 0 }
 

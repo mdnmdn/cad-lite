@@ -27,13 +27,22 @@ nothing.
 either library rejects is rejected.
 
 `FontManager.Face(family, size, weight)` returns a sized face (cached by
-path, size and weight). **Family selection is not implemented**: any family
-name, including `""`, resolves to the default font. Weight `>= 600` selects a
-real bold file when one is found (`NameBold.ttf` next to the default font,
-then well-known per-OS bold fonts) and otherwise marks the face for synthetic
-bold - a one-pixel (scale-rounded) horizontal smear of the glyph mask. There is
-no per-glyph font fallback: characters missing from the font render with
-whatever glyph the font maps them to (usually `.notdef`).
+path, size and weight). **Family lookup** is by file name: on first use of a
+named family the font directories (macOS `/System/Library/Fonts`, its
+`Supplemental`, `/Library/Fonts`, `~/Library/Fonts`; Windows `%WINDIR%\Fonts`;
+Linux `/usr/share/fonts`, `~/.fonts`, ...) are listed once (files are not
+opened), then names are matched with case/space/dash ignored (`Arial` ->
+`Arial.ttf`, bold -> `Arial Bold.ttf`). Results, including misses, are cached.
+Unknown or generic families use the default font. Weight `>= 600` selects the
+family's real bold file when found (else the default-font bold search) and
+otherwise marks the face for synthetic bold.
+
+**Fallback.** For each rune the face lacks (not whitespace/controls/joiners),
+`FontManager.Fallback(r, size, weight)` searches system fallback fonts (macOS:
+Arial Unicode, Apple Symbols, Hiragino Sans GB, Apple SD Gothic Neo; similar
+lists elsewhere), loaded lazily. `ShapedGlyph.Face` is set for glyphs owned by
+a fallback face. Colour emoji (bitmap fonts) are not supported and still draw
+as tofu.
 
 ## Shaper
 
@@ -53,7 +62,8 @@ type TextMeasurer interface {
 - **Shaping** is HarfBuzz via `go-text/typesetting`, fixed to
   left-to-right direction and the Latin script. Bidirectional and complex
   scripts are not handled. Ligatures and kerning from the font's OpenType
-  tables apply.
+  tables apply. Kerning of a glyph against a following space is dropped
+  (SF's `.`+space pair otherwise collapses the gap after a period).
 - **Caches.** Shaped runs are cached by `(face, text)` (2048 entries; the map
   is dropped when full). Everything downstream of shaping (wrapping, line
   building) runs per call over the cached run.
@@ -65,7 +75,9 @@ type TextMeasurer interface {
 `ShapeWrap(text, face, wrapWidth)` breaks lines using Unicode UAX #14 line
 break opportunities (`go-text/typesetting/segmenter`) over shaped clusters:
 
-- mandatory breaks (newlines) always split;
+- `"\n"` (and `"\r\n"`) are hard line breaks: the text is split into
+  paragraphs, each shaped and wrapped separately; empty paragraphs are blank
+  lines and no glyph is drawn for the newline;
 - text breaks at the last allowed opportunity that fits;
 - if no opportunity precedes the overflowing cluster, it falls back to the last
   whitespace, and if there is none, the line breaks between clusters
@@ -73,10 +85,9 @@ break opportunities (`go-text/typesetting/segmenter`) over shaped clusters:
   single cluster is itself wider than `wrapWidth`;
 - `maxWidth = math.MaxFloat32` means "no wrapping".
 
-`MeasureWrapped` returns the widest line and `lines * ResolvedLineHeight()`
-computed from the face size (`1.2 * FontSize`). It does **not** take
-`TextStyle.LineHeight` into account, whereas painting stacks lines using the
-style's line height - see the note in [styling.md](styling.md).
+`MeasureWrapped` returns the widest line and `lines * ts.ResolvedLineHeight()`,
+the same line height `Text` paints with (`Shaper.Measure(text, face, w)`, which
+has no style, uses `1.2 * size`).
 
 Layout asks for three widths: max-content (`MaxFloat32`), a bounded wrap width,
 and min-content (`<= 0`, implemented in `measureText` as the longest word).
@@ -105,8 +116,8 @@ thickness of `max(1, FontSize/14)`.
 
 ## Known limits
 
-- Single font family (the OS default); weights are regular and "bold".
-- No font fallback, no bidi, no complex-script shaping, no emoji colour fonts.
+- Family lookup is by file name only; weights are regular and "bold".
+- Fallback covers glyphs present in the listed system fonts; no bidi, no
+  complex-script shaping, no colour emoji.
 - `StyledText` runs wrap independently and never share a line.
 - `TextInput` measures at scale 1.
-- Line-height mismatch between measure and paint (above).

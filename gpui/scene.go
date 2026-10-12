@@ -1,10 +1,50 @@
 package gpui
 
-// ContentMask is the clip rect applied to a primitive before it is drawn.
-// The zero value is an empty rect, which clips the primitive away entirely;
-// use InfiniteContentMask to express "no clipping".
+// ContentMask is the clip applied to a primitive before it is drawn: a rect,
+// optionally with rounded corners. The zero value is an empty rect, which
+// clips the primitive away entirely; use InfiniteContentMask to express "no
+// clipping".
 type ContentMask struct {
 	Bounds Bounds
+	// CornerRadii round the clip rect; zero radii clip to the plain rect.
+	CornerRadii Corners
+}
+
+// isRounded reports whether the mask has any corner radius.
+func (m ContentMask) isRounded() bool {
+	c := m.CornerRadii
+	return c.TopLeft > 0 || c.TopRight > 0 || c.BottomLeft > 0 || c.BottomRight > 0
+}
+
+// intersect returns the mask covering both m and o. Each corner of the
+// intersection rect keeps the radius of the mask(s) contributing it, reduced
+// by how far the corner lies inside that mask's own corner (exact when the
+// offsets are equal on both axes, conservative otherwise).
+func (m ContentMask) intersect(o ContentMask) ContentMask {
+	ib := m.Bounds.Intersection(o.Bounds)
+	out := ContentMask{Bounds: ib}
+	if !m.isRounded() && !o.isRounded() {
+		return out
+	}
+	l, t := ib.Origin.X, ib.Origin.Y
+	r, b := ib.Max().X, ib.Max().Y
+	corner := func(rad, dx, dy Pixels) Pixels { return maxPixels(0, rad-maxPixels(dx, dy)) }
+	pick := func(f func(c ContentMask) Pixels) Pixels { return maxPixels(f(m), f(o)) }
+	out.CornerRadii = Corners{
+		TopLeft: pick(func(c ContentMask) Pixels {
+			return corner(c.CornerRadii.TopLeft, l-c.Bounds.Origin.X, t-c.Bounds.Origin.Y)
+		}),
+		TopRight: pick(func(c ContentMask) Pixels {
+			return corner(c.CornerRadii.TopRight, c.Bounds.Max().X-r, t-c.Bounds.Origin.Y)
+		}),
+		BottomLeft: pick(func(c ContentMask) Pixels {
+			return corner(c.CornerRadii.BottomLeft, l-c.Bounds.Origin.X, c.Bounds.Max().Y-b)
+		}),
+		BottomRight: pick(func(c ContentMask) Pixels {
+			return corner(c.CornerRadii.BottomRight, c.Bounds.Max().X-r, c.Bounds.Max().Y-b)
+		}),
+	}
+	return out
 }
 
 // InfiniteContentMask returns a clip rect large enough to contain any

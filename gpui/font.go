@@ -42,7 +42,16 @@ type FontManager struct {
 	faces map[faceKey]*Font // sized faces keyed by path, size and weight
 	bold  map[string]*Font  // bold file per base path; nil value = none found
 	def   *Font             // memoized result of DefaultFont
+
+	index    map[string]string      // normalized font file stem -> path, built on first family lookup
+	families map[string]familyEntry // resolved families by normalized name (misses included)
+	fallback []string               // existing fallback font paths, in priority order
+	fbLoaded bool                   // fallback list has been probed
 }
+
+// familyEntry is a family's resolved regular and bold fonts; nil fields mean
+// "not found" (a nil regular sends the lookup to the default font).
+type familyEntry struct{ regular, bold *Font }
 
 // faceKey identifies a sized face within a FontManager cache.
 type faceKey struct {
@@ -206,12 +215,13 @@ func (m *FontManager) DefaultFont() (*Font, error) {
 	return f, nil
 }
 
-// Face resolves a face at the given size and weight. For this POC, family
-// selection is not implemented: any family name (including "") resolves to the
-// platform default family. A weight of 600 or above uses a real bold file when
-// one is found (see boldCandidates); otherwise the regular outlines are used
-// and emboldened synthetically at raster time (a one-pixel horizontal smear). Repeated calls with the same
-// arguments return the identical pointer.
+// Face resolves a face at the given size and weight. family is looked up by
+// name in the system font directories (see familyLocked); an empty, generic
+// ("sans-serif", "system-ui") or unknown family resolves to the platform
+// default font. A weight of 600 or above uses a real bold file when one is
+// found; otherwise the regular outlines are emboldened synthetically at raster
+// time (a one-pixel horizontal smear). Repeated calls with the same arguments
+// return the identical pointer.
 func (m *FontManager) Face(family string, size float32, weight int) (*Font, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -219,17 +229,33 @@ func (m *FontManager) Face(family string, size float32, weight int) (*Font, erro
 	if err != nil {
 		return nil, err
 	}
+	var bold *Font
+	haveBold := false
+	if family != "" {
+		if e := m.familyLocked(family); e.regular != nil {
+			base, bold, haveBold = e.regular, e.bold, true
+		}
+	}
 	synth := false
 	if weight >= 600 {
-		if bold := m.boldLocked(base); bold != nil {
+		if !haveBold {
+			bold = m.boldLocked(base)
+		}
+		if bold != nil {
 			base = bold
 		} else {
 			synth = true
 		}
 	}
+	return m.sizedLocked(base, size, weight, synth), nil
+}
+
+// sizedLocked returns the cached face of base at size and weight. Callers must
+// hold m.mu.
+func (m *FontManager) sizedLocked(base *Font, size float32, weight int, synth bool) *Font {
 	key := faceKey{path: base.path, size: size, weight: weight}
 	if f, ok := m.faces[key]; ok {
-		return f, nil
+		return f
 	}
 	face := &Font{
 		sfntFont:  base.sfntFont,
@@ -241,7 +267,7 @@ func (m *FontManager) Face(family string, size float32, weight int) (*Font, erro
 		synthBold: synth,
 	}
 	m.faces[key] = face
-	return face, nil
+	return face
 }
 
 // DefaultFace is Face with the empty (default) family.
@@ -360,4 +386,177 @@ func (f *Font) HasGlyph(r rune) bool {
 	var buf sfnt.Buffer
 	gi, err := f.sfntFont.GlyphIndex(&buf, r)
 	return err == nil && gi != 0
+}
+
+// fontDirs lists the directories searched for named families.
+func fontDirs() []string {
+	home, _ := os.UserHomeDir()
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{"/System/Library/Fonts", "/System/Library/Fonts/Supplemental", "/Library/Fonts", filepath.Join(home, "Library/Fonts")}
+	case "windows":
+		return []string{filepath.Join(os.Getenv("WINDIR"), "Fonts"), filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "Windows", "Fonts")}
+	default:
+		return []string{"/usr/share/fonts", "/usr/local/share/fonts", filepath.Join(home, ".fonts"), filepath.Join(home, ".local/share/fonts")}
+	}
+}
+
+// normalizeFontName lowercases s and drops spaces, dashes, underscores and
+// quotes, so "DejaVu Sans", "dejavu-sans" and "DejaVuSans" compare equal.
+func normalizeFontName(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		switch r {
+		case ' ', '-', '_', '"', '\'', ',':
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// fontIndexLocked lists the font directories once, mapping each font file's
+// normalized stem to its path (first directory wins). Files are not opened.
+func (m *FontManager) fontIndexLocked() map[string]string {
+	if m.index != nil {
+		return m.index
+	}
+	m.index = make(map[string]string)
+	for _, dir := range fontDirs() {
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext != ".ttf" && ext != ".otf" && ext != ".ttc" {
+				return nil
+			}
+			key := normalizeFontName(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+			if _, dup := m.index[key]; !dup {
+				m.index[key] = path
+			}
+			return nil
+		})
+	}
+	return m.index
+}
+
+// genericFamilies maps CSS generic family names to ordered candidate families;
+// a nil list means "use the default font".
+var genericFamilies = map[string][]string{
+	"sansserif":    nil,
+	"systemui":     nil,
+	"default":      nil,
+	"applesystem":  nil,
+	"monospace":    {"menlo", "sfnsmono", "consolas", "dejavusansmono", "liberationmonoregular", "couriernew", "courier"},
+	"serif":        {"times", "timesnewroman", "georgia", "dejavuserif", "liberationserifregular"},
+	"cursive":      {"markerfelt", "comicsansms"},
+	"fantasy":      nil,
+	"ui-monospace": {"menlo", "sfnsmono", "consolas", "dejavusansmono"},
+}
+
+// familyLocked resolves a family name to its regular and bold fonts through
+// the file-name index, memoizing hits and misses. Callers must hold m.mu.
+func (m *FontManager) familyLocked(name string) familyEntry {
+	key := normalizeFontName(name)
+	if e, ok := m.families[key]; ok {
+		return e
+	}
+	if m.families == nil {
+		m.families = make(map[string]familyEntry)
+	}
+	cands := []string{key}
+	if g, ok := genericFamilies[key]; ok {
+		cands = g
+	}
+	idx := m.fontIndexLocked()
+	var e familyEntry
+	for _, c := range cands {
+		path := idx[c]
+		if path == "" {
+			path = idx[c+"regular"]
+		}
+		if path == "" {
+			continue
+		}
+		reg, err := m.loadLocked(path)
+		if err != nil {
+			continue
+		}
+		e.regular = reg
+		for _, suffix := range []string{"bold", "bd"} {
+			if bp := idx[c+suffix]; bp != "" && bp != path {
+				if bf, err := m.loadLocked(bp); err == nil {
+					e.bold = bf
+					break
+				}
+			}
+		}
+		if e.bold == nil {
+			if sp := boldSiblingPath(path); sp != "" && sp != path {
+				if _, err := os.Stat(sp); err == nil {
+					e.bold, _ = m.loadLocked(sp)
+				}
+			}
+		}
+		break
+	}
+	m.families[key] = e
+	return e
+}
+
+// fallbackCandidates lists system fonts tried, in order, for runes the
+// requested face lacks.
+func fallbackCandidates() []string {
+	switch runtime.GOOS {
+	case "darwin":
+		return []string{
+			"/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+			"/System/Library/Fonts/Apple Symbols.ttf",
+			"/System/Library/Fonts/Hiragino Sans GB.ttc",
+			"/System/Library/Fonts/AppleSDGothicNeo.ttc",
+		}
+	case "windows":
+		dir := filepath.Join(os.Getenv("WINDIR"), "Fonts")
+		return []string{
+			filepath.Join(dir, "seguisym.ttf"), filepath.Join(dir, "msyh.ttc"),
+			filepath.Join(dir, "YuGothR.ttc"), filepath.Join(dir, "malgun.ttf"),
+		}
+	default:
+		return []string{
+			"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+			"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+			"/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+			"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+			"/usr/share/fonts/truetype/unifont/unifont.ttf",
+		}
+	}
+}
+
+// Fallback returns a face at size and weight from the first system fallback
+// font that has a glyph for r, or nil when none does. Fallback fonts are
+// loaded lazily on the first call; colour emoji fonts are not supported.
+func (m *FontManager) Fallback(r rune, size float32, weight int) *Font {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.fbLoaded {
+		m.fbLoaded = true
+		for _, p := range fallbackCandidates() {
+			if _, err := os.Stat(p); err == nil {
+				m.fallback = append(m.fallback, p)
+			}
+		}
+	}
+	for i := 0; i < len(m.fallback); i++ {
+		f, err := m.loadLocked(m.fallback[i])
+		if err != nil {
+			m.fallback = append(m.fallback[:i], m.fallback[i+1:]...)
+			i--
+			continue
+		}
+		if f.HasGlyph(r) {
+			return m.sizedLocked(f, size, weight, weight >= 600)
+		}
+	}
+	return nil
 }

@@ -49,10 +49,12 @@ type Window struct {
 	// GlobalElementID contains a slice and so cannot be a Go map key).
 	elementStates map[string]any
 
-	clipStack []Bounds
+	clipStack []ContentMask
 
 	text TextMeasurer
-	app  *App
+	// textStyles is the inherited text-style stack of the RequestLayout walk.
+	textStyles []TextStyle
+	app        *App
 
 	background Rgba
 	raster     *Rasterizer
@@ -76,6 +78,13 @@ type Window struct {
 	// hoverAfterDraw is set while Draw re-runs hover; the frame already
 	// painted hover styles at the pointer, so no restyle redraw is needed.
 	hoverAfterDraw bool
+
+	// renderedEntities are the entities read during the last draw (Notify
+	// on one invalidates the window); nextEntities collects the current one.
+	renderedEntities map[EntityID]struct{}
+	nextEntities     map[EntityID]struct{}
+	// closed is set by Close.
+	closed bool
 }
 
 // Frame is the result of one Draw: a scene plus the hitboxes, listeners and
@@ -155,7 +164,7 @@ type keyNode struct {
 	FocusID    FocusID
 	OnKeyDown  func(*KeyDownEvent, *Window, *App)
 	OnKeyUp    func(*KeyUpEvent, *Window, *App)
-	OnAction   map[reflect.Type]func(Action, *Window, *App)
+	OnAction   map[ActionKey]func(Action, *Window, *App)
 	// tabIndex and tabStop place the node in Tab traversal.
 	tabIndex int
 	tabStop  bool
@@ -339,7 +348,7 @@ func (w *Window) insertKeyNode(kn keyNode) {
 // content mask with the current clip and applying the element opacity.
 func (w *Window) PaintQuad(q Quad) {
 	if q.ContentMask.Bounds.Size.W <= 0 || q.ContentMask.Bounds.Size.H <= 0 {
-		q.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+		q.ContentMask = w.CurrentContentMask()
 	}
 	if w.opacity < 1 {
 		q.Fill = q.Fill.Opacity(w.opacity)
@@ -355,7 +364,7 @@ func (w *Window) PaintQuad(q Quad) {
 // opacity.
 func (w *Window) PaintShadow(s Shadow) {
 	if s.ContentMask.Bounds.Size.W <= 0 || s.ContentMask.Bounds.Size.H <= 0 {
-		s.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+		s.ContentMask = w.CurrentContentMask()
 	}
 	if w.opacity < 1 {
 		s.Color = s.Color.Opacity(w.opacity)
@@ -366,7 +375,7 @@ func (w *Window) PaintShadow(s Shadow) {
 // PaintUnderline inserts an underline into the frame being built.
 func (w *Window) PaintUnderline(u Underline) {
 	if u.ContentMask.Bounds.Size.W <= 0 || u.ContentMask.Bounds.Size.H <= 0 {
-		u.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+		u.ContentMask = w.CurrentContentMask()
 	}
 	if w.opacity < 1 {
 		u.Color = u.Color.Opacity(w.opacity)
@@ -377,7 +386,7 @@ func (w *Window) PaintUnderline(u Underline) {
 // PaintGlyph inserts a glyph sprite into the frame being built.
 func (w *Window) PaintGlyph(g GlyphSprite) {
 	if g.ContentMask.Bounds.Size.W <= 0 || g.ContentMask.Bounds.Size.H <= 0 {
-		g.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+		g.ContentMask = w.CurrentContentMask()
 	}
 	if w.opacity < 1 {
 		g.Color = g.Color.Opacity(w.opacity)
@@ -390,7 +399,17 @@ func (w *Window) PushLayer() { w.nextFrame.scene.PushLayer() }
 
 // PushClip intersects b with the current clip and pushes the result.
 func (w *Window) PushClip(b Bounds) {
-	w.clipStack = append(w.clipStack, b.Intersection(w.CurrentClip()))
+	w.PushContentMask(ContentMask{Bounds: b})
+}
+
+// PushContentMask intersects m (a rect, optionally rounded) with the current
+// content mask and pushes the result; pop it with PopClip.
+func (w *Window) PushContentMask(m ContentMask) {
+	if len(w.clipStack) == 0 {
+		w.clipStack = append(w.clipStack, m.intersect(InfiniteContentMask()))
+		return
+	}
+	w.clipStack = append(w.clipStack, m.intersect(w.clipStack[len(w.clipStack)-1]))
 }
 
 // PopClip removes the innermost clip.
@@ -404,9 +423,18 @@ func (w *Window) PopClip() {
 // contain any practical primitive when nothing has been pushed.
 func (w *Window) CurrentClip() Bounds {
 	if n := len(w.clipStack); n > 0 {
-		return w.clipStack[n-1]
+		return w.clipStack[n-1].Bounds
 	}
 	return InfiniteContentMask().Bounds
+}
+
+// CurrentContentMask returns the innermost content mask (rect plus corner
+// radii), or InfiniteContentMask when nothing has been pushed.
+func (w *Window) CurrentContentMask() ContentMask {
+	if n := len(w.clipStack); n > 0 {
+		return w.clipStack[n-1]
+	}
+	return InfiniteContentMask()
 }
 
 // globalIDKey encodes a GlobalElementID as a comparable string. It is
@@ -497,6 +525,37 @@ func (w *Window) registerLayoutNode(n *LayoutNode) LayoutID {
 	return id
 }
 
+// RegisterLayoutNode registers a caller-built LayoutNode for the frame being
+// built and returns its id; custom elements return it from RequestLayout.
+// Children must already be linked into n.Children.
+func (w *Window) RegisterLayoutNode(n *LayoutNode) LayoutID { return w.registerLayoutNode(n) }
+
+// LayoutNode returns the node registered under id in the frame being built,
+// or nil.
+func (w *Window) LayoutNode(id LayoutID) *LayoutNode { return w.layoutNodes[id] }
+
+// RequestLayoutWithChildren runs RequestLayout on each non-nil child, builds
+// a node with style whose children are the children's nodes, registers it
+// and returns its id plus the state to return from RequestLayout (pair it
+// with ParentElementChildren so the window walks the children).
+func (w *Window) RequestLayoutWithChildren(style Style, children []AnyElement, cx *App) (LayoutID, *ChildLayout) {
+	node := &LayoutNode{Style: style}
+	st := &ChildLayout{Node: node}
+	for _, c := range children {
+		cel := c.Element()
+		if cel == nil {
+			continue
+		}
+		cid, cstate := cel.RequestLayout(w, cx)
+		st.childIDs = append(st.childIDs, cid)
+		st.childStates = append(st.childStates, cstate)
+		if cn := w.layoutNodes[cid]; cn != nil {
+			node.Children = append(node.Children, cn)
+		}
+	}
+	return w.registerLayoutNode(node), st
+}
+
 // renderNode is one element's slot in the resolved render tree the draw
 // pipeline walks: its final bounds, layout node, and per-phase states.
 type renderNode struct {
@@ -523,8 +582,14 @@ func (w *Window) Draw(cx *App) {
 	w.hitboxStack = w.hitboxStack[:0]
 	w.keyStack = w.keyStack[:0]
 	w.opacity = 1
+	w.textStyles = w.textStyles[:0]
 	w.paintHoverValid = false
 
+	var prevDrawing *Window
+	if cx != nil {
+		prevDrawing, cx.drawing = cx.drawing, w
+		clear(w.nextEntities)
+	}
 	var el Element
 	if w.root != nil {
 		el = IntoElementOf(w.root.Render(w, cx))
@@ -541,6 +606,10 @@ func (w *Window) Draw(cx *App) {
 		rn := w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
 		w.prepaintTree(rn, cx, true)
 		w.paintTree(rn, cx)
+	}
+	if cx != nil {
+		cx.drawing = prevDrawing
+		w.renderedEntities, w.nextEntities = w.nextEntities, w.renderedEntities
 	}
 
 	w.renderedFrame, w.nextFrame = w.nextFrame, w.renderedFrame
@@ -581,6 +650,34 @@ func (w *Window) present() {
 	w.platformWindow.Present(w.raster.Pixels(), pw, ph)
 }
 
+// Close removes the window from its App, releases the entity reference held
+// by an EntityView root and asks the platform window to close. It is
+// idempotent.
+func (w *Window) Close() {
+	if w.closed {
+		return
+	}
+	w.closed = true
+	app := w.app
+	if app != nil {
+		for i, o := range app.windows {
+			if o == w {
+				app.windows = append(app.windows[:i:i], app.windows[i+1:]...)
+				break
+			}
+		}
+	}
+	root := w.root
+	w.root = nil
+	w.renderedEntities = nil
+	if r, ok := root.(viewReleaser); ok && app != nil {
+		r.releaseView(app)
+	}
+	if w.platformWindow != nil {
+		w.platformWindow.Quit()
+	}
+}
+
 // SetBackground sets the color the frame is cleared to before rasterizing
 // (default opaque white).
 func (w *Window) SetBackground(c Rgba) { w.background = c }
@@ -612,12 +709,8 @@ func (w *Window) buildRenderNode(el Element, gid GlobalElementID, node *LayoutNo
 		layout: node,
 		state:  state,
 	}
-	pe, ok := el.(hasChildren)
-	if !ok {
-		return rn
-	}
-	kids := pe.elementChildren()
-	if len(kids) == 0 {
+	kids, ok := childrenOf(el)
+	if !ok || len(kids) == 0 {
 		return rn
 	}
 	var childIDs []LayoutID
@@ -767,7 +860,8 @@ func (w *Window) isHoveredHitbox(i int) bool {
 }
 
 // paintTree walks the render tree in order: paint the element, then its
-// children inside its clip, then pop the clip. Clips are pushed here (not in
+// children inside its clip (rounded by its corner radii), then pop the
+// clip. The element's own box is not clipped by its overflow, as in GPUI. Clips are pushed here (not in
 // prepaint) so the clip stack is balanced per subtree during painting — a
 // prepaint-pushed stack would leave every container's clip active while early
 // siblings paint, masking the wrong region.
@@ -788,10 +882,14 @@ func (w *Window) paintTree(n *renderNode, cx *App) {
 	if opacity < 1 {
 		w.opacity *= max(opacity, 0)
 	}
-	if pushed {
-		w.PushClip(n.bounds)
-	}
 	n.elem.Paint(w, cx, ElementID{Path: n.id.Path}, n.bounds, n.state, n.prepaint)
+	if pushed {
+		m := ContentMask{Bounds: n.bounds}
+		if n.layout != nil {
+			m.CornerRadii = n.layout.Style.CornerRadii
+		}
+		w.PushContentMask(m)
+	}
 	for _, c := range n.children {
 		w.paintTree(c, cx)
 	}
@@ -955,9 +1053,10 @@ func (w *Window) updateHover(pos Point, cx *App) {
 	}
 }
 
-// dispatchScroll runs OnScrollWheel over the hit path, then offers the
-// delta to the scroll containers under the cursor, innermost first: the
-// first whose offset changes takes it and requests a redraw.
+// dispatchScroll runs OnScrollWheel over the hit path, then, unless a
+// handler stopped propagation, offers the delta to the scroll containers
+// under the cursor, innermost first: the first whose offset changes takes it
+// and requests a redraw.
 func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 	ev := e
 	w.mousePosition, w.hasMouse = e.Position, true
@@ -966,6 +1065,9 @@ func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 			l.OnScrollWheel(&ev, w, cx)
 		}
 	})
+	if !w.propagateEvent {
+		return
+	}
 	for _, i := range w.hitPath(e.Position) {
 		l := &w.renderedFrame.mouseListeners[i]
 		if !l.scrollable {
@@ -1087,14 +1189,19 @@ func (w *Window) keyPath() []keyNode {
 	return rev
 }
 
-// dispatchKeyDown delivers a key press to a focused text input when it wants
-// character input; otherwise it runs OnKeyDown over the focus path (target
-// first, bubble-phase) and finally consults the keymap, dispatching any
-// matched action to OnAction handlers along the same path.
+// dispatchKeyDown routes a key press. Character input for a focused text
+// field first offers the keystroke to the keymap (GPUI: bindings win) and
+// goes to the field's input handler only if no OnAction handler consumed
+// the matched action. Any other press runs OnKeyDown over the focus path
+// (target first, bubble-phase) and then consults the keymap, dispatching
+// any matched action to OnAction handlers along the same path.
 func (w *Window) dispatchKeyDown(e KeyDownEvent, cx *App) {
 	ev := e
 	if h := w.focusedInputHandler(); h != nil && h.AcceptsTextInput() &&
 		e.PreferCharacterInput && e.Keystroke.KeyChar != nil {
+		if w.dispatchBinding(e.Keystroke, w.keyPath(), cx) {
+			return
+		}
 		var rng *IntRange
 		if sel, ok := h.SelectedTextRange(); ok && !sel.IsNil {
 			r := sel.Range
@@ -1114,27 +1221,39 @@ func (w *Window) dispatchKeyDown(e KeyDownEvent, cx *App) {
 			path[i].OnKeyDown(&ev, w, cx)
 		}
 	}
-	if !w.propagateEvent || cx == nil {
+	if !w.propagateEvent {
 		return
 	}
+	w.dispatchBinding(e.Keystroke, path, cx)
+}
 
+// dispatchBinding matches ks against the keymap with the path's key
+// contexts and delivers the action to OnAction handlers along the path,
+// target first, until StopPropagation. It reports whether a handler ran.
+func (w *Window) dispatchBinding(ks Keystroke, path []keyNode, cx *App) bool {
+	if cx == nil || len(path) == 0 {
+		return false
+	}
 	ctxStack := make([]string, 0, len(path))
 	for _, n := range path {
 		if n.KeyContext != "" {
 			ctxStack = append(ctxStack, n.KeyContext)
 		}
 	}
-	action := cx.Keymap().MatchKeystroke(e.Keystroke, ctxStack)
+	action := cx.Keymap().MatchKeystroke(ks, ctxStack)
 	if action == nil {
-		return
+		return false
 	}
-	at := reflect.TypeOf(action)
+	key := ActionKeyOf(action)
+	handled := false
 	w.propagateEvent = true
 	for i := len(path) - 1; i >= 0 && w.propagateEvent; i-- {
-		if f, ok := path[i].OnAction[at]; ok {
+		if f, ok := path[i].OnAction[key]; ok {
+			handled = true
 			f(action, w, cx)
 		}
 	}
+	return handled
 }
 
 // dispatchKeyUp runs OnKeyUp over the focus path, target first.

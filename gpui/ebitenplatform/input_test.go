@@ -174,3 +174,37 @@ func TestClickTrackerPerButton(t *testing.T) {
 		t.Errorf("left click on a lost by interleaved right press: ok=%v n=%d", ok, n)
 	}
 }
+
+func TestCharKeystrokeMatchesBareBindings(t *testing.T) {
+	cases := []struct {
+		r    rune
+		mods gpui.Modifiers
+		key  string
+		want gpui.Modifiers
+	}{
+		{'a', 0, "a", 0},
+		{'A', 0, "a", gpui.Shift},
+		{' ', 0, "space", 0},
+		{'?', 0, "?", 0},
+		{'é', gpui.Function, "é", gpui.Function},
+	}
+	for _, c := range cases {
+		ks := charKeystroke(c.r, c.mods)
+		if ks.Key != c.key || ks.Modifiers != c.want || ks.KeyChar == nil || *ks.KeyChar != string(c.r) {
+			t.Errorf("charKeystroke(%q) = %+v (char %v), want key %q mods %v", c.r, ks, ks.KeyChar, c.key, c.want)
+		}
+	}
+	for _, b := range []string{"a", "space", "?", "shift-a"} {
+		bk, err := gpui.ParseKeystroke(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := map[string]rune{"a": 'a', "space": ' ', "?": '?', "shift-a": 'A'}[b]
+		if !bk.Matches(charKeystroke(r, 0)) {
+			t.Errorf("binding %q does not match typed %q", b, r)
+		}
+	}
+	if bk, _ := gpui.ParseKeystroke("a"); bk.Matches(charKeystroke('A', 0)) {
+		t.Error(`binding "a" matches typed "A"`)
+	}
+}

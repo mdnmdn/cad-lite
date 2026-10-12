@@ -137,15 +137,18 @@ func (e inputElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, 
 func (e inputElement) Paint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState, prepaintState any) {
 	e.div.paint(w, bounds, layoutState)
 	if e.ti.focus != nil && e.ti.focus.IsFocused(w) {
-		e.paintCaret(w, bounds)
+		e.paintCaret(w, bounds, layoutState)
 	}
 }
 
 // paintCaret draws a 2px rule at the caret position, centred vertically in the
 // content box.
-func (e inputElement) paintCaret(w *Window, bounds Bounds) {
+func (e inputElement) paintCaret(w *Window, bounds Bounds, layoutState any) {
 	style := e.div.resolvedStyle()
 	ts := style.TextStyle
+	if dl, ok := layoutState.(*divLayout); ok && dl.node != nil {
+		ts = dl.node.Style.TextStyle
+	}
 	if ts.FontSize <= 0 {
 		ts = DefaultTextStyle()
 	}

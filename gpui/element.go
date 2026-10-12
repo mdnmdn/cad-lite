@@ -112,3 +112,44 @@ type layoutChildIDs interface {
 type layoutChildStates interface {
 	childLayoutStates() []any
 }
+
+// ParentElementChildren is implemented by Elements that have child elements,
+// letting custom containers outside the package participate in the window's
+// tree walk like a Div: the window prepaints and paints each child after the
+// element itself, with the child's laid-out bounds. RequestLayout must
+// return the *ChildLayout from Window.RequestLayoutWithChildren (or a value
+// embedding it) so the walk can pair children with their layout nodes.
+type ParentElementChildren interface {
+	Element
+	// ElementChildren returns the children passed to
+	// RequestLayoutWithChildren, in the same order.
+	ElementChildren() []AnyElement
+}
+
+// ChildLayout is the RequestLayout state built by
+// Window.RequestLayoutWithChildren: the container's node plus each child's
+// LayoutID and RequestLayout state.
+type ChildLayout struct {
+	// Node is the container's layout node; its Rect and ContentSize are
+	// valid from Prepaint on.
+	Node        *LayoutNode
+	childIDs    []LayoutID
+	childStates []any
+}
+
+// childLayoutIDs satisfies layoutChildIDs.
+func (c *ChildLayout) childLayoutIDs() []LayoutID { return c.childIDs }
+
+// childLayoutStates satisfies layoutChildStates.
+func (c *ChildLayout) childLayoutStates() []any { return c.childStates }
+
+// childrenOf returns an element's children for the window's tree walk.
+func childrenOf(el Element) ([]AnyElement, bool) {
+	if pe, ok := el.(hasChildren); ok {
+		return pe.elementChildren(), true
+	}
+	if pe, ok := el.(ParentElementChildren); ok {
+		return pe.ElementChildren(), true
+	}
+	return nil, false
+}

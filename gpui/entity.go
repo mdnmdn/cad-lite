@@ -22,11 +22,11 @@ func (id EntityID) String() string {
 
 // Entity is a cheap, copyable handle to state stored in the App.
 //
-// POC refcounting deviation: Entity copies do NOT bump a refcount. Entities
-// live until the App is torn down or releaseEntity is called explicitly
-// (from flushEffects when a release was requested). WeakEntity.Upgrade
-// therefore fails only after such an explicit release, not when the last
-// Entity copy is dropped.
+// Refcounting: NewEntity returns the first strong reference and Clone adds
+// one; Release drops one, and when none remain the entity is released at the
+// end of the current effect flush. Go has no Drop, so plain copies of an
+// Entity (and the handles returned by Context.Entity and WeakEntity.Upgrade)
+// are borrowed: they do not count and must not be Released.
 type Entity[T any] struct {
 	id  EntityID
 	app *App
@@ -45,6 +45,16 @@ type entitySlot struct {
 	generation uint32
 	refs       int
 	typeID     reflect.Type
+	// onRelease runs when the entity is released; owned are subscriptions
+	// the entity created (Context.Observe) and are closed with it.
+	onRelease []*releaseHook
+	owned     []*Subscription
+}
+
+// releaseHook is one OnRelease callback; closed hooks are skipped.
+type releaseHook struct {
+	f      func(*App)
+	closed bool
 }
 
 // ID returns the entity's slot id.
@@ -96,7 +106,8 @@ func (a *App) slot(id EntityID) *entitySlot {
 
 // Read returns a pointer to the entity's state, or nil when the entity has
 // been released. The pointer is only valid until the next call that can
-// re-enter the same entity; prefer Context.Listener for callbacks.
+// re-enter the same entity; prefer Context.Listener for callbacks. A read
+// during a window's draw makes Notify on the entity redraw that window.
 func (e Entity[T]) Read(cx *App) *T {
 	app := cx
 	if app == nil {
@@ -106,6 +117,7 @@ func (e Entity[T]) Read(cx *App) *T {
 	if s == nil {
 		return nil
 	}
+	app.noteAccess(e.id)
 	st, ok := s.value.(*T)
 	if !ok {
 		return nil
@@ -126,7 +138,39 @@ func (e Entity[T]) Update(cx *App, f func(state *T, cx *Context[T])) {
 	if !ok {
 		return
 	}
+	cx.noteAccess(e.id)
 	f(st, &Context[T]{App: cx, entity: e.id})
+}
+
+// Clone returns a new strong reference to the entity (refcount + 1). Each
+// Clone must be balanced by a Release. Cloning a released entity returns
+// the (dead) handle unchanged.
+func (e Entity[T]) Clone() Entity[T] {
+	if s := e.app.slot(e.id); s != nil {
+		s.refs++
+	}
+	return e
+}
+
+// Release drops one strong reference. When the last one is gone the entity
+// is released at the end of the current effect flush (immediately, via a
+// flush, when called outside Update): its slot is freed, its OnRelease
+// callbacks run, its observers and event listeners are dropped and the
+// subscriptions it created are closed. Releasing a dead entity is a no-op.
+func (e Entity[T]) Release(cx *App) {
+	app := cx
+	if app == nil {
+		app = e.app
+	}
+	s := app.slot(e.id)
+	if s == nil || s.refs <= 0 {
+		return
+	}
+	s.refs--
+	if s.refs > 0 {
+		return
+	}
+	app.Update(func(a *App) { a.scheduleRelease(e.id) })
 }
 
 // Downgrade returns a weak handle that does not keep the entity alive.
@@ -161,22 +205,77 @@ func (w WeakEntity[T]) Upgrade() (Entity[T], bool) {
 	return Entity[T]{id: w.id, app: w.app}, true
 }
 
-// releaseEntity frees the slot and bumps its generation so stale ids fail
-// their generation check. It is idempotent: releasing an already-dead id is
-// a no-op.
+// releaseEntity frees the slot of an entity with no strong references left
+// and bumps its generation so stale ids fail their generation check, then
+// tears down what hangs off it: OnRelease callbacks, observers and event
+// listeners keyed by it, and the subscriptions it owns. It is a no-op for a
+// dead id or one that was re-cloned after its release was scheduled.
 func (a *App) releaseEntity(id EntityID) {
 	s := a.slot(id)
-	if s == nil {
-		return
-	}
-	s.refs--
-	if s.refs > 0 {
+	if s == nil || s.refs > 0 {
 		return
 	}
 	delete(a.entities, id.index)
 	a.generation[id.index]++
 	a.freeIDs = append(a.freeIDs, id.index)
+	for _, h := range s.onRelease {
+		if !h.closed {
+			h.closed = true
+			h.f(a)
+		}
+	}
+	for _, sub := range s.owned {
+		sub.Close()
+	}
+	a.observers.Remove(id)
+	a.eventListeners.RemoveWhere(func(k eventKey) bool { return k.entity == id })
+	for _, w := range a.windows {
+		delete(w.renderedEntities, id)
+	}
 }
+
+// noteAccess records id as rendered by the window currently drawing.
+func (a *App) noteAccess(id EntityID) {
+	if w := a.drawing; w != nil {
+		if w.nextEntities == nil {
+			w.nextEntities = make(map[EntityID]struct{})
+		}
+		w.nextEntities[id] = struct{}{}
+	}
+}
+
+// EntityView adapts an entity whose *T renders into a window root. The view
+// holds a strong reference (a Clone), released by Window.Close.
+func EntityView[T any, P interface {
+	*T
+	EntityRoot
+}](e Entity[T]) EntityRoot {
+	return entityView[T, P]{e: e.Clone()}
+}
+
+// entityView is the EntityRoot returned by EntityView.
+type entityView[T any, P interface {
+	*T
+	EntityRoot
+}] struct {
+	e Entity[T]
+}
+
+// Render reads the entity (recording it for Notify-driven redraws) and
+// renders it; a released entity renders an empty Div.
+func (v entityView[T, P]) Render(w *Window, cx *App) IntoElement {
+	st := v.e.Read(cx)
+	if st == nil {
+		return NewDiv()
+	}
+	return P(st).Render(w, cx)
+}
+
+// releaseView drops the view's strong reference.
+func (v entityView[T, P]) releaseView(cx *App) { v.e.Release(cx) }
+
+// viewReleaser is implemented by roots that own an entity reference.
+type viewReleaser interface{ releaseView(cx *App) }
 
 // scheduleRelease requests that flushEffects release the entity's slot.
 func (a *App) scheduleRelease(id EntityID) {

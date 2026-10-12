@@ -71,6 +71,10 @@ type App struct {
 
 	shaper     *Shaper
 	shaperInit bool
+
+	// drawing is the window whose Draw is running; entity reads during it
+	// are recorded on that window for Notify-driven redraws.
+	drawing *Window
 }
 
 // NewApp returns an App with a no-op stub platform, suitable for headless
@@ -140,22 +144,29 @@ func (a *App) NewFocusHandle() *FocusHandle {
 }
 
 // Notify schedules the entity's observers to run during the next effect
-// flush. Notifications for the same entity within one flush are deduplicated.
-//
-// POC deviation: GPUI marks a window invalid immediately when it has already
-// rendered the notified entity this frame. Elements here do not record their
-// owning entity, so that fast path cannot be detected; instead every notify
-// flows through the observer set, and observers that need a redraw call
-// Window.Refresh.
+// flush and, as in GPUI, marks every window that read the entity during its
+// last draw invalid, so it redraws at the end of the flush. Notifications
+// for the same entity within one flush are deduplicated.
 func (a *App) Notify(id EntityID) {
 	if id.IsNil() {
 		return
+	}
+	for _, w := range a.windows {
+		if _, ok := w.renderedEntities[id]; ok {
+			w.invalid = true
+		}
 	}
 	if a.pendingNotify[id] {
 		return
 	}
 	a.pendingNotify[id] = true
 	a.pendingEffects = append(a.pendingEffects, effect{kind: effectNotify, entity: id})
+}
+
+// RefreshWindows queues a refresh of every window: each is marked invalid
+// during the next effect flush and redrawn.
+func (a *App) RefreshWindows() {
+	a.pendingEffects = append(a.pendingEffects, effect{kind: effectRefreshWindows})
 }
 
 // Defer schedules f to run at the end of the current effect cycle, after the
@@ -248,12 +259,21 @@ func (a *App) defaultShaper() *Shaper {
 // Windows returns the open windows in creation order.
 func (a *App) Windows() []*Window { return a.windows }
 
-// flushEffects drains the effect queue, then requests a frame for every
-// window that was marked invalid. Effects queued while draining (by
+// flushEffects drains the effect queue and releases the entities whose last
+// strong reference was dropped (repeating while either produces more work),
+// then requests a frame for every window that was marked invalid. Effects queued while draining (by
 // observers, defers or emits) are processed in the same flush, so cascading
 // notifies terminate only when no new work appears.
 func (a *App) flushEffects() {
-	for len(a.pendingEffects) > 0 {
+	for len(a.pendingEffects) > 0 || len(a.pendingRelease) > 0 {
+		if len(a.pendingEffects) == 0 {
+			releases := a.pendingRelease
+			a.pendingRelease = nil
+			for _, id := range releases {
+				a.releaseEntity(id)
+			}
+			continue
+		}
 		batch := a.pendingEffects
 		a.pendingEffects = nil
 		for _, e := range batch {
@@ -279,13 +299,6 @@ func (a *App) flushEffects() {
 					w.invalid = true
 				}
 			}
-		}
-	}
-	if len(a.pendingRelease) > 0 {
-		releases := a.pendingRelease
-		a.pendingRelease = nil
-		for _, id := range releases {
-			a.releaseEntity(id)
 		}
 	}
 	for _, w := range a.windows {

@@ -329,9 +329,8 @@ func (g *game) pollKeys(win *gpui.Window, app *gpui.App, w *window, mods gpui.Mo
 		// Shift, Alt/Option and AltGr's Ctrl were consumed composing the rune.
 		charMods := mods &^ (gpui.Shift | gpui.Alt | gpui.Control)
 		for _, r := range printableRunes(g.runeBuf) {
-			s := string(r)
 			win.DispatchEvent(gpui.KeyDownEvent{
-				Keystroke:            gpui.Keystroke{Modifiers: charMods, Key: s, KeyChar: &s},
+				Keystroke:            charKeystroke(r, charMods),
 				PreferCharacterInput: true,
 			}, app)
 		}

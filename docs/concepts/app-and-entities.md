@@ -28,8 +28,10 @@ err := ebitenplatform.New().Run(func(cx *gpui.App) {
 (There is no `App.Run` method, although the contract's example in
 `_docs/00-api-contract.md` §18 uses one.)
 
-Useful `App` methods: `Update`, `Notify`, `Defer`, `Quit`/`IsQuitting`,
-`Keymap`, `NewFocusHandle`, `Windows`, `SetGlobal`/`Global`/`UpdateGlobal`.
+Useful `App` methods: `Update`, `Notify`, `RefreshWindows`, `Defer`,
+`Quit`/`IsQuitting`, `Keymap`, `NewFocusHandle`, `Windows`,
+`SetGlobal`/`Global`/`UpdateGlobal`. `Window.Close()` removes a window (see
+below).
 
 ### Update and the effect queue
 
@@ -40,8 +42,11 @@ the effect queue:
    flush);
 2. `Defer` effects run their `func(*App)`;
 3. `Emit` effects deliver events to subscribers;
-4. effects queued while draining are processed in the same flush;
-5. every window still `invalid` gets a frame requested.
+4. `RefreshWindows` effects mark every window invalid;
+5. effects queued while draining are processed in the same flush;
+6. entities whose last strong reference was released are released (their
+   release callbacks may queue more effects, which are drained too);
+7. every window still `invalid` gets a frame requested.
 
 Nested `Update` calls are allowed (Rust's double-borrow panic has no
 equivalent here); they just bump a counter. The platform wraps each input
@@ -85,7 +90,21 @@ app.Update(func(cx *gpui.App) {
 if c := ent.Read(app); c != nil { _ = c.N } // nil if the entity is gone
 ```
 
-To use an entity as a window root, close over the handle:
+To use an entity as a window root, wrap it with `EntityView` (its `*T` needs
+a `Render(w, cx) IntoElement` method). The view holds a strong reference
+that `Window.Close()` releases:
+
+```go
+func (c *Counter) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
+    return gpui.NewText(fmt.Sprint(c.N))
+}
+
+_ = app.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot {
+    return gpui.EntityView(ent)
+})
+```
+
+Or close over the handle:
 
 ```go
 root := gpui.RenderFunc(func(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
@@ -99,17 +118,42 @@ root := gpui.RenderFunc(func(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 
 Facts that differ from Rust GPUI (all intentional POC simplifications):
 
-- **No refcounting.** Copying an `Entity` does not retain it, and dropping one
-  does not release it. A slot dies only through the internal `releaseEntity`,
-  and nothing in the public API schedules a release today, so entities live as
-  long as the `App`. `WeakEntity.Upgrade` consequently never fails in
-  practice.
-- **No automatic redraw.** `Notify` only runs observers. If a view's state
-  changed, call `Window.Refresh()` (directly or from an observer).
+- **Explicit refcounting.** Go has no `Drop`, so strong references are
+  counted only where you say so: `NewEntity` returns the first one,
+  `ent.Clone()` adds one and `ent.Release(cx)` drops one. Plain copies of an
+  `Entity`, `Context.Entity()` and `WeakEntity.Upgrade()` are *borrowed*
+  handles: they do not count and must not be released (releasing a copy
+  twice would release the entity early). When the count reaches 0 the entity
+  is released at the end of the current effect flush (immediately when
+  `Release` is called outside `Update`).
+- **Automatic redraw, GPUI-style.** Every `Entity.Read`/`Update` that happens
+  while a window draws is recorded on that window. `Notify` on such an entity
+  (via `Context.Notify`, `Entity.Notify` or `App.Notify`) marks the window
+  invalid, so it redraws at the end of the flush without a `Refresh`.
+  Plain-struct roots (not entities) still need `Window.Refresh()`.
+  `App.RefreshWindows()` redraws every window.
 - **Methods cannot take type parameters**, so generic operations are
   package-level functions: `NewEntity`, `ObserveOn`, `Subscribe`,
   `SubscribeEvent`, `Emit`, `Listener`. `Context.Observe` is a method but only
   observes entities of the same `T`.
+
+### Releasing
+
+```go
+ent := gpui.NewEntity(app, build) // refcount 1
+keep := ent.Clone()               // refcount 2
+ent.Release(app)                  // 1: still alive
+keep.Release(app)                 // 0: released at the end of the flush
+```
+
+Releasing an entity frees its slot (stale handles `Read` nil, `Update` is a
+no-op, `WeakEntity.Upgrade` fails; the slot is reused with a new
+generation), runs its `Context.OnRelease` callbacks, drops the observers and
+event subscribers registered **on** it, and closes the subscriptions it
+created through `Context.Observe` (GPUI drops a view's subscriptions with the
+view). `Window.Close()` removes the window from `App.Windows`, releases an
+`EntityView` root's reference and calls `PlatformWindow.Quit` (with the
+ebiten backend this ends the run loop).
 
 ### Weak handles
 
@@ -169,7 +213,8 @@ insert/close.
 `Entity.Read` and the `*T` passed to `Update` point straight into the stored
 value. Any call that can run other code - `Notify`, `Emit`, `Window.Refresh`
 (which can trigger a draw), an observer, another `Update` on the same entity -
-may mutate that same value or, in future, release it. Keep a `*T` only for a
+may mutate that same value or release it (`Release` frees the slot at the end
+of the flush). Keep a `*T` only for a
 straight-line stretch with no such call; otherwise re-fetch.
 
 For event handlers use `Listener`, which captures a weak handle and upgrades

@@ -19,8 +19,11 @@ OnKeyDown(func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App))
 OnHoverStart(func(*gpui.Window, *gpui.App))
 ```
 
-Handlers must call `Window.Refresh()` themselves if state changed; dispatch
-does not redraw on its own (except scroll and focus changes).
+Dispatch does not redraw on its own (except scroll and focus changes): a
+handler that changed state calls `Window.Refresh()`, or notifies an entity
+the window rendered (`Context.Notify` / `App.Notify` redraw every window that
+read that entity during its last draw; see
+[app-and-entities.md](app-and-entities.md)).
 
 ## Mouse
 
@@ -78,11 +81,13 @@ update.
 
 `ScrollWheelEvent` deltas are logical pixels, positive `DeltaY` = scroll down
 (the ebiten backend negates ebiten's wheel and uses 20 px per line).
-`OnScrollWheel` listeners run along the hit path; then, regardless of
-`StopPropagation`, the innermost `OverflowScroll` container under the pointer
-has its offset advanced by the delta, clamped to `[0, ScrollMax]`, and the
-window refreshes. Scrolling does not chain to an outer container when the
-inner one is at its limit.
+`OnScrollWheel` listeners run along the hit path first (bubbling, innermost
+first). If one of them calls `Window.StopPropagation()`, no container
+scrolls - this is how a handler takes over the wheel. Otherwise the delta is
+offered to the `OverflowScroll` containers on the hit path, innermost first,
+restricted to each one's `ScrollAxes`; the first whose offset changes takes
+it (clamped to `[0, ScrollMax]`) and the window refreshes, so a container at
+its limit lets the wheel chain to the next one out.
 
 ## Keyboard
 
@@ -107,23 +112,29 @@ Ctrl; register `"ctrl-s"` as well for cross-platform shortcuts.
   on press and repeat after 30 ticks every 3 ticks.
 - Printable keys emit a key event **only** when a shortcut modifier is held
   (Cmd/Super, or Ctrl - except AltGr). Plain typing arrives instead as text:
-  `ebiten.AppendInputChars` -> `KeyDownEvent{Keystroke{Key: s, KeyChar: &s},
+  `ebiten.AppendInputChars` -> `KeyDownEvent{Keystroke{Key, KeyChar: &s},
   PreferCharacterInput: true}`, with Shift/Alt/Control stripped from the
-  modifiers. Option-composed characters on macOS therefore reach text fields.
-- Consequence: a keymap binding on a bare printable key (`"a"`, `"space"`,
-  `"?"`) never fires with this backend (the char event carries a `KeyChar`,
-  which `Keystroke.Equals` compares). Use non-printable keys or a modifier.
+  modifiers. `Key` is the character itself, except a space is `"space"` and
+  an ASCII capital is its lower-case letter plus `Shift` (`"A"` ->
+  `shift-a`). Option-composed characters on macOS therefore reach text
+  fields.
+- Bare printable bindings work: `"a"`, `"space"`, `"shift-a"`, `"?"` match
+  these char events (bindings match on the key and ignore `KeyChar`, see
+  below).
 - `KeyUpEvent`s are emitted for named keys.
 
 ### Dispatch order
 
 `Window.dispatchKeyDown`:
 
-1. **Text input fast path.** If the focused text field (the last handler
+1. **Text input.** If the focused text field (the last handler
    registered via `Window.HandleInput` this frame) `AcceptsTextInput()` and the
-   event is `PreferCharacterInput` with a `KeyChar`, the char is inserted via
-   `ReplaceTextInRange` (the current selection, or the caret) and dispatch
-   ends.
+   event is `PreferCharacterInput` with a `KeyChar`, the keymap is consulted
+   first, as in GPUI: if a binding matches and an `OnAction` handler on the
+   focus path handles its action, dispatch ends there. Otherwise the char is
+   inserted via `ReplaceTextInRange` (the current selection, or the caret)
+   and dispatch ends (`OnKeyDown` does not see it). Scope bare printable
+   bindings with a context (e.g. `"!textbox"`) if they must not steal typing.
 2. **Key path.** Key nodes form a tree (a `Div` with an `OnKeyDown`/`OnKeyUp`/
    `OnAction`, a `KeyContext` or a focus handle). The path runs root -> target,
    where the target is the key node whose focus id is the window's focus; if
@@ -163,11 +174,16 @@ gpui.NewDiv().KeyContext("counter").TrackFocus(focus).
 - Bindings are scanned **latest first**, so a later binding overrides an
   earlier one for the same keystroke and context. Only a binding's last
   keystroke is matched: multi-keystroke chords are not supported.
-- **Action identity is the Go type.** `OnAction` stores handlers by
-  `reflect.TypeOf(action)`. Actions made with `gpui.NewAction("name")` all
-  share one concrete type, so two of them cannot be told apart by `OnAction`
-  (the later registration replaces the earlier). Define a small struct type
-  per action, as above.
+- **Matching** uses `Keystroke.Matches` (GPUI's `should_match`): the
+  modifiers must be equal and either the keys are equal (case-insensitive;
+  the typed `KeyChar` is ignored) or the typed `KeyChar` equals the binding's
+  key. `Keystroke.Equals` stays exact (it compares `KeyChar` too).
+- **Action identity** is `ActionKeyOf(action)`: the Go type (GPUI's TypeId)
+  plus, for `gpui.NewAction("name")` values, the name. So
+  `NewAction("add-todo")` and `NewAction("blur")` get separate `OnAction`
+  handlers, and a struct action type can register its handler with a zero
+  value (`OnAction(incAction{}, ...)`) whatever fields the bound value
+  carries.
 - `Div.OnAction` handlers sit on key nodes, so the div (or an ancestor of the
   focused one) must be on the key path; with no focus, only the root element
   receives actions.
@@ -186,6 +202,17 @@ automatically: add an `OnMouseDown` that calls `focus.Focus(w)`. There is no
 focus-parent chain (`ContainsFocused` equals `IsFocused`), and `TabIndex` /
 `SetTabIndex` / `SetTabStop` only store values - Tab traversal is not
 implemented. Handles are never released.
+
+Example with named actions and a bare-key binding:
+
+```go
+add, clear := gpui.NewAction("add-todo"), gpui.NewAction("clear")
+app.Keymap().AddBindings(
+    gpui.NewKeyBinding("enter", add, ""),
+    gpui.NewKeyBinding("c", clear, "!textbox"), // not while typing in a field
+)
+gpui.NewDiv().OnAction(add, onAdd).OnAction(clear, onClear)
+```
 
 ## TextInput and PlatformInputHandler
 

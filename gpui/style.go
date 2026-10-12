@@ -102,6 +102,11 @@ const (
 	AxesBoth = AxisX | AxisY
 )
 
+// AutoEdges marks which margin edges are `auto` (CSS `margin: auto`).
+type AutoEdges struct {
+	Top, Right, Bottom, Left bool
+}
+
 // Has reports whether every axis in o is in a.
 func (a Axes) Has(o Axes) bool { return a&o == o }
 
@@ -143,10 +148,15 @@ type Style struct {
 	MaxWidth, MaxHeight Length // LengthAuto means no maximum
 
 	Margin, Padding Edges
-	Gap             Pixels // main-axis gutter between adjacent children
+	// MarginAuto marks `auto` margin edges; they override Margin there.
+	MarginAuto AutoEdges
+	Gap        Pixels // main-axis gutter between adjacent children
 
 	FlexGrow   float32 // default 0
 	FlexShrink float32 // default 1
+	// FlexBasis is the flex base size: Auto uses the main size (Width or
+	// Height), a Px length overrides it.
+	FlexBasis Length
 
 	Justify    Justify
 	AlignItems Align
@@ -182,6 +192,7 @@ func DefaultStyle() Style {
 		MaxHeight:  Auto(),
 		FlexGrow:   0,
 		FlexShrink: 1,
+		FlexBasis:  Auto(),
 		Justify:    JustifyStart,
 		AlignItems: AlignStretch,
 		AlignSelf:  AlignSelfAuto,
@@ -292,9 +303,11 @@ type StyleRefinement struct {
 	MaxWidth, MaxHeight *Length
 
 	Margin, Padding *Edges
+	MarginAuto      *AutoEdges
 	Gap             *Pixels
 
 	FlexGrow, FlexShrink *float32
+	FlexBasis            *Length
 
 	Justify    *Justify
 	AlignItems *Align
@@ -310,6 +323,66 @@ type StyleRefinement struct {
 	ScrollAxes   *Axes
 
 	TextStyle *TextStyle
+	// TextSet names the TextStyle fields that are explicit. Zero with a
+	// non-nil TextStyle means every field is.
+	TextSet TextFields
+}
+
+// TextFields is a bit set of TextStyle fields a refinement sets explicitly.
+type TextFields uint8
+
+const (
+	// TextFieldFamily marks TextStyle.FontFamily.
+	TextFieldFamily TextFields = 1 << iota
+	// TextFieldSize marks TextStyle.FontSize.
+	TextFieldSize
+	// TextFieldWeight marks TextStyle.FontWeight.
+	TextFieldWeight
+	// TextFieldColor marks TextStyle.Color.
+	TextFieldColor
+	// TextFieldLineHeight marks TextStyle.LineHeight.
+	TextFieldLineHeight
+	// TextFieldStrikethrough marks TextStyle.Strikethrough.
+	TextFieldStrikethrough
+	textFieldsAll = TextFieldFamily | TextFieldSize | TextFieldWeight | TextFieldColor | TextFieldLineHeight | TextFieldStrikethrough
+)
+
+func (r *StyleRefinement) textSet() TextFields {
+	if r.TextStyle == nil {
+		return 0
+	}
+	if r.TextSet == 0 {
+		return textFieldsAll
+	}
+	return r.TextSet
+}
+
+// RefineText overlays the explicit text fields of r onto base.
+func (r *StyleRefinement) RefineText(base TextStyle) TextStyle {
+	if r == nil || r.TextStyle == nil {
+		return base
+	}
+	set := r.textSet()
+	t := r.TextStyle
+	if set&TextFieldFamily != 0 {
+		base.FontFamily = t.FontFamily
+	}
+	if set&TextFieldSize != 0 {
+		base.FontSize = t.FontSize
+	}
+	if set&TextFieldWeight != 0 {
+		base.FontWeight = t.FontWeight
+	}
+	if set&TextFieldColor != 0 {
+		base.Color = t.Color
+	}
+	if set&TextFieldLineHeight != 0 {
+		base.LineHeight = t.LineHeight
+	}
+	if set&TextFieldStrikethrough != 0 {
+		base.Strikethrough = t.Strikethrough
+	}
+	return base
 }
 
 // Refine merges the refinement onto base, returning a resolved Style. Fields
@@ -349,6 +422,12 @@ func (r *StyleRefinement) Refine(base Style) Style {
 	}
 	if r.Padding != nil {
 		out.Padding = *r.Padding
+	}
+	if r.MarginAuto != nil {
+		out.MarginAuto = *r.MarginAuto
+	}
+	if r.FlexBasis != nil {
+		out.FlexBasis = *r.FlexBasis
 	}
 	if r.Gap != nil {
 		out.Gap = *r.Gap
@@ -392,9 +471,7 @@ func (r *StyleRefinement) Refine(base Style) Style {
 	if r.ScrollAxes != nil {
 		out.ScrollAxes = *r.ScrollAxes
 	}
-	if r.TextStyle != nil {
-		out.TextStyle = *r.TextStyle
-	}
+	out.TextStyle = r.RefineText(base.TextStyle)
 	return out
 }
 
@@ -413,6 +490,8 @@ func (r *StyleRefinement) merge(o *StyleRefinement) {
 	mergePtr(&r.MaxHeight, o.MaxHeight)
 	mergePtr(&r.Margin, o.Margin)
 	mergePtr(&r.Padding, o.Padding)
+	mergePtr(&r.MarginAuto, o.MarginAuto)
+	mergePtr(&r.FlexBasis, o.FlexBasis)
 	mergePtr(&r.Gap, o.Gap)
 	mergePtr(&r.FlexGrow, o.FlexGrow)
 	mergePtr(&r.FlexShrink, o.FlexShrink)
@@ -427,7 +506,15 @@ func (r *StyleRefinement) merge(o *StyleRefinement) {
 	mergePtr(&r.BoxShadows, o.BoxShadows)
 	mergePtr(&r.Opacity, o.Opacity)
 	mergePtr(&r.ScrollAxes, o.ScrollAxes)
-	mergePtr(&r.TextStyle, o.TextStyle)
+	if o.TextStyle != nil {
+		merged := DefaultTextStyle()
+		if r.TextStyle != nil {
+			merged = *r.TextStyle
+		}
+		merged = o.RefineText(merged)
+		r.TextSet = r.textSet() | o.textSet()
+		r.TextStyle = &merged
+	}
 }
 
 func mergePtr[T any](dst **T, src *T) {

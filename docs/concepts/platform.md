@@ -78,7 +78,7 @@ Input mapping (`gpui/ebitenplatform/input.go`):
 | Wheel | `ScrollWheelEvent`, `20 px` per line, positive `DeltaY` = down |
 | Shift / Ctrl / Alt / Meta | `Shift` / `Control` / `Alt` / `ModPlatform` |
 | Named keys, shortcuts | `KeyDownEvent` / `KeyUpEvent` |
-| Typed text | `KeyDownEvent{PreferCharacterInput: true}` |
+| Typed text | `KeyDownEvent{PreferCharacterInput: true}`; `Key` is the char (`"space"` for a space, lower-case letter + `Shift` for a capital), `KeyChar` the text, so bare bindings like `"a"`/`"space"` fire |
 | cmd/ctrl-c, x, v | async clipboard, then edits via the input handler |
 
 Details of each are in [events-and-input.md](events-and-input.md).
@@ -159,7 +159,11 @@ immediately; `SetBackgroundColor` and `SetScaleFactor` affect windows opened
 afterwards.
 
 Inspecting the scene is also useful for assertions: `win.Scene()` exposes the
-`Quads`, `Sprites` and `Underlines` of the last frame.
+`Quads`, `Shadows`, `Sprites` and `Underlines` of the last frame. The
+rasterizer draws them merged by `Order` (scene order, across kinds), so a
+later quad covers earlier text; each primitive's `ContentMask` may carry
+`CornerRadii` (a rounded `OverflowHidden` ancestor), which the rasterizer
+applies as an anti-aliased mask.
 
 `gpui.NewApp()` (nil platform) uses an internal stub: windows report their
 requested size at scale 1 and discard frames. It is enough for entity/effect
@@ -236,7 +240,8 @@ Checklist (mirrors what `ebitenplatform` does):
    flush once per batch. Translate to GPUI's conventions: logical-pixel
    positions, lower-case key names, Ctrl -> `Control`, Cmd/Super ->
    `ModPlatform`, wheel positive = down, text as
-   `KeyDownEvent{PreferCharacterInput: true, Keystroke.KeyChar}`.
+   `KeyDownEvent{PreferCharacterInput: true, Keystroke.KeyChar}` with a
+   `Key` a binding can match (`"space"`, `shift-a` for `"A"`, else the char).
 4. **Clicks.** Synthesize `ClickEvent` yourself: record `win.HitTest(pos)` on
    press and release and emit `ClickEvent{Up: &up}` when the ids are `Equal`.
    Compute `ClickCount` for multi-clicks.
@@ -244,7 +249,8 @@ Checklist (mirrors what `ebitenplatform` does):
    field (or `nil`); route IME/clipboard through it
    (`ReplaceTextInRange`, `SelectedTextRange`, ...). Ranges are UTF-16.
 6. **Quit.** `Platform.Quit` and `App.Quit` can be called from any goroutine;
-   observe the flag from your loop.
+   observe the flag from your loop. `Window.Close()` calls
+   `PlatformWindow.Quit()` after removing the window from `App.Windows`.
 7. **Single goroutine.** Call into `gpui` only from the loop's goroutine.
 8. **Present** gets premultiplied RGBA; convert if your display wants straight
    alpha or a different channel order.

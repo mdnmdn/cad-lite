@@ -21,6 +21,19 @@ type Rasterizer struct {
 	// lut and rowBuf are scratch space for gradient and shadow fills.
 	lut    gradientLUT
 	rowBuf []float32
+
+	// masked is set while drawing a primitive whose ContentMask is rounded;
+	// mask is that rounded rect and band its fully-covered cross region.
+	masked bool
+	mask   rrect
+	band   maskBand
+}
+
+// maskBand is the part of a rounded mask where coverage is exactly 1 for
+// any pixel inside the mask's rect: the horizontal band between the corner
+// rows and the vertical band between the corner columns.
+type maskBand struct {
+	top, bottom, left, right float32
 }
 
 // NewRasterizer allocates a w×h rasterizer whose buffer starts fully
@@ -53,41 +66,87 @@ func (r *Rasterizer) Reset(clear Rgba) {
 	}
 }
 
-// Render draws every quad and shadow (merged by Order), then every
-// underline, then every sprite; each group in ascending Order with ties
-// broken by insertion order. This keeps text on top of backgrounds.
+// Render draws every primitive in scene order: each kind is stably sorted by
+// Order and the four lists are merged, so a later background covers earlier
+// text (GPUI paints by draw order, not by primitive kind). On equal Order a
+// shadow paints before a quad, a quad before an underline, an underline
+// before a sprite.
 func (r *Rasterizer) Render(s *Scene) {
 	if s == nil {
 		return
 	}
 	r.quads = sortByOrder(append(r.quads[:0], s.Quads...), func(q Quad) uint32 { return q.Order })
-	if len(s.Shadows) == 0 {
-		for i := range r.quads {
-			r.drawQuad(r.quads[i])
-		}
-	} else {
-		r.shadows = sortByOrder(append(r.shadows[:0], s.Shadows...), func(sh Shadow) uint32 { return sh.Order })
-		j := 0
-		for i := range r.quads {
-			for ; j < len(r.shadows) && r.shadows[j].Order <= r.quads[i].Order; j++ {
-				r.drawShadow(r.shadows[j])
-			}
-			r.drawQuad(r.quads[i])
-		}
-		for ; j < len(r.shadows); j++ {
-			r.drawShadow(r.shadows[j])
-		}
-	}
-
+	r.shadows = sortByOrder(append(r.shadows[:0], s.Shadows...), func(sh Shadow) uint32 { return sh.Order })
 	r.underlines = sortByOrder(append(r.underlines[:0], s.Underlines...), func(u Underline) uint32 { return u.Order })
-	for i := range r.underlines {
-		r.drawUnderline(r.underlines[i])
-	}
-
 	r.sprites = sortByOrder(append(r.sprites[:0], s.Sprites...), func(g GlyphSprite) uint32 { return g.Order })
-	for i := range r.sprites {
-		r.drawSprite(r.sprites[i])
+	qs, shs, us, gs := r.quads, r.shadows, r.underlines, r.sprites
+	var qi, si, ui, gi int
+	for {
+		const none = math.MaxUint32 + 1
+		next, kind := uint64(none), -1
+		if si < len(shs) {
+			next, kind = uint64(shs[si].Order), 0
+		}
+		if qi < len(qs) && uint64(qs[qi].Order) < next {
+			next, kind = uint64(qs[qi].Order), 1
+		}
+		if ui < len(us) && uint64(us[ui].Order) < next {
+			next, kind = uint64(us[ui].Order), 2
+		}
+		if gi < len(gs) && uint64(gs[gi].Order) < next {
+			kind = 3
+		}
+		switch kind {
+		case 0:
+			r.setMask(shs[si].ContentMask)
+			r.drawShadow(shs[si])
+			si++
+		case 1:
+			r.setMask(qs[qi].ContentMask)
+			r.drawQuad(qs[qi])
+			qi++
+		case 2:
+			r.setMask(us[ui].ContentMask)
+			r.drawUnderline(us[ui])
+			ui++
+		case 3:
+			r.setMask(gs[gi].ContentMask)
+			r.drawSprite(gs[gi])
+			gi++
+		default:
+			r.masked = false
+			return
+		}
 	}
+}
+
+// setMask prepares the rounded content mask for the next primitive; a mask
+// without radii leaves blending unmasked (the clip rect is applied by the
+// pixel windows).
+func (r *Rasterizer) setMask(m ContentMask) {
+	r.masked = m.isRounded()
+	if !r.masked {
+		return
+	}
+	r.mask = newRRect(m.Bounds, m.CornerRadii)
+	k := r.mask
+	r.band = maskBand{
+		top:    k.cy - k.hh + maxf32(k.rTL, k.rTR),
+		bottom: k.cy + k.hh - maxf32(k.rBL, k.rBR),
+		left:   k.cx - k.hw + maxf32(k.rTL, k.rBL),
+		right:  k.cx + k.hw - maxf32(k.rTR, k.rBR),
+	}
+}
+
+// maskCoverage is the rounded mask's coverage of pixel (x, y), which the
+// caller guarantees lies inside the mask's rect; only the corner squares
+// evaluate the SDF.
+func (r *Rasterizer) maskCoverage(x, y int) float32 {
+	px, py := float32(x)+0.5, float32(y)+0.5
+	if (py >= r.band.top && py <= r.band.bottom) || (px >= r.band.left && px <= r.band.right) {
+		return 1
+	}
+	return r.mask.coverage(px, py)
 }
 
 // sortByOrder stably sorts v by order, skipping the sort when v is already
@@ -233,7 +292,19 @@ func (r *Rasterizer) fillRounded(b Bounds, radii Corners, clip Bounds, color Rgb
 			}
 		}
 		if pm.A == 255 {
-			r.fillSpan(y, a, z, pm)
+			sa, sz := a, z
+			if r.masked {
+				ma, mz := r.mask.solidRow(py, x0, x1)
+				sa = min(max(a, ma), z)
+				sz = min(max(min(z, mz), sa), z)
+			}
+			for x := a; x < sa; x++ {
+				r.blend(x, y, pr, pg, pb, pa)
+			}
+			r.fillSpan(y, sa, sz, pm)
+			for x := sz; x < z; x++ {
+				r.blend(x, y, pr, pg, pb, pa)
+			}
 		} else {
 			for x := a; x < z; x++ {
 				r.blend(x, y, pr, pg, pb, pa)
@@ -408,6 +479,15 @@ func (r *Rasterizer) clipWindow(clip Bounds) (x0, y0, x1, y1 int, ok bool) {
 // blend composites a premultiplied source (channels as float 0..255, sa the
 // source alpha) onto the destination pixel with source-over.
 func (r *Rasterizer) blend(x, y int, sr, sg, sb, sa float32) {
+	if r.masked {
+		m := r.maskCoverage(x, y)
+		if m <= 0 {
+			return
+		}
+		if m < 1 {
+			sr, sg, sb, sa = sr*m, sg*m, sb*m, sa*m
+		}
+	}
 	i := 4*(y*r.w) + 4*x
 	inv := 1 - sa/255
 	r.pix[i] = uint8(clamp32(sr+float32(r.pix[i])*inv, 0, 255) + 0.5)
@@ -523,7 +603,7 @@ func scaleScene(s *Scene, scale float32, out *Scene) *Scene {
 		if m.Bounds.Size.W >= 1e6 {
 			return m
 		}
-		return ContentMask{Bounds: sb(m.Bounds)}
+		return ContentMask{Bounds: sb(m.Bounds), CornerRadii: scaleCorners(m.CornerRadii, k)}
 	}
 	out.Clear()
 	for _, q := range s.Quads {
