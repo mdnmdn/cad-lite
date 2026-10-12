@@ -77,7 +77,7 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 		t.app = cx
 	}
 	var label IntoElement
-	if t.text == "" && !t.focus.IsFocused(w) {
+	if t.text == "" {
 		label = NewText(t.placeholder).TextColor(Gray500)
 	} else {
 		label = NewText(t.text)
@@ -141,7 +141,8 @@ func (e inputElement) Paint(w *Window, cx *App, id ElementID, bounds Bounds, lay
 	}
 }
 
-// paintCaret draws a 2px rule at the caret position on the first line.
+// paintCaret draws a 2px rule at the caret position, centred vertically in the
+// content box.
 func (e inputElement) paintCaret(w *Window, bounds Bounds) {
 	style := e.div.resolvedStyle()
 	ts := style.TextStyle
@@ -149,10 +150,13 @@ func (e inputElement) paintCaret(w *Window, bounds Bounds) {
 		ts = DefaultTextStyle()
 	}
 	lh := ts.ResolvedLineHeight()
-	x := bounds.Origin.X + style.Padding.Left + e.caretAdvance(w, ts)
+	bw, pad := style.BorderWidths, style.Padding
+	x := bounds.Origin.X + bw.Left + pad.Left + e.caretAdvance(w, ts)
+	top := bounds.Origin.Y + bw.Top + pad.Top
+	inner := bounds.Size.H - bw.Top - bw.Bottom - pad.Top - pad.Bottom
 	w.PaintQuad(Quad{
 		Bounds: Bounds{
-			Origin: Point{X: x, Y: bounds.Origin.Y + style.Padding.Top},
+			Origin: Point{X: x, Y: top + (inner-lh)/2},
 			Size:   Size{W: 2, H: lh},
 		},
 		Background: BackgroundSolid,

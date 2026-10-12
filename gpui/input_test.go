@@ -132,3 +132,70 @@ func TestTextInputHandlerContract(t *testing.T) {
 		t.Errorf("TextLengthUTF16() with astral char = %d, %v; want 6, true", n, ok)
 	}
 }
+
+func openHeadlessInput(t *testing.T, ti *gpui.TextInput, scale float32) (*gpui.App, *gpui.Window) {
+	t.Helper()
+	p := gpui.NewHeadlessPlatform()
+	p.SetScaleFactor(scale)
+	app := gpui.NewAppWithPlatform(p)
+	if err := app.OpenWindow(gpui.WindowOptions{Width: 400, Height: 300}, func(w *gpui.Window, cx *gpui.App) gpui.EntityRoot {
+		return inputTestRoot(ti)
+	}); err != nil {
+		t.Fatalf("OpenWindow: %v", err)
+	}
+	win := app.Windows()[0]
+	win.Draw(app)
+	return app, win
+}
+
+func inputFieldAndCaret(t *testing.T, win *gpui.Window) (field, caret gpui.Bounds) {
+	t.Helper()
+	var haveField, haveCaret bool
+	for _, q := range win.Scene().Quads {
+		if q.Bounds.Size.W == 2 {
+			caret, haveCaret = q.Bounds, true
+		} else if q.BorderWidths != (gpui.Edges{}) && q.Bounds.Size.W > 100 {
+			field, haveField = q.Bounds, true
+		}
+	}
+	if !haveField || !haveCaret {
+		t.Fatalf("field=%v caret=%v not found in scene", haveField, haveCaret)
+	}
+	return field, caret
+}
+
+func TestTextInputFocusedHeightAndCaret(t *testing.T) {
+	for _, scale := range []float32{1, 2} {
+		ti := gpui.NewTextInput("What needs doing?")
+		app, win := openHeadlessInput(t, ti, scale)
+		focusInput(t, app, win, ti)
+		emptyField, emptyCaret := inputFieldAndCaret(t, win)
+
+		if emptyField.Size.H < 30 {
+			t.Errorf("scale %v: empty focused field height %v is collapsed", scale, emptyField.Size.H)
+		}
+		if emptyCaret.Origin.Y < emptyField.Origin.Y || emptyCaret.Origin.Y+emptyCaret.Size.H > emptyField.Origin.Y+emptyField.Size.H {
+			t.Errorf("scale %v: caret %v outside field %v", scale, emptyCaret, emptyField)
+		}
+		if len(win.Scene().Sprites) == 0 {
+			t.Errorf("scale %v: placeholder glyphs not painted when empty and focused", scale)
+		}
+
+		ti.SetText("hello")
+		win.Refresh()
+		win.Draw(app)
+		field, caret := inputFieldAndCaret(t, win)
+		if field.Size.H != emptyField.Size.H {
+			t.Errorf("scale %v: field height empty=%v non-empty=%v", scale, emptyField.Size.H, field.Size.H)
+		}
+		if caret.Origin.Y != emptyCaret.Origin.Y {
+			t.Errorf("scale %v: caret y changed %v -> %v", scale, emptyCaret.Origin.Y, caret.Origin.Y)
+		}
+		if caret.Origin.Y < field.Origin.Y || caret.Origin.Y+caret.Size.H > field.Origin.Y+field.Size.H {
+			t.Errorf("scale %v: caret %v outside field %v", scale, caret, field)
+		}
+		if caret.Origin.X <= emptyCaret.Origin.X {
+			t.Errorf("scale %v: caret x %v did not advance past %v", scale, caret.Origin.X, emptyCaret.Origin.X)
+		}
+	}
+}
