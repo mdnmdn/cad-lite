@@ -1,6 +1,9 @@
 package gpui
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 // Text is a leaf element that renders a single run of styled text. It sizes
 // itself through the window's TextMeasurer and paints one GlyphSprite per
@@ -32,12 +35,9 @@ func Str(s string) IntoElement { return NewText(s) }
 // resolvedStyle merges the refinement onto DefaultStyle.
 func (t *Text) resolvedStyle() Style { return t.ResolvedStyle(DefaultStyle()) }
 
-// textLayout is Text's RequestLayout state: the node plus the wrap width the
-// layout engine last measured with. Paint reuses that width so shaping matches
-// the layout exactly.
+// textLayout is Text's RequestLayout state.
 type textLayout struct {
-	node  *LayoutNode
-	wrapW Pixels
+	node *LayoutNode
 }
 
 // textElement adapts *Text to Element. It exists because *Text carries the
@@ -57,7 +57,6 @@ func (e textElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	node := &LayoutNode{Style: t.resolvedStyle(), Text: t.text}
 	st := &textLayout{node: node}
 	node.Measure = func(text string, ts TextStyle, maxWidth float32) (float32, float32) {
-		st.wrapW = Pixels(maxWidth)
 		return measureText(w, text, ts, maxWidth)
 	}
 	return w.registerLayoutNode(node), st
@@ -79,27 +78,71 @@ func (t *Text) paint(w *Window, bounds Bounds, layoutState any) {
 	if w == nil || w.text == nil || t.text == "" {
 		return
 	}
-	wrapW := float32(math.MaxFloat32)
-	if st, ok := layoutState.(*textLayout); ok && st.wrapW > 0 {
-		wrapW = float32(st.wrapW)
+	style := t.resolvedStyle()
+	ts := style.TextStyle
+	lines := w.text.ShapeWrapped(t.text, ts, paintWrapWidth(bounds, style))
+	paintShapedLines(w, bounds.Origin.X+style.Padding.Left, bounds.Origin.Y+style.Padding.Top, ts, lines)
+}
+
+// paintWrapWidth is the wrap width text paints with: the laid-out content
+// width, which is the width the layout engine last measured the leaf at. A
+// zero-width box (never laid out) paints unwrapped.
+func paintWrapWidth(bounds Bounds, style Style) float32 {
+	if bounds.Size.W <= 0 {
+		return math.MaxFloat32
 	}
-	ts := t.resolvedStyle().TextStyle
-	lines := w.text.ShapeWrapped(t.text, ts, wrapW)
-	paintShapedLines(w, bounds.Origin.X, bounds.Origin.Y, ts, lines)
+	return float32(maxPixels(0, bounds.Size.W-style.Padding.Horizontal()))
 }
 
 // measureText sizes text through the window's measurer, falling back to a
 // crude estimator when no shaper is installed (e.g. the stub platform).
+// maxWidth <= 0 requests the min-content size: the longest word's width and
+// the height of wrapping at that width.
 func measureText(w *Window, text string, ts TextStyle, maxWidth float32) (float32, float32) {
+	if maxWidth <= 0 {
+		var longest float32
+		for _, word := range strings.Fields(text) {
+			ww, _ := measureText(w, word, ts, math.MaxFloat32)
+			longest = maxf32(longest, ww)
+		}
+		if longest <= 0 {
+			return measureText(w, text, ts, math.MaxFloat32)
+		}
+		_, h := measureText(w, text, ts, longest)
+		return longest, h
+	}
 	if w != nil && w.text != nil {
 		sw, sh := w.text.MeasureWrapped(text, ts, maxWidth)
 		return float32(sw), float32(sh)
 	}
+	return estimateText(text, ts, maxWidth)
+}
+
+// estimateText is the shaper-less fallback: a fixed advance per rune and
+// greedy wrapping at spaces.
+func estimateText(text string, ts TextStyle, maxWidth float32) (float32, float32) {
 	fs := float32(ts.FontSize)
 	if fs <= 0 {
 		fs = float32(DefaultTextStyle().FontSize)
 	}
-	return float32(len(text)) * fs * 0.55, float32(ts.ResolvedLineHeight())
+	cw := fs * 0.55
+	lh := float32(ts.ResolvedLineHeight())
+	var widest, cur float32
+	lines := 1
+	for i, word := range strings.Fields(text) {
+		ww := float32(len([]rune(word))) * cw
+		switch {
+		case i == 0:
+			cur = ww
+		case cur+cw+ww <= maxWidth:
+			cur += cw + ww
+		default:
+			widest = maxf32(widest, cur)
+			cur = ww
+			lines++
+		}
+	}
+	return maxf32(widest, cur), float32(lines) * lh
 }
 
 // paintShapedLines draws shaped lines starting at (x, y), stacking lines
@@ -179,7 +222,6 @@ func (e styledTextElement) RequestLayout(w *Window, cx *App) (LayoutID, any) {
 	node := &LayoutNode{Style: s.resolvedStyle(), Text: s.joinedText()}
 	st := &textLayout{node: node}
 	node.Measure = func(text string, ts TextStyle, maxWidth float32) (float32, float32) {
-		st.wrapW = Pixels(maxWidth)
 		return measureRuns(w, s.runs, maxWidth)
 	}
 	return w.registerLayoutNode(node), st
@@ -215,11 +257,10 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 	if w == nil || w.text == nil {
 		return
 	}
-	wrapW := float32(math.MaxFloat32)
-	if st, ok := layoutState.(*textLayout); ok && st.wrapW > 0 {
-		wrapW = float32(st.wrapW)
-	}
-	x := bounds.Origin.X
+	style := s.resolvedStyle()
+	wrapW := paintWrapWidth(bounds, style)
+	x := bounds.Origin.X + style.Padding.Left
+	y := bounds.Origin.Y + style.Padding.Top
 	for _, r := range s.runs {
 		if r.Text == "" {
 			continue
@@ -229,7 +270,7 @@ func (s *StyledText) paint(w *Window, bounds Bounds, layoutState any) {
 			ts = DefaultTextStyle()
 		}
 		lines := w.text.ShapeWrapped(r.Text, ts, wrapW)
-		paintShapedLines(w, x, bounds.Origin.Y, ts, lines)
+		paintShapedLines(w, x, y, ts, lines)
 		rw := Pixels(0)
 		for _, l := range lines {
 			rw = maxPixels(rw, l.Width)
@@ -308,3 +349,93 @@ func (t *Text) Hidden() *Text { t.StyledMixin.Hidden(); return t }
 
 // Visible undoes Hidden.
 func (t *Text) Visible() *Text { t.StyledMixin.Visible(); return t }
+
+// SizeWH is StyledMixin.SizeWH returning *Text to keep the chain.
+func (t *Text) SizeWH(w, h float32) *Text { t.StyledMixin.SizeWH(w, h); return t }
+
+// FlexShrink is StyledMixin.FlexShrink returning *Text to keep the chain.
+func (t *Text) FlexShrink(v float32) *Text { t.StyledMixin.FlexShrink(v); return t }
+
+// Flex is StyledMixin.Flex returning *Text to keep the chain.
+func (t *Text) Flex() *Text { t.StyledMixin.Flex(); return t }
+
+// FlexRow is StyledMixin.FlexRow returning *Text to keep the chain.
+func (t *Text) FlexRow() *Text { t.StyledMixin.FlexRow(); return t }
+
+// FlexCol is StyledMixin.FlexCol returning *Text to keep the chain.
+func (t *Text) FlexCol() *Text { t.StyledMixin.FlexCol(); return t }
+
+// Gap is StyledMixin.Gap returning *Text to keep the chain.
+func (t *Text) Gap(v float32) *Text { t.StyledMixin.Gap(v); return t }
+
+// P is StyledMixin.P returning *Text to keep the chain.
+func (t *Text) P(v float32) *Text { t.StyledMixin.P(v); return t }
+
+// Px_ is StyledMixin.Px_ returning *Text to keep the chain.
+func (t *Text) Px_(v float32) *Text { t.StyledMixin.Px_(v); return t }
+
+// Py_ is StyledMixin.Py_ returning *Text to keep the chain.
+func (t *Text) Py_(v float32) *Text { t.StyledMixin.Py_(v); return t }
+
+// Pt is StyledMixin.Pt returning *Text to keep the chain.
+func (t *Text) Pt(v float32) *Text { t.StyledMixin.Pt(v); return t }
+
+// Pr is StyledMixin.Pr returning *Text to keep the chain.
+func (t *Text) Pr(v float32) *Text { t.StyledMixin.Pr(v); return t }
+
+// Pb is StyledMixin.Pb returning *Text to keep the chain.
+func (t *Text) Pb(v float32) *Text { t.StyledMixin.Pb(v); return t }
+
+// Pl is StyledMixin.Pl returning *Text to keep the chain.
+func (t *Text) Pl(v float32) *Text { t.StyledMixin.Pl(v); return t }
+
+// M is StyledMixin.M returning *Text to keep the chain.
+func (t *Text) M(v float32) *Text { t.StyledMixin.M(v); return t }
+
+// Bg is StyledMixin.Bg returning *Text to keep the chain.
+func (t *Text) Bg(c Rgba) *Text { t.StyledMixin.Bg(c); return t }
+
+// Rounded is StyledMixin.Rounded returning *Text to keep the chain.
+func (t *Text) Rounded(px float32) *Text { t.StyledMixin.Rounded(px); return t }
+
+// RoundedAll is StyledMixin.RoundedAll returning *Text to keep the chain.
+func (t *Text) RoundedAll(tl, tr, br, bl float32) *Text {
+	t.StyledMixin.RoundedAll(tl, tr, br, bl)
+	return t
+}
+
+// Border is StyledMixin.Border returning *Text to keep the chain.
+func (t *Text) Border(w float32, c Rgba) *Text { t.StyledMixin.Border(w, c); return t }
+
+// ItemsStart is StyledMixin.ItemsStart returning *Text to keep the chain.
+func (t *Text) ItemsStart() *Text { t.StyledMixin.ItemsStart(); return t }
+
+// ItemsCenter is StyledMixin.ItemsCenter returning *Text to keep the chain.
+func (t *Text) ItemsCenter() *Text { t.StyledMixin.ItemsCenter(); return t }
+
+// ItemsEnd is StyledMixin.ItemsEnd returning *Text to keep the chain.
+func (t *Text) ItemsEnd() *Text { t.StyledMixin.ItemsEnd(); return t }
+
+// ItemsStretch is StyledMixin.ItemsStretch returning *Text to keep the chain.
+func (t *Text) ItemsStretch() *Text { t.StyledMixin.ItemsStretch(); return t }
+
+// JustifyStart is StyledMixin.JustifyStart returning *Text to keep the chain.
+func (t *Text) JustifyStart() *Text { t.StyledMixin.JustifyStart(); return t }
+
+// JustifyCenter is StyledMixin.JustifyCenter returning *Text to keep the chain.
+func (t *Text) JustifyCenter() *Text { t.StyledMixin.JustifyCenter(); return t }
+
+// JustifyEnd is StyledMixin.JustifyEnd returning *Text to keep the chain.
+func (t *Text) JustifyEnd() *Text { t.StyledMixin.JustifyEnd(); return t }
+
+// JustifyBetween is StyledMixin.JustifyBetween returning *Text to keep the chain.
+func (t *Text) JustifyBetween() *Text { t.StyledMixin.JustifyBetween(); return t }
+
+// JustifyAround is StyledMixin.JustifyAround returning *Text to keep the chain.
+func (t *Text) JustifyAround() *Text { t.StyledMixin.JustifyAround(); return t }
+
+// OverflowHidden is StyledMixin.OverflowHidden returning *Text to keep the chain.
+func (t *Text) OverflowHidden() *Text { t.StyledMixin.OverflowHidden(); return t }
+
+// OverflowScroll is StyledMixin.OverflowScroll returning *Text to keep the chain.
+func (t *Text) OverflowScroll() *Text { t.StyledMixin.OverflowScroll(); return t }

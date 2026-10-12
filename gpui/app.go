@@ -1,6 +1,9 @@
 package gpui
 
-import "reflect"
+import (
+	"reflect"
+	"sync/atomic"
+)
 
 // EntityRoot is the root view a window renders. Any type with a Render
 // method satisfies it; use RenderFunc to adapt a plain function.
@@ -64,7 +67,7 @@ type App struct {
 
 	globals        map[reflect.Type]any
 	pendingUpdates int
-	quitting       bool
+	quitting       atomic.Bool
 }
 
 // NewApp returns an App with a no-op stub platform, suitable for headless
@@ -108,16 +111,19 @@ func (a *App) Update(f func(*App)) {
 	f(a)
 }
 
-// Quit marks the app as quitting and asks the platform to terminate.
+// Quit marks the app as quitting and asks the platform to terminate. Unlike
+// the rest of App, Quit and IsQuitting are safe to call from any goroutine
+// (for example a time.AfterFunc): the flag is atomic and Platform.Quit
+// implementations must be goroutine-safe.
 func (a *App) Quit() {
-	a.quitting = true
+	a.quitting.Store(true)
 	if a.platform != nil {
 		a.platform.Quit()
 	}
 }
 
-// IsQuitting reports whether Quit has been called.
-func (a *App) IsQuitting() bool { return a.quitting }
+// IsQuitting reports whether Quit has been called; safe from any goroutine.
+func (a *App) IsQuitting() bool { return a.quitting.Load() }
 
 // Keymap returns the app's keymap; add bindings with AddBindings.
 func (a *App) Keymap() *Keymap { return a.keymap }

@@ -28,6 +28,7 @@ type Window struct {
 	mousePosition  Point
 	propagateEvent bool
 	capturedHitbox int
+	hovered        map[string]func(*Window, *App) // hover-end callbacks of currently hovered elements
 
 	renderedFrame Frame
 	nextFrame     Frame
@@ -95,6 +96,8 @@ type MouseListener struct {
 	OnMouseMove   func(*MouseMoveEvent, *Window, *App)
 	OnClick       func(*ClickEvent, *Window, *App)
 	OnScrollWheel func(*ScrollWheelEvent, *Window, *App)
+	OnHoverStart  func(*Window, *App)
+	OnHoverEnd    func(*Window, *App)
 	KeyContext    string
 
 	// elementID identifies the owning element for retained state lookups
@@ -605,6 +608,7 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 		})
 	case MouseMoveEvent:
 		w.mousePosition = e.Position
+		w.updateHover(e.Position, cx)
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseMove != nil {
@@ -649,6 +653,47 @@ func (w *Window) dispatchMouse(pos Point, cx *App, call func(*MouseListener)) {
 	}
 	for i := idx; i >= 0 && w.propagateEvent; i-- {
 		call(&w.renderedFrame.mouseListeners[i])
+	}
+}
+
+// updateHover diffs the set of hover-aware elements under pos against the set
+// seen at the previous move: newly entered elements get OnHoverStart, left
+// ones get OnHoverEnd (leaves first). An element counts as hovered when its
+// hitbox is at or below the topmost hit in paint order and its bounds contain
+// pos, so a parent stays hovered while the pointer is over its child.
+func (w *Window) updateHover(pos Point, cx *App) {
+	type entry struct {
+		start, end func(*Window, *App)
+	}
+	now := map[string]entry{}
+	if idx := w.renderedFrame.hitboxes.HitTest(pos); idx >= 0 {
+		for i := 0; i <= idx; i++ {
+			l := &w.renderedFrame.mouseListeners[i]
+			if (l.OnHoverStart == nil && l.OnHoverEnd == nil) || !l.Bounds.Contains(pos) {
+				continue
+			}
+			now[globalIDKey(l.elementID)] = entry{l.OnHoverStart, l.OnHoverEnd}
+		}
+	}
+	for k, end := range w.hovered {
+		if _, ok := now[k]; !ok {
+			delete(w.hovered, k)
+			if end != nil {
+				end(w, cx)
+			}
+		}
+	}
+	for k, e := range now {
+		if _, ok := w.hovered[k]; ok {
+			continue
+		}
+		if w.hovered == nil {
+			w.hovered = make(map[string]func(*Window, *App))
+		}
+		w.hovered[k] = e.end
+		if e.start != nil {
+			e.start(w, cx)
+		}
 	}
 }
 

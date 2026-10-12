@@ -409,12 +409,11 @@ func (s *Shaper) rasterizeGlyph(face *Font, glyphID uint32, size float32) *Glyph
 		return &GlyphMask{}
 	}
 	r := vector.NewRasterizer(w, h)
-	// sfnt outlines are y-up while vector.Rasterizer is y-down, so font Y is
-	// negated: mask row 0 becomes the top of the ink, one pixel of pad above
-	// b.Max.Y and below b.Min.Y.
-	dx, dy := float32(-x0), float32(y1)
+	// sfnt.LoadGlyph already returns y-down coordinates (like
+	// vector.Rasterizer), so no flip is needed: row 0 is the top of the ink.
+	dx, dy := float32(-x0), float32(-y0)
 	p := func(pt fixed.Point26_6) (float32, float32) {
-		return float32(pt.X)/64 + dx, float32(-pt.Y)/64 + dy
+		return float32(pt.X)/64 + dx, float32(pt.Y)/64 + dy
 	}
 	// sfnt emits no close operator: each MoveTo starts a new contour, so the
 	// previous one must be closed explicitly for the fill rule to work.
@@ -447,13 +446,37 @@ func (s *Shaper) rasterizeGlyph(face *Font, glyphID uint32, size float32) *Glyph
 	}
 	dst := image.NewAlpha(image.Rect(0, 0, w, h))
 	r.Draw(dst, dst.Bounds(), image.NewUniform(color.Alpha{A: 0xff}), image.Point{})
+	pix := dst.Pix
+	if face.synthBold {
+		pix = embolden(pix, w, h)
+	}
 	return &GlyphMask{
-		Pix:  dst.Pix,
+		Pix:  pix,
 		W:    w,
 		H:    h,
 		MinX: float32(b.Min.X) / 64,
-		MinY: float32(b.Min.Y) / 64,
+		MinY: -float32(b.Max.Y) / 64,
 		MaxX: float32(b.Max.X) / 64,
-		MaxY: float32(b.Max.Y) / 64,
+		MaxY: -float32(b.Min.Y) / 64,
 	}
+}
+
+// embolden synthesizes a bold weight by smearing coverage one pixel to the
+// right (the mask's one-pixel pad absorbs the growth).
+func embolden(pix []uint8, w, h int) []uint8 {
+	const n = 1
+	out := make([]uint8, len(pix))
+	for y := 0; y < h; y++ {
+		row := pix[y*w : (y+1)*w]
+		for x := 0; x < w; x++ {
+			v := row[x]
+			for k := 1; k <= n && k <= x; k++ {
+				if row[x-k] > v {
+					v = row[x-k]
+				}
+			}
+			out[y*w+x] = v
+		}
+	}
+	return out
 }

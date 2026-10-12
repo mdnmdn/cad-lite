@@ -31,6 +31,7 @@ type Font struct {
 	family    string       // family name from the name table, may be ""
 	size      float32      // ppem this face instance is bound to; 0 on raw loaded fonts
 	weight    int          // requested CSS-style weight (400 regular, 700 bold)
+	synthBold bool         // weight >= 600 but no bold file found: glyphs are emboldened at raster time
 }
 
 // FontManager loads, parses and caches fonts, and resolves the platform
@@ -206,9 +207,9 @@ func (m *FontManager) DefaultFont() (*Font, error) {
 
 // Face resolves a face at the given size and weight. For this POC, family
 // selection is not implemented: any family name (including "") resolves to the
-// platform default family. A weight of 600 or above prefers a bold sibling
-// file (the same directory with "Bold" inserted before the extension) when one
-// exists, falling back to the regular face. Repeated calls with the same
+// platform default family. A weight of 600 or above uses a real bold file when
+// one is found (see boldCandidates); otherwise the regular outlines are used
+// and emboldened synthetically at raster time (a one-pixel horizontal smear). Repeated calls with the same
 // arguments return the identical pointer.
 func (m *FontManager) Face(family string, size float32, weight int) (*Font, error) {
 	m.mu.Lock()
@@ -217,9 +218,12 @@ func (m *FontManager) Face(family string, size float32, weight int) (*Font, erro
 	if err != nil {
 		return nil, err
 	}
+	synth := false
 	if weight >= 600 {
-		if bold, err := m.loadLocked(boldSiblingPath(base.path)); err == nil {
+		if bold := m.boldLocked(base); bold != nil {
 			base = bold
+		} else {
+			synth = true
 		}
 	}
 	key := faceKey{path: base.path, size: size, weight: weight}
@@ -233,6 +237,7 @@ func (m *FontManager) Face(family string, size float32, weight int) (*Font, erro
 		family:    base.family,
 		size:      size,
 		weight:    weight,
+		synthBold: synth,
 	}
 	m.faces[key] = face
 	return face, nil
@@ -258,6 +263,44 @@ func (m *FontManager) defaultLocked() (*Font, error) {
 	}
 	m.def = f
 	return f, nil
+}
+
+// boldLocked returns a loadable bold font file for base, or nil. Callers must
+// hold m.mu.
+func (m *FontManager) boldLocked(base *Font) *Font {
+	for _, p := range boldCandidates(base.path) {
+		if p == "" || p == base.path {
+			continue
+		}
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		if f, err := m.loadLocked(p); err == nil {
+			return f
+		}
+	}
+	return nil
+}
+
+// boldCandidates lists bold font files to try for a default font at path: the
+// "Bold" sibling, then well-known per-platform bold faces.
+func boldCandidates(path string) []string {
+	c := []string{boldSiblingPath(path)}
+	switch runtime.GOOS {
+	case "darwin":
+		c = append(c,
+			"/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+			"/Library/Fonts/Arial Bold.ttf")
+	case "windows":
+		dir := filepath.Join(os.Getenv("WINDIR"), "Fonts")
+		c = append(c, filepath.Join(dir, "segoeuib.ttf"), filepath.Join(dir, "arialbd.ttf"))
+	default:
+		c = append(c,
+			"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+			"/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+			"/usr/share/fonts/TTF/DejaVuSans-Bold.ttf")
+	}
+	return c
 }
 
 // boldSiblingPath rewrites /dir/Name.ttf to /dir/NameBold.ttf (and .otf the

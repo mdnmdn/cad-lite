@@ -245,7 +245,9 @@ type LayoutNode struct {
     Children []*LayoutNode
 
     // Measure overrides leaf sizing. Only used when len(Children)==0.
-    // maxWidth is the wrap width (math.MaxFloat32 for max-content).
+    // maxWidth is the wrap width (math.MaxFloat32 for max-content);
+    // maxWidth <= 0 requests the min-content size (text: the longest
+    // unbreakable word, with the height of wrapping at that width).
     Measure func(text string, ts TextStyle, maxWidth float32) (w, h float32)
     Text    string // non-empty + Measure != nil => leaf sized by Measure
 
@@ -263,34 +265,61 @@ func (n *LayoutNode) ScrollMax() (w, h Pixels)
 
 Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
 
-- One flex line, LTR, no wrap, no margins.
+- One flex line, LTR, no wrap, no margins. `Display:false` children are
+  skipped entirely (zero rect, no gap). Sizes are border-box (padding
+  included); leaves include their padding too.
+- **Rects are parent-relative**: a child's `Rect.Origin` is measured from its
+  parent's border-box origin. The window adds the parent origins when it
+  builds the render tree.
+- Available space is a *maximum*, never a size. An `Auto` axis sizes to its
+  content (fit-content: max-content capped by a bounded available length);
+  only the parent can force a size (stretch, flex grow/shrink). The root is
+  the exception: `Layout` forces the root to `available` on every bounded axis
+  whose `Length` is not `LengthPx` (a window root fills the window).
 - `Gap` is a fixed gutter: `gapsTotal = Gap*(k-1)`, always subtracted before
   `justify-content` sees free space, always re-added between items.
 - Flex base size: `LengthPx`→val; `LengthFlex(g)`→base 0, grow g, shrink 1;
-  `LengthAuto`→measure under (definite-or-unbounded main, definite cross).
-- Automatic minimum size (`Min*=LengthAuto`): **0 if the node is a scroll
-  container** (`Overflow != Visible`), else its min-content size in that axis
-  (measured with that axis unbounded, the other axis bounded), capped by a
-  definite `Max*`.
+  `LengthAuto`→max-content main size, measured with an unbounded main axis and
+  the cross size the item will get (the container's inner cross if it
+  stretches and that is definite, else the cross space as a maximum).
+- Automatic minimum size (`Min*=LengthAuto`, main axis only): **0 if the node
+  is a scroll container** (`Overflow != Visible`); otherwise a definite
+  `LengthPx` preferred size, else the min-content size, capped by a definite
+  `Max*`. Min-content width: text = longest word (`Measure(..., 0)`), row =
+  sum of children's min-content widths + gaps, column = max, plus padding;
+  scroll-container children contribute 0 unless they have a `LengthPx` width.
+  Min-content height = content height at the given width. So a wrapping text
+  item shrinks down to its longest word without `MinW(0)`. The cross axis has
+  no automatic minimum.
 - Hypothetical main size = clamp(base, min, max), floored at 0.
 - Resolve flexible lengths per CSS §9.7 (freeze inflexible items, iterate,
-  fix min/max violations, freeze violators, repeat until all frozen). If the
-  container's used inner main size is indefinite (unbounded main) **skip the
-  loop entirely**: every item keeps its hypothetical size.
+  fix min/max violations, freeze violators, repeat until all frozen) against
+  the container's inner main size. That size is the definite main size if
+  there is one; otherwise the sum of the items' max-content contributions +
+  gaps, capped by a bounded available main length.
 - Cross size: if the container's cross is definite, `lineCross = innerCross`;
-  else `lineCross = max_i(hypCross)`. `align-items: stretch` applies only when
-  the child's cross `Length` is `LengthAuto`; it sets the child's cross size to
-  `lineCross` (clamped) and **re-measures** the child at that definite cross.
+  else `lineCross = max_i(itemCross)` where each item's cross is measured at its
+  final main size (content height, not the available height). `align-items:
+  stretch` applies only on the cross axis and only when the child's cross
+  `Length` is `LengthAuto`; it sets the child's cross size to `lineCross`
+  (clamped). A `LengthFlex` cross length (e.g. `SizeFull`) fills `lineCross`
+  regardless of alignment (the POC's `100%`).
 - `justify-content` offsets with the fallback: if `k<=1 || free<=0`, then
-  `SpaceBetween→Start` and `SpaceAround→Center`.
+  `SpaceBetween→Start` and `SpaceAround→Center`. `SpaceBetween` adds
+  `free/(k-1)` after every item but the last; `SpaceAround` starts at
+  `free/k/2` and adds `free/k` between items.
 - `Overflow` never changes descendant layout. It only affects (a) the automatic
   minimum size rule, (b) clipping, (c) content-size propagation.
-- Scroll container: children measured with **unbounded main, definite cross**.
-  `ContentSize.main = max(usedMain, max_i(childEndAlongMain)+endPaddingMain)`,
-  and the same on the cross axis. Non-scroll children with `OverflowVisible`
-  propagate their own `ContentSize` upward.
-- Text leaf: `wrapWidth =` the `LengthPx` width if set, else the available main
-  or cross width if that axis is bounded, else `math.MaxFloat32` (max-content).
+- Scroll container: children are measured with an **unbounded main axis**
+  (their base sizes are max-content). `ContentSize.main = max(usedMain,
+  max_i(childEndAlongMain)+endPaddingMain)`, and the same on the cross axis.
+  Non-scroll children with `OverflowVisible` propagate their own
+  `ContentSize` upward.
+- Text leaf: wrap width = the leaf's final content-box width once the parent
+  has sized it; while measuring, the `LengthPx` width if set, else the bounded
+  available width, else `math.MaxFloat32` (max-content). Text paints wrapped
+  at its laid-out content width (`bounds.W - horizontal padding`), so paint and
+  layout agree.
 
 ## 5. `element.go`, `div.go`, `text_elem.go`
 
@@ -780,8 +809,8 @@ type App struct {
 }
 func NewApp() *App
 func (a *App) Update(f func(*App))   // reentrancy-guarded; outermost runs flushEffects
-func (a *App) Quit()
-func (a *App) IsQuitting() bool
+func (a *App) Quit()           // goroutine-safe (atomic flag); Platform.Quit must be too
+func (a *App) IsQuitting() bool // goroutine-safe
 func (a *App) OpenWindow(o WindowOptions, build func(*Window, *App) EntityRoot) error
 func (a *App) Windows() []*Window
 func (a *App) Notify(id EntityID)

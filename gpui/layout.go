@@ -58,411 +58,458 @@ func (n *LayoutNode) ScrollMax() (Pixels, Pixels) {
 	return maxPixels(0, n.ContentSize.W-n.Rect.Size.W), maxPixels(0, n.ContentSize.H-n.Rect.Size.H)
 }
 
-// Layout runs the two-pass flexbox algorithm: measure sizes the tree, then
-// arrange assigns final positions. It returns the root's border box.
+// Layout sizes the tree and assigns every node its parent-relative border box.
+// The root is forced to available on each bounded axis whose Length is not
+// LengthPx; every other Auto axis sizes to its content. It returns the root's
+// border box.
 func Layout(n *LayoutNode, available Available) Bounds {
 	if n == nil {
 		return Bounds{}
 	}
-	size := measureNode(n, available)
+	resetLayoutCache(n)
+	var f forcedSize
+	if available.BoundedW && !n.Style.Width.IsPx() {
+		f.w, f.hasW = available.W, true
+	}
+	if available.BoundedH && !n.Style.Height.IsPx() {
+		f.h, f.hasH = available.H, true
+	}
+	size := measureNode(n, available, f)
 	n.Rect = Bounds{Size: size}
 	arrangeNode(n)
 	return n.Rect
 }
 
-// nodeState caches the per-node intermediate results that arrange reads back.
-// It is recomputed by every measureNode call.
-type nodeState struct {
-	isRow bool
-
-	base, hyp, min, max   []Pixels
-	grow, shrink          []float32
-	target                []Pixels
-	hypCross, crossTarget []Pixels
-	crossMin, crossMax    []Pixels
-	mainPos, crossPos     []Pixels
-	needReMeasure         []bool
-
-	usedMain, usedCross Pixels
+// forcedSize carries border-box sizes the parent has already decided for a
+// node (stretch, flex resolution). A forced axis is definite; any other axis
+// sizes to content within the available space.
+type forcedSize struct {
+	w, h       Pixels
+	hasW, hasH bool
 }
 
-func measureNode(n *LayoutNode, avail Available) Size {
+func forcedAxes(main Pixels, hasMain bool, cross Pixels, hasCross bool, isRow bool) forcedSize {
+	if isRow {
+		return forcedSize{w: main, hasW: hasMain, h: cross, hasH: hasCross}
+	}
+	return forcedSize{w: cross, hasW: hasCross, h: main, hasH: hasMain}
+}
+
+type measureKey struct {
+	avail  Available
+	forced forcedSize
+}
+
+type measureEntry struct {
+	key  measureKey
+	size Size
+}
+
+// nodeState is the per-node measure cache. It is only valid for one Layout
+// call: sizes depend solely on (available, forced), so repeated measurements
+// during flex resolution are free.
+type nodeState struct {
+	cache []measureEntry
+}
+
+func resetLayoutCache(n *LayoutNode) {
+	n.state.cache = n.state.cache[:0]
+	for _, c := range n.Children {
+		if c != nil {
+			resetLayoutCache(c)
+		}
+	}
+}
+
+func measureNode(n *LayoutNode, avail Available, f forcedSize) Size {
 	if n == nil || !n.Style.Display {
-		n.clearState()
 		return Size{}
 	}
+	key := measureKey{avail: avail, forced: f}
+	for _, e := range n.state.cache {
+		if e.key == key {
+			return e.size
+		}
+	}
+	var size Size
 	if len(n.Children) == 0 {
-		n.clearState()
-		return measureLeaf(n, avail)
+		size = measureLeaf(n, avail, f)
+	} else {
+		size = layoutFlex(n, avail, f, false)
 	}
-	return measureFlex(n, avail)
+	n.state.cache = append(n.state.cache, measureEntry{key: key, size: size})
+	return size
 }
 
-func (n *LayoutNode) clearState() {
-	n.state = nodeState{}
-	n.ContentSize = n.Rect.Size
+// ownSize resolves a node's border-box size on one axis when it is definite:
+// forced by the parent, or a LengthPx preferred size.
+func ownSize(forced Pixels, hasForced bool, pref, lo, hi Length) (Pixels, bool) {
+	if hasForced {
+		return forced, true
+	}
+	if pref.IsPx() {
+		return clampLength(pref.Val, lo, hi), true
+	}
+	return 0, false
 }
 
-func measureLeaf(n *LayoutNode, avail Available) Size {
-	var w, h Pixels
+func measureLeaf(n *LayoutNode, avail Available, f forcedSize) Size {
+	s := n.Style
+	padW, padH := s.Padding.Horizontal(), s.Padding.Vertical()
+	w, hasW := ownSize(f.w, f.hasW, s.Width, s.MinWidth, s.MaxWidth)
+	h, hasH := ownSize(f.h, f.hasH, s.Height, s.MinHeight, s.MaxHeight)
+	var mw, mh Pixels
 	if n.Measure != nil && n.Text != "" {
-		wrapW := resolveWrapWidth(n, avail)
-		mw, mh := n.Measure(n.Text, n.Style.TextStyle, float32(wrapW))
-		w, h = Pixels(mw), Pixels(mh)
+		wrap := infPixels
+		switch {
+		case hasW:
+			wrap = maxPixels(0, w-padW)
+		case avail.BoundedW:
+			wrap = maxPixels(0, avail.W-padW)
+		}
+		a, b := n.Measure(n.Text, s.TextStyle, float32(wrap))
+		mw, mh = Pixels(a), Pixels(b)
 	}
-	if n.Style.Width.IsPx() {
-		w = n.Style.Width.Val
+	if !hasW {
+		w = clampLength(mw+padW, s.MinWidth, s.MaxWidth)
 	}
-	if n.Style.Height.IsPx() {
-		h = n.Style.Height.Val
+	if !hasH {
+		h = clampLength(mh+padH, s.MinHeight, s.MaxHeight)
 	}
-	w = clampLength(w, n.Style.MinWidth, n.Style.MaxWidth)
-	h = clampLength(h, n.Style.MinHeight, n.Style.MaxHeight)
 	return Size{W: w, H: h}
 }
 
-func resolveWrapWidth(n *LayoutNode, avail Available) Pixels {
-	if n.Style.Width.IsPx() {
-		return n.Style.Width.Val
+// minContentWidth is a node's min-content width contribution: its LengthPx
+// width if set, otherwise the narrowest width its content can take without
+// overflowing (the longest word for text).
+func minContentWidth(n *LayoutNode) Pixels {
+	if n == nil || !n.Style.Display {
+		return 0
 	}
-	if avail.BoundedW {
-		return avail.W
+	s := n.Style
+	if s.Width.IsPx() {
+		return clampLength(s.Width.Val, s.MinWidth, s.MaxWidth)
 	}
-	return infPixels
+	var v Pixels
+	switch {
+	case len(n.Children) == 0:
+		if n.Measure != nil && n.Text != "" {
+			w, _ := n.Measure(n.Text, s.TextStyle, 0)
+			v = Pixels(w)
+		}
+	default:
+		isRow := s.Direction == DirectionRow
+		k := 0
+		for _, c := range n.Children {
+			if c == nil || !c.Style.Display {
+				continue
+			}
+			k++
+			var cw Pixels
+			if c.Style.isScrollContainer() && !c.Style.Width.IsPx() {
+				cw = resolveBound(c.Style.MinWidth, 0)
+			} else {
+				cw = minContentWidth(c)
+			}
+			if isRow {
+				v += cw
+			} else {
+				v = maxPixels(v, cw)
+			}
+		}
+		if isRow && k > 1 {
+			v += s.Gap * Pixels(k-1)
+		}
+	}
+	return clampLength(v+s.Padding.Horizontal(), s.MinWidth, s.MaxWidth)
 }
 
-func measureFlex(n *LayoutNode, avail Available) Size {
-	isRow := n.Style.Direction == DirectionRow
-	pad := n.Style.Padding
+// flexItem is one visible child's working state during a flex pass.
+type flexItem struct {
+	node              *LayoutNode
+	align             Align
+	fillCross         bool
+	forcedCross       Pixels
+	hasForcedCross    bool
+	cross, mainPos    Pixels
+	crossMin, crossMx Pixels
+	crossPos          Pixels
+}
 
-	innerW, boundedW := avail.W, avail.BoundedW
-	innerH, boundedH := avail.H, avail.BoundedH
-	if boundedW {
-		innerW = maxPixels(0, innerW-pad.Horizontal())
+// layoutFlex runs the flexbox algorithm for a container. With place=false it
+// only returns the border-box size; with place=true (called from arrange with
+// the node's final size forced) it also writes the children's parent-relative
+// Rects, arranges them recursively and sets ContentSize.
+func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
+	s := n.Style
+	isRow := s.Direction == DirectionRow
+	pad := s.Padding
+
+	defW, hasW := ownSize(f.w, f.hasW, s.Width, s.MinWidth, s.MaxWidth)
+	defH, hasH := ownSize(f.h, f.hasH, s.Height, s.MinHeight, s.MaxHeight)
+
+	// Inner (content-box) space per axis: definite, or a maximum, or neither.
+	innerOf := func(def Pixels, hasDef bool, av Pixels, bounded bool, padding Pixels) (Pixels, bool, bool) {
+		if hasDef {
+			return maxPixels(0, def-padding), true, true
+		}
+		if bounded {
+			return maxPixels(0, av-padding), false, true
+		}
+		return 0, false, false
 	}
-	if boundedH {
-		innerH = maxPixels(0, innerH-pad.Vertical())
+	innerW, defInnerW, boundInnerW := innerOf(defW, hasW, avail.W, avail.BoundedW, pad.Horizontal())
+	innerH, defInnerH, boundInnerH := innerOf(defH, hasH, avail.H, avail.BoundedH, pad.Vertical())
+
+	var mainInner, crossInner Pixels
+	var mainDef, crossDef, mainBounded, crossBounded bool
+	if isRow {
+		mainInner, mainDef, mainBounded = innerW, defInnerW, boundInnerW
+		crossInner, crossDef, crossBounded = innerH, defInnerH, boundInnerH
+	} else {
+		mainInner, mainDef, mainBounded = innerH, defInnerH, boundInnerH
+		crossInner, crossDef, crossBounded = innerW, defInnerW, boundInnerW
 	}
 
-	availMain, boundedMain := pickAxis(innerW, boundedW, innerH, boundedH, isRow)
-	availCross, boundedCross := pickAxis(innerW, boundedW, innerH, boundedH, !isRow)
-
-	// A scroll container offers its children an indefinite main axis so they
-	// size to content and overflow, which is what makes them scrollable.
-	childBoundedMain := boundedMain
-	if n.Style.isScrollContainer() {
-		childBoundedMain = false
+	var items []flexItem
+	for _, c := range n.Children {
+		if c == nil {
+			continue
+		}
+		if !c.Style.Display {
+			if place {
+				c.Rect = Bounds{}
+				c.ContentSize = Size{}
+			}
+			continue
+		}
+		items = append(items, flexItem{node: c})
 	}
-
-	k := len(n.Children)
-	gap := n.Style.Gap
+	k := len(items)
 	var gapsTotal Pixels
 	if k > 1 {
-		gapsTotal = gap * Pixels(k-1)
+		gapsTotal = s.Gap * Pixels(k-1)
 	}
 
-	st := &n.state
-	st.isRow = isRow
-	st.base = make([]Pixels, k)
-	st.hyp = make([]Pixels, k)
-	st.min = make([]Pixels, k)
-	st.max = make([]Pixels, k)
-	st.grow = make([]float32, k)
-	st.shrink = make([]float32, k)
-	st.target = make([]Pixels, k)
-	st.hypCross = make([]Pixels, k)
-	st.crossTarget = make([]Pixels, k)
-	st.crossMin = make([]Pixels, k)
-	st.crossMax = make([]Pixels, k)
-	st.mainPos = make([]Pixels, k)
-	st.crossPos = make([]Pixels, k)
-	st.needReMeasure = make([]bool, k)
-
-	childAvail := Available{
-		W:        innerW,
-		H:        innerH,
-		BoundedW: boundedW,
-		BoundedH: boundedH,
+	// The space children see on the cross axis (a maximum unless definite) and
+	// on the main axis (unbounded: base sizes are max-content).
+	childAvail := func(main Pixels, mainBound bool) Available {
+		a := Available{}
+		if isRow {
+			a.W, a.BoundedW = main, mainBound
+			a.H, a.BoundedH = crossInner, crossBounded
+		} else {
+			a.H, a.BoundedH = main, mainBound
+			a.W, a.BoundedW = crossInner, crossBounded
+		}
+		return a
 	}
-	childAvailMain := Available{
-		W:        innerW,
-		H:        innerH,
-		BoundedW: childBoundedMain,
-		BoundedH: boundedH,
+	unboundedMain := childAvail(0, false)
+
+	st := &flexState{
+		base: make([]Pixels, k), hyp: make([]Pixels, k),
+		min: make([]Pixels, k), max: make([]Pixels, k),
+		grow: make([]float32, k), shrink: make([]float32, k),
+		target: make([]Pixels, k),
 	}
-	if isRow {
-		childAvailMain = Available{
-			W:        innerW,
-			H:        innerH,
-			BoundedW: boundedW,
-			BoundedH: childBoundedMain,
-		}
-	}
+	contrib := make([]Pixels, k)
 
-	// Step 1: per-child flex base size, automatic minimum, hypothetical size.
-	for i, child := range n.Children {
-		styleMain := child.Style.resolveMain(isRow)
-		styleCross := child.Style.resolveCross(isRow)
+	// Step 1: flex base size, automatic minimum, hypothetical main size.
+	for i := range items {
+		it := &items[i]
+		cs := it.node.Style
+		it.align = cs.AlignSelf
+		if it.align == AlignSelfAuto {
+			it.align = s.AlignItems
+		}
+		crossLen := cs.resolveCross(isRow)
+		it.crossMin = resolveBound(cs.resolveMinCross(isRow), 0)
+		it.crossMx = resolveBound(cs.resolveMaxCross(isRow), infPixels)
+		it.fillCross = crossLen.IsFlex() || (crossLen.IsAuto() && it.align == AlignStretch)
+		if it.fillCross && crossDef {
+			it.forcedCross, it.hasForcedCross = clampLen(crossInner, it.crossMin, it.crossMx), true
+		}
+		baseForced := forcedAxes(0, false, it.forcedCross, it.hasForcedCross, isRow)
 
-		minMain := childAutoMin(child, isRow, childAvail, childBoundedMain)
-		if child.Style.resolveMinMain(isRow).IsPx() {
-			minMain = child.Style.resolveMinMain(isRow).Val
+		maxMain := resolveBound(cs.resolveMaxMain(isRow), infPixels)
+		var minMain Pixels
+		switch {
+		case cs.resolveMinMain(isRow).IsPx():
+			minMain = cs.resolveMinMain(isRow).Val
+		case cs.isScrollContainer():
+			minMain = 0
+		case cs.resolveMain(isRow).IsPx():
+			minMain = cs.resolveMain(isRow).Val
+		case isRow:
+			minMain = minContentWidth(it.node)
+		default:
+			minMain = measureNode(it.node, unboundedMain, baseForced).H
 		}
-		maxMain := infPixels
-		if child.Style.resolveMaxMain(isRow).IsPx() {
-			maxMain = child.Style.resolveMaxMain(isRow).Val
-		}
-		minCross := childAutoMin(child, !isRow, childAvail, boundedCross)
-		if child.Style.resolveMinCross(isRow).IsPx() {
-			minCross = child.Style.resolveMinCross(isRow).Val
-		}
-		maxCross := infPixels
-		if child.Style.resolveMaxCross(isRow).IsPx() {
-			maxCross = child.Style.resolveMaxCross(isRow).Val
-		}
+		minMain = minPixels(minMain, maxMain)
 
+		mainLen := cs.resolveMain(isRow)
 		var base Pixels
-		switch styleMain.Kind {
+		switch mainLen.Kind {
 		case LengthPx:
-			base = styleMain.Val
-			st.grow[i] = child.Style.FlexGrow
-			st.shrink[i] = child.Style.FlexShrink
+			base = mainLen.Val
+			st.grow[i], st.shrink[i] = cs.FlexGrow, cs.FlexShrink
 		case LengthFlex:
 			base = 0
-			st.grow[i] = float32(styleMain.Val)
-			st.shrink[i] = 1
-		default: // LengthAuto
-			base = measureNode(child, childAvailMain).axis(isRow)
-			st.grow[i] = child.Style.FlexGrow
-			st.shrink[i] = child.Style.FlexShrink
-		}
-
-		st.min[i], st.max[i] = minMain, maxMain
-		st.crossMin[i], st.crossMax[i] = minCross, maxCross
-		st.base[i] = base
-		st.hyp[i] = clampLen(base, minMain, maxMain)
-
-		// Cross hypothetical size, measured at the child's hypothetical main
-		// size so the two axes agree.
-		switch styleCross.Kind {
-		case LengthPx:
-			st.hypCross[i] = clampLen(styleCross.Val, minCross, maxCross)
+			st.grow[i], st.shrink[i] = float32(mainLen.Val), 1
 		default:
-			// Flex on the cross axis is treated as Auto so stretch can fill
-			// the line.
-			m := childAvail
-			if isRow {
-				m.H = st.hyp[i]
-				m.BoundedH = true
-			} else {
-				m.W = st.hyp[i]
-				m.BoundedW = true
-			}
-			if !boundedCross {
-				if isRow {
-					m.BoundedH = false
-				} else {
-					m.BoundedW = false
-				}
-			}
-			st.hypCross[i] = clampLen(measureNode(child, m).axis(!isRow), minCross, maxCross)
+			base = measureNode(it.node, unboundedMain, baseForced).axis(isRow)
+			st.grow[i], st.shrink[i] = cs.FlexGrow, cs.FlexShrink
+		}
+		st.base[i], st.min[i], st.max[i] = base, minMain, maxMain
+		st.hyp[i] = clampLen(base, minMain, maxMain)
+		contrib[i] = st.hyp[i]
+		if mainLen.IsFlex() {
+			contrib[i] = clampLen(measureNode(it.node, unboundedMain, baseForced).axis(isRow), minMain, maxMain)
 		}
 	}
 
-	// Step 2: the container's own main size. Sizes are border-box (padding
-	// included), matching CSS box-sizing: border-box, so the value handed to
-	// resolveFlex is the padding-subtracted content box.
-	var borderMain, contentMain Pixels
-	mainDefinite := true
-	selfMain := n.Style.resolveMain(isRow)
-	switch {
-	case selfMain.IsPx():
-		borderMain = selfMain.Val
-	case boundedMain:
-		borderMain = availMain + n.Style.mainPadding(isRow)
-	default:
-		mainDefinite = false
-		var sum Pixels
-		for i := range n.Children {
-			sum += maxPixels(st.base[i], st.min[i])
+	// Step 2: the container's inner main size.
+	M := mainInner
+	if !mainDef {
+		var sum, mins Pixels
+		for i := range items {
+			sum += contrib[i]
+			mins += st.min[i]
 		}
-		borderMain = sum + gapsTotal + n.Style.mainPadding(isRow)
+		M = sum + gapsTotal
+		if mainBounded && M > mainInner {
+			M = maxPixels(mainInner, mins+gapsTotal)
+		}
+		mp := s.mainPadding(isRow)
+		M = maxPixels(0, clampLength(M+mp, s.resolveMinMain(isRow), s.resolveMaxMain(isRow))-mp)
 	}
-	borderMain = clampLen(borderMain, resolveBound(n.Style.resolveMinMain(isRow), 0), resolveBound(n.Style.resolveMaxMain(isRow), infPixels))
-	contentMain = maxPixels(0, borderMain-n.Style.mainPadding(isRow))
-	st.usedMain = borderMain
 
 	// Step 3: resolve flexible lengths.
-	resolveFlex(st, contentMain, gapsTotal, mainDefinite)
+	resolveFlex(st, M, gapsTotal)
 
-	// Step 4: line cross size and stretch. A definite cross size on the
-	// container itself wins over the space the parent offers, otherwise a
-	// flex column would stretch to fill its parent instead of its own width.
-	var lineCross Pixels
-	selfCross := n.Style.resolveCross(isRow)
-	switch {
-	case selfCross.IsPx():
-		lineCross = maxPixels(0, selfCross.Val-n.Style.crossPadding(isRow))
-	case boundedCross:
-		lineCross = availCross
-	default:
-		for i := range n.Children {
-			lineCross = maxPixels(lineCross, st.hypCross[i])
+	// Step 4: item cross sizes at their final main sizes, then the line.
+	for i := range items {
+		it := &items[i]
+		cs := it.node.Style
+		crossLen := cs.resolveCross(isRow)
+		switch {
+		case crossLen.IsPx():
+			it.cross = clampLen(crossLen.Val, it.crossMin, it.crossMx)
+		case it.hasForcedCross:
+			it.cross = it.forcedCross
+		default:
+			ff := forcedAxes(st.target[i], true, 0, false, isRow)
+			it.cross = clampLen(measureNode(it.node, childAvail(st.target[i], true), ff).axis(!isRow), it.crossMin, it.crossMx)
 		}
 	}
-	lineCross = clampLen(lineCross, resolveBound(n.Style.resolveMinCross(isRow), 0), resolveBound(n.Style.resolveMaxCross(isRow), infPixels))
+	lineCross := crossInner
+	if !crossDef {
+		lineCross = 0
+		for i := range items {
+			lineCross = maxPixels(lineCross, items[i].cross)
+		}
+		cp := s.crossPadding(isRow)
+		lineCross = maxPixels(0, clampLength(lineCross+cp, s.resolveMinCross(isRow), s.resolveMaxCross(isRow))-cp)
+		for i := range items {
+			it := &items[i]
+			if it.fillCross {
+				it.cross = clampLen(lineCross, it.crossMin, it.crossMx)
+			}
+		}
+	}
 
-	for i, child := range n.Children {
-		align := child.Style.AlignSelf
-		if align == AlignSelfAuto {
-			align = n.Style.AlignItems
+	var size Size
+	borderMain := M + s.mainPadding(isRow)
+	borderCross := lineCross + s.crossPadding(isRow)
+	if isRow {
+		size = Size{W: borderMain, H: borderCross}
+		if hasW {
+			size.W = defW
 		}
-		if align == AlignStretch && child.Style.resolveCross(isRow).IsAuto() {
-			ct := clampLen(lineCross, st.crossMin[i], st.crossMax[i])
-			st.crossTarget[i] = ct
-			st.needReMeasure[i] = ct != st.hypCross[i]
-		} else {
-			st.crossTarget[i] = st.hypCross[i]
-			st.needReMeasure[i] = false
+		if hasH {
+			size.H = defH
 		}
+	} else {
+		size = Size{W: borderCross, H: borderMain}
+		if hasW {
+			size.W = defW
+		}
+		if hasH {
+			size.H = defH
+		}
+	}
+	if !place {
+		return size
 	}
 
 	// Step 5: main-axis placement.
 	var used Pixels
-	for i := range n.Children {
+	for i := range items {
 		used += st.target[i]
 	}
-	used += gapsTotal
-
-	free := Pixels(0)
-	if mainDefinite {
-		free = contentMain - used
-	}
-	mode := n.Style.Justify
+	free := M - used - gapsTotal
+	mode := s.Justify
 	if k <= 1 || free <= 0 {
-		if mode == JustifySpaceBetween {
+		switch mode {
+		case JustifySpaceBetween:
 			mode = JustifyStart
-		}
-		if mode == JustifySpaceAround {
+		case JustifySpaceAround:
 			mode = JustifyCenter
 		}
 	}
-	first := firstOffset(mode, free, k)
+	pos := s.mainPaddingStart(isRow) + firstOffset(mode, free, k)
 	between := betweenOffset(mode, free, k)
-
-	pos := n.Style.mainPaddingStart(isRow) + first
-	for i := range n.Children {
-		st.mainPos[i] = pos
-		pos += st.target[i] + gap
-		if i > 0 {
-			pos += between
-		}
+	for i := range items {
+		items[i].mainPos = pos
+		pos += st.target[i] + s.Gap + between
 	}
 
-	// Step 6: cross-axis placement.
-	for i, child := range n.Children {
-		align := child.Style.AlignSelf
-		if align == AlignSelfAuto {
-			align = n.Style.AlignItems
-		}
-		cfree := lineCross - st.crossTarget[i]
+	// Step 6: cross-axis placement, child rects, recursion, content size.
+	extentMain, extentCross := size.axis(isRow), size.axis(!isRow)
+	for i := range items {
+		it := &items[i]
+		cfree := lineCross - it.cross
 		var off Pixels
-		switch align {
+		switch it.align {
 		case AlignCenter:
 			off = cfree / 2
 		case AlignEnd:
 			off = cfree
-		default: // Start, Stretch
-			off = 0
 		}
-		st.crossPos[i] = n.Style.crossPaddingStart(isRow) + off
-	}
+		it.crossPos = s.crossPaddingStart(isRow) + off
 
-	// Step 7/8: container size and content size.
-	var usedCross Pixels
-	if boundedCross {
-		usedCross = lineCross
-	} else {
-		usedCross = lineCross
-	}
-	usedCross += n.Style.crossPadding(isRow)
-	st.usedCross = usedCross
-
-	var size Size
-	if isRow {
-		size = Size{W: borderMain, H: usedCross}
-	} else {
-		size = Size{W: usedCross, H: borderMain}
-	}
-
-	// ContentSize tracks how far the content scrolls past the border box.
-	var extentMain, extentCross Pixels
-	extentMain = st.usedMain
-	extentCross = st.usedCross
-	for i, child := range n.Children {
-		endMain := st.mainPos[i] + st.target[i]
-		endCross := st.crossPos[i] + st.crossTarget[i]
-		if child.Style.Overflow == OverflowVisible {
-			if child.Rect.Size.W > 0 || child.Rect.Size.H > 0 || child.ContentSize.W > 0 {
-				// Propagate the child's own scrollable overflow. The child has
-				// not been arranged yet, so use the size it will get.
-				cw, ch := st.target[i], st.crossTarget[i]
-				if !isRow {
-					cw, ch = ch, cw
-				}
-				endMain += maxPixels(0, child.ContentSize.W-cw)
-				endCross += maxPixels(0, child.ContentSize.H-ch)
-			}
+		c := it.node
+		if isRow {
+			c.Rect = Bounds{Origin: Point{X: it.mainPos, Y: it.crossPos}, Size: Size{W: st.target[i], H: it.cross}}
+		} else {
+			c.Rect = Bounds{Origin: Point{X: it.crossPos, Y: it.mainPos}, Size: Size{W: it.cross, H: st.target[i]}}
 		}
-		extentMain = maxPixels(extentMain, endMain+n.Style.mainPaddingEnd(isRow))
-		extentCross = maxPixels(extentCross, endCross+n.Style.crossPaddingEnd(isRow))
+		arrangeNode(c)
+
+		endMain := it.mainPos + st.target[i]
+		endCross := it.crossPos + it.cross
+		if c.Style.Overflow == OverflowVisible {
+			endMain += maxPixels(0, c.ContentSize.axis(isRow)-c.Rect.Size.axis(isRow))
+			endCross += maxPixels(0, c.ContentSize.axis(!isRow)-c.Rect.Size.axis(!isRow))
+		}
+		extentMain = maxPixels(extentMain, endMain+s.mainPaddingEnd(isRow))
+		extentCross = maxPixels(extentCross, endCross+s.crossPaddingEnd(isRow))
 	}
-	n.ContentSize = mapAxis(size, extentMain, extentCross, isRow)
+	n.ContentSize = mapAxis(extentMain, extentCross, isRow)
 	return size
 }
 
+// arrangeNode lays out n's children inside n.Rect, which the caller has set.
 func arrangeNode(n *LayoutNode) {
 	if n == nil || !n.Style.Display {
 		return
 	}
 	if len(n.Children) == 0 {
+		n.ContentSize = n.Rect.Size
 		return
 	}
-	isRow := n.state.isRow
-	origin := n.Rect.Origin
-	// mainPos/crossPos are already measured from the content-box edge (they
-	// start at mainPaddingStart/crossPaddingStart), so padding is not added
-	// here a second time.
-	ox, oy := origin.X, origin.Y
-
-	for i, child := range n.Children {
-		var r Bounds
-		if isRow {
-			r = Bounds{
-				Origin: Point{X: ox + n.state.mainPos[i], Y: oy + n.state.crossPos[i]},
-				Size:   Size{W: n.state.target[i], H: n.state.crossTarget[i]},
-			}
-		} else {
-			r = Bounds{
-				Origin: Point{X: ox + n.state.crossPos[i], Y: oy + n.state.mainPos[i]},
-				Size:   Size{W: n.state.crossTarget[i], H: n.state.target[i]},
-			}
-		}
-		child.Rect = r
-
-		// Re-measure the child against its final box so its own internal
-		// state (and ContentSize) reflect the size it actually received.
-		tight := Available{W: r.Size.W, H: r.Size.H, BoundedW: true, BoundedH: true}
-		if child.Style.isScrollContainer() {
-			if isRow {
-				tight.BoundedW = false
-			} else {
-				tight.BoundedH = false
-			}
-		}
-		measureNode(child, tight)
-		arrangeNode(child)
-	}
+	sz := n.Rect.Size
+	layoutFlex(n, Definite(float32(sz.W), float32(sz.H)), forcedSize{w: sz.W, h: sz.H, hasW: true, hasH: true}, true)
 }
 
 func firstOffset(mode Justify, free Pixels, k int) Pixels {
@@ -472,7 +519,7 @@ func firstOffset(mode Justify, free Pixels, k int) Pixels {
 	case JustifyCenter:
 		return free / 2
 	case JustifySpaceAround:
-		if free >= 0 {
+		if free >= 0 && k > 0 {
 			return (free / Pixels(k)) / 2
 		}
 		return free / 2
@@ -482,55 +529,32 @@ func firstOffset(mode Justify, free Pixels, k int) Pixels {
 }
 
 func betweenOffset(mode Justify, free Pixels, k int) Pixels {
-	if k < 2 {
+	if k < 2 || free <= 0 {
 		return 0
 	}
-	f := maxPixels(0, free)
 	switch mode {
 	case JustifySpaceBetween:
-		return f / Pixels(k-1)
+		return free / Pixels(k-1)
 	case JustifySpaceAround:
-		return f / Pixels(k)
+		return free / Pixels(k)
 	default:
 		return 0
 	}
 }
 
-// childAutoMin computes the CSS automatic minimum size (min-width/min-height:
-// auto) for a child on the given axis: 0 for scroll containers, otherwise the
-// child's min-content size in that axis, capped by its definite preferred size.
-func childAutoMin(child *LayoutNode, isRow bool, parentAvail Available, parentBounded bool) Pixels {
-	if child.Style.isScrollContainer() {
-		return 0
-	}
-	var m Available = parentAvail
-	if isRow {
-		m.BoundedW = false
-	} else {
-		m.BoundedH = false
-	}
-	_ = parentBounded
-	v := measureNode(child, m).axis(isRow)
-	pref := child.Style.resolveMain(isRow)
-	if pref.IsPx() {
-		v = minPixels(v, pref.Val)
-	}
-	return v
+// flexState is the working set of CSS §9.7 flexible-length resolution.
+type flexState struct {
+	base, hyp, min, max []Pixels
+	grow, shrink        []float32
+	target              []Pixels
 }
 
 // resolveFlex implements CSS flexbox §9.7.
-func resolveFlex(st *nodeState, M Pixels, gapsTotal Pixels, mainDefinite bool) {
+func resolveFlex(st *flexState, M Pixels, gapsTotal Pixels) {
 	k := len(st.base)
 	if k == 0 {
 		return
 	}
-	if !mainDefinite {
-		for i := range st.base {
-			st.target[i] = st.hyp[i]
-		}
-		return
-	}
-
 	var S Pixels
 	for i := range st.base {
 		S += st.hyp[i]
@@ -668,13 +692,6 @@ func resolveFlex(st *nodeState, M Pixels, gapsTotal Pixels, mainDefinite bool) {
 	}
 }
 
-func pickAxis(w Pixels, bw bool, h Pixels, bh bool, isRow bool) (Pixels, bool) {
-	if isRow {
-		return w, bw
-	}
-	return h, bh
-}
-
 func (s Size) axis(isRow bool) Pixels {
 	if isRow {
 		return s.W
@@ -682,7 +699,7 @@ func (s Size) axis(isRow bool) Pixels {
 	return s.H
 }
 
-func mapAxis(size Size, main, cross Pixels, isRow bool) Size {
+func mapAxis(main, cross Pixels, isRow bool) Size {
 	if isRow {
 		return Size{W: main, H: cross}
 	}

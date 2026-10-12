@@ -131,8 +131,8 @@ func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div {
 	return d
 }
 
-// OnHoverStart registers a pointer-enter listener. The POC never fires
-// hover events; the hook exists so later waves can wire it up.
+// OnHoverStart registers a pointer-enter listener, fired from mouse-move
+// dispatch when the pointer enters the element (or one of its descendants).
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div {
 	d.onHoverStart = f
 	return d
@@ -365,6 +365,8 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	ml.OnMouseMove = d.onMouseMove
 	ml.OnClick = d.onClick
 	ml.OnScrollWheel = d.onScrollWheel
+	ml.OnHoverStart = d.onHoverStart
+	ml.OnHoverEnd = d.onHoverEnd
 
 	if style.Overflow != OverflowVisible {
 		st.clipped = true
@@ -423,3 +425,66 @@ func (d *Div) paint(w *Window, bounds Bounds, layoutState any) {
 		})
 	}
 }
+
+// FlexGrow is StyledMixin.FlexGrow returning *Div to keep the chain.
+func (d *Div) FlexGrow(v float32) *Div { d.StyledMixin.FlexGrow(v); return d }
+
+// FlexShrink is StyledMixin.FlexShrink returning *Div to keep the chain.
+func (d *Div) FlexShrink(v float32) *Div { d.StyledMixin.FlexShrink(v); return d }
+
+// Px_ is StyledMixin.Px_ returning *Div to keep the chain.
+func (d *Div) Px_(v float32) *Div { d.StyledMixin.Px_(v); return d }
+
+// Py_ is StyledMixin.Py_ returning *Div to keep the chain.
+func (d *Div) Py_(v float32) *Div { d.StyledMixin.Py_(v); return d }
+
+// Pt is StyledMixin.Pt returning *Div to keep the chain.
+func (d *Div) Pt(v float32) *Div { d.StyledMixin.Pt(v); return d }
+
+// Pr is StyledMixin.Pr returning *Div to keep the chain.
+func (d *Div) Pr(v float32) *Div { d.StyledMixin.Pr(v); return d }
+
+// Pb is StyledMixin.Pb returning *Div to keep the chain.
+func (d *Div) Pb(v float32) *Div { d.StyledMixin.Pb(v); return d }
+
+// Pl is StyledMixin.Pl returning *Div to keep the chain.
+func (d *Div) Pl(v float32) *Div { d.StyledMixin.Pl(v); return d }
+
+// M is StyledMixin.M returning *Div to keep the chain.
+func (d *Div) M(v float32) *Div { d.StyledMixin.M(v); return d }
+
+// FontWeight is StyledMixin.FontWeight returning *Div to keep the chain.
+func (d *Div) FontWeight(w int) *Div { d.StyledMixin.FontWeight(w); return d }
+
+// FontFamily is StyledMixin.FontFamily returning *Div to keep the chain.
+func (d *Div) FontFamily(name string) *Div { d.StyledMixin.FontFamily(name); return d }
+
+// TextStrikethrough is StyledMixin.TextStrikethrough returning *Div to keep the chain.
+func (d *Div) TextStrikethrough() *Div { d.StyledMixin.TextStrikethrough(); return d }
+
+// TextLineHeight is StyledMixin.TextLineHeight returning *Div to keep the chain.
+func (d *Div) TextLineHeight(px float32) *Div { d.StyledMixin.TextLineHeight(px); return d }
+
+// RoundedAll is StyledMixin.RoundedAll returning *Div to keep the chain.
+func (d *Div) RoundedAll(tl, tr, br, bl float32) *Div {
+	d.StyledMixin.RoundedAll(tl, tr, br, bl)
+	return d
+}
+
+// ItemsEnd is StyledMixin.ItemsEnd returning *Div to keep the chain.
+func (d *Div) ItemsEnd() *Div { d.StyledMixin.ItemsEnd(); return d }
+
+// ItemsStretch is StyledMixin.ItemsStretch returning *Div to keep the chain.
+func (d *Div) ItemsStretch() *Div { d.StyledMixin.ItemsStretch(); return d }
+
+// JustifyStart is StyledMixin.JustifyStart returning *Div to keep the chain.
+func (d *Div) JustifyStart() *Div { d.StyledMixin.JustifyStart(); return d }
+
+// JustifyCenter is StyledMixin.JustifyCenter returning *Div to keep the chain.
+func (d *Div) JustifyCenter() *Div { d.StyledMixin.JustifyCenter(); return d }
+
+// JustifyEnd is StyledMixin.JustifyEnd returning *Div to keep the chain.
+func (d *Div) JustifyEnd() *Div { d.StyledMixin.JustifyEnd(); return d }
+
+// JustifyAround is StyledMixin.JustifyAround returning *Div to keep the chain.
+func (d *Div) JustifyAround() *Div { d.StyledMixin.JustifyAround(); return d }

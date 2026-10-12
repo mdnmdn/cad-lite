@@ -4,6 +4,7 @@ package ebitenplatform
 import (
 	"errors"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -15,7 +16,7 @@ import (
 // Platform is the ebiten-backed gpui.Platform. It supports a single window.
 type Platform struct {
 	win  *window
-	quit bool
+	quit atomic.Bool
 }
 
 // New returns an ebiten-backed gpui.Platform.
@@ -32,7 +33,7 @@ func (p *Platform) Name() string {
 }
 
 // Quit asks the run loop to terminate on the next update.
-func (p *Platform) Quit() { p.quit = true }
+func (p *Platform) Quit() { p.quit.Store(true) }
 
 // OpenWindow configures the single ebiten window from o.
 func (p *Platform) OpenWindow(o gpui.WindowOptions) (gpui.PlatformWindow, error) {
@@ -125,7 +126,7 @@ func (w *window) TakeInputHandler() gpui.PlatformInputHandler {
 }
 
 // Quit closes the window by terminating the run loop.
-func (w *window) Quit() { w.p.quit = true }
+func (w *window) Quit() { w.p.quit.Store(true) }
 
 type game struct {
 	p   *Platform
@@ -166,7 +167,7 @@ func (g *game) Layout(ow, oh int) (int, int) {
 }
 
 func (g *game) Update() error {
-	if g.p.quit || g.app.IsQuitting() {
+	if g.p.quit.Load() || g.app.IsQuitting() {
 		return ebiten.Termination
 	}
 	w := g.p.win
@@ -178,7 +179,7 @@ func (g *game) Update() error {
 	g.app.Update(func(app *gpui.App) {
 		g.pollInput(win, app, w)
 	})
-	if g.p.quit || g.app.IsQuitting() {
+	if g.p.quit.Load() || g.app.IsQuitting() {
 		return ebiten.Termination
 	}
 	if w.pending && w.onFrame != nil {
