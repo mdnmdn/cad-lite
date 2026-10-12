@@ -169,11 +169,55 @@ func (m *StyledMixin) M(v float32) *StyledMixin {
 	return m
 }
 
-// Bg sets the background fill color.
-func (m *StyledMixin) Bg(c Rgba) *StyledMixin {
-	m.style.Background = &c
+// Bg sets the background fill: an Rgba, an Hsla, or a Background such as
+// LinearGradient(...).
+func (m *StyledMixin) Bg(f Fill) *StyledMixin {
+	var b Background
+	if f != nil {
+		b = f.ToBackground()
+	}
+	m.style.Background = &b
 	return m
 }
+
+// Opacity sets the element's opacity (0..1); it multiplies the alpha of
+// everything the element and its descendants paint.
+func (m *StyledMixin) Opacity(f float32) *StyledMixin {
+	f = clamp32(f, 0, 1)
+	m.style.Opacity = &f
+	return m
+}
+
+// Shadow replaces the element's box shadows.
+func (m *StyledMixin) Shadow(shadows ...BoxShadow) *StyledMixin {
+	s := append([]BoxShadow(nil), shadows...)
+	m.style.BoxShadows = &s
+	return m
+}
+
+// ShadowNone removes every box shadow.
+func (m *StyledMixin) ShadowNone() *StyledMixin { return m.Shadow() }
+
+// Shadow2xs applies GPUI's shadow_2xs preset.
+func (m *StyledMixin) Shadow2xs() *StyledMixin { return m.Shadow(shadow2xs...) }
+
+// ShadowXs applies GPUI's shadow_xs preset.
+func (m *StyledMixin) ShadowXs() *StyledMixin { return m.Shadow(shadowXs...) }
+
+// ShadowSm applies GPUI's shadow_sm preset.
+func (m *StyledMixin) ShadowSm() *StyledMixin { return m.Shadow(shadowSm...) }
+
+// ShadowMd applies GPUI's shadow_md preset.
+func (m *StyledMixin) ShadowMd() *StyledMixin { return m.Shadow(shadowMd...) }
+
+// ShadowLg applies GPUI's shadow_lg preset.
+func (m *StyledMixin) ShadowLg() *StyledMixin { return m.Shadow(shadowLg...) }
+
+// ShadowXl applies GPUI's shadow_xl preset.
+func (m *StyledMixin) ShadowXl() *StyledMixin { return m.Shadow(shadowXl...) }
+
+// Shadow2xl applies GPUI's shadow_2xl preset.
+func (m *StyledMixin) Shadow2xl() *StyledMixin { return m.Shadow(shadow2xl...) }
 
 // TextColor sets the text color inherited by descendants.
 func (m *StyledMixin) TextColor(c Rgba) *StyledMixin {
@@ -312,9 +356,21 @@ func (m *StyledMixin) OverflowHidden() *StyledMixin {
 	return m
 }
 
-// OverflowScroll is OverflowHidden plus a scroll offset driven by input.
-func (m *StyledMixin) OverflowScroll() *StyledMixin {
+// OverflowScroll is OverflowHidden plus a scroll offset driven by input on
+// both axes.
+func (m *StyledMixin) OverflowScroll() *StyledMixin { return m.overflowScroll(AxesBoth) }
+
+// OverflowXScroll makes the element a scroll container that scrolls
+// horizontally. As in CSS, the other axis is clipped too.
+func (m *StyledMixin) OverflowXScroll() *StyledMixin { return m.overflowScroll(AxisX) }
+
+// OverflowYScroll makes the element a scroll container that scrolls
+// vertically. As in CSS, the other axis is clipped too.
+func (m *StyledMixin) OverflowYScroll() *StyledMixin { return m.overflowScroll(AxisY) }
+
+func (m *StyledMixin) overflowScroll(a Axes) *StyledMixin {
 	m.style.Overflow = overflowPtr(OverflowScroll)
+	m.style.ScrollAxes = &a
 	return m
 }
 

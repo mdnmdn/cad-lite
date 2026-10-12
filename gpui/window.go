@@ -62,6 +62,20 @@ type Window struct {
 	// currentElementID is the global id of the element currently being
 	// prepainted; the walker sets it before each Prepaint call.
 	currentElementID GlobalElementID
+
+	// opacity is the product of the Opacity of the elements enclosing the
+	// one being painted; Paint* multiply primitive alphas by it.
+	opacity float32
+	// focusVisible records whether the last key/mouse press came from the
+	// keyboard (CSS :focus-visible modality).
+	focusVisible bool
+	// paintHover caches, per Draw, the hitboxes of the frame being built
+	// that lie on the hit path at the pointer (for Hover styles).
+	paintHover      []int
+	paintHoverValid bool
+	// hoverAfterDraw is set while Draw re-runs hover; the frame already
+	// painted hover styles at the pointer, so no restyle redraw is needed.
+	hoverAfterDraw bool
 }
 
 // Frame is the result of one Draw: a scene plus the hitboxes, listeners and
@@ -121,6 +135,14 @@ type MouseListener struct {
 	scrollable bool
 	// scrollMax is the container's scrollable extent, captured at prepaint.
 	scrollMax Size
+	// scrollAxes are the axes the container scrolls with the wheel.
+	scrollAxes Axes
+	// focusID is the focus id a mouse-down on this element focuses (0 =
+	// not focusable).
+	focusID FocusID
+	// hoverStyle marks an element whose paint depends on hover, so hover
+	// changes must redraw.
+	hoverStyle bool
 	// parent is the index of the nearest ancestor hitbox, or -1; depth is
 	// the number of ancestor hitboxes.
 	parent, depth int
@@ -134,6 +156,9 @@ type keyNode struct {
 	OnKeyDown  func(*KeyDownEvent, *Window, *App)
 	OnKeyUp    func(*KeyUpEvent, *Window, *App)
 	OnAction   map[reflect.Type]func(Action, *Window, *App)
+	// tabIndex and tabStop place the node in Tab traversal.
+	tabIndex int
+	tabStop  bool
 	// parent is the index of the nearest ancestor key node, or -1.
 	parent int
 }
@@ -142,6 +167,9 @@ type keyNode struct {
 type scrollState struct {
 	offset     Point
 	maxW, maxH Pixels
+	// handle is the ScrollHandle tracking the container, if any; it holds
+	// the authoritative offset.
+	handle *ScrollHandle
 }
 
 // windowBinder is implemented by platform windows that need the owning
@@ -276,8 +304,13 @@ func (w *Window) focusedInputHandler() PlatformInputHandler {
 
 // InsertHitbox registers a hit-testable region for the frame being built and
 // returns its index, which pairs with the frame's MouseListener slice.
+// The hit-testable region is b clipped to the enclosing clip containers.
 func (w *Window) InsertHitbox(b Bounds) int {
-	idx := w.nextFrame.hitboxes.Insert(Hitbox{Bounds: b, Order: w.nextFrame.order})
+	hb := b
+	if len(w.clipStack) > 0 {
+		hb = b.Intersection(w.CurrentClip())
+	}
+	idx := w.nextFrame.hitboxes.Insert(Hitbox{Bounds: hb, Order: w.nextFrame.order})
 	parent := -1
 	if n := len(w.hitboxStack); n > 0 {
 		parent = w.hitboxStack[n-1]
@@ -303,18 +336,40 @@ func (w *Window) insertKeyNode(kn keyNode) {
 }
 
 // PaintQuad inserts a quad into the frame being built, filling an unset
-// content mask with the current clip.
+// content mask with the current clip and applying the element opacity.
 func (w *Window) PaintQuad(q Quad) {
 	if q.ContentMask.Bounds.Size.W <= 0 || q.ContentMask.Bounds.Size.H <= 0 {
 		q.ContentMask = ContentMask{Bounds: w.CurrentClip()}
 	}
+	if w.opacity < 1 {
+		q.Fill = q.Fill.Opacity(w.opacity)
+		q.BorderColor = q.BorderColor.Opacity(w.opacity)
+		q.Gradient.Stops[0].Color = q.Gradient.Stops[0].Color.Opacity(w.opacity)
+		q.Gradient.Stops[1].Color = q.Gradient.Stops[1].Color.Opacity(w.opacity)
+	}
 	w.nextFrame.scene.InsertQuad(q)
+}
+
+// PaintShadow inserts a box shadow into the frame being built, filling an
+// unset content mask with the current clip and applying the element
+// opacity.
+func (w *Window) PaintShadow(s Shadow) {
+	if s.ContentMask.Bounds.Size.W <= 0 || s.ContentMask.Bounds.Size.H <= 0 {
+		s.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+	}
+	if w.opacity < 1 {
+		s.Color = s.Color.Opacity(w.opacity)
+	}
+	w.nextFrame.scene.InsertShadow(s)
 }
 
 // PaintUnderline inserts an underline into the frame being built.
 func (w *Window) PaintUnderline(u Underline) {
 	if u.ContentMask.Bounds.Size.W <= 0 || u.ContentMask.Bounds.Size.H <= 0 {
 		u.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+	}
+	if w.opacity < 1 {
+		u.Color = u.Color.Opacity(w.opacity)
 	}
 	w.nextFrame.scene.InsertUnderline(u)
 }
@@ -323,6 +378,9 @@ func (w *Window) PaintUnderline(u Underline) {
 func (w *Window) PaintGlyph(g GlyphSprite) {
 	if g.ContentMask.Bounds.Size.W <= 0 || g.ContentMask.Bounds.Size.H <= 0 {
 		g.ContentMask = ContentMask{Bounds: w.CurrentClip()}
+	}
+	if w.opacity < 1 {
+		g.Color = g.Color.Opacity(w.opacity)
 	}
 	w.nextFrame.scene.InsertSprite(g)
 }
@@ -404,22 +462,15 @@ func (w *Window) ScrollOffset(id GlobalElementID) Point {
 }
 
 // SetScrollOffset stores a scroll offset for id, clamped to the extent
-// captured at the last prepaint of that element.
+// captured at the last prepaint of that element. A ScrollHandle tracking
+// the container is updated too.
 func (w *Window) SetScrollOffset(id GlobalElementID, p Point) {
 	key := globalIDKey(id)
 	st, _ := w.elementStates[key].(scrollState)
 	st.offset = Point{X: clampf(p.X, 0, st.maxW), Y: clampf(p.Y, 0, st.maxH)}
-	w.elementStates[key] = st
-}
-
-// initScrollState records a scroll container's extent, keeping any existing
-// offset clamped to it.
-func (w *Window) initScrollState(id GlobalElementID, max Size) {
-	key := globalIDKey(id)
-	st, _ := w.elementStates[key].(scrollState)
-	st.maxW, st.maxH = max.W, max.H
-	st.offset.X = clampf(st.offset.X, 0, st.maxW)
-	st.offset.Y = clampf(st.offset.Y, 0, st.maxH)
+	if st.handle != nil {
+		st.handle.SetOffset(st.offset)
+	}
 	w.elementStates[key] = st
 }
 
@@ -471,6 +522,8 @@ func (w *Window) Draw(cx *App) {
 	w.clipStack = w.clipStack[:0]
 	w.hitboxStack = w.hitboxStack[:0]
 	w.keyStack = w.keyStack[:0]
+	w.opacity = 1
+	w.paintHoverValid = false
 
 	var el Element
 	if w.root != nil {
@@ -501,11 +554,13 @@ func (w *Window) Draw(cx *App) {
 
 	// The tree under a stationary pointer may have changed: re-run hover.
 	if w.hasMouse {
+		w.hoverAfterDraw = true
 		if cx != nil {
 			cx.Update(func(cx *App) { w.updateHover(w.mousePosition, cx) })
 		} else {
 			w.updateHover(w.mousePosition, nil)
 		}
+		w.hoverAfterDraw = false
 	}
 }
 
@@ -575,7 +630,17 @@ func (w *Window) buildRenderNode(el Element, gid GlobalElementID, node *LayoutNo
 	}
 	childOrigin := Point{X: origin.X + rect.Origin.X, Y: origin.Y + rect.Origin.Y}
 	if node != nil && node.Style.Overflow != OverflowVisible {
-		off := w.ScrollOffset(gid)
+		var h *ScrollHandle
+		if de, ok := el.(divElement); ok {
+			h = de.d.scrollHandle
+		}
+		mw, mh := node.ScrollMax()
+		off := w.syncScroll(gid, h, rn.bounds, node.Style.Padding, Size{W: mw, H: mh}, func(ix int) (Bounds, bool) {
+			if ix < 0 || ix >= len(node.Children) || node.Children[ix] == nil {
+				return Bounds{}, false
+			}
+			return node.Children[ix].Rect, true
+		})
 		childOrigin.X -= off.X
 		childOrigin.Y -= off.Y
 	}
@@ -622,6 +687,16 @@ func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
 	hb, kb := len(w.nextFrame.mouseListeners), len(w.nextFrame.keyNodes)
 	w.currentElementID = n.id
 	n.prepaint = n.elem.Prepaint(w, cx, ElementID{Path: n.id.Path}, n.bounds, n.state)
+	if lc, ok := n.prepaint.(lateChildren); ok {
+		n.children = append(n.children, lc.lateChildren()...)
+	}
+	clipped := false
+	if sc, ok := n.prepaint.(paintScoper); ok {
+		clipped = sc.clipsChildren()
+	}
+	if clipped {
+		w.PushClip(n.bounds)
+	}
 	pushedHitbox := len(w.nextFrame.mouseListeners) > hb
 	pushedKey := len(w.nextFrame.keyNodes) > kb
 	if pushedHitbox {
@@ -642,6 +717,53 @@ func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
 	if pushedKey {
 		w.keyStack = w.keyStack[:len(w.keyStack)-1]
 	}
+	if clipped {
+		w.PopClip()
+	}
+}
+
+// paintScoper is implemented by prepaint states of elements that clip their
+// children or resolve their paint style (hover/focus) at paint time.
+type paintScoper interface {
+	// clipsChildren reports whether children are clipped to the bounds.
+	clipsChildren() bool
+	// paintOpacity resolves the element's paint style and returns its
+	// opacity; called once per frame, before Paint.
+	paintOpacity(w *Window) float32
+}
+
+// scrollbarPainter is implemented by prepaint states of scroll containers;
+// paintScrollbar runs after the children, inside the container's clip.
+type scrollbarPainter interface {
+	paintScrollbar(w *Window)
+}
+
+// lateChildren is implemented by prepaint states of elements that create
+// their children during prepaint (UniformList); they are appended to the
+// render node and walked like ordinary children.
+type lateChildren interface {
+	lateChildren() []*renderNode
+}
+
+// isHoveredHitbox reports whether hitbox i of the frame being built is on
+// the hit path at the pointer. Valid from paint on (all hitboxes exist).
+func (w *Window) isHoveredHitbox(i int) bool {
+	if !w.hasMouse || i < 0 {
+		return false
+	}
+	if !w.paintHoverValid {
+		w.paintHover = w.paintHover[:0]
+		for j := w.nextFrame.hitboxes.HitTest(w.mousePosition); j >= 0; j = w.nextFrame.mouseListeners[j].parent {
+			w.paintHover = append(w.paintHover, j)
+		}
+		w.paintHoverValid = true
+	}
+	for _, j := range w.paintHover {
+		if j == i {
+			return true
+		}
+	}
+	return false
 }
 
 // paintTree walks the render tree in order: paint the element, then its
@@ -656,8 +778,16 @@ func (w *Window) paintTree(n *renderNode, cx *App) {
 	if n.layout != nil && !n.layout.Style.Display {
 		return
 	}
-	st, isDiv := n.prepaint.(*divPrepaint)
-	pushed := isDiv && st.clipped
+	opacity := float32(1)
+	pushed := false
+	if sc, ok := n.prepaint.(paintScoper); ok {
+		opacity = sc.paintOpacity(w)
+		pushed = sc.clipsChildren()
+	}
+	prevOpacity := w.opacity
+	if opacity < 1 {
+		w.opacity *= max(opacity, 0)
+	}
 	if pushed {
 		w.PushClip(n.bounds)
 	}
@@ -665,9 +795,13 @@ func (w *Window) paintTree(n *renderNode, cx *App) {
 	for _, c := range n.children {
 		w.paintTree(c, cx)
 	}
+	if sp, ok := n.prepaint.(scrollbarPainter); ok {
+		sp.paintScrollbar(w)
+	}
 	if pushed {
 		w.PopClip()
 	}
+	w.opacity = prevOpacity
 }
 
 // DispatchEvent routes one platform input event through the rendered frame.
@@ -678,10 +812,16 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 	switch e := input.(type) {
 	case MouseDownEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		w.setFocusVisible(false)
 		ev := e
+		focused := false
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseDown != nil {
 				l.OnMouseDown(&ev, w, cx)
+			}
+			if !focused && l.focusID != 0 {
+				focused = true
+				w.focusID(l.focusID)
 			}
 		})
 	case MouseUpEvent:
@@ -715,6 +855,7 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 	case ScrollWheelEvent:
 		w.dispatchScroll(e, cx)
 	case KeyDownEvent:
+		w.setFocusVisible(true)
 		w.dispatchKeyDown(e, cx)
 	case KeyUpEvent:
 		w.dispatchKeyUp(e, cx)
@@ -756,10 +897,11 @@ func (w *Window) updateHover(pos Point, cx *App) {
 	path := w.hitPath(pos)
 	now := make(map[string]int, len(path))
 	for _, i := range path {
-		if ls[i].OnHoverStart != nil || ls[i].OnHoverEnd != nil {
+		if ls[i].OnHoverStart != nil || ls[i].OnHoverEnd != nil || ls[i].hoverStyle {
 			now[globalIDKey(ls[i].elementID)] = i
 		}
 	}
+	restyle := false
 
 	type gone struct {
 		key   string
@@ -780,8 +922,11 @@ func (w *Window) updateHover(pos Point, cx *App) {
 	for _, g := range ended {
 		delete(w.hovered, g.key)
 		for i := range ls {
-			if ls[i].OnHoverEnd != nil && globalIDKey(ls[i].elementID) == g.key {
-				ls[i].OnHoverEnd(w, cx)
+			if (ls[i].OnHoverEnd != nil || ls[i].hoverStyle) && globalIDKey(ls[i].elementID) == g.key {
+				restyle = restyle || ls[i].hoverStyle
+				if ls[i].OnHoverEnd != nil {
+					ls[i].OnHoverEnd(w, cx)
+				}
 				break
 			}
 		}
@@ -800,15 +945,19 @@ func (w *Window) updateHover(pos Point, cx *App) {
 			w.hovered = make(map[string]int)
 		}
 		w.hovered[k] = l.depth
+		restyle = restyle || l.hoverStyle
 		if l.OnHoverStart != nil {
 			l.OnHoverStart(w, cx)
 		}
 	}
+	if restyle && !w.hoverAfterDraw {
+		w.Refresh()
+	}
 }
 
-// dispatchScroll runs OnScrollWheel over the hit path, then clamps and
-// stores a scroll offset for the innermost scroll container under the
-// cursor and requests a redraw.
+// dispatchScroll runs OnScrollWheel over the hit path, then offers the
+// delta to the scroll containers under the cursor, innermost first: the
+// first whose offset changes takes it and requests a redraw.
 func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 	ev := e
 	w.mousePosition, w.hasMouse = e.Position, true
@@ -822,15 +971,91 @@ func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 		if !l.scrollable {
 			continue
 		}
-		key := globalIDKey(l.elementID)
-		st, _ := w.elementStates[key].(scrollState)
-		st.maxW, st.maxH = l.scrollMax.W, l.scrollMax.H
-		st.offset.X = clampf(st.offset.X+e.DeltaX, 0, st.maxW)
-		st.offset.Y = clampf(st.offset.Y+e.DeltaY, 0, st.maxH)
-		w.elementStates[key] = st
-		w.Refresh()
+		if w.applyWheel(l, e) {
+			w.Refresh()
+			return
+		}
+	}
+}
+
+// focusID moves focus to id if it is still alive.
+func (w *Window) focusID(id FocusID) {
+	if id == 0 || w.focus == id {
 		return
 	}
+	if w.app != nil && !w.app.focusMap.alive(id) {
+		return
+	}
+	w.focus = id
+	w.Refresh()
+}
+
+// setFocusVisible records the input modality, redrawing when it flips while
+// something is focused (FocusVisible styles depend on it).
+func (w *Window) setFocusVisible(v bool) {
+	if w.focusVisible == v {
+		return
+	}
+	w.focusVisible = v
+	if w.focus != 0 {
+		w.Refresh()
+	}
+}
+
+// FocusVisible reports whether the last key or mouse press came from the
+// keyboard; FocusVisible styles apply only then (CSS :focus-visible).
+func (w *Window) FocusVisible() bool { return w.focusVisible }
+
+// tabStops returns the rendered frame's tab stops in traversal order: by
+// tab index, ties in tree order, each focus id once.
+func (w *Window) tabStops() []FocusID {
+	type stop struct {
+		id  FocusID
+		idx int
+	}
+	var stops []stop
+	seen := map[FocusID]bool{}
+	for _, n := range w.renderedFrame.keyNodes {
+		if n.FocusID == 0 || !n.tabStop || seen[n.FocusID] {
+			continue
+		}
+		seen[n.FocusID] = true
+		stops = append(stops, stop{n.FocusID, n.tabIndex})
+	}
+	sort.SliceStable(stops, func(a, b int) bool { return stops[a].idx < stops[b].idx })
+	ids := make([]FocusID, len(stops))
+	for i, s := range stops {
+		ids[i] = s.id
+	}
+	return ids
+}
+
+// FocusNext moves focus to the next tab stop of the rendered frame (by tab
+// index, ties in tree order), wrapping; with no focused stop it focuses the
+// first. Tab is not bound by default: bind it to an action that calls this.
+func (w *Window) FocusNext() { w.focusStep(1) }
+
+// FocusPrev moves focus to the previous tab stop, wrapping; with no focused
+// stop it focuses the last.
+func (w *Window) FocusPrev() { w.focusStep(-1) }
+
+func (w *Window) focusStep(d int) {
+	ids := w.tabStops()
+	n := len(ids)
+	if n == 0 {
+		return
+	}
+	cur := slices.Index(ids, w.focus)
+	var next int
+	switch {
+	case cur < 0 && d > 0:
+		next = 0
+	case cur < 0:
+		next = n - 1
+	default:
+		next = ((cur+d)%n + n) % n
+	}
+	w.focusID(ids[next])
 }
 
 // keyPath returns the key nodes a key event traverses, root first; the last

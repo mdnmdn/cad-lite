@@ -90,6 +90,21 @@ const (
 	OverflowScroll
 )
 
+// Axes is a bit set of the two layout axes.
+type Axes uint8
+
+const (
+	// AxisX is the horizontal axis.
+	AxisX Axes = 1 << iota
+	// AxisY is the vertical axis.
+	AxisY
+	// AxesBoth is AxisX | AxisY.
+	AxesBoth = AxisX | AxisY
+)
+
+// Has reports whether every axis in o is in a.
+func (a Axes) Has(o Axes) bool { return a&o == o }
+
 // TextStyle describes how a run of text is rendered. It is opaque to the
 // layout engine, which only needs the resulting metrics.
 type TextStyle struct {
@@ -141,7 +156,15 @@ type Style struct {
 	BorderWidths Edges
 	BorderColor  Rgba
 	CornerRadii  Corners
-	Background   Rgba
+	// Background is the fill; a transparent one paints no quad.
+	Background Background
+	// BoxShadows are painted outside (or, inset, inside) the border box.
+	BoxShadows []BoxShadow
+	// Opacity multiplies the alpha of everything the element and its
+	// descendants paint; 1 is opaque.
+	Opacity float32
+	// ScrollAxes are the axes an OverflowScroll container scrolls.
+	ScrollAxes Axes
 
 	TextStyle TextStyle
 }
@@ -163,6 +186,8 @@ func DefaultStyle() Style {
 		AlignItems: AlignStretch,
 		AlignSelf:  AlignSelfAuto,
 		Overflow:   OverflowVisible,
+		Opacity:    1,
+		ScrollAxes: AxesBoth,
 		TextStyle:  DefaultTextStyle(),
 	}
 }
@@ -279,7 +304,10 @@ type StyleRefinement struct {
 	BorderWidths *Edges
 	BorderColor  *Rgba
 	CornerRadii  *Corners
-	Background   *Rgba
+	Background   *Background
+	BoxShadows   *[]BoxShadow
+	Opacity      *float32
+	ScrollAxes   *Axes
 
 	TextStyle *TextStyle
 }
@@ -355,8 +383,55 @@ func (r *StyleRefinement) Refine(base Style) Style {
 	if r.Background != nil {
 		out.Background = *r.Background
 	}
+	if r.BoxShadows != nil {
+		out.BoxShadows = *r.BoxShadows
+	}
+	if r.Opacity != nil {
+		out.Opacity = *r.Opacity
+	}
+	if r.ScrollAxes != nil {
+		out.ScrollAxes = *r.ScrollAxes
+	}
 	if r.TextStyle != nil {
 		out.TextStyle = *r.TextStyle
 	}
 	return out
+}
+
+// merge overwrites r's fields with every field set in o.
+func (r *StyleRefinement) merge(o *StyleRefinement) {
+	if o == nil {
+		return
+	}
+	mergePtr(&r.Display, o.Display)
+	mergePtr(&r.Direction, o.Direction)
+	mergePtr(&r.Width, o.Width)
+	mergePtr(&r.Height, o.Height)
+	mergePtr(&r.MinWidth, o.MinWidth)
+	mergePtr(&r.MinHeight, o.MinHeight)
+	mergePtr(&r.MaxWidth, o.MaxWidth)
+	mergePtr(&r.MaxHeight, o.MaxHeight)
+	mergePtr(&r.Margin, o.Margin)
+	mergePtr(&r.Padding, o.Padding)
+	mergePtr(&r.Gap, o.Gap)
+	mergePtr(&r.FlexGrow, o.FlexGrow)
+	mergePtr(&r.FlexShrink, o.FlexShrink)
+	mergePtr(&r.Justify, o.Justify)
+	mergePtr(&r.AlignItems, o.AlignItems)
+	mergePtr(&r.AlignSelf, o.AlignSelf)
+	mergePtr(&r.Overflow, o.Overflow)
+	mergePtr(&r.BorderWidths, o.BorderWidths)
+	mergePtr(&r.BorderColor, o.BorderColor)
+	mergePtr(&r.CornerRadii, o.CornerRadii)
+	mergePtr(&r.Background, o.Background)
+	mergePtr(&r.BoxShadows, o.BoxShadows)
+	mergePtr(&r.Opacity, o.Opacity)
+	mergePtr(&r.ScrollAxes, o.ScrollAxes)
+	mergePtr(&r.TextStyle, o.TextStyle)
+}
+
+func mergePtr[T any](dst **T, src *T) {
+	if src != nil {
+		*dst = src
+	}
 }

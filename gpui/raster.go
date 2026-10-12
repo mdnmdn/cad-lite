@@ -14,8 +14,13 @@ type Rasterizer struct {
 
 	// scratch slices reused across Render calls for the sorted primitives.
 	quads      []Quad
+	shadows    []Shadow
 	underlines []Underline
 	sprites    []GlyphSprite
+
+	// lut and rowBuf are scratch space for gradient and shadow fills.
+	lut    gradientLUT
+	rowBuf []float32
 }
 
 // NewRasterizer allocates a w×h rasterizer whose buffer starts fully
@@ -48,16 +53,30 @@ func (r *Rasterizer) Reset(clear Rgba) {
 	}
 }
 
-// Render draws every quad, then every underline, then every sprite; each
-// group in ascending Order with ties broken by insertion order. This keeps
-// text on top of backgrounds.
+// Render draws every quad and shadow (merged by Order), then every
+// underline, then every sprite; each group in ascending Order with ties
+// broken by insertion order. This keeps text on top of backgrounds.
 func (r *Rasterizer) Render(s *Scene) {
 	if s == nil {
 		return
 	}
 	r.quads = sortByOrder(append(r.quads[:0], s.Quads...), func(q Quad) uint32 { return q.Order })
-	for i := range r.quads {
-		r.drawQuad(r.quads[i])
+	if len(s.Shadows) == 0 {
+		for i := range r.quads {
+			r.drawQuad(r.quads[i])
+		}
+	} else {
+		r.shadows = sortByOrder(append(r.shadows[:0], s.Shadows...), func(sh Shadow) uint32 { return sh.Order })
+		j := 0
+		for i := range r.quads {
+			for ; j < len(r.shadows) && r.shadows[j].Order <= r.quads[i].Order; j++ {
+				r.drawShadow(r.shadows[j])
+			}
+			r.drawQuad(r.quads[i])
+		}
+		for ; j < len(r.shadows); j++ {
+			r.drawShadow(r.shadows[j])
+		}
 	}
 
 	r.underlines = sortByOrder(append(r.underlines[:0], s.Underlines...), func(u Underline) uint32 { return u.Order })
@@ -112,6 +131,9 @@ func (r *Rasterizer) drawQuad(q Quad) {
 	}
 	if q.Background == BackgroundSolid && !q.Fill.IsTransparent() {
 		r.fillRounded(q.Bounds, q.CornerRadii, clip, q.Fill)
+	}
+	if q.Background == BackgroundLinearGradient {
+		r.fillGradient(q.Bounds, q.CornerRadii, clip, q.Gradient)
 	}
 	bw := q.BorderWidths
 	if !q.BorderColor.IsTransparent() && (bw.Top > 0 || bw.Right > 0 || bw.Bottom > 0 || bw.Left > 0) {
@@ -511,6 +533,15 @@ func scaleScene(s *Scene, scale float32, out *Scene) *Scene {
 		q.CornerRadii = Corners{TopLeft: q.CornerRadii.TopLeft * k, TopRight: q.CornerRadii.TopRight * k, BottomLeft: q.CornerRadii.BottomLeft * k, BottomRight: q.CornerRadii.BottomRight * k}
 		out.Quads = append(out.Quads, q)
 	}
+	for _, sh := range s.Shadows {
+		sh.Bounds = sb(sh.Bounds)
+		sh.Clip = sb(sh.Clip)
+		sh.ContentMask = sm(sh.ContentMask)
+		sh.BlurRadius *= k
+		sh.CornerRadii = scaleCorners(sh.CornerRadii, k)
+		sh.ClipRadii = scaleCorners(sh.ClipRadii, k)
+		out.Shadows = append(out.Shadows, sh)
+	}
 	for _, u := range s.Underlines {
 		u.Bounds = sb(u.Bounds)
 		u.ContentMask = sm(u.ContentMask)
@@ -523,4 +554,245 @@ func scaleScene(s *Scene, scale float32, out *Scene) *Scene {
 		out.Sprites = append(out.Sprites, g)
 	}
 	return out
+}
+
+func scaleCorners(c Corners, k Pixels) Corners {
+	return Corners{TopLeft: c.TopLeft * k, TopRight: c.TopRight * k, BottomLeft: c.BottomLeft * k, BottomRight: c.BottomRight * k}
+}
+
+// fillGradient fills the rounded rect b with the linear gradient g,
+// anti-aliased like fillRounded; colors come from a per-call lookup table.
+func (r *Rasterizer) fillGradient(b Bounds, radii Corners, clip Bounds, g Gradient) {
+	if g.Stops[0].Color.A == 0 && g.Stops[1].Color.A == 0 {
+		return
+	}
+	x0, y0, x1, y1, ok := r.coverWindow(b, clip)
+	if !ok {
+		return
+	}
+	g.buildLUT(&r.lut)
+	m := newGradientMapper(b, g)
+	rr := newRRect(b, radii)
+	for y := y0; y < y1; y++ {
+		py := float32(y) + 0.5
+		a, z := rr.solidRow(py, x0, x1)
+		for x := x0; x < x1; x++ {
+			px := float32(x) + 0.5
+			cov := float32(1)
+			if x < a || x >= z {
+				if cov = rr.coverage(px, py); cov <= 0 {
+					continue
+				}
+			}
+			c := &r.lut[m.index(px, py)]
+			if c[3] <= 0 {
+				continue
+			}
+			r.blend(x, y, c[0]*cov, c[1]*cov, c[2]*cov, c[3]*cov)
+		}
+	}
+}
+
+// phiRange and phiN define the standard normal CDF lookup table: phiN
+// samples over [-phiRange, phiRange].
+const (
+	phiRange = 4
+	phiN     = 1024
+)
+
+var phiTable = func() (t [phiN + 1]float32) {
+	for i := range t {
+		z := float64(i)/phiN*2*phiRange - phiRange
+		t[i] = float32(0.5 * math.Erfc(-z/math.Sqrt2))
+	}
+	return t
+}()
+
+// phi is the standard normal CDF, linearly interpolated from phiTable.
+func phi(z float32) float32 {
+	if z <= -phiRange {
+		return 0
+	}
+	if z >= phiRange {
+		return 1
+	}
+	f := (z + phiRange) * (phiN / (2 * phiRange))
+	i := int(f)
+	t := f - float32(i)
+	return phiTable[i] + (phiTable[i+1]-phiTable[i])*t
+}
+
+// dist is the signed distance from the pixel center (px, py) to the
+// rounded rect (negative inside).
+func (r rrect) dist(px, py float32) float32 {
+	var rad float32
+	switch {
+	case px < r.cx && py < r.cy:
+		rad = r.rTL
+	case px >= r.cx && py < r.cy:
+		rad = r.rTR
+	case px < r.cx && py >= r.cy:
+		rad = r.rBL
+	default:
+		rad = r.rBR
+	}
+	qx := abs32(px-r.cx) - (r.hw - rad)
+	qy := abs32(py-r.cy) - (r.hh - rad)
+	ox, oy := maxf32(qx, 0), maxf32(qy, 0)
+	var outside float32
+	switch {
+	case oy == 0:
+		outside = ox
+	case ox == 0:
+		outside = oy
+	default:
+		outside = float32(math.Sqrt(float64(ox*ox + oy*oy)))
+	}
+	return outside + minf32(maxf32(qx, qy), 0) - rad
+}
+
+// blurredShape evaluates the coverage of a gaussian-blurred rounded rect:
+// min(Φ(-sdf/σ), box blur), where the separable box blur of the rect is
+// fx (per column, precomputed) times fy (per row). It is exact for square
+// corners and a close approximation for rounded ones.
+type blurredShape struct {
+	rr       rrect
+	invSigma float32
+	minX     float32
+	maxX     float32
+	minY     float32
+	maxY     float32
+}
+
+func newBlurredShape(b Bounds, radii Corners, sigma float32) blurredShape {
+	return blurredShape{
+		rr:       newRRect(b, radii),
+		invSigma: 1 / sigma,
+		minX:     float32(b.Origin.X), maxX: float32(b.Max().X),
+		minY: float32(b.Origin.Y), maxY: float32(b.Max().Y),
+	}
+}
+
+func (s *blurredShape) colFactors(buf []float32, x0 int) {
+	for i := range buf {
+		px := float32(x0+i) + 0.5
+		buf[i] = phi((px-s.minX)*s.invSigma) - phi((px-s.maxX)*s.invSigma)
+	}
+}
+
+func (s *blurredShape) rowFactor(py float32) float32 {
+	return phi((py-s.minY)*s.invSigma) - phi((py-s.maxY)*s.invSigma)
+}
+
+func (s *blurredShape) coverage(px, py, box float32) float32 {
+	if box <= 0 {
+		return 0
+	}
+	if c := phi(-s.rr.dist(px, py) * s.invSigma); c < box {
+		return c
+	}
+	return box
+}
+
+// drawShadow paints an outset or inset box shadow. The pixel loop is
+// bounded by the shape grown by 3σ (outset) or by the element (inset).
+func (r *Rasterizer) drawShadow(sh Shadow) {
+	if sh.Color.IsTransparent() || sh.ContentMask.Bounds.IsEmpty() {
+		return
+	}
+	sigma := float32(sh.BlurRadius) / 2
+	if sh.Inset {
+		r.drawInsetShadow(sh, sigma)
+		return
+	}
+	if sh.Bounds.IsEmpty() {
+		return
+	}
+	if sigma < 0.05 {
+		r.fillRounded(sh.Bounds, sh.CornerRadii, sh.ContentMask.Bounds, sh.Color)
+		return
+	}
+	ext := Pixels(3 * sigma)
+	area := sh.Bounds.Inset(Edges{Top: -ext, Right: -ext, Bottom: -ext, Left: -ext})
+	x0, y0, x1, y1, ok := r.coverWindow(area, sh.ContentMask.Bounds)
+	if !ok {
+		return
+	}
+	bs := newBlurredShape(sh.Bounds, sh.CornerRadii, sigma)
+	fx := r.rowScratch(x1 - x0)
+	bs.colFactors(fx, x0)
+	pm := sh.Color.Premultiply()
+	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
+	for y := y0; y < y1; y++ {
+		py := float32(y) + 0.5
+		fy := bs.rowFactor(py)
+		if fy <= 0 {
+			continue
+		}
+		for x := x0; x < x1; x++ {
+			cov := bs.coverage(float32(x)+0.5, py, fx[x-x0]*fy)
+			if cov <= 0.5/255 {
+				continue
+			}
+			r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
+		}
+	}
+}
+
+func (r *Rasterizer) drawInsetShadow(sh Shadow, sigma float32) {
+	x0, y0, x1, y1, ok := r.coverWindow(sh.Clip, sh.ContentMask.Bounds)
+	if !ok {
+		return
+	}
+	outer := newRRect(sh.Clip, sh.ClipRadii)
+	hasHole := !sh.Bounds.IsEmpty()
+	crisp := sigma < 0.05
+	var bs blurredShape
+	var hole rrect
+	fx := r.rowScratch(x1 - x0)
+	if hasHole {
+		if crisp {
+			hole = newRRect(sh.Bounds, sh.CornerRadii)
+		} else {
+			bs = newBlurredShape(sh.Bounds, sh.CornerRadii, sigma)
+			bs.colFactors(fx, x0)
+		}
+	}
+	pm := sh.Color.Premultiply()
+	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
+	for y := y0; y < y1; y++ {
+		py := float32(y) + 0.5
+		var fy float32
+		if hasHole && !crisp {
+			fy = bs.rowFactor(py)
+		}
+		for x := x0; x < x1; x++ {
+			px := float32(x) + 0.5
+			cov := outer.coverage(px, py)
+			if cov <= 0 {
+				continue
+			}
+			if hasHole {
+				var in float32
+				if crisp {
+					in = hole.coverage(px, py)
+				} else {
+					in = bs.coverage(px, py, fx[x-x0]*fy)
+				}
+				cov *= 1 - in
+			}
+			if cov <= 0.5/255 {
+				continue
+			}
+			r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
+		}
+	}
+}
+
+// rowScratch returns a reusable float slice of length n.
+func (r *Rasterizer) rowScratch(n int) []float32 {
+	if cap(r.rowBuf) < n {
+		r.rowBuf = make([]float32, n)
+	}
+	return r.rowBuf[:n]
 }

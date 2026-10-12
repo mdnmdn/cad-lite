@@ -125,10 +125,21 @@ type Style struct {
     BorderWidths Edges
     BorderColor  Rgba
     CornerRadii  Corners
-    Background   Rgba // Transparent means "no background quad"
+    Background   Background // solid color or linear gradient; transparent => no quad
+    BoxShadows   []BoxShadow
+    Opacity      float32    // default 1; multiplies the alpha of the whole subtree at paint
+    ScrollAxes   Axes       // axes OverflowScroll scrolls; default AxesBoth
 
     TextStyle TextStyle
 }
+
+// Axes is a bit set of axes.
+type Axes uint8
+const (
+    AxisX Axes = 1 << iota
+    AxisY
+    AxesBoth = AxisX | AxisY
+)
 
 // StyleRefinement is the partial/fluent form; Refine(base) fills unset fields
 // from base. All fields are pointers so "unset" is distinguishable.
@@ -148,7 +159,10 @@ type StyleRefinement struct {
     BorderWidths              *Edges
     BorderColor               *Rgba
     CornerRadii               *Corners
-    Background                *Rgba
+    Background                *Background
+    BoxShadows                *[]BoxShadow
+    Opacity                   *float32
+    ScrollAxes                *Axes
     TextStyle                 *TextStyle
 }
 func (r *StyleRefinement) Refine(base Style) Style
@@ -194,7 +208,11 @@ func (m *StyledMixin) Pt(v float32) *T
 func (m *StyledMixin) Pr(v float32) *T
 func (m *StyledMixin) Pb(v float32) *T
 func (m *StyledMixin) M(v float32) *T
-func (m *StyledMixin) Bg(c Rgba) *T
+func (m *StyledMixin) Bg(f Fill) *T                 // Rgba, Hsla or a Background (e.g. LinearGradient)
+func (m *StyledMixin) Opacity(f float32) *T         // subtree opacity, see §3b
+func (m *StyledMixin) Shadow(s ...BoxShadow) *T     // replaces the shadow list
+func (m *StyledMixin) ShadowNone() *T
+func (m *StyledMixin) Shadow2xs() *T / ShadowXs / ShadowSm / ShadowMd / ShadowLg / ShadowXl / Shadow2xl
 func (m *StyledMixin) TextColor(c Rgba) *T
 func (m *StyledMixin) TextSize(px float32) *T
 func (m *StyledMixin) FontWeight(w int) *T
@@ -212,7 +230,9 @@ func (m *StyledMixin) JustifyEnd() *T
 func (m *StyledMixin) JustifyBetween() *T
 func (m *StyledMixin) JustifyAround() *T
 func (m *StyledMixin) OverflowHidden() *T
-func (m *StyledMixin) OverflowScroll() *T
+func (m *StyledMixin) OverflowScroll() *T          // scrolls both axes
+func (m *StyledMixin) OverflowXScroll() *T         // Overflow=Scroll, ScrollAxes=AxisX
+func (m *StyledMixin) OverflowYScroll() *T         // Overflow=Scroll, ScrollAxes=AxisY
 func (m *StyledMixin) MinW(v float32) *T
 func (m *StyledMixin) MinH(v float32) *T
 func (m *StyledMixin) MaxW(v float32) *T
@@ -223,6 +243,84 @@ func (m *StyledMixin) MaxH(v float32) *T
 > `Width=Flex(1)` and `Height=Flex(1)` when the parent is a flex container of the
 > matching direction, and additionally sets `MinWidth/MinHeight` to `Px(0)` so the
 > automatic minimum size does not block shrinking. Document this deviation.
+
+Per-axis overflow follows CSS: when one axis scrolls the other is clipped
+too (`visible` computes to `auto`), so a single `Overflow` kind drives
+clipping and layout and `ScrollAxes` only restricts which axes take wheel
+input. *Div, *Text and *UniformList forward the common methods so a chain
+keeps its concrete type.
+
+## 3b. `background.go`, `shadow.go` — fills, gradients, shadows, opacity
+
+```go
+// Fill is anything usable as a background: Rgba, Hsla, Background.
+type Fill interface{ ToBackground() Background }
+func (c Rgba) ToBackground() Background
+func (c Hsla) ToBackground() Background
+
+type ColorSpace uint8
+const (ColorSpaceSrgb ColorSpace = iota; ColorSpaceOklab)
+func (c ColorSpace) String() string // "sRGB", "Oklab"
+
+// ColorStop is GPUI's LinearColorStop (the type is renamed because Go
+// cannot have a type and a function with one name).
+type ColorStop struct {
+    Color      Rgba
+    Percentage float32 // 0..1 along the gradient line
+}
+func LinearColorStop(c Rgba, percentage float32) ColorStop
+
+// Gradient is a two-stop linear gradient. Angle is in degrees with CSS
+// semantics: 0 = towards the top, 90 = towards the right.
+type Gradient struct {
+    Angle float32
+    Stops [2]ColorStop
+    Space ColorSpace
+}
+
+type Background struct {
+    Kind     BackgroundKind // None, Solid, LinearGradient
+    Solid    Rgba
+    Gradient Gradient
+}
+func SolidBackground(c Rgba) Background
+func LinearGradient(angle float32, from, to ColorStop) Background
+func (b Background) ColorSpace(cs ColorSpace) Background // builder (GPUI .color_space)
+func (b Background) Opacity(f float32) Background          // multiplies every alpha
+func (b Background) IsTransparent() bool
+func (b Background) ToBackground() Background
+
+type BoxShadow struct {
+    Color        Rgba
+    Offset       Point
+    BlurRadius   Pixels // gaussian sigma = BlurRadius/2 (CSS)
+    SpreadRadius Pixels
+    Inset        bool
+}
+func NewBoxShadow(offsetX, offsetY float32, color Rgba) BoxShadow
+func (s BoxShadow) WithBlur(r float32) BoxShadow
+func (s BoxShadow) WithSpread(r float32) BoxShadow
+func (s BoxShadow) AsInset() BoxShadow
+```
+
+Gradient geometry is GPUI's shader: direction `(cos(a-90°), sin(a-90°))`
+with the short side expanded to the long one, `t` projected through the
+quad's center and remapped by the stop percentages, then clamped;
+interpolation of straight-alpha colors in sRGB or Oklab.
+
+Shadow presets match GPUI (`styled.rs`, Tailwind v4): `2xs` (0,1) blur 0
+a.05; `xs` (0,1) blur 2 a.05; `sm` (0,1) blur 3 a.1 + (0,1) blur 2 spread −1
+a.1; `md` (0,4) blur 6 spread −1 + (0,2) blur 4 spread −2, a.1; `lg` (0,10)
+blur 15 spread −3 + (0,4) blur 6 spread −4, a.1; `xl` (0,20) blur 25 spread
+−5 + (0,8) blur 10 spread −6, a.1; `2xl` (0,25) blur 50 spread −12 a.25.
+
+Div paint order: outset shadows, background, inset shadows, border, then the
+children. `Opacity` is honoured by *Div and *UniformList (elements whose
+prepaint state resolves a paint scope); on *Text it is ignored, as GPUI text
+is not styled. Opacity is GPUI's element opacity: the window keeps a running
+product of the ancestors' `Opacity` and multiplies the alpha of every
+primitive painted inside the subtree (overlapping children are not
+composited as a group, exactly as in GPUI). Opacity 1 changes nothing.
 
 ## 4. `layout.go` — the flexbox engine
 
@@ -408,8 +506,87 @@ func (d *Div) OnHoverEnd(f func(*Window, *App)) *Div
 func (d *Div) OnAction(action Action, f func(Action, *Window, *App)) *Div
 func (d *Div) TrackFocus(h *FocusHandle) *Div
 func (d *Div) KeyContext(ctx string) *Div
-func (d *Div) TabIndex(i int) *Div
+func (d *Div) TabIndex(i int) *Div   // also makes the div a tab stop
+func (d *Div) TabStop(b bool) *Div
+// Interaction style refinements (GPUI .hover/.focus/.focus_visible). f gets
+// an empty StyledMixin and returns it; the set fields override the base
+// style at paint. Applied in the order base, Focus, FocusVisible, Hover.
+// They are paint-time only: layout fields set in them are ignored.
+func (d *Div) Hover(f func(*StyledMixin) *StyledMixin) *Div
+func (d *Div) Focus(f func(*StyledMixin) *StyledMixin) *Div
+func (d *Div) FocusVisible(f func(*StyledMixin) *StyledMixin) *Div
+// TrackScroll binds a ScrollHandle to this scroll container.
+func (d *Div) TrackScroll(h *ScrollHandle) *Div
+// ShowScrollbar opts a scroll container into an overlay scrollbar (GPUI
+// divs paint none; Zed's ui crate adds them).
+func (d *Div) ShowScrollbar() *Div
 ```
+
+Focus semantics:
+
+- A div with `TrackFocus(h)` is focusable: a mouse-down on it (or on a
+  descendant that is not itself focusable) focuses it — the innermost
+  focusable element on the hit path wins, after that element's
+  `OnMouseDown` ran, unless propagation was stopped before reaching it.
+- `TabIndex(i)` without `TrackFocus` gives the div an implicit focus handle,
+  retained per GlobalElementID (GPUI's stateful-div focus handle).
+- Tab stops: the effective tab index is the div's `TabIndex` if set, else
+  the handle's; the div is a stop if `TabIndex`/`TabStop(true)` was called or
+  the handle has `SetTabStop(true)`.
+- Hover style is resolved at paint from the hit test of the frame being
+  built at the last pointer position; a hover-styled element entering or
+  leaving the hover set triggers a redraw.
+
+### `scroll.go`
+
+```go
+// ScrollHandle exposes and controls a scroll container's offset (GPUI's
+// ScrollHandle / UniformListScrollHandle). Offsets are POSITIVE distances
+// scrolled (GPUI's are negative).
+type ScrollHandle struct{ /* shared state */ }
+func NewScrollHandle() *ScrollHandle
+func (h *ScrollHandle) Offset() Point
+func (h *ScrollHandle) SetOffset(p Point)      // clamped at the next frame; caller refreshes
+func (h *ScrollHandle) MaxOffset() Size        // as of the last frame
+func (h *ScrollHandle) Bounds() Bounds         // container border box, last frame
+func (h *ScrollHandle) ScrollToItem(ix int)    // child ix (Div) / item ix (UniformList), next frame
+func (h *ScrollHandle) ScrollToTop()
+func (h *ScrollHandle) ScrollToBottom()
+```
+
+Scroll semantics: wheel deltas go to scroll containers on the hit path,
+innermost first. A container takes the components on its `ScrollAxes`
+(a container scrolling X only maps `DeltaY` to X when `DeltaX == 0`, as
+GPUI does); if its offset changed the event stops, else it bubbles to the
+next container. Offsets are clamped to `[0, ScrollMax]` before the frame
+uses them. Hitboxes are clipped to the enclosing scroll/clip containers, so
+scrolled-out children are not hit. With `ShowScrollbar()`, a scroll
+container with overflow on a scrolling axis paints a thin overlay thumb
+(6px, 2px inset, gray α≈0.55, not draggable) after its children.
+
+### `uniform_list.go`
+
+```go
+// UniformList is a virtualized, vertically scrolling list of count rows of
+// equal height. The row height is measured each frame by laying out item 0
+// at the list's content width; only the rows intersecting the viewport are
+// rendered (render is called once per frame with [start, end)).
+type UniformList struct {
+    StyledMixin
+    // unexported
+}
+func NewUniformList(id string, count int, render func(start, end int, w *Window, cx *App) []IntoElement) *UniformList
+func (u *UniformList) TrackScroll(h *ScrollHandle) *UniformList
+func (u *UniformList) ShowScrollbar() *UniformList
+func (u *UniformList) IntoElement() Element
+```
+
+*UniformList forwards SizeFull, SizeWH, SizeW, SizeH, Flex1, MinH, MaxH, P,
+Px_, Py_, Bg, Rounded, Border, Opacity, TextColor to keep the chain typed.
+Rows get GlobalElementIDs keyed by their absolute index (stable while
+scrolling) and are laid out with `Definite(contentWidth, rowHeight)`. With an
+`Auto` height the list sizes to `count * rowHeight` (+ padding). Overflow is
+Scroll on Y; padding is honoured.
 
 ### `text_elem.go`
 
@@ -452,6 +629,7 @@ type BackgroundKind uint8
 const (
     BackgroundNone BackgroundKind = iota
     BackgroundSolid
+    BackgroundLinearGradient
 )
 
 type Quad struct {
@@ -463,6 +641,23 @@ type Quad struct {
     BorderColor   Rgba
     BorderWidths  Edges
     CornerRadii   Corners
+    Gradient      Gradient // used when Background == BackgroundLinearGradient
+}
+
+// Shadow is a blurred rounded rect. Outset: Bounds/CornerRadii are the
+// shadow shape (element bounds offset and grown by spread). Inset: the
+// shadow fills Clip/ClipRadii (the element shape) minus the blurred
+// Bounds/CornerRadii hole.
+type Shadow struct {
+    Order       uint32
+    Bounds      Bounds
+    CornerRadii Corners
+    ContentMask ContentMask
+    Color       Rgba
+    BlurRadius  Pixels
+    Inset       bool
+    Clip        Bounds
+    ClipRadii   Corners
 }
 
 type GlyphSprite struct {
@@ -498,9 +693,11 @@ type Underline struct {
 
 type Scene struct {
     Quads   []Quad
+    Shadows []Shadow
     Sprites []GlyphSprite
     Underlines []Underline
 }
+func (s *Scene) InsertShadow(sh Shadow)
 
 func (s *Scene) Clear()
 func (s *Scene) InsertQuad(q Quad)
@@ -526,6 +723,13 @@ func (r *Rasterizer) Reset(clear Rgba)          // fill with premultiplied clear
 func (r *Rasterizer) Render(s *Scene)           // draw all primitives in Order
 func (r *Rasterizer) Image() *image.NRGBA       // non-premultiplied copy (for png.Encode)
 ```
+
+`Render` draws quads and shadows merged by Order (one group), then
+underlines, then sprites. Shadow coverage is an analytic approximation:
+`min(Φ(−sdf/σ), separable box blur)` with σ = BlurRadius/2 (exact for
+square corners, close for rounded ones), Φ from a lookup table, the pixel
+loop bounded by the shape grown by 3σ. Gradient fills use a 256-entry
+premultiplied color table per quad.
 
 Clipping: each primitive is intersected with its `ContentMask.Bounds` and drawn
 with that clip rect. Corner radii are drawn by an anti-aliased rounded-rect
@@ -702,9 +906,17 @@ func (h *FocusHandle) Focus(w *Window)
 func (h *FocusHandle) Blur(w *Window)
 func (h *FocusHandle) IsFocused(w *Window) bool
 func (h *FocusHandle) ContainsFocused(w *Window) bool
-func (h *FocusHandle) SetTabIndex(i int)
-func (h *FocusHandle) SetTabStop(b bool)
+func (h *FocusHandle) SetTabIndex(i int) *FocusHandle // chainable (GPUI .tab_index)
+func (h *FocusHandle) SetTabStop(b bool) *FocusHandle  // chainable (GPUI .tab_stop)
+func (h *FocusHandle) TabIndex() int
+func (h *FocusHandle) TabStop() bool
+// IsFocusVisible reports IsFocused && the window's last input was the
+// keyboard (CSS :focus-visible).
+func (h *FocusHandle) IsFocusVisible(w *Window) bool
 ```
+
+Tab-order data lives on the handle *pointer*: copies made by
+`Window.Focus()` carry no tab info.
 
 `App` holds a `focusMap` from `FocusID` to a refcount. Dropping the last handle
 releases the id during `flushEffects`. `Window` stores `focus FocusID` (0 =
@@ -911,6 +1123,16 @@ func (w *Window) InsertHitbox(b Bounds) int
 func (w *Window) PaintQuad(q Quad)
 func (w *Window) PaintUnderline(u Underline)
 func (w *Window) PaintGlyph(g GlyphSprite)
+func (w *Window) PaintShadow(s Shadow)
+// FocusNext / FocusPrev move focus along the rendered frame's tab stops,
+// ordered by tab index (ties: tree order), wrapping. With no focused stop,
+// Next goes to the first and Prev to the last. They do not bind Tab: apps
+// bind "tab"/"shift-tab" to actions that call them, as in GPUI.
+func (w *Window) FocusNext()
+func (w *Window) FocusPrev()
+// FocusVisible reports whether the last input was a key press (true) or a
+// mouse press (false); see FocusHandle.IsFocusVisible.
+func (w *Window) FocusVisible() bool
 func (w *Window) PushLayer()
 func (w *Window) ElementState(id GlobalElementID, out any) bool   // retained state lookup
 func (w *Window) SetElementState(id GlobalElementID, v any)

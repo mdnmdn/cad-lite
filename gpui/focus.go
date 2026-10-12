@@ -62,20 +62,28 @@ func (h *FocusHandle) IsFocused(w *Window) bool {
 // The POC has no focus-parent chain, so this is equivalent to IsFocused.
 func (h *FocusHandle) ContainsFocused(w *Window) bool { return h.IsFocused(w) }
 
-// SetTabIndex sets the handle's position in tab-order traversal.
-func (h *FocusHandle) SetTabIndex(i int) {
-	if h == nil {
-		return
+// SetTabIndex sets the handle's position in tab-order traversal and
+// returns h, so it chains like GPUI's .tab_index(i).
+func (h *FocusHandle) SetTabIndex(i int) *FocusHandle {
+	if h != nil {
+		h.tabIndex = i
 	}
-	h.tabIndex = i
+	return h
 }
 
-// SetTabStop sets whether Tab traversal may stop at this handle.
-func (h *FocusHandle) SetTabStop(b bool) {
-	if h == nil {
-		return
+// SetTabStop sets whether Tab traversal may stop at this handle and returns
+// h, so it chains like GPUI's .tab_stop(b).
+func (h *FocusHandle) SetTabStop(b bool) *FocusHandle {
+	if h != nil {
+		h.tabStop = b
 	}
-	h.tabStop = b
+	return h
+}
+
+// IsFocusVisible reports whether the handle is focused and the window's
+// last input was the keyboard (CSS :focus-visible).
+func (h *FocusHandle) IsFocusVisible(w *Window) bool {
+	return h.IsFocused(w) && w.focusVisible
 }
 
 // TabIndex returns the handle's tab-order position.

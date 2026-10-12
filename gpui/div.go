@@ -35,6 +35,15 @@ type Div struct {
 	tracksFocus bool
 	keyContext  string
 	tabIndex    int
+	hasTabIndex bool
+	tabStop     *bool
+
+	hoverStyle        *StyleRefinement
+	focusStyle        *StyleRefinement
+	focusVisibleStyle *StyleRefinement
+
+	scrollHandle  *ScrollHandle
+	showScrollbar bool
 }
 
 // NewDiv returns a new Div seeded with DefaultStyle, so a bare NewDiv() is a
@@ -66,6 +75,8 @@ func NewDiv() *Div {
 		BorderColor:  &base.BorderColor,
 		CornerRadii:  &base.CornerRadii,
 		Background:   &base.Background,
+		Opacity:      &base.Opacity,
+		ScrollAxes:   &base.ScrollAxes,
 		TextStyle:    &base.TextStyle,
 	}
 	return d
@@ -174,9 +185,75 @@ func (d *Div) KeyContext(ctx string) *Div {
 	return d
 }
 
-// TabIndex sets the div's position in tab-order traversal.
+// TabIndex sets the div's position in tab-order traversal and makes it a
+// tab stop. Without TrackFocus the div gets an implicit focus handle,
+// retained per element id.
 func (d *Div) TabIndex(i int) *Div {
 	d.tabIndex = i
+	d.hasTabIndex = true
+	return d
+}
+
+// TabStop sets whether Tab traversal may stop at the div, overriding the
+// tracked handle's own setting.
+func (d *Div) TabStop(b bool) *Div {
+	d.tabStop = &b
+	return d
+}
+
+// Hover sets a style refinement applied while the pointer is over the div
+// (GPUI's .hover). f receives an empty StyledMixin and returns it. Like
+// every interaction style it is applied at paint, so layout fields set in
+// it have no effect.
+func (d *Div) Hover(f func(*StyledMixin) *StyledMixin) *Div {
+	d.hoverStyle = d.interactionStyle(f)
+	return d
+}
+
+// Focus sets a style refinement applied while the div's focus handle is
+// focused (GPUI's .focus).
+func (d *Div) Focus(f func(*StyledMixin) *StyledMixin) *Div {
+	d.focusStyle = d.interactionStyle(f)
+	return d
+}
+
+// FocusVisible sets a style refinement applied while the div is focused
+// and the last input was the keyboard (GPUI's .focus_visible, CSS
+// :focus-visible). It applies after Focus and before Hover.
+func (d *Div) FocusVisible(f func(*StyledMixin) *StyledMixin) *Div {
+	d.focusVisibleStyle = d.interactionStyle(f)
+	return d
+}
+
+// interactionStyle runs f on a fresh mixin whose text style starts from
+// the div's, so text tweaks keep the other text properties.
+func (d *Div) interactionStyle(f func(*StyledMixin) *StyledMixin) *StyleRefinement {
+	if f == nil {
+		return nil
+	}
+	m := &StyledMixin{}
+	if d.style.TextStyle != nil {
+		ts := *d.style.TextStyle
+		m.style.TextStyle = &ts
+	}
+	if r := f(m); r != nil {
+		m = r
+	}
+	return &m.style
+}
+
+// TrackScroll binds h to this scroll container: h reports and controls the
+// container's offset.
+func (d *Div) TrackScroll(h *ScrollHandle) *Div {
+	d.scrollHandle = h
+	return d
+}
+
+// ShowScrollbar opts a scroll container into a thin overlay scrollbar,
+// painted when its content overflows on a scrolling axis. GPUI divs paint
+// none by default; neither does this port.
+func (d *Div) ShowScrollbar() *Div {
+	d.showScrollbar = true
 	return d
 }
 
@@ -222,8 +299,45 @@ func (d *Div) Gap(v float32) *Div { d.StyledMixin.Gap(v); return d }
 // P sets padding on all four edges.
 func (d *Div) P(v float32) *Div { d.StyledMixin.P(v); return d }
 
-// Bg sets the background fill color.
-func (d *Div) Bg(c Rgba) *Div { d.StyledMixin.Bg(c); return d }
+// Bg sets the background fill: an Rgba, an Hsla or a Background such as
+// LinearGradient(...).
+func (d *Div) Bg(f Fill) *Div { d.StyledMixin.Bg(f); return d }
+
+// Opacity sets the opacity of the div and its subtree.
+func (d *Div) Opacity(f float32) *Div { d.StyledMixin.Opacity(f); return d }
+
+// Shadow replaces the div's box shadows.
+func (d *Div) Shadow(shadows ...BoxShadow) *Div { d.StyledMixin.Shadow(shadows...); return d }
+
+// ShadowNone removes every box shadow.
+func (d *Div) ShadowNone() *Div { d.StyledMixin.ShadowNone(); return d }
+
+// Shadow2xs applies GPUI's shadow_2xs preset.
+func (d *Div) Shadow2xs() *Div { d.StyledMixin.Shadow2xs(); return d }
+
+// ShadowXs applies GPUI's shadow_xs preset.
+func (d *Div) ShadowXs() *Div { d.StyledMixin.ShadowXs(); return d }
+
+// ShadowSm applies GPUI's shadow_sm preset.
+func (d *Div) ShadowSm() *Div { d.StyledMixin.ShadowSm(); return d }
+
+// ShadowMd applies GPUI's shadow_md preset.
+func (d *Div) ShadowMd() *Div { d.StyledMixin.ShadowMd(); return d }
+
+// ShadowLg applies GPUI's shadow_lg preset.
+func (d *Div) ShadowLg() *Div { d.StyledMixin.ShadowLg(); return d }
+
+// ShadowXl applies GPUI's shadow_xl preset.
+func (d *Div) ShadowXl() *Div { d.StyledMixin.ShadowXl(); return d }
+
+// Shadow2xl applies GPUI's shadow_2xl preset.
+func (d *Div) Shadow2xl() *Div { d.StyledMixin.Shadow2xl(); return d }
+
+// OverflowXScroll makes the div scroll horizontally (the other axis clips).
+func (d *Div) OverflowXScroll() *Div { d.StyledMixin.OverflowXScroll(); return d }
+
+// OverflowYScroll makes the div scroll vertically (the other axis clips).
+func (d *Div) OverflowYScroll() *Div { d.StyledMixin.OverflowYScroll(); return d }
 
 // TextColor sets the text color inherited by descendants.
 func (d *Div) TextColor(c Rgba) *Div { d.StyledMixin.TextColor(c); return d }
@@ -298,7 +412,7 @@ func (e divElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, la
 
 // Paint delegates to the Div.
 func (e divElement) Paint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState, prepaintState any) {
-	e.d.paint(w, bounds, layoutState)
+	e.d.paint(w, bounds, prepaintState)
 }
 
 // elementChildren exposes the children to the window's tree walk; without it
@@ -342,10 +456,66 @@ func (d *Div) requestLayout(w *Window, cx *App) (LayoutID, any) {
 
 // divPrepaint is Div's per-frame prepaint state.
 type divPrepaint struct {
+	d        *Div
 	bounds   Bounds
 	globalID GlobalElementID
 	hitbox   int
 	clipped  bool
+	focusID  FocusID
+	// scroll is set for OverflowScroll containers (overlay scrollbar).
+	scroll *scrollbarInfo
+	// style is the paint style: base plus the active interaction styles,
+	// resolved by paintOpacity (resolved reports that it ran).
+	style    Style
+	resolved bool
+}
+
+func (st *divPrepaint) clipsChildren() bool { return st.clipped }
+
+// paintOpacity resolves the paint style (focus, focus-visible and hover
+// refinements over the base style) and returns its opacity.
+func (st *divPrepaint) paintOpacity(w *Window) float32 {
+	d := st.d
+	focused := st.focusID != 0 && w.focus == st.focusID
+	hovered := d.hoverStyle != nil && w.isHoveredHitbox(st.hitbox)
+	if (focused && (d.focusStyle != nil || d.focusVisibleStyle != nil)) || hovered {
+		r := d.style
+		if focused {
+			r.merge(d.focusStyle)
+			if w.focusVisible {
+				r.merge(d.focusVisibleStyle)
+			}
+		}
+		if hovered {
+			r.merge(d.hoverStyle)
+		}
+		st.style = r.Refine(DefaultStyle())
+	} else {
+		st.style = d.resolvedStyle()
+	}
+	st.resolved = true
+	return st.style.Opacity
+}
+
+func (st *divPrepaint) paintScrollbar(w *Window) {
+	if st.scroll != nil {
+		st.scroll.paint(w)
+	}
+}
+
+// implicitFocusHandle returns the focus handle a TabIndex div without
+// TrackFocus owns, retained per element id.
+func (d *Div) implicitFocusHandle(w *Window, cx *App, gid GlobalElementID) *FocusHandle {
+	if cx == nil {
+		return nil
+	}
+	key := globalIDKey(gid) + "#focus"
+	if h, ok := w.elementStates[key].(*FocusHandle); ok && h.IsValid() && cx.focusMap.alive(h.id) {
+		return h
+	}
+	h := cx.NewFocusHandle()
+	w.elementStates[key] = h
+	return h
 }
 
 // prepaint registers the div's hitbox, mouse/key listeners, scroll state and
@@ -354,8 +524,18 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	style := d.resolvedStyle()
 	gid := w.currentElementID
 
-	st := &divPrepaint{bounds: bounds, globalID: gid}
+	st := &divPrepaint{d: d, bounds: bounds, globalID: gid}
 	st.hitbox = w.InsertHitbox(bounds)
+
+	fh := d.focusHandle
+	if fh == nil && d.hasTabIndex {
+		fh = d.implicitFocusHandle(w, cx, gid)
+	}
+	var focusID FocusID
+	if fh != nil && fh.IsValid() {
+		focusID = fh.ID()
+	}
+	st.focusID = focusID
 
 	ml := &w.nextFrame.mouseListeners[st.hitbox]
 	ml.KeyContext = d.keyContext
@@ -367,10 +547,13 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	ml.OnScrollWheel = d.onScrollWheel
 	ml.OnHoverStart = d.onHoverStart
 	ml.OnHoverEnd = d.onHoverEnd
+	ml.focusID = focusID
+	ml.hoverStyle = d.hoverStyle != nil
 
 	if style.Overflow != OverflowVisible {
 		st.clipped = true
 		ml.scrollable = style.Overflow == OverflowScroll
+		ml.scrollAxes = style.ScrollAxes
 		var node *LayoutNode
 		if ls, ok := layoutState.(*divLayout); ok {
 			node = ls.node
@@ -379,13 +562,12 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 			mw, mh := node.ScrollMax()
 			ml.scrollMax = Size{W: mw, H: mh}
 		}
-		w.initScrollState(gid, ml.scrollMax)
+		if ml.scrollable && d.showScrollbar {
+			sst, _ := w.elementStates[globalIDKey(gid)].(scrollState)
+			st.scroll = &scrollbarInfo{bounds: bounds, offset: sst.offset, max: ml.scrollMax, axes: style.ScrollAxes}
+		}
 	}
 
-	var focusID FocusID
-	if d.focusHandle != nil && d.focusHandle.IsValid() {
-		focusID = d.focusHandle.ID()
-	}
 	if d.onKeyDown != nil || d.onKeyUp != nil || len(d.onAction) > 0 || focusID != 0 || d.keyContext != "" {
 		kn := keyNode{
 			KeyContext: d.keyContext,
@@ -394,36 +576,29 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 			OnKeyUp:    d.onKeyUp,
 			OnAction:   d.onAction,
 		}
+		if focusID != 0 {
+			kn.tabIndex, kn.tabStop = fh.TabIndex(), fh.TabStop()
+			if d.hasTabIndex {
+				kn.tabIndex, kn.tabStop = d.tabIndex, true
+			}
+			if d.tabStop != nil {
+				kn.tabStop = *d.tabStop
+			}
+		}
 		w.insertKeyNode(kn)
 	}
 	return st
 }
 
-// paint emits the div's background and border quads with the current content
-// mask. Children are painted by the window's walk, after this returns.
-func (d *Div) paint(w *Window, bounds Bounds, layoutState any) {
-	style := d.resolvedStyle()
-	mask := ContentMask{Bounds: w.CurrentClip()}
-	if style.Background.A > 0 {
-		w.PaintQuad(Quad{
-			Bounds:      bounds,
-			ContentMask: mask,
-			Background:  BackgroundSolid,
-			Fill:        style.Background,
-			CornerRadii: style.CornerRadii,
-		})
+// paint emits the div's shadows, background and border with the current
+// content mask, using the paint style resolved by paintOpacity. Children
+// are painted by the window's walk, after this returns.
+func (d *Div) paint(w *Window, bounds Bounds, prepaintState any) {
+	if st, ok := prepaintState.(*divPrepaint); ok && st.resolved {
+		paintBox(w, bounds, st.style)
+		return
 	}
-	bw := style.BorderWidths
-	if bw.Sum() > 0 && style.BorderColor.A > 0 {
-		w.PaintQuad(Quad{
-			Bounds:       bounds,
-			ContentMask:  mask,
-			Background:   BackgroundNone,
-			BorderColor:  style.BorderColor,
-			BorderWidths: bw,
-			CornerRadii:  style.CornerRadii,
-		})
-	}
+	paintBox(w, bounds, d.resolvedStyle())
 }
 
 // FlexGrow is StyledMixin.FlexGrow returning *Div to keep the chain.

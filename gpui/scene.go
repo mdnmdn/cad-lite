@@ -22,6 +22,8 @@ const (
 	// BackgroundSolid fills the quad's Bounds with Fill as an
 	// anti-aliased rounded rectangle.
 	BackgroundSolid
+	// BackgroundLinearGradient fills the quad's Bounds with Gradient.
+	BackgroundLinearGradient
 )
 
 // Quad is a rounded-rect draw command: an optional solid fill plus an
@@ -43,6 +45,31 @@ type Quad struct {
 	BorderWidths Edges
 	// CornerRadii are the rounded-corner radii.
 	CornerRadii Corners
+	// Gradient is the fill when Background is BackgroundLinearGradient.
+	Gradient Gradient
+}
+
+// Shadow is a gaussian-blurred rounded rect. An outset shadow paints the
+// blurred Bounds/CornerRadii shape; an inset shadow paints inside the
+// Clip/ClipRadii shape everywhere the blurred Bounds shape does not reach.
+type Shadow struct {
+	// Order is the paint order; 0 means "assign the scene's next auto order".
+	Order uint32
+	// Bounds is the shadow shape before blurring.
+	Bounds Bounds
+	// CornerRadii are the shadow shape's corner radii.
+	CornerRadii Corners
+	// ContentMask clips the shadow; the zero value clips it away entirely.
+	ContentMask ContentMask
+	// Color is the shadow color.
+	Color Rgba
+	// BlurRadius is the CSS blur radius (gaussian sigma = BlurRadius/2).
+	BlurRadius Pixels
+	// Inset selects an inner shadow.
+	Inset bool
+	// Clip and ClipRadii are the element shape an inset shadow is drawn in.
+	Clip      Bounds
+	ClipRadii Corners
 }
 
 // GlyphSprite draws a grayscale alpha mask (typically a shaped glyph)
@@ -114,6 +141,9 @@ type Underline struct {
 type Scene struct {
 	// Quads are the accumulated quad commands.
 	Quads []Quad
+	// Shadows are the accumulated shadow commands; they interleave with
+	// Quads by Order.
+	Shadows []Shadow
 	// Sprites are the accumulated glyph sprite commands.
 	Sprites []GlyphSprite
 	// Underlines are the accumulated underline commands.
@@ -129,6 +159,7 @@ const layerStride uint32 = 1 << 20
 // Clear removes every primitive and resets auto-ordering.
 func (s *Scene) Clear() {
 	s.Quads = s.Quads[:0]
+	s.Shadows = s.Shadows[:0]
 	s.Sprites = s.Sprites[:0]
 	s.Underlines = s.Underlines[:0]
 	s.nextOrder = 0
@@ -138,6 +169,12 @@ func (s *Scene) Clear() {
 func (s *Scene) InsertQuad(q Quad) {
 	q.Order = s.takeOrder(q.Order)
 	s.Quads = append(s.Quads, q)
+}
+
+// InsertShadow appends a shadow, assigning its auto order when Order is 0.
+func (s *Scene) InsertShadow(sh Shadow) {
+	sh.Order = s.takeOrder(sh.Order)
+	s.Shadows = append(s.Shadows, sh)
 }
 
 // InsertSprite appends a glyph sprite, assigning its auto order when Order is 0.
@@ -159,9 +196,10 @@ func (s *Scene) PushLayer() {
 	s.nextOrder += layerStride
 }
 
-// PrimitiveCount returns the total number of quads, sprites and underlines.
+// PrimitiveCount returns the total number of quads, shadows, sprites and
+// underlines.
 func (s *Scene) PrimitiveCount() int {
-	return len(s.Quads) + len(s.Sprites) + len(s.Underlines)
+	return len(s.Quads) + len(s.Shadows) + len(s.Sprites) + len(s.Underlines)
 }
 
 // takeOrder resolves a primitive's order: 0 becomes the next auto order, and

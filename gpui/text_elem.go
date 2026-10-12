@@ -413,8 +413,8 @@ func (t *Text) Pl(v float32) *Text { t.StyledMixin.Pl(v); return t }
 // M is StyledMixin.M returning *Text to keep the chain.
 func (t *Text) M(v float32) *Text { t.StyledMixin.M(v); return t }
 
-// Bg is StyledMixin.Bg returning *Text to keep the chain.
-func (t *Text) Bg(c Rgba) *Text { t.StyledMixin.Bg(c); return t }
+// Bg sets the background fill (Rgba, Hsla or a Background).
+func (t *Text) Bg(f Fill) *Text { t.StyledMixin.Bg(f); return t }
 
 // Rounded is StyledMixin.Rounded returning *Text to keep the chain.
 func (t *Text) Rounded(px float32) *Text { t.StyledMixin.Rounded(px); return t }
