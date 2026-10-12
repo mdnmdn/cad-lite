@@ -18,7 +18,9 @@ two disagree, these pages follow the code and call the difference out.
 - [examples.md](examples.md) - index of the 17 programs under `examples/`:
   what each shows, which gpui-ce example it was ported from, what was left out.
 - [architecture.md](architecture.md) - package layout, dependency rules, the
-  frame pipeline, threading model, performance notes.
+  frame pipeline, scene order and content masks, element-state lifecycle,
+  effect flush and `Update` nesting, paint-time text overrides, threading
+  model, performance notes.
 - Concepts
   - [concepts/app-and-entities.md](concepts/app-and-entities.md) - `App`,
     `Entity`, `Context`, weak handles, subscriptions, the re-entrancy rule.

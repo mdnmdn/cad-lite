@@ -33,7 +33,10 @@ named family the font directories (macOS `/System/Library/Fonts`, its
 Linux `/usr/share/fonts`, `~/.fonts`, ...) are listed once (files are not
 opened), then names are matched with case/space/dash ignored (`Arial` ->
 `Arial.ttf`, bold -> `Arial Bold.ttf`). Results, including misses, are cached.
-Unknown or generic families use the default font. Weight `>= 600` selects the
+The CSS generics `monospace`, `ui-monospace`, `serif` and `cursive` map to
+ordered candidate families (`genericFamilies`: Menlo, SF Mono, Consolas, DejaVu
+Sans Mono, ... for the monospace ones); `sans-serif`, `system-ui` and other
+unknown families use the default font. Weight `>= 600` selects the
 family's real bold file when found (else the default-font bold search) and
 otherwise marks the face for synthetic bold.
 

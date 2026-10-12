@@ -7,7 +7,8 @@ Source: `gpui/events.go`, `gpui/window.go` (dispatch), `gpui/keymap.go`,
 The platform turns OS input into `PlatformInput` values (`MouseDownEvent`,
 `MouseUpEvent`, `MouseMoveEvent`, `ClickEvent`, `ScrollWheelEvent`,
 `KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
-`Window.DispatchEvent(input, app)` inside `app.Update`. Dispatch reads the
+`Window.DispatchEvent(input, app)`, which runs inside `App.Update` itself, so
+effects queued by handlers flush once after dispatch. Dispatch reads the
 **rendered frame** - the hitboxes and key nodes recorded during the last
 prepaint.
 
@@ -60,7 +61,7 @@ gpui.NewDiv().OnClick(outer).Child(
 `Window` does not synthesize clicks; it dispatches whatever `ClickEvent` the
 platform sends, along the hit path at `Up.Position`. The ebiten backend
 (`clickTracker`) records which element (by `GlobalElementID`) each button was
-pressed on and emits `MouseUp` followed by `ClickEvent{Up: &up}` only when the
+pressed on and emits `MouseUpEvent` followed by `ClickEvent{Up: &up}` only when the
 release lands on the same element id as the press - so a press, redraw, release
 sequence still counts. `ClickCount` counts presses of the same button within
 400 ms and 4 px. Headless tests must dispatch the three events themselves

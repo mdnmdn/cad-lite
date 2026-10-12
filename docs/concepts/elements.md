@@ -26,8 +26,8 @@ Phases, in the order the window runs them (see
    state that is handed back to the later phases.
 2. **Prepaint** - bounds are now known (absolute, logical pixels). Register
    hitboxes, listeners, key nodes and input handlers; return state for Paint.
-3. **Paint** - emit `Quad`, `GlyphSprite`, `Underline` primitives through the
-   window. Paint draws **only the element itself**; the window walks children
+3. **Paint** - emit `Quad`, `Shadow`, `GlyphSprite`, `Underline` primitives
+   through the window. Paint draws **only the element itself**; the window walks children
    in tree order.
 
 `Child`/`Children` accept any `IntoElement`, which is satisfied by `*Div`,
@@ -124,12 +124,17 @@ gpui.NewStyledText(
   line break. A run whose `Style.FontSize <= 0` is replaced wholesale by
   `DefaultTextStyle()`, so start from `DefaultTextStyle()` rather than a bare
   `TextStyle{}`.
-- Both embed `StyledMixin` (box styling: padding, background, size, etc.).
-  `Text` re-declares the style methods to keep a `*Text` chain; `StyledText`
+- Both embed `StyledMixin`. Padding, size, margins, text style and `Opacity`
+  take effect on a text leaf; `Bg`/`Border`/`Shadow` builders exist (via the
+  mixin) but a text leaf paints **no box**: wrap it in a styled `Div` for a
+  background or border (tracked in `_docs/wip.md`). `Text` re-declares the style methods to keep a `*Text` chain; `StyledText`
   does not, so style it with statements on a variable or wrap it in a `Div`.
-- Text-colour/size/weight set on a **`Div` do not cascade** to child text in
-  the current code (each `Text` resolves its own style from `DefaultStyle()`).
-  Set text styles on the `Text` itself. See [styling.md](styling.md).
+- Text style set on an ancestor **`Div`** (`TextColor`, `TextSize`,
+  `FontWeight`, `FontFamily`, `TextLineHeight`, `TextStrikethrough`) cascades
+  to child text: the window keeps a text-style stack during `RequestLayout`
+  and each text leaf resolves its own explicit fields over the inherited
+  style. Hover/focus text colour and strikethrough cascade at paint time. See
+  [styling.md](styling.md).
 
 ## Composition: functions, not types
 
@@ -229,7 +234,9 @@ func (e frameElement) Paint(w *gpui.Window, cx *gpui.App, id gpui.ElementID, b g
 }
 ```
 
-Limits: a custom container cannot clip its children or register an
+Limits: a custom container pushes no paint-time text override, so an outer
+`Div`'s hover/focus text colour keeps applying to text inside it (it cannot
+re-assert its own). It also cannot clip its children or register an
 `OnScrollWheel`-driven scroll offset (those paths are `Div`-only); wrap the
 children in a `Div` with `OverflowHidden()` for that. Delegating to a
 childless `Div`'s element (as before these hooks existed) still works when
@@ -245,8 +252,8 @@ Notes for authors:
   leave `ContentMask` zero. `PushClip`/`PushContentMask`/`PopClip` push your
   own masks.
 - Primitives are drawn in the order you emit them, across kinds: a quad
-  painted after a glyph covers it (see `Scene` in
-  [platform.md](platform.md)).
+  painted after a glyph covers it (see
+  [architecture.md](../architecture.md#scene-and-rasterization)).
 - Text: `Window.TextMeasurer()` exposes `MeasureWrapped` / `ShapeWrapped`;
   it is `nil` when no system font was found.
 - Retained state across frames: `Window.SetElementState(gid, v)` /

@@ -44,8 +44,9 @@ go-gpui/
 
 A frame is produced by `Window.Draw` (`gpui/window.go`). Every frame rebuilds
 the element tree from scratch; only the application's own state, the
-`Window`'s retained per-element state (scroll offsets), the focus, and the
-shaper caches survive between frames.
+`Window`'s retained per-element state (scroll offsets, implicit focus
+handles, custom `SetElementState` values; see [Element state](#element-state)),
+the focus, and the shaper caches survive between frames.
 
 ```
  state change / input
@@ -62,9 +63,11 @@ shaper caches survive between frames.
    | buildRenderNode              -> absolute bounds, scroll offsets      |
    | prepaintTree                 -> hitboxes, mouse/key listeners,       |
    |                                 focus nodes, input handlers          |
-   | paintTree                    -> Quad / GlyphSprite / Underline       |
-   |                                 in Scene (clip stack applied)        |
+   | paintTree                    -> Quad / Shadow / GlyphSprite /        |
+   |                                 Underline in Scene (content masks,   |
+   |                                 paint-time text overrides applied)   |
    +----------------------------------------------------------------------+
+                                   |  prune unaccessed element state
                                    |  swap nextFrame <-> renderedFrame
                                    v
                  scaleScene(scene, scale)      logical -> device px
@@ -89,7 +92,10 @@ Step by step:
 2. **RequestLayout.** Each element registers a `LayoutNode` with the window
    and returns its `LayoutID` plus opaque state. `Div` recurses into its
    children here, so the layout tree mirrors the element tree. Text leaves
-   install a `Measure` callback that calls the window's `TextMeasurer`.
+   install a `Measure` callback that calls the window's `TextMeasurer`. The
+   window keeps a text-style stack for the walk: a `Div`, a `UniformList` and
+   `RequestLayoutWithChildren` push their explicitly set text fields, and text
+   leaves resolve their own fields over the innermost entry.
 3. **Layout.** `Layout(root, Definite(windowW, windowH))`
    (`gpui/layout.go`). Output: every node's `Rect` relative to its parent.
 4. **Render tree.** `buildRenderNode` pairs elements with layout nodes,
@@ -101,10 +107,11 @@ Step by step:
    (`parent`) are recorded so dispatch can walk the hit/focus path later.
    `Display: false` nodes are skipped.
 6. **Paint.** Another depth-first walk calls `Element.Paint`; a clipped div
-   (`OverflowHidden`/`OverflowScroll`) pushes its bounds on the clip stack
-   around its subtree. Primitives go into the frame's `Scene`, each stamped
-   with the current clip as a `ContentMask`.
-7. **Swap.** The finished frame becomes `renderedFrame`; all event dispatch
+   (`OverflowHidden`/`OverflowScroll`) pushes a `ContentMask` (its bounds plus
+   corner radii) around its subtree. Primitives go into the frame's `Scene`,
+   each stamped with the current mask. See [Paint-time state](#paint-time-state).
+7. **Prune and swap.** Element state not accessed this frame is dropped
+   (below). The finished frame becomes `renderedFrame`; all event dispatch
    reads it. `invalid` is cleared.
 8. **Raster + present.** `present()` scales the scene to device pixels
    (`scaleScene`), clears the buffer to the window background (default white),
@@ -118,18 +125,97 @@ Step by step:
 
 ## Scene and rasterization
 
-`Scene` holds three primitive lists: `Quad` (fill and/or border, per-corner
-radii, solid fills only), `GlyphSprite` (an 8-bit coverage mask plus colour),
-and `Underline` (used for strikethrough). `Rasterizer.Render`
-(`gpui/raster.go`) draws **all quads, then all underlines, then all
-sprites**, each group stably ordered by `Order`. Consequence: text is always
-on top of every background, even a background painted later by an overlapping
-sibling. `Window.PushLayer` only advances the order counter inside a group.
+`Scene` holds four primitive lists: `Quad` (fill and/or border, per-corner
+radii, solid or gradient fill), `Shadow` (outset/inset box shadows),
+`GlyphSprite` (an 8-bit coverage mask plus colour) and `Underline` (used for
+strikethrough). Every primitive carries an `Order` and a `ContentMask`.
+Primitives inserted with `Order == 0` get the scene's next auto order, so
+order is **paint (tree) order**: `Rasterizer.Render` (`gpui/raster.go`) sorts
+each list stably by `Order` and merges the four, so a later background covers
+earlier text, as in GPUI. On equal `Order` the kinds draw shadow, quad,
+underline, sprite. `Window.PushLayer` reserves a gap (`layerStride`, 1<<20
+orders) so everything inserted afterwards paints above everything before it.
 
-Quads are anti-aliased with a signed-distance rounded-rect coverage function.
-Sprites are blitted 1:1 when the mask matches the device-pixel bounds
-(the normal case, because glyph masks are rasterized at the window scale) and
-bilinearly sampled otherwise.
+**Rounded content masks.** `ContentMask` is a clip rect plus optional
+`CornerRadii`. Pushing one (`Window.PushContentMask`, or `PushClip` for a plain
+rect) intersects it with the current mask; each corner of the intersection keeps
+the radius of the mask that contributes it, reduced by how far the corner lies
+inside that mask's own corner (exact for equal offsets, conservative
+otherwise). The rasterizer applies a mask
+with radii as an anti-aliased rounded-rect coverage (`setMask` /
+`maskCoverage`: only the corner squares evaluate the SDF), so an
+`OverflowHidden` + `Rounded` div clips its children to the rounded shape;
+rect-only masks are applied through the pixel windows. Hitboxes are still
+clipped to rectangles only.
+
+Quads and shadows are anti-aliased with a signed-distance rounded-rect
+coverage function. Sprites are blitted 1:1 when the mask matches the
+device-pixel bounds (the normal case, because glyph masks are rasterized at
+the window scale) and bilinearly sampled otherwise.
+
+## Element state
+
+`Window` retains per-element values across frames in `elementStates`, keyed by
+the string form of the element's `GlobalElementID`: scroll offsets, the
+implicit focus handle of a `TabIndex` div without `TrackFocus` (key suffix
+`#focus`), and anything an application stores with `SetElementState`.
+
+Lifecycle, as in GPUI: state that is not **accessed** during a frame is dropped
+when that frame finishes. "Accessed" means `ElementState`, `SetElementState`,
+`ScrollOffset`/`SetScrollOffset`, or the internal scroll and focus-handle
+lookups, each of which records the key in `stateSeen`. `Window.Draw` calls
+`pruneElementStates` after the element walk: every key not in `stateSeen` is
+deleted (an implicit focus handle also releases its focus id) and `stateSeen`
+is cleared. Consequences: a scroll container or `TabIndex` div that is not
+rendered for a frame (a hidden branch, a conditional) loses its offset or
+handle; custom elements must touch their state every frame they are drawn.
+
+## Effects and Update nesting
+
+`App.Update(f)` bumps `pendingUpdates`, runs `f`, and only when the outermost
+call returns does it call `flushEffects` (`gpui/app.go`). The flush itself also
+counts as an update, so callbacks it runs (observers, defers, event
+subscribers, release callbacks) may call `Update` or `Entity.Release` freely:
+those calls do not start a nested flush, they queue work that the same loop
+picks up. The loop runs until no effects and no pending releases remain, then
+requests a frame for every window still `invalid`.
+
+Consequences for code you write:
+
+- `Entity.Release` on the last reference only *schedules* the release when
+  called inside `Update` or a flush; outside both it runs its own `Update`, so
+  the entity is gone when `Release` returns.
+- `Window.DispatchEvent` wraps dispatch in `App.Update` itself, so effects
+  queued by handlers (notifies, emits, releases) flush once, after the event
+  is fully dispatched. Platforms may still wrap a batch of events in one
+  `Update`.
+- `NewEntity` creates the entity slot before calling `build`, so `Observe`
+  and `OnRelease` registered from `build` attach to the new entity; reading
+  the entity from inside its own `build` finds no value yet.
+
+## Paint-time state
+
+Layout is finished before paint, so anything resolved at paint cannot change
+sizes. Two things are resolved per frame at paint:
+
+- **Interaction styles.** `Div.paintOpacity` (`gpui/div.go`) merges the
+  `Focus`, `FocusVisible` and `Hover` refinements over the base style and
+  returns the div's opacity, which `paintTree` multiplies into `Window.opacity`
+  (nested opacities multiply; `Text` and `StyledText` carry theirs through
+  `textPrepaint`).
+- **Text override stack.** Text style cascades at layout, but hover and focus
+  styles change at paint, so `Window.paintTexts` holds a stack of
+  `textOverride{set, ts}` entries. `paintTree` pushes a node's entry (from
+  prepaint states implementing `paintTextStyler`: `Div`, `UniformList`) when an
+  interaction style contributed to it, or when an entry is already on the
+  stack (so a nearer ancestor that sets `TextColor` itself re-asserts it over an
+  outer hover colour). `Text`/`StyledText` call `Window.paintTextStyle`,
+  which walks the stack innermost first and overlays, per field, the first
+  entry that sets it, skipping fields the text element sets itself. Only
+  `paintTextFields` (colour and strikethrough) are overridden; size, weight,
+  family and line height affect layout and are ignored in interaction styles
+  for descendants. A custom container built on `RequestLayoutWithChildren`
+  pushes no entry, so an outer hover colour keeps applying inside it.
 
 ## Threading model
 
@@ -147,9 +233,10 @@ bilinearly sampled otherwise.
 - Clipboard access shells out to OS tools and is done on a worker goroutine in
   the ebiten backend; results are drained on the UI goroutine in `Update`.
 - `App.Update(f)` can nest. Only the outermost call flushes queued effects
-  (notifications, deferred funcs, emitted events) and then requests frames for
-  invalid windows. Platforms wrap all input dispatch and frame callbacks in
-  `app.Update`.
+  (notifications, deferred funcs, emitted events, entity releases) and then
+  requests frames for invalid windows; see
+  [Effects and Update nesting](#effects-and-update-nesting). `DispatchEvent`
+  runs inside `Update`, and platforms wrap frame callbacks in it.
 
 ## When frames are drawn
 

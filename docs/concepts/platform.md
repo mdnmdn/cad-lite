@@ -236,8 +236,8 @@ Checklist (mirrors what `ebitenplatform` does):
 2. **Frames.** Implement `FrameRequester` and call the registered callback
    (inside `app.Update`) when pending; otherwise call `Window.Draw(app)`
    yourself. Coalesce `RequestFrame` calls.
-3. **Input.** Wrap every `Window.DispatchEvent` in `app.Update` so effects
-   flush once per batch. Translate to GPUI's conventions: logical-pixel
+3. **Input.** `Window.DispatchEvent` already runs inside `app.Update`; wrap a
+   whole batch of events in one `app.Update` to flush effects once per batch. Translate to GPUI's conventions: logical-pixel
    positions, lower-case key names, Ctrl -> `Control`, Cmd/Super ->
    `ModPlatform`, wheel positive = down, text as
    `KeyDownEvent{PreferCharacterInput: true, Keystroke.KeyChar}` with a

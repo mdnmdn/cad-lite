@@ -2,10 +2,10 @@
 
 Activity registry for the GPUI port. Each activity has an id, a status, and
 dependencies. Statuses: `done`, `in-progress`, `blocked`, `todo`. Contract:
-`_docs/00-api-contract.md` (change signatures there first). Plan narrative:
-`_docs/plan.md`.
+`_docs/00-api-contract.md` (change signatures there first). The original plan
+(`_docs/plan.md`) is historical.
 
-Last updated: 2026-10-12 (rows A9-A16 added).
+Last updated: 2026-10-12 (rows A17-A18 added; follow-ups refreshed).
 
 ## Registry
 
@@ -29,6 +29,8 @@ Last updated: 2026-10-12 (rows A9-A16 added).
 | A14 | Performance: bounds-limited rasterizer fills (2.5s to 1ms/frame at 2x), shaping cache | done | A1 | `gpui/{raster,text}.go` |
 | A15 | Frame snapshot key in the ebiten backend (`cmd/ctrl-shift-s`, `WithSnapshotKey`) | done | A6 | `gpui/ebitenplatform/snapshot.go` |
 | A16 | Docs: `docs/` (architecture, concepts, getting-started, examples), root `README.md` | done | A1-A15 | `docs/`, `README.md` |
+| A17 | Review-fix wave (commit `1e6fbfd`): entity slot created before `build` (Observe/OnRelease from build attach), `Release` during a flush only schedules, effect flush counts as an `Update`, `DispatchEvent` runs inside `App.Update`; `UniformList` and `RequestLayoutWithChildren` text-style inheritance; paint-time hover/focus text overrides (colour/strikethrough only); mouse-down auto-focus skipped if a handler moved focus; `Text`/`StyledText` `Opacity`; `"ui-monospace"` generic family; scroll offsets limited to scroll axes (`OverflowHidden` not programmatically scrollable); half-leading text baseline; `TextInput` paint fix; element-state pruning per frame. Docs refreshed (A18) | done | A10-A13 | `gpui/{app,entity,window,div,text_elem,uniform_list,scroll,font,input}.go`, `gpui/review_fixes*_test.go` |
+| A18 | Docs audit against A17: architecture (element-state lifecycle, effect flush/Update nesting, paint-time text overrides, scene-order painting, rounded content masks), concept pages, plan marked historical | done | A16, A17 | `docs/`, `_docs/plan.md`, `AGENTS.md` |
 
 ## In progress
 
@@ -72,10 +74,16 @@ Gaps and limitations:
 
 - Headless keyboard-focus seeding: add a `RenderOption` so `RenderToPNG` can
   start with a focused element and keyboard modality (examples use flags).
-- `UniformList` rows are laid out outside the ancestor walk and do not
-  inherit text style.
-- Hover/focus text refinements (`Hover(...TextColor)`) change the div's own
-  paint style and do not cascade to descendant text.
+- Hover/focus text refinements cascade at paint time for colour and
+  strikethrough only (`paintTextFields`); `TextSize`, `FontWeight`,
+  `FontFamily` and `TextLineHeight` in `Hover`/`Focus`/`FocusVisible` are
+  ignored for descendants because layout is already done.
+- The hover/focus text override stops at custom `RequestLayoutWithChildren`
+  containers: they push no paint-time override, so an outer div's hover colour
+  keeps applying inside them and they cannot re-assert their own.
+- `Text.Bg`/`Border`/`Shadow` builders exist (via `StyledMixin`) but text
+  leaves paint no box; wrap the text in a styled `Div`. Either paint the box
+  in `Text`/`StyledText` or drop the builders.
 - Hitboxes are clipped to rectangles, not to rounded corners.
 - Interactive ebiten window has never been run in the agent environment (no
   Metal device); headless rendering is what the tests cover.

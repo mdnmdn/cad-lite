@@ -6,7 +6,8 @@ Guidance for AI agents working in this repo.
 
 POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
 (stdlib-only); the GPU/display backend lives in `gpui/ebitenplatform`
-(ebiten, no cgo). Contract: `_docs/00-api-contract.md`. Plan: `_docs/plan.md`.
+(ebiten, no cgo). Contract: `_docs/00-api-contract.md`. Status and follow-ups: `_docs/wip.md`
+(`_docs/plan.md` is the original plan, kept for history).
 
 ## Rules
 
@@ -32,9 +33,10 @@ POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
 
 ## Layout
 
-- `gpui/` — core: geometry, color, style, layout, elements (div, text),
-  scene, raster, events, keymap, focus, entity/context/app, window pipeline,
-  font/text shaper, platform interfaces + stub.
+- `gpui/` — core: geometry, color, style, layout, elements (div, text,
+  uniform list, text input), background/shadow, scroll, scene, raster, events,
+  keymap, focus, entity/context/app, window pipeline, font/text shaper,
+  platform interfaces + stub, headless platform, clipboard.
 - `gpui/ebitenplatform/` — ebiten backend implementing `gpui.Platform`.
 - `examples/` — 17 runnable apps, each `examples/<name>/main.go` with `-png
   PATH` headless rendering: actions_and_keybinds, border_and_shadow_backgrounds,
@@ -44,6 +46,6 @@ POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
 - `docs/` — user documentation (getting started, examples, architecture,
   concepts); describes what the code does, so update it with behaviour changes.
   Snippets must compile.
-- `_docs/` — contract, plan and WIP registry (`wip.md`).
-- `_tmp/` — gitignored scratch (e.g. `_tmp/docchk/`, a throwaway module with
+- `_docs/` — contract, WIP registry (`wip.md`) and the historical plan.
+- `_tmp/` — gitignored scratch (e.g. `_tmp/docchk2/`, a throwaway module with
   `replace go-gpui => ../..` for compiling doc snippets). Never commit it.

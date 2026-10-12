@@ -17,7 +17,9 @@ and `Refine(base)` overlays the set fields onto a base `Style` at the point of
 use. That is how a bare `Div` can distinguish "width: 0" from "width: unset".
 
 `StyledMixin` (embedded in `Div`, `Text`, `StyledText`, `UniformList`) holds the refinement
-and the Tailwind-flavoured builder methods:
+and the Tailwind-flavoured builder methods. Only `Div` and `UniformList` paint
+a box: `Text`/`StyledText` accept `Bg`/`Border`/`Shadow` but draw none of them
+(padding, size, margins, text style and opacity do apply):
 
 | Group | Methods |
 |---|---|
@@ -25,7 +27,7 @@ and the Tailwind-flavoured builder methods:
 | Flex | `Flex()`, `FlexRow()`, `FlexCol()`, `Flex1()`, `FlexAuto()`, `FlexNone()`, `FlexBasis(v)`, `FlexGrow(v)`, `FlexShrink(v)`, `Gap(v)` |
 | Alignment | `ItemsStart/Center/End/Stretch()`, `JustifyStart/Center/End/Between/Around()` |
 | Spacing | `P(v)`, `Px_`, `Py_`, `Pt`, `Pr`, `Pb`, `Pl`; margins `M(v)`, `Mx`, `My`, `Mt`, `Mr`, `Mb`, `Ml` and auto margins `MAuto`, `MxAuto`, `MyAuto`, `MtAuto`, `MrAuto`, `MbAuto`, `MlAuto` |
-| Paint | `Bg(fill)`, `Rounded(px)`, `RoundedAll(tl,tr,br,bl)`, `Border(w, c)`, `Opacity(f)`, `Shadow(...)`, `ShadowNone()`, `Shadow2xs/Xs/Sm/Md/Lg/Xl/2xl()` |
+| Paint | `Bg(fill)`, `Rounded(px)`, `RoundedAll(tl,tr,br,bl)`, `Border(w, c)`, `Opacity(f)`, `Shadow(...)`, `ShadowNone()`, `Shadow2xs()`, `ShadowXs/Sm/Md/Lg/Xl()`, `Shadow2xl()` |
 | Overflow | `OverflowHidden()`, `OverflowScroll()`, `OverflowXScroll()`, `OverflowYScroll()` |
 | Visibility | `Hidden()`, `Visible()` |
 | Text | `TextColor`, `TextSize`, `FontWeight`, `FontFamily`, `TextStrikethrough`, `TextLineHeight` |
@@ -109,9 +111,9 @@ with defaults 14px, weight 400, black, line height `1.2 * FontSize`
   smear (synthetic bold). There are no intermediate weights.
 - **Family.** `FontFamily` is looked up by name (case, spaces and dashes
   ignored) in the system font directories by file name, e.g. `"Arial"`,
-  `"Menlo"`, `"DejaVu Sans"`; `"monospace"` and `"serif"` map to common
-  fonts. Unknown or generic (`"sans-serif"`, `"system-ui"`) families use the
-  default font. See [text.md](text.md).
+  `"Menlo"`, `"DejaVu Sans"`; `"monospace"`, `"ui-monospace"`, `"serif"` and
+  `"cursive"` map to common fonts. Unknown or generic (`"sans-serif"`,
+  `"system-ui"`) families use the default font. See [text.md](text.md).
 - **Line height.** `TextLineHeight(px)` sets the line height used by both
   measurement and painting.
 - **Strikethrough** is drawn as a thin `Underline` primitive across each
@@ -193,7 +195,9 @@ the div's subtree the window keeps a paint-time text-override stack, and
 fields the text element (or a nearer ancestor `Div`/`UniformList`) sets
 itself. Text fields that affect layout (`TextSize`, `FontWeight`,
 `FontFamily`, `TextLineHeight`) in an interaction style are ignored for
-descendant text. Visual-only properties (`Bg`, `Border`, `Rounded`, `Shadow`,
+descendant text. The paint-time override is pushed only by `Div` and
+`UniformList`: text inside a custom `RequestLayoutWithChildren` container does
+not stop an outer div's hover colour from applying. Visual-only properties (`Bg`, `Border`, `Rounded`, `Shadow`,
 `Opacity`, text colour) are the intended use. There is no `active()` style.
 
 The older manual pattern still works and is the way to change layout or text

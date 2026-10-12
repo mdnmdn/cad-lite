@@ -1,5 +1,13 @@
 # go-gpui plan
 
+> **Historical.** This is the original plan for the first implementation wave
+> and is no longer maintained: it predates the examples, gradients, shadows,
+> scroll containers, text inheritance and later fixes, and some signatures here
+> (e.g. `New() *gpui.Platform`, `app.Run`) differ from the code. For current
+> state see the activity registry and open follow-ups in
+> [wip.md](wip.md), the user docs in [../docs/](../docs/README.md), and the
+> API contract in [00-api-contract.md](00-api-contract.md).
+
 POC port of Zed's GPUI to Go. Core rendering (geometry, color, style, flexbox
 layout, elements, scene, raster, events, keymap, focus, entities, window
 pipeline) is **done and tested**. This plan tracks the remaining platform and
