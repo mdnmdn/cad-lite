@@ -37,8 +37,9 @@ outside). The **hit path** is the target hitbox followed by its chain of
 ancestor hitboxes (`parent` links), innermost first. Overlapping non-ancestor
 elements below the target are not on the path.
 
-Hit testing ignores clipping: a child scrolled out of its container's visible
-area is still hit-testable where its (scrolled) bounds are.
+Hitboxes are clipped to the enclosing clip rectangles (`Window.InsertHitbox`),
+so a child scrolled out of its container's visible area is not hit-testable
+there. Clipping is rectangular: hitboxes are not clipped to rounded corners.
 
 ### Bubbling and StopPropagation
 
@@ -197,11 +198,20 @@ focus.Focus(w); focus.Blur(w)       // request / drop focus (both Refresh)
 focus.IsFocused(w); w.Focus()       // query
 ```
 
-Focus is a single `FocusID` per window. Clicking does not focus anything
-automatically: add an `OnMouseDown` that calls `focus.Focus(w)`. There is no
-focus-parent chain (`ContainsFocused` equals `IsFocused`), and `TabIndex` /
-`SetTabIndex` / `SetTabStop` only store values - Tab traversal is not
-implemented. Handles are never released.
+Focus is a single `FocusID` per window. A mouse press focuses the innermost
+focusable element on the hit path (a div with `TrackFocus` or `TabIndex`); an
+element that is not focusable needs an `OnMouseDown` that calls
+`focus.Focus(w)`. There is no focus-parent chain (`ContainsFocused` equals
+`IsFocused`). Handles are never released.
+
+Tab order: `TabIndex(i)` (div) or `FocusHandle.SetTabIndex` / `SetTabStop`
+register tab stops; `Window.FocusNext()` / `FocusPrev()` move focus through the
+rendered frame's stops (sorted by index, ties in tree order, wrapping). Tab is
+**not bound by default**: bind it to an action that calls them
+(`examples/tab_stop`).
+
+`Window.FocusVisible()` is true when the last input was a key press and false
+after a mouse press; it gates `Div.FocusVisible` styles.
 
 Example with named actions and a bare-key binding:
 
@@ -277,7 +287,3 @@ characters dropped); copy needs a focused handler with a non-empty selection;
 cut also deletes the text, but only if the write succeeded and the selection
 is unchanged. These shortcuts are handled by the platform and are not
 dispatched as key events.
-
-> TODO: this page will gain sections for the features being added to `gpui/`
-> (shadows, opacity, scroll, uniform list, tab stops, gradients) once they
-> land; until then it documents only what exists today.

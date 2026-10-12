@@ -205,7 +205,3 @@ past it extend its `ContentSize`.
   rectangles (not to rounded corners).
 - Layout is recomputed from scratch each frame (with per-call measure
   memoization); there is no incremental layout.
-
-> TODO: this page will gain sections for the features being added to `gpui/`
-> (shadows, opacity, scroll, uniform list, tab stops, gradients) once they
-> land; until then it documents only what exists today.

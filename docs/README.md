@@ -12,6 +12,11 @@ two disagree, these pages follow the code and call the difference out.
 
 ## Contents
 
+- [getting-started.md](getting-started.md) - tutorial: install, first window,
+  state and click handlers, entities, keybindings, `TextInput`, PNG rendering,
+  headless tests.
+- [examples.md](examples.md) - index of the 17 programs under `examples/`:
+  what each shows, which gpui-ce example it was ported from, what was left out.
 - [architecture.md](architecture.md) - package layout, dependency rules, the
   frame pipeline, threading model, performance notes.
 - Concepts
@@ -22,7 +27,8 @@ two disagree, these pages follow the code and call the difference out.
   - [concepts/layout.md](concepts/layout.md) - the flexbox engine as
     implemented, and its limits.
   - [concepts/styling.md](concepts/styling.md) - `Style`, `StyledMixin`,
-    colours, borders, radii, text styles, hover.
+    colours, borders, radii, gradients, shadows, opacity, hover/focus styles,
+    margins and flex shorthands, text style inheritance, fonts.
   - [concepts/events-and-input.md](concepts/events-and-input.md) - mouse and
     keyboard dispatch, keymap, actions, focus, `TextInput`, clipboard.
   - [concepts/text.md](concepts/text.md) - font discovery, shaping, wrapping,
@@ -30,8 +36,20 @@ two disagree, these pages follow the code and call the difference out.
   - [concepts/platform.md](concepts/platform.md) - `Platform` /
     `PlatformWindow`, the ebiten loop, headless rendering, writing a backend.
 
-Getting started, the examples index and the repository README are written
-separately.
+## Suggested reading order
+
+1. [../README.md](../README.md) for the overview, then
+   [getting-started.md](getting-started.md).
+2. Run and skim a few [examples](examples.md) (`counter`, `todo`, `styling`).
+3. [concepts/elements.md](concepts/elements.md),
+   [concepts/styling.md](concepts/styling.md) and
+   [concepts/layout.md](concepts/layout.md) to build UIs.
+4. [concepts/events-and-input.md](concepts/events-and-input.md) and
+   [concepts/app-and-entities.md](concepts/app-and-entities.md) for
+   interaction and state.
+5. [architecture.md](architecture.md), [concepts/text.md](concepts/text.md)
+   and [concepts/platform.md](concepts/platform.md) for internals and
+   backends.
 
 ## Conventions used in these pages
 

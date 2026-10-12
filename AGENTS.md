@@ -36,5 +36,14 @@ POC port of Zed's GPUI (Rust) to Go. The UI core lives in package `gpui`
   scene, raster, events, keymap, focus, entity/context/app, window pipeline,
   font/text shaper, platform interfaces + stub.
 - `gpui/ebitenplatform/` — ebiten backend implementing `gpui.Platform`.
-- `examples/todo/` — demo app; supports `-png PATH` headless rendering.
-- `_docs/` — contract and plan.
+- `examples/` — 17 runnable apps, each `examples/<name>/main.go` with `-png
+  PATH` headless rendering: actions_and_keybinds, border_and_shadow_backgrounds,
+  counter, focus_visible, gallery, gradient, hello_world, interactive_elements,
+  layout, opacity, scrollable, styling, tab_stop, text, todo, tree,
+  uniform_list. Index: `docs/examples.md`.
+- `docs/` — user documentation (getting started, examples, architecture,
+  concepts); describes what the code does, so update it with behaviour changes.
+  Snippets must compile.
+- `_docs/` — contract, plan and WIP registry (`wip.md`).
+- `_tmp/` — gitignored scratch (e.g. `_tmp/docchk/`, a throwaway module with
+  `replace go-gpui => ../..` for compiling doc snippets). Never commit it.

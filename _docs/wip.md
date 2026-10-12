@@ -5,7 +5,7 @@ dependencies. Statuses: `done`, `in-progress`, `blocked`, `todo`. Contract:
 `_docs/00-api-contract.md` (change signatures there first). Plan narrative:
 `_docs/plan.md`.
 
-Last updated: 2026-10-12.
+Last updated: 2026-10-12 (rows A9-A16 added).
 
 ## Registry
 
@@ -21,6 +21,14 @@ Last updated: 2026-10-12.
 | A7b | Counter example (`examples/counter`: buttons with hover styles, up/down keybindings) | done | A2, A4, A6 | `examples/counter/main.go` (new) |
 | A7c | Gallery example (`examples/gallery`: layout/styling/StyledText showcase) | done | A2, A4, A6 | `examples/gallery/main.go` (new) |
 | A8 | Verification: `gofmt -l .`, `go vet ./...`, `go test ./...`, `go mod tidy`, PNG smoke test | done | A4–A7 | — |
+| A9  | Port gpui-ce examples: `hello_world`, `actions_and_keybinds`, `layout`, `styling`, `text`, `tree`, `interactive_elements` | done | A7 | `examples/*/main.go` |
+| A10 | Core features wave: linear gradients (sRGB/Oklab), box shadows, element opacity, scroll containers + `ScrollHandle` + scrollbars, `UniformList`, tab stops (`FocusNext/FocusPrev`), `Hover`/`Focus`/`FocusVisible` styles | done | A1 | `gpui/{background,shadow,scroll,uniform_list,div,focus,window}.go` |
+| A11 | Port gpui-ce examples: `scrollable`, `uniform_list`, `opacity`, `border_and_shadow_backgrounds`, `tab_stop`, `focus_visible`, `gradient` | done | A9, A10 | `examples/*/main.go` |
+| A12 | Text fixes: text style inheritance (`TextFields`), line height, newlines, font family lookup + system fallback, TextInput placeholder/caret, shaper installed for every window, retina glyphs | done | A2, A3 | `gpui/{text,text_elem,font,input,style,styled}.go` |
+| A13 | Layout/events/app fixes: margins + auto margins, `Flex1` basis 0 / `FlexAuto` / `FlexNone` / `FlexBasis`, rounded child clips, scene-order paint, custom element layout, action keys + bare-key bindings, entity release, dispatch paths, click identity, clipboard timeouts | done | A1 | `gpui/{layout,styled,styled_layout,div,window,keymap,entity,app,clipboard}.go` |
+| A14 | Performance: bounds-limited rasterizer fills (2.5s to 1ms/frame at 2x), shaping cache | done | A1 | `gpui/{raster,text}.go` |
+| A15 | Frame snapshot key in the ebiten backend (`cmd/ctrl-shift-s`, `WithSnapshotKey`) | done | A6 | `gpui/ebitenplatform/snapshot.go` |
+| A16 | Docs: `docs/` (architecture, concepts, getting-started, examples), root `README.md` | done | A1-A15 | `docs/`, `README.md` |
 
 ## In progress
 
@@ -49,7 +57,28 @@ None. Pick the next `todo` activity with unmet dependencies; move its status to
 
 ## Open follow-ups
 
-- Interactive ebiten window has never been run in the CI environment (no Metal device).
+Missing features:
+
+- Absolute positioning (`position: absolute`); examples approximate it.
+- `flex-wrap`; examples split wrapped rows by hand.
+- `Active()` (pressed) style.
+- Animation frames: no API to request the next frame on a timer; examples
+  step state in `Render` and call `Refresh`.
+- Images and SVG elements.
+- Colour emoji (bitmap fonts draw as tofu).
+- Scrollbar thumb drag (scrollbars are display-only).
+
+Gaps and limitations:
+
+- Headless keyboard-focus seeding: add a `RenderOption` so `RenderToPNG` can
+  start with a focused element and keyboard modality (examples use flags).
+- `UniformList` rows are laid out outside the ancestor walk and do not
+  inherit text style.
+- Hover/focus text refinements (`Hover(...TextColor)`) change the div's own
+  paint style and do not cascade to descendant text.
+- Hitboxes are clipped to rectangles, not to rounded corners.
+- Interactive ebiten window has never been run in the agent environment (no
+  Metal device); headless rendering is what the tests cover.
 - `Keystroke.String` prints `ModPlatform` as `cmd-` on Linux/Windows.
 - Windows cannot clear the clipboard.
 - Sprite raster loop iterates the clip window rather than the sprite bounds.

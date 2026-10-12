@@ -6,26 +6,27 @@ Source: `gpui/style.go`, `gpui/styled.go`, `gpui/color.go`,
 ## Style and StyleRefinement
 
 `Style` is the fully-resolved record the layout engine and painters read:
-display, direction, width/height and min/max lengths, margin, padding, gap,
-flex grow/shrink, justify/align, overflow, border widths/colour, corner radii,
-background and a `TextStyle`. `DefaultStyle()` is the starting point.
+display, direction, width/height and min/max lengths, margin (with per-edge
+auto flags), padding, gap, flex grow/shrink/basis, justify/align, overflow,
+border widths/colour, corner radii, `Background`, `BoxShadows`, `Opacity` and a
+`TextStyle`. `DefaultStyle()` is the starting point.
 
 Fluent builders do not edit a `Style` directly. They write into a
 `StyleRefinement` - the same fields as pointers, where `nil` means "not set" -
 and `Refine(base)` overlays the set fields onto a base `Style` at the point of
 use. That is how a bare `Div` can distinguish "width: 0" from "width: unset".
 
-`StyledMixin` (embedded in `Div`, `Text`, `StyledText`) holds the refinement
+`StyledMixin` (embedded in `Div`, `Text`, `StyledText`, `UniformList`) holds the refinement
 and the Tailwind-flavoured builder methods:
 
 | Group | Methods |
 |---|---|
 | Size | `SizeWH(w,h)`, `SizeW`, `SizeH`, `SizeFull()`, `MinW/MinH/MaxW/MaxH` |
-| Flex | `Flex()`, `FlexRow()`, `FlexCol()`, `Flex1()`, `FlexGrow(v)`, `FlexShrink(v)`, `Gap(v)` |
+| Flex | `Flex()`, `FlexRow()`, `FlexCol()`, `Flex1()`, `FlexAuto()`, `FlexNone()`, `FlexBasis(v)`, `FlexGrow(v)`, `FlexShrink(v)`, `Gap(v)` |
 | Alignment | `ItemsStart/Center/End/Stretch()`, `JustifyStart/Center/End/Between/Around()` |
-| Spacing | `P(v)`, `Px_`, `Py_`, `Pt`, `Pr`, `Pb`, `Pl`, `M(v)` (margin: stored, **not laid out**) |
-| Paint | `Bg(c)`, `Rounded(px)`, `RoundedAll(tl,tr,br,bl)`, `Border(w, c)` |
-| Overflow | `OverflowHidden()`, `OverflowScroll()` |
+| Spacing | `P(v)`, `Px_`, `Py_`, `Pt`, `Pr`, `Pb`, `Pl`; margins `M(v)`, `Mx`, `My`, `Mt`, `Mr`, `Mb`, `Ml` and auto margins `MAuto`, `MxAuto`, `MyAuto`, `MtAuto`, `MrAuto`, `MbAuto`, `MlAuto` |
+| Paint | `Bg(fill)`, `Rounded(px)`, `RoundedAll(tl,tr,br,bl)`, `Border(w, c)`, `Opacity(f)`, `Shadow(...)`, `ShadowNone()`, `Shadow2xs/Xs/Sm/Md/Lg/Xl/2xl()` |
+| Overflow | `OverflowHidden()`, `OverflowScroll()`, `OverflowXScroll()`, `OverflowYScroll()` |
 | Visibility | `Hidden()`, `Visible()` |
 | Text | `TextColor`, `TextSize`, `FontWeight`, `FontFamily`, `TextStrikethrough`, `TextLineHeight` |
 
@@ -62,7 +63,7 @@ h := gpui.Blue500.ToHsla()           // Hsla{H,S,L,A}; Hsla.ToRgba() converts ba
 Predefined values: `White`, `Black`, `Transparent`, `Gray50` ... `Gray900`
 (Material-style), `Blue500/600`, `Red500/600`, `Green600`, `Yellow400`.
 The rasterizer premultiplies at draw time and composites source-over.
-A background with `A == 0` is not painted.
+A fully transparent background is not painted.
 
 ## Borders and corner radii
 
@@ -76,9 +77,10 @@ A background with `A == 0` is not painted.
 - The border is painted inside the element's bounds and is **not** included in
   layout size: content is not inset by it. Add padding at least as large as
   the border width.
-- Radii are clipped by the quad's content mask like any primitive, but a
-  rounded parent does **not** clip its children to the rounded shape;
-  `OverflowHidden` clips to the rectangular bounds.
+- With `OverflowHidden`/`OverflowScroll`, children are clipped to the parent's
+  bounds rounded by its radii; the parent's own background, border and shadows
+  are not clipped. Hitboxes are clipped to rectangles only, not to rounded
+  corners.
 
 ## Text styles
 
@@ -114,32 +116,122 @@ with defaults 14px, weight 400, black, line height `1.2 * FontSize`
   line's width.
 - `StyledText` takes a full `TextStyle` per run instead of the builder.
 
-## Hover (and other interaction styles)
+## Backgrounds and gradients
 
-There are no `hover:` style refinements. Hover is expressed by registering
-`OnHoverStart`/`OnHoverEnd`, storing the state in your own struct, and
-rebuilding the element with a different style on the next frame:
+`Bg` takes a `Fill`: `Rgba`, `Hsla` or a `Background` (`gpui/background.go`).
+`LinearGradient(angle, from, to)` builds a two-stop gradient; the angle is in
+degrees with CSS semantics (0 points up, 90 right) and each stop is
+`LinearColorStop(color, percentage)` with the percentage in 0..1 along the
+gradient line. Exactly two stops are supported.
 
 ```go
-type Btn struct{ hovered bool }
-
-func (b *Btn) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
-    bg := gpui.Blue500
-    if b.hovered {
-        bg = gpui.Blue600
-    }
-    return gpui.NewDiv().ID("btn").P(10).Bg(bg).Rounded(6).
-        OnHoverStart(func(w *gpui.Window, _ *gpui.App) { b.hovered = true; w.Refresh() }).
-        OnHoverEnd(func(w *gpui.Window, _ *gpui.App) { b.hovered = false; w.Refresh() }).
-        Child(gpui.NewText("Save").TextColor(gpui.White).FontWeight(700))
-}
+grad := gpui.LinearGradient(90,
+    gpui.LinearColorStop(gpui.Blue500, 0),
+    gpui.LinearColorStop(gpui.Red500, 1)).ColorSpace(gpui.ColorSpaceOklab)
+card := gpui.NewDiv().SizeWH(120, 60).Bg(grad).Rounded(8)
 ```
 
-Give hover-aware elements an `.ID(...)`: hover state is keyed by the element's
-global id, so a stable id keeps the state across re-renders. Hover also
-re-evaluates after every draw at the last pointer position. See
-[events-and-input.md](events-and-input.md#hover) for ordering.
+Interpolation defaults to sRGB (`ColorSpaceSrgb`); `.ColorSpace(ColorSpaceOklab)`
+switches to Oklab. `Background.Opacity(f)` scales every stop's alpha. Only
+the background can be a gradient: borders and shadows are solid colours. The
+rasterizer samples a 256-entry LUT per quad (`gradientMapper`).
 
-> TODO: this page will gain sections for the features being added to `gpui/`
-> (shadows, opacity, scroll, uniform list, tab stops, gradients) once they
-> land; until then it documents only what exists today.
+## Shadows
+
+`Shadow(...BoxShadow)` replaces the element's shadows; the presets
+(`ShadowSm()`, `ShadowMd()` ... `Shadow2xl()`) copy GPUI's `shadow_*` values.
+Build your own with a fluent chain:
+
+```go
+s := gpui.NewBoxShadow(0, 4, gpui.RgbaOf(0, 0, 0, 64)).WithBlur(12).WithSpread(1)
+d := gpui.NewDiv().Rounded(8).Shadow(s, s.AsInset())
+```
+
+`BoxShadow{Color, Offset, BlurRadius, SpreadRadius, Inset}`: the CSS blur
+radius is twice the gaussian sigma; spread grows (negative: shrinks) the shape
+and the corner radii. Outset shadows paint before the background, inset
+shadows after it and clipped to the border box (`paintBox` in
+`gpui/shadow.go`). Shadows follow the element's corner radii.
+
+## Opacity
+
+`Opacity(f)` (clamped to 0..1) multiplies the alpha of **every primitive** the
+element and its descendants paint (quads, borders, gradients, shadows, glyphs);
+nested opacities multiply. It is not a group layer: where two children overlap
+inside a translucent parent, both are blended individually and the overlap is
+denser than a flattened layer would be.
+
+## Interaction styles: hover, focus, focus-visible
+
+`Div` has GPUI's state-dependent refinements:
+
+```go
+btn := gpui.NewDiv().ID("save").TabIndex(0).P(8).Bg(gpui.Blue500).
+    Hover(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Blue600) }).
+    Focus(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(2, gpui.Gray400) }).
+    FocusVisible(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(2, gpui.Green600) })
+```
+
+- `Hover` applies while the pointer is over the div's hitbox (it follows the
+  hit path, so a hovered descendant counts).
+- `Focus` applies while the div's focus handle is focused. The handle comes
+  from `TrackFocus(h)` or, for `TabIndex(i)` divs without one, an implicit
+  handle retained per element id.
+- `FocusVisible` additionally requires the last input to be the keyboard
+  (`Window.FocusVisible()`: key press sets it, mouse press clears it), like CSS
+  `:focus-visible`.
+- Precedence: base style, then `Focus`, then `FocusVisible`, then `Hover`.
+
+They are resolved at paint (`paintOpacity` in `gpui/div.go`), so layout
+fields set in them (size, padding, margin, flex) have **no effect**. Text
+refinements (`TextColor` etc.) change that div's own paint style only; they do
+not cascade to descendant `Text` (the cascade is built in `RequestLayout`).
+Visual-only properties (`Bg`, `Border`, `Rounded`, `Shadow`, `Opacity`) are the
+intended use. There is no `active()` style.
+
+The older manual pattern still works and is the way to change layout or text
+on hover: store `hovered` in your view, set it from
+`OnHoverStart`/`OnHoverEnd`, call `w.Refresh()`, and rebuild with a different
+style (see `examples/counter/main.go`). Give hover-aware elements an
+`.ID(...)`; hover re-evaluates after every draw at the last pointer position.
+See [events-and-input.md](events-and-input.md#hover).
+
+## Flex shorthands and margins
+
+Layout semantics are in [layout.md](layout.md); the builders are:
+
+| Builder | CSS | Notes |
+|---|---|---|
+| `Flex1()` | `flex: 1 1 0%` | grow 1, shrink 1, basis 0: siblings share space equally |
+| `FlexAuto()` | `flex: 1 1 auto` | free space added on top of content size |
+| `FlexNone()` | `flex: none` | no grow, no shrink |
+| `FlexBasis(v)` | `flex-basis: Npx` | definite base size |
+| `Mx/My/Mt/Mr/Mb/Ml(v)` | `margin-*` | outside the border box; negative allowed |
+| `MAuto()`, `MxAuto()`, `MlAuto()` ... | `margin: auto` | absorbs free main-axis space (`MlAuto` on the last row child right-aligns it) |
+
+A pixel margin on an edge clears that edge's auto flag and vice versa.
+
+## Text style inheritance
+
+Text style cascades. The `Text*`/`Font*` builders on a `Div` record **only the
+fields they set** (`StyleRefinement.TextSet`, a `TextFields` bit set:
+`TextFieldFamily`, `TextFieldSize`, `TextFieldWeight`, `TextFieldColor`,
+`TextFieldLineHeight`, ...); descendants resolve explicit fields over the
+nearest ancestor's over `DefaultTextStyle()`.
+
+```go
+gpui.NewDiv().FontFamily("Menlo").TextSize(12).TextColor(gpui.Gray600).Child(
+    gpui.NewText("inherits all three"),
+    gpui.NewText("keeps family+size").TextColor(gpui.Red500))
+```
+
+Limits: rows built by a `UniformList` render callback do not inherit (they are
+laid out outside the ancestor walk); set the style on the row element itself.
+
+## Font family and fallback
+
+`FontFamily(name)` resolves by file name in the system font directories
+(`FontManager.Face`); unknown or generic names use the default font (override
+the default with `GPUI_FONT`). Glyphs the chosen face lacks are drawn from
+system fallback fonts (`FontManager.Fallback`), so CJK and symbols usually
+render; colour emoji do not (bitmap fonts: tofu). Details in [text.md](text.md).

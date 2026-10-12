@@ -10,6 +10,9 @@ go-gpui/
     layout.go              flexbox engine over LayoutNode
     element.go div.go      Element interface, Div
     text_elem.go           Text, StyledText, Str
+    background.go shadow.go Fill/gradients, BoxShadow, paintBox
+    scroll.go uniform_list.go ScrollHandle, scrollbars, UniformList
+    styled_layout.go       Div/Text wrappers for margins and flex shorthands
     scene.go raster.go     Scene primitives, CPU rasterizer, scaleScene
     bounds.go              hitbox list (BoundsTree)
     events.go keymap.go    input events, keystrokes, keybindings, key contexts
@@ -21,8 +24,8 @@ go-gpui/
     headless.go            HeadlessPlatform, RenderToPNG / RenderToImage
     font.go text.go        FontManager, Shaper (HarfBuzz via go-text)
     clipboard.go           OS-tool clipboard
-    ebitenplatform/        gpui.Platform on ebiten (no cgo)
-  examples/                runnable apps (counter, gallery, todo)
+    ebitenplatform/        gpui.Platform on ebiten (no cgo); snapshot.go = frame-snapshot key
+  examples/                17 runnable apps (see examples.md)
   _docs/                   internal contract, plan, WIP registry
   docs/                    these pages
 ```
