@@ -7,10 +7,12 @@ signatures there first). Layout of the repo: [project-structure.md](project-stru
 
 Last updated: 2026-10-13.
 
-Current wave: **S1 — done (verified, uncommitted)**, implemented by agent `l1`,
-independently reviewed by `review_l1`, coordinated by Jake.
-L1 and L2 remain verified and uncommitted. No commits authorized.
-Next dependency-free P1 interaction milestone: I1 (scrollbar drag / track click).
+Current wave: **I1 — in progress**, owned by agent `l1`, coordinated by Jake.
+Requested research: **K1 — done (verified; commit pending)**, owned by agent `gpui_kit`:
+assess [gpui-kit](https://github.com/longbridge/gpui-kit) and write an integration
+document. K1 does not authorize component implementation or new dependencies.
+L1, L2 and S1 are committed in `f9666fd`. Commits are authorized without
+coauthor trailers. I1 combined verification and review are pending; K1 source/document review passed.
 
 ## 1. Status summary
 
@@ -93,15 +95,15 @@ Commit hashes from `git log --oneline` (oldest first within a group).
 | `5dbd7ea` | Text style inheritance, line height, newlines, font family + fallback; margins and auto margins, `Flex1` basis 0 / `FlexAuto` / `FlexNone` / `FlexBasis`, rounded child clips, scene-order paint, action keys + bare-key bindings, entity release, custom element layout |
 | `69be5b1` | `TextInput` keeps placeholder and height when focused and empty; caret centred |
 
-### Verified working-tree milestones
+### Verified roadmap milestones
 
-These changes are complete locally but have no commit hash yet.
+Verified milestones; later waves also record their commit hashes here.
 
 | ID | Status | What and evidence |
 |----|--------|-------------------|
-| L1 | done, uncommitted (2026-10-13) | Absolute positioning: `Position`, `Absolute` / `Relative`, edge and inset builders; out-of-flow sizing, constrained stretching, nested placement, overflow and scene-order overlap tests. Contract and user docs updated; new layout and revised cookbook snippets compile. Independent review found no correctness issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Before/after PNGs inspected in `_tmp/l1-before` and `_tmp/l1-after`: layout changes only its stack region, opacity intentionally overlaps background text, todo is pixel-identical. Todo scale-2 benchmark: 1.29 ms before, 1.21 ms after (single runs; no regression observed). Real-window checks not run: no display/GPU access. |
-| L2 | done, uncommitted (2026-10-13) | Row/column `FlexWrap` / `FlexNoWrap`, `RowGap` / `ColumnGap`, six align-content modes; per-line flex resolution, constraint and absolute-child coverage. Contract, user docs and project map updated; wrapping snippet compiles. Independent review found no blocking issues; stale contract wording corrected. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Before/after PNGs in `_tmp/l2-before` and `_tmp/l2-after` inspected: default styling/border and todo/layout/opacity controls pixel-identical; narrow styling palette reflows and narrow border cards form one column instead of clipped pairs. Todo scale-2 benchmark: 1.30 ms/frame (single run, within baseline variation); allocation count unchanged. No real-window checks available. |
-| S1 | done, uncommitted (2026-10-13) | `Div.Active` primary-button paint refinement with stable hit-path identity, ancestor activation, release/leave/removal/occlusion cancellation and precedence after Hover. Headless tests include stopped propagation, redraw lifecycle, inherited text/opacity and ignored layout refinements. Styling and gradient examples, contract and user docs updated; three snippets compile. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Resting styling/gradient and todo/layout/opacity renders pixel-identical; pressed/released previews inspected in `_tmp/s1-after`, release matches hovered baseline. Paired isolated before/current benchmarks (1s, count 3) show no material S1 slowdown: Todo2 medians 1.964/2.009 ms, Todo1 .835/.866 ms, Gallery2 3.303/3.216 ms, allocation counts unchanged; elevated absolute times occur in both copies. No real-window checks available. |
+| L1 | done, `f9666fd` (2026-10-13) | Absolute positioning: `Position`, `Absolute` / `Relative`, edge and inset builders; out-of-flow sizing, constrained stretching, nested placement, overflow and scene-order overlap tests. Contract and user docs updated; new layout and revised cookbook snippets compile. Independent review found no correctness issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Before/after PNGs inspected in `_tmp/l1-before` and `_tmp/l1-after`: layout changes only its stack region, opacity intentionally overlaps background text, todo is pixel-identical. Todo scale-2 benchmark: 1.29 ms before, 1.21 ms after (single runs; no regression observed). Real-window checks not run: no display/GPU access. |
+| L2 | done, `f9666fd` (2026-10-13) | Row/column `FlexWrap` / `FlexNoWrap`, `RowGap` / `ColumnGap`, six align-content modes; per-line flex resolution, constraint and absolute-child coverage. Contract, user docs and project map updated; wrapping snippet compiles. Independent review found no blocking issues; stale contract wording corrected. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Before/after PNGs in `_tmp/l2-before` and `_tmp/l2-after` inspected: default styling/border and todo/layout/opacity controls pixel-identical; narrow styling palette reflows and narrow border cards form one column instead of clipped pairs. Todo scale-2 benchmark: 1.30 ms/frame (single run, within baseline variation); allocation count unchanged. No real-window checks available. |
+| S1 | done, `f9666fd` (2026-10-13) | `Div.Active` primary-button paint refinement with stable hit-path identity, ancestor activation, release/leave/removal/occlusion cancellation and precedence after Hover. Headless tests include stopped propagation, redraw lifecycle, inherited text/opacity and ignored layout refinements. Styling and gradient examples, contract and user docs updated; three snippets compile. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Resting styling/gradient and todo/layout/opacity renders pixel-identical; pressed/released previews inspected in `_tmp/s1-after`, release matches hovered baseline. Paired isolated before/current benchmarks (1s, count 3) show no material S1 slowdown: Todo2 medians 1.964/2.009 ms, Todo1 .835/.866 ms, Gallery2 3.303/3.216 ms, allocation counts unchanged; elevated absolute times occur in both copies. No real-window checks available. |
 
 L1 limits: logical-pixel offsets only; immediate parent border box is the anchor.
 No relative translation, CSS static-position placement, fixed positioning or
@@ -258,6 +260,21 @@ top of each `examples/*/main.go`.
 | `bench/*` (data_table, paths_bench, pattern, shadow) | todo | - | E7; perf references for `bench_test.go` |
 
 Local-only examples (not from gpui-ce): `counter`, `gallery`, `todo`.
+
+### 3.7 Component toolkit integration
+
+Requested upstream reference: [longbridge/gpui-kit](https://github.com/longbridge/gpui-kit).
+Research and proposal are scoped separately from implementation. K1 is complete:
+[`gpui-kit-integration.md`](gpui-kit-integration.md), upstream revision
+`c5f8eca4a0759f8c0c7ed624eddfd03f1c93a5f2` (2026-10-13), independently checked
+against source manifests, architecture, linked paths and notices. No integration
+code, dependency additions or Rust build occurred. K2 is a backlog proposal;
+package/API and activation choices remain for contract review before dispatch.
+Later overlay/data phases remain proposals inside the document.
+
+| ID | Pri | Size | Deps | Milestone | Acceptance criteria |
+|----|-----|------|------|-----------|---------------------|
+| K2 | P2 | M | L2, S1 | First native Go controls inspired by gpui-kit (backlog proposal) | Settle package/test and activation contracts first; semantic theme, text button and controlled checkbox with one headless example; disabled/focus/keyboard dispatch tests and light/dark visual checks; exclude assets/overlays/motion and document accessibility gap |
 
 ## 4. Known limitations and POC deviations from GPUI
 

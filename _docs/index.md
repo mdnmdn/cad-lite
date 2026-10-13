@@ -15,6 +15,7 @@ Audience: **user** (building apps), **contributor** (changing the library),
 | [../AGENTS.md](../AGENTS.md) | agent, contributor | Rules, boundaries, layout, verification |
 | [api-contract.md](api-contract.md) | contributor, agent | Normative API contract; change it before code |
 | [roadmap.md](roadmap.md) | contributor, agent | Status, completed milestones, open work, limitations, process |
+| [gpui-kit-integration.md](gpui-kit-integration.md) | contributor, agent | Pinned upstream investigation and phased native Go component proposal |
 | [project-structure.md](project-structure.md) | contributor, agent | File tree, responsibilities, dependency layers, where to add things |
 | [index.md](index.md) | all | This page |
 | [../docs/README.md](../docs/README.md) | user | Index of user documentation under `docs/` |
