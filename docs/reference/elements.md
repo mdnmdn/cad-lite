@@ -93,7 +93,7 @@ Each setter holds one handler; a second call replaces the first.
 | Method | Meaning |
 |---|---|
 | `TrackScroll(h *ScrollHandle) *Div` | Bind `h` to this scroll container. |
-| `ShowScrollbar() *Div` | Thin overlay scrollbar when content overflows. |
+| `ShowScrollbar() *Div` | Thin overlay scrollbar with primary thumb dragging and track paging when content overflows. |
 | `Hover(f)`, `Focus(f)`, `FocusVisible(f)`, `Active(f)` | Interaction style refinements; see [style-builders.md](style-builders.md#interaction-styles-div-only). |
 
 What a `Div` does per phase: it registers a hitbox always, mouse listeners, a
@@ -173,6 +173,12 @@ exactly the elements of rows `[start, end)`. With an auto height the list sizes
 itself to `count` rows. The chain-preserving builders are `Bg`, `Border`,
 `Flex1`, `MaxH`, `MinH`, `Opacity`, `P`, `Px_`, `Py_`, `Rounded`, `SizeFull`,
 `SizeH`, `SizeW`, `SizeWH`, `TextColor`, plus the two above.
+
+`ShowScrollbar` uses the same interactive track behavior on Div and UniformList:
+primary thumb dragging continues outside bounds until release, and a track press
+pages one viewport toward the pointer. Geometry/extent changes or programmatic
+offset changes cancel capture. Stable IDs preserve it across ordinary redraws.
+See [scrollbar input](../concepts/events-and-input.md#scrollbar-input).
 
 ## ScrollHandle
 

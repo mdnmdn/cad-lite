@@ -759,7 +759,30 @@ next container. Offsets are clamped to `[0, ScrollMax]` before the frame
 uses them. Hitboxes are clipped to the enclosing scroll/clip containers, so
 scrolled-out children are not hit. With `ShowScrollbar()`, a scroll
 container with overflow on a scrolling axis paints a thin overlay thumb
-(6px, 2px inset, gray α≈0.55, not draggable) after its children.
+(6px, 2px inset, gray α≈0.55) after its children.
+
+Scrollbar tracks share the painted thumb geometry, including the 20px minimum
+thumb and shortened tracks when both axes overflow. Hitboxes cover the 6px
+track strips; they are registered after container descendants, under later
+siblings, and clipped to the container and enclosing rectangular clips. No
+overflow or a nonpositive track length produces no scrollbar input region.
+
+Primary thumb press captures the container GlobalElementID and axis. Movement
+changes offset proportionally by pointer delta times scroll maximum divided by
+thumb travel, clamped to the current extent, even outside the container. Primary
+release ends capture anywhere; secondary release does not. Pressing the track
+outside the thumb pages one viewport toward the pointer, with no held-repeat.
+Small tracks whose thumb fills the track have no drag travel.
+
+The consumed primary gesture does not dispatch content mouse handlers, focus
+content, or start Active styles. Its immediately following matching ClickEvent
+is suppressed; another input event/new press clears stale click suppression.
+Scrollbar input updates retained scroll state and the attached ScrollHandle
+and redraws automatically. Stable explicit container IDs preserve capture
+across redraws; capture cancels if the owner/scrollbar disappears, its track
+is fully clipped, geometry/max changes, or programmatic scrolling changes the
+tracked offset. Geometry changes cancel rather than retarget the drag. Div
+and UniformList share this behavior; no generic drag/drop API is introduced.
 
 ### Pressed interaction style
 

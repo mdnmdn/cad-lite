@@ -155,6 +155,7 @@ type scrollbarInfo struct {
 	offset Point
 	max    Size
 	axes   Axes
+	owner  GlobalElementID
 }
 
 const (
@@ -167,47 +168,203 @@ const (
 // dark backgrounds.
 var scrollbarColor = Rgba{R: 128, G: 128, B: 128, A: 140}
 
-// paint draws one thumb per scrolling axis that has overflow.
-func (s *scrollbarInfo) paint(w *Window) {
+type scrollbarGeometry struct {
+	track, thumb      Bounds
+	maximum, viewport Pixels
+}
+
+func (g scrollbarGeometry) travel(axis Axes) Pixels {
+	if axis == AxisY {
+		return g.track.Size.H - g.thumb.Size.H
+	}
+	return g.track.Size.W - g.thumb.Size.W
+}
+
+func (s *scrollbarInfo) geometry(axis Axes) (scrollbarGeometry, bool) {
 	b := s.bounds
 	showY := s.axes.Has(AxisY) && s.max.H > 0.5
 	showX := s.axes.Has(AxisX) && s.max.W > 0.5
-	var r Corners
-	r = r.Uniform(scrollbarThickness / 2)
-	if showY {
-		track := b.Size.H - 2*scrollbarInset
+	if (axis == AxisY && !showY) || (axis == AxisX && !showX) {
+		return scrollbarGeometry{}, false
+	}
+	var track, viewport, maximum, offset Pixels
+	var bounds Bounds
+	if axis == AxisY {
+		track, viewport, maximum, offset = b.Size.H-2*scrollbarInset, b.Size.H, s.max.H, s.offset.Y
 		if showX {
 			track -= scrollbarThickness + scrollbarInset
 		}
-		content := b.Size.H + s.max.H
-		thumb := minPixels(track, maxPixels(scrollbarMinThumb, track*b.Size.H/content))
-		pos := (track - thumb) * s.offset.Y / s.max.H
-		if track > 0 {
-			w.PaintQuad(Quad{
-				Bounds: Bounds{
-					Origin: Point{X: b.Max().X - scrollbarInset - scrollbarThickness, Y: b.Origin.Y + scrollbarInset + pos},
-					Size:   Size{W: scrollbarThickness, H: thumb},
-				},
-				Background: BackgroundSolid, Fill: scrollbarColor, CornerRadii: r,
-			})
-		}
-	}
-	if showX {
-		track := b.Size.W - 2*scrollbarInset
+		bounds = Bounds{Origin: Point{X: b.Max().X - scrollbarInset - scrollbarThickness, Y: b.Origin.Y + scrollbarInset}, Size: Size{W: scrollbarThickness, H: track}}
+	} else {
+		track, viewport, maximum, offset = b.Size.W-2*scrollbarInset, b.Size.W, s.max.W, s.offset.X
 		if showY {
 			track -= scrollbarThickness + scrollbarInset
 		}
-		content := b.Size.W + s.max.W
-		thumb := minPixels(track, maxPixels(scrollbarMinThumb, track*b.Size.W/content))
-		pos := (track - thumb) * s.offset.X / s.max.W
-		if track > 0 {
-			w.PaintQuad(Quad{
-				Bounds: Bounds{
-					Origin: Point{X: b.Origin.X + scrollbarInset + pos, Y: b.Max().Y - scrollbarInset - scrollbarThickness},
-					Size:   Size{W: thumb, H: scrollbarThickness},
-				},
-				Background: BackgroundSolid, Fill: scrollbarColor, CornerRadii: r,
-			})
+		bounds = Bounds{Origin: Point{X: b.Origin.X + scrollbarInset, Y: b.Max().Y - scrollbarInset - scrollbarThickness}, Size: Size{W: track, H: scrollbarThickness}}
+	}
+	if track <= 0 {
+		return scrollbarGeometry{}, false
+	}
+	thumb := minPixels(track, maxPixels(scrollbarMinThumb, track*viewport/(viewport+maximum)))
+	pos := (track - thumb) * offset / maximum
+	thumbBounds := bounds
+	if axis == AxisY {
+		thumbBounds.Origin.Y += pos
+		thumbBounds.Size.H = thumb
+	} else {
+		thumbBounds.Origin.X += pos
+		thumbBounds.Size.W = thumb
+	}
+	return scrollbarGeometry{track: bounds, thumb: thumbBounds, maximum: maximum, viewport: viewport}, true
+}
+
+// paint uses the same geometry as input, preserving the existing overlay appearance.
+func (s *scrollbarInfo) paint(w *Window) {
+	for _, axis := range []Axes{AxisY, AxisX} {
+		g, ok := s.geometry(axis)
+		if !ok {
+			continue
 		}
+		w.PaintQuad(Quad{Bounds: g.thumb, Background: BackgroundSolid, Fill: scrollbarColor, CornerRadii: Corners{}.Uniform(scrollbarThickness / 2)})
+	}
+}
+
+type scrollbarInput struct {
+	owner    GlobalElementID
+	axis     Axes
+	geometry scrollbarGeometry
+}
+
+type scrollbarDrag struct {
+	ownerKey                              string
+	axis                                  Axes
+	track                                 Bounds
+	maximum, travel                       Pixels
+	startPointer, startOffset, lastOffset Pixels
+}
+
+func (s *scrollbarInfo) registerInput(w *Window) {
+	for _, axis := range []Axes{AxisY, AxisX} {
+		g, ok := s.geometry(axis)
+		if !ok {
+			continue
+		}
+		key := "#scrollbar-y"
+		if axis == AxisX {
+			key = "#scrollbar-x"
+		}
+		path := append(append([]ElementPathKey(nil), s.owner.Path...), ElementPathKey{Key: key})
+		w.currentElementID = GlobalElementID{Path: path}
+		hb := w.InsertHitbox(g.track)
+		w.nextFrame.mouseListeners[hb].scrollbar = &scrollbarInput{owner: s.owner, axis: axis, geometry: g}
+	}
+}
+
+func scrollbarCoordinate(p Point, axis Axes) Pixels {
+	if axis == AxisY {
+		return p.Y
+	}
+	return p.X
+}
+
+func scrollbarOffset(st scrollState, axis Axes) Pixels {
+	p := st.offset
+	if st.handle != nil {
+		p = st.handle.offset
+	}
+	return scrollbarCoordinate(p, axis)
+}
+
+func (w *Window) setScrollbarOffset(input *scrollbarInput, value Pixels) {
+	key := globalIDKey(input.owner)
+	w.touchState(key)
+	st, ok := w.elementStates[key].(scrollState)
+	if !ok {
+		return
+	}
+	p := st.offset
+	if st.handle != nil {
+		p = st.handle.offset
+	}
+	if input.axis == AxisY {
+		p.Y = value
+	} else {
+		p.X = value
+	}
+	w.SetScrollOffset(input.owner, p)
+	w.Refresh()
+}
+
+func (w *Window) beginScrollbar(pos Point) bool {
+	i := w.renderedFrame.hitboxes.HitTest(pos)
+	if i < 0 {
+		return false
+	}
+	input := w.renderedFrame.mouseListeners[i].scrollbar
+	if input == nil {
+		return false
+	}
+	g := input.geometry
+	st, ok := w.elementStates[globalIDKey(input.owner)].(scrollState)
+	if !ok {
+		return false
+	}
+	w.scrollbarPress = true
+	if len(w.active) > 0 {
+		clear(w.active)
+		w.Refresh()
+	}
+	offset := scrollbarOffset(st, input.axis)
+	if g.thumb.Contains(pos) {
+		if travel := g.travel(input.axis); travel > 0 {
+			w.scrollbarDrag = &scrollbarDrag{ownerKey: globalIDKey(input.owner), axis: input.axis, track: g.track, maximum: g.maximum, travel: travel, startPointer: scrollbarCoordinate(pos, input.axis), startOffset: offset, lastOffset: offset}
+		}
+	} else {
+		delta := g.viewport
+		if scrollbarCoordinate(pos, input.axis) < scrollbarCoordinate(g.thumb.Origin, input.axis) {
+			delta = -delta
+		}
+		w.setScrollbarOffset(input, clampf(offset+delta, 0, g.maximum))
+	}
+	return true
+}
+
+func (w *Window) scrollbarFor(frame *Frame, drag *scrollbarDrag) *scrollbarInput {
+	for i := range frame.mouseListeners {
+		input := frame.mouseListeners[i].scrollbar
+		if input != nil && input.axis == drag.axis && globalIDKey(input.owner) == drag.ownerKey && !frame.hitboxes.boxes[i].Bounds.IsEmpty() {
+			return input
+		}
+	}
+	return nil
+}
+
+func (w *Window) reconcileScrollbarDrag(frame *Frame) {
+	drag := w.scrollbarDrag
+	if drag == nil {
+		return
+	}
+	input := w.scrollbarFor(frame, drag)
+	if input == nil || input.geometry.track != drag.track || input.geometry.maximum != drag.maximum || input.geometry.travel(drag.axis) != drag.travel {
+		w.scrollbarDrag = nil
+		return
+	}
+	st, ok := w.elementStates[drag.ownerKey].(scrollState)
+	if !ok || (st.handle != nil && st.handle.request != scrollNone) || scrollbarOffset(st, drag.axis) != drag.lastOffset {
+		w.scrollbarDrag = nil
+	}
+}
+
+func (w *Window) moveScrollbar(pos Point) {
+	w.reconcileScrollbarDrag(&w.renderedFrame)
+	drag := w.scrollbarDrag
+	if drag == nil {
+		return
+	}
+	input := w.scrollbarFor(&w.renderedFrame, drag)
+	value := clampf(drag.startOffset+(scrollbarCoordinate(pos, drag.axis)-drag.startPointer)*drag.maximum/drag.travel, 0, drag.maximum)
+	if value != drag.lastOffset {
+		drag.lastOffset = value
+		w.setScrollbarOffset(input, value)
 	}
 }

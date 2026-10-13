@@ -32,7 +32,8 @@ func (u *UniformList) TrackScroll(h *ScrollHandle) *UniformList {
 	return u
 }
 
-// ShowScrollbar opts the list into a thin overlay scrollbar.
+// ShowScrollbar opts the list into a thin overlay scrollbar with primary
+// thumb dragging and viewport paging on track presses.
 func (u *UniformList) ShowScrollbar() *UniformList {
 	u.showScrollbar = true
 	return u
@@ -127,6 +128,12 @@ func (st *uniformListPrepaint) paintTextOverride() (textOverride, bool) {
 func (st *uniformListPrepaint) clipsChildren() bool            { return true }
 func (st *uniformListPrepaint) paintOpacity(w *Window) float32 { return st.style.Opacity }
 func (st *uniformListPrepaint) lateChildren() []*renderNode    { return st.children }
+func (st *uniformListPrepaint) registerScrollbar(w *Window) {
+	if st.scroll != nil {
+		st.scroll.registerInput(w)
+	}
+}
+
 func (st *uniformListPrepaint) paintScrollbar(w *Window) {
 	if st.scroll != nil {
 		st.scroll.paint(w)
@@ -166,7 +173,7 @@ func (e uniformListElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bo
 	ml.scrollAxes = AxisY
 	ml.scrollMax = limit
 	if u.showScrollbar {
-		st.scroll = &scrollbarInfo{bounds: bounds, offset: off, max: limit, axes: AxisY}
+		st.scroll = &scrollbarInfo{bounds: bounds, offset: off, max: limit, axes: AxisY, owner: gid}
 	}
 
 	if itemH <= 0 || u.count <= 0 || u.render == nil {

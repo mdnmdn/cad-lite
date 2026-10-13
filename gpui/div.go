@@ -252,7 +252,8 @@ func (d *Div) TrackScroll(h *ScrollHandle) *Div {
 }
 
 // ShowScrollbar opts a scroll container into a thin overlay scrollbar,
-// painted when its content overflows on a scrolling axis. GPUI divs paint
+// painted when its content overflows on a scrolling axis. It supports primary
+// thumb dragging and viewport paging on track presses. GPUI divs paint
 // none by default; neither does this port.
 func (d *Div) ShowScrollbar() *Div {
 	d.showScrollbar = true
@@ -533,6 +534,12 @@ func (r *StyleRefinement) interactionText() TextFields {
 	return r.textSet() & paintTextFields
 }
 
+func (st *divPrepaint) registerScrollbar(w *Window) {
+	if st.scroll != nil {
+		st.scroll.registerInput(w)
+	}
+}
+
 func (st *divPrepaint) paintScrollbar(w *Window) {
 	if st.scroll != nil {
 		st.scroll.paint(w)
@@ -608,7 +615,7 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 		}
 		if ml.scrollable && d.showScrollbar {
 			sst, _ := w.elementStates[globalIDKey(gid)].(scrollState)
-			st.scroll = &scrollbarInfo{bounds: bounds, offset: sst.offset, max: ml.scrollMax, axes: style.ScrollAxes}
+			st.scroll = &scrollbarInfo{bounds: bounds, offset: sst.offset, max: ml.scrollMax, axes: style.ScrollAxes, owner: gid}
 		}
 	}
 

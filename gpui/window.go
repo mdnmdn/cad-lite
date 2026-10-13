@@ -34,7 +34,10 @@ type Window struct {
 	// hitbox depth; callbacks are looked up in the rendered frame when fired.
 	hovered map[string]int
 	// active captures the primary press path, pruned on leave and before paint.
-	active map[string]struct{}
+	active         map[string]struct{}
+	scrollbarDrag  *scrollbarDrag
+	scrollbarPress bool
+	scrollbarClick *MouseUpEvent
 
 	// hitboxStack and keyStack hold the indices of the innermost enclosing
 	// hitbox / key node while prepainting, giving each new one its parent.
@@ -163,6 +166,7 @@ type MouseListener struct {
 	// changes must redraw.
 	hoverStyle  bool
 	activeStyle bool
+	scrollbar   *scrollbarInput
 	// parent is the index of the nearest ancestor hitbox, or -1; depth is
 	// the number of ancestor hitboxes.
 	parent, depth int
@@ -683,6 +687,7 @@ func (w *Window) Draw(cx *App) {
 		rn = w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
 		w.prepaintTree(rn, cx, true)
 	}
+	w.reconcileScrollbarDrag(&w.nextFrame)
 	w.retainActive(&w.nextFrame, false)
 	w.paintTree(rn, cx)
 	if cx != nil {
@@ -887,6 +892,9 @@ func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
 	for _, c := range n.children {
 		w.prepaintTree(c, cx, false)
 	}
+	if sp, ok := n.prepaint.(scrollbarRegistrar); ok {
+		sp.registerScrollbar(w)
+	}
 	if pushedHitbox {
 		w.hitboxStack = w.hitboxStack[:len(w.hitboxStack)-1]
 	}
@@ -912,6 +920,10 @@ type paintScoper interface {
 // paintScrollbar runs after the children, inside the container's clip.
 type scrollbarPainter interface {
 	paintScrollbar(w *Window)
+}
+
+type scrollbarRegistrar interface {
+	registerScrollbar(w *Window)
 }
 
 // lateChildren is implemented by prepaint states of elements that create
@@ -1011,10 +1023,17 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 
 // dispatchEvent is DispatchEvent's body.
 func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
+	if _, click := input.(ClickEvent); !click {
+		w.scrollbarClick = nil
+	}
 	switch e := input.(type) {
 	case MouseDownEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
 		if e.Button == MouseLeft {
+			w.scrollbarDrag, w.scrollbarPress = nil, false
+			if w.beginScrollbar(e.Position) {
+				return
+			}
 			w.beginActive(e.Position)
 		} else {
 			w.retainActive(&w.renderedFrame, true)
@@ -1039,6 +1058,13 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		})
 	case MouseUpEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		if e.Button == MouseLeft && w.scrollbarPress {
+			w.moveScrollbar(e.Position)
+			w.scrollbarDrag, w.scrollbarPress = nil, false
+			up := e
+			w.scrollbarClick = &up
+			return
+		}
 		if e.Button == MouseLeft {
 			if len(w.active) > 0 {
 				clear(w.active)
@@ -1055,6 +1081,10 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		})
 	case MouseMoveEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		if w.scrollbarPress {
+			w.moveScrollbar(e.Position)
+			return
+		}
 		w.retainActive(&w.renderedFrame, true)
 		w.updateHover(e.Position, cx)
 		ev := e
@@ -1064,6 +1094,11 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 			}
 		})
 	case ClickEvent:
+		consumed := e.Up != nil && w.scrollbarClick != nil && *e.Up == *w.scrollbarClick
+		w.scrollbarClick = nil
+		if consumed {
+			return
+		}
 		pos := w.mousePosition
 		if e.Up != nil {
 			pos = e.Up.Position

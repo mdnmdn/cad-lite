@@ -265,7 +265,8 @@ painting of its **children** is clipped to its bounds (rounded by its
 `CornerRadii` when it has `Rounded(...)`; its own background, border and
 shadows are not clipped), and `ContentSize` records the content
 extent. `LayoutNode.ScrollMax()` is `max(0, ContentSize - Rect.Size)` per axis.
-`OverflowScroll` additionally stores an offset updated by wheel events
+`OverflowScroll` additionally stores an offset updated by wheel events and, with
+`ShowScrollbar`, thumb dragging and track presses
 (`Window.dispatchScroll`) and clamped to that range; children are shifted by it
 when the render tree is built. The range is 0 on axes outside the
 container's `ScrollAxes` (and on both axes of an `OverflowHidden` node), so

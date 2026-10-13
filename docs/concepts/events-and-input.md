@@ -122,6 +122,47 @@ restricted to each one's `ScrollAxes`; the first whose offset changes takes
 it (clamped to `[0, ScrollMax]`) and the window refreshes, so a container at
 its limit lets the wheel chain to the next one out.
 
+### Scrollbar input
+
+`Div.ShowScrollbar()` and `UniformList.ShowScrollbar()` opt into interactive
+overlay scrollbars. The primary button drags a thumb proportionally to scroll
+extent, clamped at both ends. Capture follows the stable container ID and axis,
+so movement and release outside the container still work. A primary press on
+the track outside the thumb pages one viewport toward the pointer; holding the
+button does not repeat. Secondary buttons do not begin or end a drag.
+
+Tracks are 6px strips inset 2px, matching painted thumb geometry (minimum thumb
+20px). When both axes overflow, each track leaves room for the other. They win
+hit testing over container content and nested descendants; later overlapping
+siblings still cover them. Tracks are clipped to container and enclosing clip
+rectangles. With no overflow/nonpositive track length there is no input region;
+a thumb filling a tiny track has no travel and cannot drag.
+
+Consumed primary gestures do not invoke content mouse handlers, change keyboard
+focus, or start Active styles. The immediately following ClickEvent matching
+the consumed release is suppressed; another input/new press clears stale
+suppression. Input synchronizes retained state and ScrollHandle and redraws
+automatically. Programmatic offsets still require the caller to refresh.
+
+Capture cancels when its container/scrollbar disappears, track becomes fully
+clipped, bounds/extent geometry changes, or a programmatic offset changes.
+Resize/content changes cancel the drag rather than retarget it mid-gesture.
+A cancelled gesture still consumes its remaining primary release; the next
+normal content press works normally. This is internal scrollbar capture, not
+a generic drag/drop API.
+
+```go
+func dragThumb(hw *gpui.HeadlessWindow, start, end gpui.Point) {
+    hw.Dispatch(gpui.MouseDownEvent{Position: start, Button: gpui.MouseLeft})
+    hw.Dispatch(gpui.MouseMoveEvent{Position: end})
+    hw.Dispatch(gpui.MouseUpEvent{Position: end, Button: gpui.MouseLeft})
+}
+```
+
+For headless tests use a point inside the painted thumb as `start`; its movement
+scales by `scrollMax / (trackLength - thumbLength)`. `ScrollHandle.Offset()`
+reports the updated offset after dispatch, including for virtualized lists.
+
 ## Keyboard
 
 ### Key events and modifiers

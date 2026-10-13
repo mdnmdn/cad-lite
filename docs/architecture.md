@@ -105,7 +105,8 @@ Step by step:
    one hitbox (always), its mouse listeners, scroll extent, and - when it has
    key handlers, a key context or a focus handle - a key node. Ancestor links
    (`parent`) are recorded so dispatch can walk the hit/focus path later.
-   `Display: false` nodes are skipped.
+   `Display: false` nodes are skipped. Scrollbar tracks register after a
+   container's descendants so their input order matches their overlay paint.
 6. **Paint.** Another depth-first walk calls `Element.Paint`; a clipped div
    (`OverflowHidden`/`OverflowScroll`) pushes a `ContentMask` (its bounds plus
    corner radii) around its subtree. Primitives go into the frame's `Scene`,
@@ -244,7 +245,7 @@ Nothing redraws on a timer. A frame is drawn when:
 
 - `Window.Refresh()` is called (it sets `invalid` and calls
   `RequestFrame`), or `RequestFocus`/`Blur` change focus;
-- a scroll container's offset changes in `dispatchScroll`;
+- a scroll container's offset changes through wheel input or scrollbar drag/paging;
 - the platform resizes the window or changes scale (ebiten's `Layout`);
 - effects flush and a window is `invalid`.
 

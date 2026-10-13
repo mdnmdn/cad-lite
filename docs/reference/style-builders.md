@@ -240,7 +240,7 @@ func focusRing() *gpui.Div {
 
 | Builder | Meaning |
 |---|---|
-| `ShowScrollbar() *Div` | Paint a thin overlay scrollbar when content overflows a scrolling axis (also on `*UniformList`). |
+| `ShowScrollbar() *Div` | Paint a thin overlay scrollbar with primary thumb dragging and viewport paging on track presses (also on `*UniformList`). |
 | `TabIndex(i int)` / `TabStop(b bool)` | Focus order; see [events.md](events.md#focus). |
 | `Child(...IntoElement)` / `Children(...)` | Append children; see [elements.md](elements.md#div). |
 
