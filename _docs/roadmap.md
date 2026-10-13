@@ -7,14 +7,15 @@ signatures there first). Layout of the repo: [project-structure.md](project-stru
 
 Last updated: 2026-10-13.
 
-Current wave: **I1 — done**, implemented by `l1`, independently reviewed by
-`review_l1`, coordinated by Jake; committed in `e6f5130`.
+Current wave: **I2 — done**, implemented by `l1`, independently reviewed by
+`review_l1`, coordinated by Jake; committed in `4c93e7c`.
+I1 remains committed in `e6f5130`. I3 (multi-line text area) is now unblocked;
+remaining P1 runtime work begins with E1 (animation frames and timers).
 Requested gpui-kit investigation **K1 — done**, researched by `gpui_kit`,
 independently source-reviewed by `review_l1`; document/roadmap committed in
 `a59d2f6`. Integration implementation remains the K2 backlog proposal.
 L1, L2 and S1 are committed in `f9666fd`. Commits are authorized without
-coauthor trailers. Next dependency-free P1 interaction milestone: I2
-(`TextInput` selection and caret navigation).
+coauthor trailers.
 
 ## 1. Status summary
 
@@ -24,7 +25,8 @@ What works today:
   colour, flexbox layout (grow/shrink/basis, margins incl. auto, gaps, min/max,
   row/column wrapping, axis gaps and align-content),
   parent-relative absolute positioning with pixel offsets and inset,
-  `Div`, `Text`, `StyledText`, `TextInput`, `UniformList`, scroll containers
+  `Div`, `Text`, `StyledText`, `TextInput` (selection highlight, drag/word/line
+  selection, rune-safe caret navigation), `UniformList`, scroll containers
   with draggable scrollbar thumbs and track paging, borders, rounded corners and clips, linear
   gradients (sRGB/Oklab), box shadows (outset/inset), opacity, active / hover / focus /
   focus-visible styles, text style inheritance, font families with system
@@ -108,12 +110,17 @@ Verified milestones; later waves also record their commit hashes here.
 | S1 | done, `f9666fd` (2026-10-13) | `Div.Active` primary-button paint refinement with stable hit-path identity, ancestor activation, release/leave/removal/occlusion cancellation and precedence after Hover. Headless tests include stopped propagation, redraw lifecycle, inherited text/opacity and ignored layout refinements. Styling and gradient examples, contract and user docs updated; three snippets compile. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Resting styling/gradient and todo/layout/opacity renders pixel-identical; pressed/released previews inspected in `_tmp/s1-after`, release matches hovered baseline. Paired isolated before/current benchmarks (1s, count 3) show no material S1 slowdown: Todo2 medians 1.964/2.009 ms, Todo1 .835/.866 ms, Gallery2 3.303/3.216 ms, allocation counts unchanged; elevated absolute times occur in both copies. No real-window checks available. |
 | I1 | done, `e6f5130` (2026-10-13) | Shared scrollbar paint/hit geometry for Div and UniformList; primary thumb dragging is proportional and clamped, continues outside, releases outside; track press pages one viewport. Overlay/clipping, both axes, lifecycle/programmatic cancellation, tiny tracks, state/handle sync and content-click suppression covered by headless tests. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check`, compiled drag snippet and todo PNG smoke pass. Seven resting example renders pixel-identical; virtual-list drag/release previews inspected in `_tmp/i1-after`. Todo2 benchmark 2.05 ms, Gallery2 3.21 ms on current host (prior same-host S1 medians 2.01/3.22 ms); allocation counts unchanged. No real-window checks available. |
 | K1 | done, `a59d2f6` (2026-10-13) | [GPUI Kit integration investigation](gpui-kit-integration.md), pinned upstream `c5f8eca4a0759f8c0c7ed624eddfd03f1c93a5f2`; architecture, manifest versions, source paths and licence notices independently checked. Recommends selective native Go controls; package/API/activation decisions remain for contract review. No component integration, dependencies or Rust builds performed. |
+| I2 | done, `4c93e7c` (2026-10-13) | TextInput selection highlight, primary click/drag outside/release, Unicode word double-click and whole-line triple-click, Shift anchors/reversed ranges and Home/End. Rune-safe navigation/deletion and invalid UTF-16 range rejection have failing-before regressions. Capture identity/lifecycle, bubbling, shaping/cache, clip/layer and scale-1/2 pixels tested. Contract and user docs updated; new selection snippet compiles. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check`, tidy (manifests unchanged) and todo PNG smoke pass. Eight resting renders pixel-identical; selection previews inspected. Long-input preview intentionally changes from wrapped to one clipped line; focused caret aligns to label/full-line advances. Paired isolated benchmarks show no I2 regression established under unstable host timings (Todo2 before/current medians 5.231/4.119 ms, ranges 5.064–5.408/3.584–10.531 ms); Todo allocations 1477→1421, gallery unchanged. No real-window checks available. |
 
 L1 limits: logical-pixel offsets only; immediate parent border box is the anchor.
 No relative translation, CSS static-position placement, fixed positioning or
 z-index; absolute auto margins count as zero. These are documented in the contract.
 
 L2 limit: wrap-reverse remains unsupported (optional in the milestone).
+
+I2 limits: rune rather than grapheme navigation; no BiDi visual-order selection,
+horizontal autoscroll, select-all or word-arrow shortcuts. L7 scale API work
+remains open. Embedded CR/LF display as spaces while stored text is preserved.
 
 I1 limits: no held track-repeat; bounds/content/track changes and programmatic
 offsets cancel capture. Input clipping is rectangular; no generic drag/drop API.
@@ -181,7 +188,6 @@ standard verification (section 1) and a contract update when signatures change.
 
 | ID | Pri | Size | Deps | Milestone | Acceptance criteria |
 |----|-----|------|------|-----------|---------------------|
-| I2 | P1 | M | - | `TextInput` selection highlight, drag/double-click/triple-click selection, Home/End, shift-arrows | Highlight painted; gestures covered by dispatch tests |
 | I3 | P2 | L | I2 | Multi-line text area (`TextArea`) | Enter inserts newline, up/down caret movement, wrapping, scroll to caret; example |
 | I4 | P2 | M | - | IME/composition (marked text UI, candidate window position via `PlatformInputHandler`) | Composition text rendered underlined; platform reports caret bounds; documented per platform |
 | I5 | P2 | M | - | Drag and drop API (`OnDrag`, `OnDrop`, drag preview, drag-over style) | `interactive_elements` uses the real API instead of mouse-down/up emulation |
