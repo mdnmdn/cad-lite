@@ -320,15 +320,39 @@ focusable `Div` with key context `"textbox"`, 8 px padding, a 1 px border and
 rounded corners. Mouse-down focuses it. While focused it registers itself with
 `Window.HandleInput` during prepaint and paints a 2 px caret.
 
-Built-in keys (handled on the div's `OnKeyDown`, which stops propagation for
-the first two): `enter` -> `OnSubmit`, `escape` -> blur, `backspace`,
-`delete`, `left`, `right`. Typed text and pasted text arrive through the
-`PlatformInputHandler`. Not implemented: home/end/up/down, word movement,
-select-all, shift-selection, mouse caret placement or selection, horizontal
-scrolling, undo. Consequently copy/cut only act if the platform has set a
-non-empty selection via `SetSelectedTextRange`. Caret measurement runs at
-scale 1 (`BoundsForRange` / `CharacterIndexForPoint` use fixed estimates).
-`SetText` replaces the content and moves the caret to the end.
+Built-in keys consume their editing events: `enter` submits, `escape` blurs,
+`backspace`/`delete` remove the selection or one whole Unicode rune;
+`left`/`right` move one rune, collapsing an unshifted selection to its respective
+edge. `home`/`end` move to the line's start/end. Shift with these four navigation
+keys keeps the opposite endpoint as anchor, including reversed selections when
+the caret crosses it. Typed/pasted text replaces the current selection through
+the existing input-handler path; copy/cut read the selected range normally.
+Character bindings still get first chance before insertion (see key contexts).
+
+Primary mouse press places the nearest shaped caret; Shift-primary extends
+from the existing anchor. Double-click selects a contiguous run of Unicode
+letters/numbers/marks/underscore, whitespace, or punctuation/other symbols.
+Triple-click selects the whole line. Drag extends the range, including outside
+the field (x clamps to start/end); double-click drag extends by word-class runs,
+and triple-click drag retains the whole line. Primary release anywhere ends
+capture; secondary release does not. Capture follows the same TextInput object
+and global element path across redraws, and cancels on removal/replacement,
+blur or changed field bounds. Mouse-down bubbles to ancestors as before;
+captured move/release are consumed. Scrollbar capture takes precedence.
+
+Focused selection paints a light blue highlight behind glyphs, with the caret
+at the active endpoint. Text is a single unwrapped line clipped to the content
+box; embedded CR/LF display as spaces while the stored value remains unchanged.
+Positions use full-line shaped cluster advances and inherited text metrics;
+caret stops within ligatures interpolate evenly across rune boundaries. A
+fallback estimate counts runes, never surrogate halves. The cache refreshes on
+text, inherited style or measurer changes. Existing logical scale-1 shaping
+APIs remain in use; glyph masks still rasterize at the window scale.
+
+Not implemented: up/down, word-arrow shortcuts, select-all, horizontal
+scroll/autoscroll, undo, grapheme-cluster navigation or BiDi visual selection.
+`SetText` replaces content, moves the caret to the end and refreshes an already
+rendered field. Selection-only changes do not call `OnChange`.
 
 `PlatformInputHandler` (`gpui/platform.go`) is the editing surface an OS IME
 or clipboard would drive: `TextForRange`, `SelectedTextRange`,
@@ -343,9 +367,23 @@ the window installs the focused handler on the platform window with
 `IntRange` is a half-open `[Start, End)` range of **UTF-16 code units**, as
 native text-input APIs expect, not bytes or runes: `"h😀llo"` has length 6
 (the emoji is a surrogate pair) while `"héllo"` has length 5. `TextInput`
-converts to byte offsets internally. `UTF16Selection{Range, Reversed, IsNil}`
+uses byte/rune boundaries internally. `TextForRange` rejects negative, reversed,
+out-of-range and surrogate-interior endpoints. Setters and explicit replacement
+ranges clamp each endpoint to `[0, length]` and snap down to the previous rune
+boundary; reversed setter endpoints produce a normalized range with `Reversed`
+set (collapsed ranges are not reversed). Explicit replacement ranges are sorted
+after normalization. `UTF16Selection{Range, Reversed, IsNil}`
 adds the caret orientation (`Reversed` puts the caret at `Range.Start`) and an
 explicit "no selection" flag.
+
+```go
+func selectEmoji(ti *gpui.TextInput) {
+    ti.SetText("a😀b")
+    ti.SetSelectedTextRange(gpui.IntRange{Start: 1, End: 3})
+    // Reversed endpoints place the caret before the selected emoji.
+    ti.SetSelectedTextRange(gpui.IntRange{Start: 3, End: 1})
+}
+```
 
 ## Clipboard
 

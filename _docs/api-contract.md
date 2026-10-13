@@ -1262,6 +1262,50 @@ func (t *TextInput) OnChange(f func(string, *Window, *App)) *TextInput
 `cx.Notify()` on the owning entity re-renders it. Document this simplification
 relative to GPUI's entity-per-textbox design.
 
+### Single-line selection and editing
+
+TextInput keeps public offsets in UTF-16 code units, with internal byte/rune
+boundaries. TextForRange returns false for negative, reversed, out-of-range or
+surrogate-interior endpoints. SetSelectedTextRange and explicit replacement
+ranges clamp each endpoint to [0, length] and snap down to the previous rune
+boundary. SetSelectedTextRange sorts endpoints and sets Reversed when the
+clamped/snapped first endpoint is greater than the second (collapsed ranges are
+not reversed). Explicit replacement ranges are sorted after normalization.
+SetText collapses to end; SetText and selection setters refresh the rendered field.
+
+Left/Right move one Unicode rune (never half a surrogate pair). Without Shift,
+a nonempty selection collapses to its start/end respectively. Home/End move to
+0/document end. With Shift these keys preserve the opposite selection endpoint
+as anchor, including reversal when crossing it. Backspace/Delete remove a
+selection or one whole rune. Typing/paste use the current selection via the
+existing PlatformInputHandler path. Nil ReplaceTextInRange remains insertion
+at the active caret; copy/cut use TextForRange as before. Enter submits; Escape
+blurs. Editing keys consume their handled events; character keymap precedence
+and the textbox context remain unchanged.
+
+Primary mouse press positions the nearest caret; Shift-primary extends from
+the existing anchor. ClickCount 2 selects a run of Unicode letters/numbers/marks
+or underscore, whitespace, or punctuation/other symbols. ClickCount >=3 selects
+the whole single line. Double-click drag extends by those word-class runs;
+triple-click drag keeps the whole line selected. Selection capture follows
+TextInput identity and its GlobalElementID across redraws, continues outside
+bounds (x clamped to line endpoints), and ends on primary release anywhere.
+Secondary release does not end it. Removal/replacement, blur, changed field
+bounds or text/programmatic selection changes cancel capture; re-entry does not start a new capture. Mouse-down still
+bubbles normally; captured movement/release are consumed. Scrollbar capture
+has precedence; no generic capture API is introduced.
+
+Rendering uses one unwrapped, clipped text line. Embedded CR/LF display as
+spaces while stored text stays unchanged. Focused nonempty selection paints a
+light blue rectangle behind selected glyphs; the 2px caret remains at the active
+endpoint. Highlight/caret use the laid-out label origin and inherited TextStyle,
+clipped to the content box. Full-line shaped cluster advances map x positions;
+internal caret stops within a multi-rune ligature interpolate evenly across its
+rune boundaries. Fallback metrics count runes, not UTF-16 units. These are logical
+metrics using existing shaping APIs; no scale API change. Grapheme navigation,
+BiDi visual-order selection, word-arrow shortcuts, horizontal autoscroll,
+select-all and undo remain unsupported.
+
 ## 11. `entity.go`, `context.go`, `app.go`, `subscription.go`
 
 ```go

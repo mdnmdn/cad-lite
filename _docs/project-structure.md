@@ -66,7 +66,7 @@ Elements:
 | `text_elem.go` | `Text`, `StyledText`, `TextRun`, `Str` |
 | `text.go` | text shaper (HarfBuzz via go-text), glyph cache, wrapping, measurement |
 | `font.go` | system font discovery, families, fallback, bundled faces |
-| `input.go` | `TextInput` single-line field (`PlatformInputHandler`) |
+| `input.go` | `TextInput` single-line field, rune-safe UTF-16 selection and internal capture (`PlatformInputHandler`) |
 | `uniform_list.go` | virtualized equal-height `UniformList` |
 | `scroll.go` | `ScrollHandle`, scroll requests, scrollbar geometry, capture and paging |
 
@@ -105,7 +105,7 @@ Tests (package `gpui_test` unless noted internal), grouped by area:
 | Geometry/bounds/scene/raster | `bounds_test.go`*, `scene_test.go`*, `raster_test.go`*, `paint_order_test.go`, `paint_features_test.go`, `bench_test.go` |
 | Layout | `layout_test.go`, `layout_wrap_test.go`, `layout_margin_test.go`, `styled_wrap_test.go` |
 | Text/fonts | `text_test.go`*, `text_features_test.go`*, `text_elem_test.go`, `text_cascade_test.go`, `font_test.go`*, `glyph_fix_test.go`* |
-| Events/input/keymap/focus | `events_test.go`, `dispatch_test.go`, `hover_test.go`, `active_test.go`, `input_test.go`, `keymap_test.go`, `action_key_test.go`, `scroll_focus_test.go`, `scroll_stop_test.go`, `scrollbar_input_test.go` |
+| Events/input/keymap/focus | `events_test.go`, `dispatch_test.go`, `hover_test.go`, `active_test.go`, `input_test.go`, `input_selection_test.go`, `keymap_test.go`, `action_key_test.go`, `scroll_focus_test.go`, `scroll_stop_test.go`, `scrollbar_input_test.go` |
 | Entities/app | `entity_release_test.go`, `subscription_test.go`, `custom_element_test.go`, `core_test.go`* |
 | Headless/clipboard | `headless_test.go`, `clipboard_test.go`, `clipboard_internal_test.go`* |
 | Review regressions | `review_fixes_test.go`, `review_fixes_internal_test.go`* |

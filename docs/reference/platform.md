@@ -58,6 +58,12 @@ type PlatformInputHandler interface {
 `TextInput` implements it. `PlatformInput` (the event interface) is in
 [events.md](events.md#input-events).
 
+`TextInput.TextForRange` rejects invalid UTF-16/rune endpoints. Its range setters
+and explicit replacements clamp and snap each endpoint down to rune boundaries;
+reversed setter endpoints set caret orientation. `BoundsForRange` and
+`CharacterIndexForPoint` use the rendered full-line shaped metrics (rune estimates
+before rendering). See [selection](../concepts/events-and-input.md#utf-16-ranges).
+
 ## HeadlessPlatform and HeadlessWindow
 
 `HeadlessPlatform` runs the identical pipeline with in-memory windows. The

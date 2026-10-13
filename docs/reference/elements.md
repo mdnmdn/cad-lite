@@ -142,9 +142,9 @@ struct and call `Render` every frame. Setters that mutate it call
 | Method | Meaning |
 |---|---|
 | `NewTextInput(placeholder string) *TextInput` | New empty field showing `placeholder` until text is entered. |
-| `Render(w *Window, cx *App) IntoElement` | The focusable box (key context `"textbox"`, 8 px padding, 1 px border) with text or placeholder and a caret when focused. |
+| `Render(w *Window, cx *App) IntoElement` | The focusable box (key context `"textbox"`, 8 px padding, 1 px border) with one clipped text/placeholder line, focused selection highlight and caret. |
 | `Text() string` | Current value. |
-| `SetText(s string)` | Replace the value; the caret moves to the end. |
+| `SetText(s string)` | Replace the value; caret moves to end, cancels selection capture and refreshes if rendered. |
 | `OnChange(f func(string, *Window, *App)) *TextInput` | Called on every edit made through input dispatch. |
 | `OnSubmit(f func(string, *Window, *App)) *TextInput` | Called with the text on Enter while focused. |
 | `FocusHandle() *FocusHandle` | The field's handle; valid only after `Render` has run once. |
@@ -154,7 +154,17 @@ It also implements `PlatformInputHandler`
 `SelectedTextRange`, `SetSelectedTextRange`, `MarkedTextRange`, `UnmarkText`,
 `ReplaceTextInRange`, `BoundsForRange`, `CharacterIndexForPoint`,
 `TextLengthUTF16`, `AcceptsTextInput`. Built-in keys: `enter`, `escape`
-(blur), `backspace`, `delete`, `left`, `right`.
+(blur), `backspace`, `delete`, `left`, `right`, `home`, `end`; Shift extends
+with these navigation keys. Primary click/drag selects, double selects a Unicode
+word-class run, triple selects the line. See [selection semantics](../concepts/events-and-input.md#textinput-and-platforminputhandler).
+
+`TextForRange` validates UTF-16 rune boundaries. `SetSelectedTextRange` clamps and
+snaps down, normalizes reversed endpoints and refreshes the field; it does not
+fire OnChange. `BoundsForRange` and `CharacterIndexForPoint` use full-line shaped
+caret stops after rendering, rune-count estimates before rendering. Capture
+cancels on removal/replacement, blur, field bounds change or text/programmatic
+selection changes. There is no horizontal autoscroll, grapheme navigation or
+BiDi visual selection.
 
 ## UniformList
 

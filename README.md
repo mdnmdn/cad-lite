@@ -54,7 +54,7 @@ func main() {
 
 Supported: flexbox (wrapping, grow/shrink/basis, margins incl. auto, row/column gaps, min/max),
 absolute positioning,
-`Div`/`Text`/`StyledText`/`TextInput`, `UniformList`, scroll containers and
+`Div`/`Text`/`StyledText`/`TextInput` (mouse selection and Shift navigation), `UniformList`, scroll containers and
 scrollbars with thumb dragging and track paging, borders, rounded corners and clips, linear gradients (sRGB/Oklab),
 box shadows (outset/inset), opacity, hover/focus/focus-visible/active styles, text
 style inheritance, font family with system fallback, HarfBuzz shaping and

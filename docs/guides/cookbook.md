@@ -334,8 +334,8 @@ func (s *SignUp) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 
 Clicking a field focuses it. `OnChange` fires on every edit if you want live
 validation. The field edits only what the platform delivers: typed text,
-backspace/delete, left/right, paste; there is no selection by mouse or word
-movement yet ([events and input](../concepts/events-and-input.md#textinput-and-platforminputhandler)).
+backspace/delete, left/right/Home/End with Shift, paste and mouse selection;
+word-arrow movement is not implemented ([events and input](../concepts/events-and-input.md#textinput-and-platforminputhandler)).
 
 ## Keyboard shortcuts with key contexts
 

@@ -84,6 +84,7 @@ func TestTextInputBackspaceThroughDispatch(t *testing.T) {
 	ti.SetText("abc")
 	app, win := openInputApp(t, ti)
 	focusInput(t, app, win, ti)
+	inputSelectionKey(win, app, "end", 0)
 
 	win.DispatchEvent(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "backspace"}}, app)
 	if got := ti.Text(); got != "ab" {
@@ -96,6 +97,7 @@ func TestTextInputArrowKeysMoveCaret(t *testing.T) {
 	ti.SetText("abc")
 	app, win := openInputApp(t, ti)
 	focusInput(t, app, win, ti)
+	inputSelectionKey(win, app, "end", 0)
 
 	win.DispatchEvent(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "left"}}, app)
 	sel, _ := ti.SelectedTextRange()

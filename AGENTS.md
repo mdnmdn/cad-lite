@@ -16,7 +16,7 @@ and process: `_docs/roadmap.md`. Repo map and where to add things:
 
 - **Works:**
   - Flexbox layout with wrapping and absolute positioning, including margins (auto margins too), gaps, min/max and grow/shrink/basis.
-  - Elements: `Div`, `Text`, `StyledText`, `TextInput`, the virtualized `UniformList`, scroll containers with thumb dragging and track paging.
+  - Elements: `Div`, `Text`, `StyledText`, `TextInput` with selection and Shift navigation, the virtualized `UniformList`, scroll containers with thumb dragging and track paging.
   - Styling: borders, rounded corners and clips, gradients, box shadows, opacity, hover/focus/focus-visible/active styles.
   - Text: style inheritance, font family lookup with system fallback, HarfBuzz shaping and wrapping.
   - Entities with observe, emit and release; keymap, actions, key contexts, tab order.

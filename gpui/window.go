@@ -38,6 +38,7 @@ type Window struct {
 	scrollbarDrag  *scrollbarDrag
 	scrollbarPress bool
 	scrollbarClick *MouseUpEvent
+	inputSelection *inputSelectionDrag
 
 	// hitboxStack and keyStack hold the indices of the innermost enclosing
 	// hitbox / key node while prepainting, giving each new one its parent.
@@ -61,7 +62,8 @@ type Window struct {
 
 	clipStack []ContentMask
 
-	text TextMeasurer
+	text        TextMeasurer
+	textVersion uint64
 	// textStyles is the inherited text-style stack of the RequestLayout walk.
 	textStyles []TextStyle
 	// paintTexts is the paint-time text-override stack (interaction text
@@ -167,6 +169,7 @@ type MouseListener struct {
 	hoverStyle  bool
 	activeStyle bool
 	scrollbar   *scrollbarInput
+	textInput   *TextInput
 	// parent is the index of the nearest ancestor hitbox, or -1; depth is
 	// the number of ancestor hitboxes.
 	parent, depth int
@@ -552,7 +555,7 @@ func (w *Window) SetScrollOffset(id GlobalElementID, p Point) {
 
 // SetTextMeasurer installs the window's text backend. A nil measurer makes
 // text elements fall back to a crude estimator.
-func (w *Window) SetTextMeasurer(t TextMeasurer) { w.text = t }
+func (w *Window) SetTextMeasurer(t TextMeasurer) { w.text = t; w.textVersion++ }
 
 // TextMeasurer returns the window's text backend, or nil when none is
 // installed.
@@ -687,6 +690,7 @@ func (w *Window) Draw(cx *App) {
 		rn = w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
 		w.prepaintTree(rn, cx, true)
 	}
+	w.reconcileInputSelection(&w.nextFrame)
 	w.reconcileScrollbarDrag(&w.nextFrame)
 	w.retainActive(&w.nextFrame, false)
 	w.paintTree(rn, cx)
@@ -1030,6 +1034,7 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	case MouseDownEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
 		if e.Button == MouseLeft {
+			w.inputSelection = nil
 			w.scrollbarDrag, w.scrollbarPress = nil, false
 			if w.beginScrollbar(e.Position) {
 				return
@@ -1065,6 +1070,15 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 			w.scrollbarClick = &up
 			return
 		}
+		if e.Button == MouseLeft && w.inputSelection != nil {
+			w.moveInputSelection(e.Position)
+			w.inputSelection = nil
+			if len(w.active) > 0 {
+				clear(w.active)
+				w.Refresh()
+			}
+			return
+		}
 		if e.Button == MouseLeft {
 			if len(w.active) > 0 {
 				clear(w.active)
@@ -1083,6 +1097,11 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		w.mousePosition, w.hasMouse = e.Position, true
 		if w.scrollbarPress {
 			w.moveScrollbar(e.Position)
+			return
+		}
+		if w.inputSelection != nil {
+			w.moveInputSelection(e.Position)
+			w.retainActive(&w.renderedFrame, true)
 			return
 		}
 		w.retainActive(&w.renderedFrame, true)

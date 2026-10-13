@@ -82,8 +82,10 @@ is sharp when the window scale is right. When it is not:
   shift by a pixel as layout changes; it is not blur.
 - **Display scaling by the OS** on top of the app (screenshots upscaled,
   remote desktop). Compare with a `-png` render of the example.
-- `TextInput` caret and hit positions use scale-1 estimates, so on HiDPI the
-  caret can sit a few pixels off the glyphs (known: roadmap item L7).
+- `TextInput` uses full-line shaped logical metrics for caret, highlight and
+  hit positions, with glyph masks at the window scale. Its shaping API still
+  uses logical scale 1 (roadmap L7); grapheme navigation and BiDi visual
+  selection are unsupported.
 
 ## Slow frames
 
@@ -140,7 +142,7 @@ Work down this list; each item is something that has actually bitten.
    for the same keystroke and context wins; an earlier one can be shadowed.
 8. **Something stopped it.** An `OnKeyDown` handler on the path that calls
    `StopPropagation()` skips the keymap. `TextInput` consumes `enter` and
-   `escape` itself (submit, blur) and handles `backspace`, `delete`, `left`,
+   `escape` itself (submit, blur) and handles `backspace`, `delete`, `left`, `home`, `end`,
    `right`; those never reach the keymap while it is focused.
 9. **Printable keys.** The ebiten backend sends plain typing as character
    input, not as key events with a shortcut modifier; bare bindings like `"a"`,

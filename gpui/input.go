@@ -2,6 +2,9 @@ package gpui
 
 import (
 	"math"
+	"sort"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -20,10 +23,18 @@ type TextInput struct {
 	hasMarked   bool
 	placeholder string
 
-	focus    *FocusHandle
-	measurer TextMeasurer
-	win      *Window
-	app      *App
+	focus                           *FocusHandle
+	measurer                        TextMeasurer
+	win                             *Window
+	app                             *App
+	bounds, content                 Bounds
+	textOrigin                      Point
+	textStyle                       TextStyle
+	elementID                       GlobalElementID
+	metricsText                     string
+	metricsStyle                    TextStyle
+	measurerVersion, metricsVersion uint64
+	metrics                         []inputCaretStop
 
 	onSubmit []func(string, *Window, *App)
 	onChange []func(string, *Window, *App)
@@ -43,6 +54,10 @@ func (t *TextInput) SetText(s string) {
 	t.text = s
 	t.sel = UTF16Selection{Range: IntRange{Start: utf16Length(s), End: utf16Length(s)}}
 	t.hasMarked = false
+	t.cancelSelectionDrag()
+	if t.win != nil {
+		t.win.Refresh()
+	}
 }
 
 // FocusHandle returns the handle the field renders with, allocating it from
@@ -71,6 +86,7 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 	}
 	if w != nil {
 		t.measurer = w.text
+		t.measurerVersion = w.textVersion
 		t.win = w
 	}
 	if cx != nil {
@@ -78,9 +94,9 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 	}
 	var label IntoElement
 	if t.text == "" {
-		label = NewText(t.placeholder).TextColor(Gray500)
+		label = NewText(inputDisplayText(t.placeholder)).TextColor(Gray500).FlexShrink(0)
 	} else {
-		label = NewText(t.text)
+		label = NewText(inputDisplayText(t.text)).FlexShrink(0)
 	}
 	div := NewDiv().
 		FlexRow().
@@ -91,9 +107,8 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 		Border(1, Gray300).
 		TrackFocus(t.focus).
 		KeyContext("textbox").
-		OnMouseDown(func(e *MouseDownEvent, w *Window, cx *App) {
-			t.focus.Focus(w)
-		}).
+		OverflowHidden().
+		OnMouseDown(t.onMouseDown).
 		OnKeyDown(t.onKeyDown).
 		Child(label)
 	return inputElement{div: div, ti: t}
@@ -127,6 +142,21 @@ func (e inputElement) elementChildren() []AnyElement { return e.div.elementChild
 // field holds window focus — the frame's last handler is the focused field.
 func (e inputElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState any) any {
 	st := e.div.prepaint(w, cx, bounds, layoutState)
+	t := e.ti
+	t.bounds, t.content = bounds, bounds.Inset(e.div.resolvedStyle().Padding)
+	t.textOrigin, t.textStyle = t.content.Origin, DefaultTextStyle()
+	t.elementID = w.currentElementID
+	if dl, ok := layoutState.(*divLayout); ok && dl.node != nil {
+		t.textStyle = dl.node.Style.TextStyle
+		if len(dl.node.Children) > 0 {
+			label := dl.node.Children[0]
+			t.textOrigin = label.Rect.Translate(bounds.Origin).Origin
+		}
+	}
+	if ps, ok := st.(*divPrepaint); ok {
+		w.nextFrame.mouseListeners[ps.hitbox].textInput = t
+	}
+
 	if e.ti.focus != nil && e.ti.focus.IsFocused(w) {
 		w.HandleInput(e.ti)
 	}
@@ -137,49 +167,270 @@ func (e inputElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, 
 func (e inputElement) Paint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState, prepaintState any) {
 	e.div.paint(w, bounds, prepaintState)
 	if e.ti.focus != nil && e.ti.focus.IsFocused(w) {
-		e.paintCaret(w, bounds, layoutState)
+		e.paintSelection(w)
 	}
 }
 
-// paintCaret draws a 2px rule at the caret position, centred vertically in the
-// content box.
-func (e inputElement) paintCaret(w *Window, bounds Bounds, layoutState any) {
-	style := e.div.resolvedStyle()
-	ts := style.TextStyle
-	if dl, ok := layoutState.(*divLayout); ok && dl.node != nil {
-		ts = dl.node.Style.TextStyle
-	}
+func inputDisplayText(text string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(text, "\r", " "), "\n", " ")
+}
+
+type inputCaretStop struct {
+	offset, byteOffset int
+	x                  Pixels
+}
+
+func (t *TextInput) caretStops() []inputCaretStop {
+	ts := t.textStyle
 	if ts.FontSize <= 0 {
 		ts = DefaultTextStyle()
 	}
-	lh := ts.ResolvedLineHeight()
-	bw, pad := style.BorderWidths, style.Padding
-	x := bounds.Origin.X + bw.Left + pad.Left + e.caretAdvance(w, ts)
-	top := bounds.Origin.Y + bw.Top + pad.Top
-	inner := bounds.Size.H - bw.Top - bw.Bottom - pad.Top - pad.Bottom
-	w.PaintQuad(Quad{
-		Bounds: Bounds{
-			Origin: Point{X: x, Y: top + (inner-lh)/2},
-			Size:   Size{W: 2, H: lh},
-		},
-		Background: BackgroundSolid,
-		Fill:       ts.Color,
-	})
+	if t.metrics != nil && t.metricsText == t.text && t.metricsStyle == ts && t.metricsVersion == t.measurerVersion {
+		return t.metrics
+	}
+	stops := []inputCaretStop{{}}
+	units := 0
+	for pos, r := range t.text {
+		units++
+		if r > 0xffff {
+			units++
+		}
+		_, bytes := utf8.DecodeRuneInString(t.text[pos:])
+		stops = append(stops, inputCaretStop{offset: units, byteOffset: pos + bytes})
+	}
+	for i := range stops {
+		stops[i].x = Pixels(i) * ts.FontSize * 0.55
+	}
+	if t.measurer != nil && t.text != "" {
+		lines := t.measurer.ShapeWrapped(inputDisplayText(t.text), ts, float32(math.MaxFloat32))
+		if len(lines) > 0 && len(lines[0].Glyphs) > 0 {
+			starts := make(map[int]Pixels)
+			var pen Pixels
+			for _, g := range lines[0].Glyphs {
+				if _, ok := starts[g.Cluster]; !ok {
+					starts[g.Cluster] = pen
+				}
+				pen += g.Advance
+			}
+			keys := make([]int, 0, len(starts)+1)
+			for key := range starts {
+				keys = append(keys, key)
+			}
+			starts[len(t.text)] = lines[0].Width
+			keys = append(keys, len(t.text))
+			sort.Ints(keys)
+			firstIndex := 0
+			for k := 0; k+1 < len(keys); k++ {
+				first, end := keys[k], keys[k+1]
+				for firstIndex < len(stops) && stops[firstIndex].byteOffset < first {
+					firstIndex++
+				}
+				lastIndex := firstIndex
+				for lastIndex+1 < len(stops) && stops[lastIndex+1].byteOffset <= end {
+					lastIndex++
+				}
+				for i := firstIndex; i <= lastIndex && i < len(stops); i++ {
+					x := starts[first]
+					if lastIndex > firstIndex {
+						x += (starts[end] - x) * Pixels(i-firstIndex) / Pixels(lastIndex-firstIndex)
+					}
+					stops[i].x = x
+				}
+				firstIndex = lastIndex
+			}
+		}
+	}
+	t.metricsText, t.metricsStyle, t.metrics = t.text, ts, stops
+	t.metricsVersion = t.measurerVersion
+	return stops
 }
 
-// caretAdvance measures the text before the caret using the shaper captured
-// at Render time, falling back to the crude per-glyph estimate.
-func (e inputElement) caretAdvance(w *Window, ts TextStyle) Pixels {
-	m := e.ti.measurer
-	if m == nil {
-		return Pixels(float32(utf16Length(e.ti.text[:e.ti.byteOffset(tiCaret(e.ti))])) * float32(ts.FontSize) * 0.55)
+func (t *TextInput) advance(offset int) Pixels {
+	offset = t.snapOffset(offset)
+	for _, stop := range t.caretStops() {
+		if stop.offset == offset {
+			return stop.x
+		}
 	}
-	head := e.ti.text[:e.ti.byteOffset(tiCaret(e.ti))]
-	lines := m.ShapeWrapped(head, ts, float32(math.MaxFloat32))
-	if len(lines) == 0 {
+	return 0
+}
+
+func (e inputElement) paintSelection(w *Window) {
+	t := e.ti
+	lh := t.textStyle.ResolvedLineHeight()
+	w.PushClip(t.content)
+	defer w.PopClip()
+	top := t.textOrigin.Y
+	if t.sel.Range.Start != t.sel.Range.End {
+		start, end := t.advance(t.sel.Range.Start), t.advance(t.sel.Range.End)
+		w.PaintQuad(Quad{Bounds: Bounds{Origin: Point{X: t.textOrigin.X + start, Y: top}, Size: Size{W: maxPixels(0, end-start), H: lh}}, Background: BackgroundSolid, Fill: Blue500.Opacity(0.25)})
+	}
+	w.PaintQuad(Quad{Bounds: Bounds{Origin: Point{X: t.textOrigin.X + t.advance(tiCaret(t)), Y: top}, Size: Size{W: 2, H: lh}}, Background: BackgroundSolid, Fill: t.textStyle.Color})
+}
+
+func (t *TextInput) anchor() int {
+	if t.sel.Reversed {
+		return t.sel.Range.End
+	}
+	return t.sel.Range.Start
+}
+
+func (t *TextInput) selectTo(anchor, caret int) {
+	anchor, caret = t.snapOffset(anchor), t.snapOffset(caret)
+	r := IntRange{Start: anchor, End: caret}
+	if r.Start > r.End {
+		r.Start, r.End = r.End, r.Start
+	}
+	sel := UTF16Selection{Range: r, Reversed: caret < anchor}
+	if t.sel != sel {
+		t.sel = sel
+		if t.win != nil {
+			t.win.Refresh()
+		}
+	}
+}
+
+func (t *TextInput) runeBefore(offset int) int {
+	b := t.byteOffset(t.snapOffset(offset))
+	if b == 0 {
 		return 0
 	}
-	return lines[0].Width
+	_, size := utf8.DecodeLastRuneInString(t.text[:b])
+	return utf16Length(t.text[:b-size])
+}
+
+func (t *TextInput) runeAfter(offset int) int {
+	b := t.byteOffset(t.snapOffset(offset))
+	if b == len(t.text) {
+		return utf16Length(t.text)
+	}
+	_, size := utf8.DecodeRuneInString(t.text[b:])
+	return utf16Length(t.text[:b+size])
+}
+
+func (t *TextInput) onMouseDown(e *MouseDownEvent, w *Window, _ *App) {
+	if e.Button != MouseLeft {
+		return
+	}
+	t.focus.Focus(w)
+	index, _ := t.CharacterIndexForPoint(e.Position, t.bounds)
+	mode := uint8(1)
+	r := IntRange{Start: index, End: index}
+	if e.ClickCount >= 3 {
+		mode, r = 3, IntRange{End: utf16Length(t.text)}
+	} else if e.ClickCount == 2 {
+		mode = 2
+		if index > 0 && e.Position.X-t.textOrigin.X < t.advance(index) {
+			index = t.runeBefore(index)
+		}
+		r = t.wordRange(index)
+	} else if e.Modifiers&Shift != 0 {
+		t.selectTo(t.anchor(), index)
+		r.Start = t.anchor()
+	} else {
+		t.selectTo(index, index)
+	}
+	if mode != 1 {
+		t.selectTo(r.Start, r.End)
+	}
+	w.inputSelection = &inputSelectionDrag{input: t, elementKey: globalIDKey(t.elementID), bounds: t.bounds, anchor: r.Start, anchorRange: r, mode: mode}
+}
+
+func inputWordClass(r rune) uint8 {
+	if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsMark(r) || r == '_' {
+		return 1
+	}
+	if unicode.IsSpace(r) {
+		return 2
+	}
+	return 3
+}
+
+func (t *TextInput) wordRange(offset int) IntRange {
+	offset = t.snapOffset(offset)
+	if offset == utf16Length(t.text) {
+		offset = t.runeBefore(offset)
+	}
+	start := t.byteOffset(offset)
+	if start == len(t.text) {
+		return IntRange{}
+	}
+	r, size := utf8.DecodeRuneInString(t.text[start:])
+	end := start + size
+	class := inputWordClass(r)
+	for start > 0 {
+		r, size = utf8.DecodeLastRuneInString(t.text[:start])
+		if inputWordClass(r) != class {
+			break
+		}
+		start -= size
+	}
+	for end < len(t.text) {
+		r, size = utf8.DecodeRuneInString(t.text[end:])
+		if inputWordClass(r) != class {
+			break
+		}
+		end += size
+	}
+	return IntRange{Start: utf16Length(t.text[:start]), End: utf16Length(t.text[:end])}
+}
+
+type inputSelectionDrag struct {
+	input       *TextInput
+	elementKey  string
+	bounds      Bounds
+	anchor      int
+	anchorRange IntRange
+	mode        uint8
+}
+
+func (t *TextInput) cancelSelectionDrag() {
+	if t.win != nil && t.win.inputSelection != nil && t.win.inputSelection.input == t {
+		t.win.inputSelection = nil
+	}
+}
+
+func (w *Window) reconcileInputSelection(frame *Frame) {
+	d := w.inputSelection
+	if d == nil {
+		return
+	}
+	if d.input.focus == nil || !d.input.focus.IsFocused(w) {
+		w.inputSelection = nil
+		return
+	}
+	for i := range frame.mouseListeners {
+		l := &frame.mouseListeners[i]
+		if l.textInput == d.input && globalIDKey(l.elementID) == d.elementKey && l.Bounds == d.bounds && !frame.hitboxes.boxes[i].Bounds.IsEmpty() {
+			return
+		}
+	}
+	w.inputSelection = nil
+}
+
+func (w *Window) moveInputSelection(p Point) {
+	w.reconcileInputSelection(&w.renderedFrame)
+	d := w.inputSelection
+	if d == nil {
+		return
+	}
+	t := d.input
+	caret, _ := t.CharacterIndexForPoint(p, t.bounds)
+	switch d.mode {
+	case 2:
+		r := t.wordRange(caret)
+		if caret < d.anchorRange.Start {
+			t.selectTo(d.anchorRange.End, r.Start)
+		} else if caret >= d.anchorRange.End {
+			t.selectTo(d.anchorRange.Start, r.End)
+		} else {
+			t.selectTo(d.anchorRange.Start, d.anchorRange.End)
+		}
+	case 3:
+		t.selectTo(0, utf16Length(t.text))
+	default:
+		t.selectTo(d.anchor, caret)
+	}
 }
 
 // onKeyDown handles the editing keys. Printable characters never reach here:
@@ -189,7 +440,11 @@ func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 		return
 	}
 	caret := tiCaret(t)
-	switch e.Keystroke.Key {
+	key := e.Keystroke.Key
+	if key == "left" || key == "right" || key == "home" || key == "end" || key == "backspace" || key == "delete" {
+		t.cancelSelectionDrag()
+	}
+	switch key {
 	case "enter":
 		for _, f := range t.onSubmit {
 			f(t.text, w, cx)
@@ -203,9 +458,10 @@ func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 			t.replaceSelection("", w)
 		} else if caret > 0 {
 			end := t.byteOffset(caret)
-			start := t.byteOffset(caret - 1)
+			start := t.byteOffset(t.runeBefore(caret))
 			t.replaceRange(start, end, "", w)
 		}
+		w.StopPropagation()
 	case "delete":
 		if t.sel.Range.Start != t.sel.Range.End {
 			t.replaceSelection("", w)
@@ -216,20 +472,33 @@ func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 				t.replaceRange(end, end+size, "", w)
 			}
 		}
-	case "left":
-		if t.sel.Range.Start != t.sel.Range.End {
-			t.sel = UTF16Selection{Range: IntRange{Start: t.sel.Range.Start, End: t.sel.Range.Start}}
-		} else if caret > 0 {
-			t.sel = UTF16Selection{Range: IntRange{Start: caret - 1, End: caret - 1}}
+		w.StopPropagation()
+	case "left", "right", "home", "end":
+		anchor, next := t.anchor(), caret
+		extend := e.Keystroke.Modifiers&Shift != 0
+		switch key {
+		case "home":
+			next = 0
+		case "end":
+			next = utf16Length(t.text)
+		case "left":
+			if !extend && t.sel.Range.Start != t.sel.Range.End {
+				next = t.sel.Range.Start
+			} else {
+				next = t.runeBefore(caret)
+			}
+		case "right":
+			if !extend && t.sel.Range.Start != t.sel.Range.End {
+				next = t.sel.Range.End
+			} else {
+				next = t.runeAfter(caret)
+			}
 		}
-		w.Refresh()
-	case "right":
-		if t.sel.Range.Start != t.sel.Range.End {
-			t.sel = UTF16Selection{Range: IntRange{Start: t.sel.Range.End, End: t.sel.Range.End}}
-		} else if caret < utf16Length(t.text) {
-			t.sel = UTF16Selection{Range: IntRange{Start: caret + 1, End: caret + 1}}
+		if !extend {
+			anchor = next
 		}
-		w.Refresh()
+		t.selectTo(anchor, next)
+		w.StopPropagation()
 	}
 }
 
@@ -255,6 +524,7 @@ func (t *TextInput) replaceRange(start, end int, text string, w *Window) {
 	if start > end {
 		start, end = end, start
 	}
+	t.cancelSelectionDrag()
 	t.text = t.text[:start] + text + t.text[end:]
 	caret := utf16Length(t.text[:start]) + utf16Length(text)
 	t.sel = UTF16Selection{Range: IntRange{Start: caret, End: caret}}
@@ -287,27 +557,33 @@ func tiCaret(t *TextInput) int {
 	return t.sel.Range.End
 }
 
-// byteOffset converts a UTF-16 offset to a byte offset, reporting false when
-// the offset is out of range or lands inside a surrogate pair.
-func (t *TextInput) byteOffset(u int) int {
-	if u < 0 {
-		return 0
+func (t *TextInput) snapOffset(offset int) int {
+	offset = max(0, min(offset, utf16Length(t.text)))
+	units := 0
+	for _, r := range t.text {
+		next := units + 1
+		if r > 0xffff {
+			next++
+		}
+		if next > offset {
+			return units
+		}
+		units = next
 	}
-	i := 0
-	for pos := 0; pos < len(t.text); {
-		if i == u {
+	return units
+}
+
+func (t *TextInput) byteOffset(offset int) int {
+	offset = t.snapOffset(offset)
+	units := 0
+	for pos, r := range t.text {
+		if units == offset {
 			return pos
 		}
-		r, size := utf8.DecodeRuneInString(t.text[pos:])
-		if r > 0xFFFF {
-			i += 2
-		} else {
-			i++
+		units++
+		if r > 0xffff {
+			units++
 		}
-		pos += size
-	}
-	if i == u {
-		return len(t.text)
 	}
 	return len(t.text)
 }
@@ -329,11 +605,10 @@ func utf16Length(s string) int {
 
 // TextForRange returns the text in the given UTF-16 range.
 func (t *TextInput) TextForRange(rng IntRange) (string, bool) {
-	s := t.byteOffset(rng.Start)
-	e := t.byteOffset(rng.End)
-	if rng.Start < 0 || rng.End < rng.Start || e > len(t.text) {
+	if rng.Start < 0 || rng.End < rng.Start || rng.End > utf16Length(t.text) || t.snapOffset(rng.Start) != rng.Start || t.snapOffset(rng.End) != rng.End {
 		return "", false
 	}
+	s, e := t.byteOffset(rng.Start), t.byteOffset(rng.End)
 	return t.text[s:e], true
 }
 
@@ -372,42 +647,45 @@ func (t *TextInput) ReplaceTextInRange(rng *IntRange, text string) {
 	t.replaceRange(s, e, text, nil)
 }
 
-// BoundsForRange returns the caret rect at the range start. POC limitation:
-// the shaper is not available without a window, so positions use the crude
-// per-glyph estimate.
+// BoundsForRange returns the shaped caret rect at the normalized range start.
 func (t *TextInput) BoundsForRange(rng IntRange, elementBounds Bounds) (Bounds, bool) {
-	ts := DefaultTextStyle()
-	lh := ts.ResolvedLineHeight()
-	used := t.text[:t.byteOffset(rng.Start)]
-	x := Pixels(float32(utf16Length(used)) * float32(ts.FontSize) * 0.55)
-	return Bounds{
-		Origin: Point{X: elementBounds.Origin.X + 8 + x, Y: elementBounds.Origin.Y + 8},
-		Size:   Size{W: 2, H: lh},
-	}, true
+	ts := t.textStyle
+	if ts.FontSize <= 0 {
+		ts = DefaultTextStyle()
+	}
+	origin := t.textOrigin
+	if t.bounds.Size == (Size{}) {
+		origin = Point{X: elementBounds.Origin.X + 8, Y: elementBounds.Origin.Y + 8}
+	} else {
+		origin.X += elementBounds.Origin.X - t.bounds.Origin.X
+		origin.Y += elementBounds.Origin.Y - t.bounds.Origin.Y
+	}
+	return Bounds{Origin: Point{X: origin.X + t.advance(rng.Start), Y: origin.Y}, Size: Size{W: 2, H: ts.ResolvedLineHeight()}}, true
 }
 
-// CharacterIndexForPoint maps a point within the element's bounds to a
-// UTF-16 code unit offset, using the crude per-glyph estimate.
+// CharacterIndexForPoint maps x to the nearest shaped rune boundary in UTF-16.
 func (t *TextInput) CharacterIndexForPoint(p Point, elementBounds Bounds) (int, bool) {
-	ts := DefaultTextStyle()
-	gw := float32(ts.FontSize) * 0.55
-	if gw <= 0 {
-		return 0, false
+	origin := t.textOrigin.X
+	if t.bounds.Size == (Size{}) {
+		origin = elementBounds.Origin.X + 8
+	} else {
+		origin += elementBounds.Origin.X - t.bounds.Origin.X
 	}
-	rel := float32(p.X - elementBounds.Origin.X - 8)
-	idx := int(rel / gw)
-	if idx < 0 {
-		idx = 0
+	x := p.X - origin
+	stops := t.caretStops()
+	for i := 0; i+1 < len(stops); i++ {
+		if x < (stops[i].x+stops[i+1].x)/2 {
+			return stops[i].offset, true
+		}
 	}
-	if idx > utf16Length(t.text) {
-		idx = utf16Length(t.text)
-	}
-	return idx, true
+	return stops[len(stops)-1].offset, true
 }
 
-// SetSelectedTextRange moves the selection to the given range.
+// SetSelectedTextRange clamps and snaps endpoints down to rune boundaries;
+// reversed endpoints select backwards. It refreshes an already rendered field.
 func (t *TextInput) SetSelectedTextRange(rng IntRange) {
-	t.sel = UTF16Selection{Range: rng}
+	t.cancelSelectionDrag()
+	t.selectTo(rng.Start, rng.End)
 }
 
 // TextLengthUTF16 returns the document length in UTF-16 code units.
