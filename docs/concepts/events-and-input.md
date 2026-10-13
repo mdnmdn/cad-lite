@@ -20,8 +20,8 @@ OnKeyDown(func(*gpui.KeyDownEvent, *gpui.Window, *gpui.App))
 OnHoverStart(func(*gpui.Window, *gpui.App))
 ```
 
-Dispatch does not redraw on its own (except scroll and focus changes): a
-handler that changed state calls `Window.Refresh()`, or notifies an entity
+Dispatch redraws on scroll/focus changes and Hover/Active style transitions;
+for other state changes, the handler calls `Window.Refresh()` or notifies an entity
 the window rendered (`Context.Notify` / `App.Notify` redraw every window that
 read that entity during its last draw; see
 [app-and-entities.md](app-and-entities.md)).
@@ -78,6 +78,37 @@ keyed by the element's global id and callbacks are looked up in the current
 frame, so an element that disappeared gets no `OnHoverEnd`. Use stable
 `.ID(...)`s. The move event's own `OnMouseMove` listeners run after the hover
 update.
+
+### Pressed styles
+
+`Div.Active(f)` applies a paint refinement while the primary (MouseLeft) button
+is pressed on the element's hit path. A press activates both the target and
+Active-enabled ancestors. Occluded siblings do not activate. StopPropagation
+only affects handler bubbling; it does not block pressed styles. No click
+handler is required, and state changes redraw automatically.
+
+```go
+func pressButton() *gpui.Div {
+    return gpui.NewDiv().ID("press").SizeWH(100, 32).Bg(gpui.Blue500).
+        Hover(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Blue600) }).
+        Active(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray700) }).
+        Child(gpui.NewText("Press me").TextColor(gpui.White))
+}
+```
+
+Primary release clears captured state even outside the target or with stopped
+propagation. Movement off the hit path cancels an element until the next primary
+press; re-entry while held does not restore it. Leaving only a child can cancel
+the child while its ancestor remains active. Redraws reconcile against new
+hitboxes before paint: removed, hidden, newly occluded or moved elements cancel.
+Use stable `.ID(...)` values to preserve identity across redraws; a changed ID
+never inherits the old press. Secondary-button presses/releases do not start or
+end a primary press, though their reported pointer position can cancel an element
+that has left the hit path. Capture follows rectangular hitboxes and their clip regions.
+
+Active runs after Focus, FocusVisible and Hover and affects paint only. Layout
+fields and text metrics are ignored; colour/strikethrough cascade to descendant
+text and opacity multiplies the subtree. See [styling](styling.md).
 
 ### Scroll wheel
 

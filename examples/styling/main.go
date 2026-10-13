@@ -6,8 +6,7 @@
 //
 // Not ported: shadows (focus_visible shadow_sm), element opacity (the disabled
 // item and the group-hover arrow blend colours instead), cursor styles,
-// active() (its colour equals the base colour in the source), the application
-// menu, flex_wrap (the swatches are split into two rows) and native
+// the application menu and native
 // focus_next/focus_prev (Tab cycles the three buttons in this example).
 package main
 
@@ -142,6 +141,7 @@ func (s *StylingExample) cycle(w *gpui.Window, delta int) {
 
 func (s *StylingExample) interactiveButton(c colors, id, text string) *gpui.Div {
 	return s.hover(gpui.NewDiv().Px_(16).Py_(8).Rounded(6).Bg(c.selected).
+		Active(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(gpui.Blue600) }).
 		Child(label(text, 14, c.selectedText)), id)
 }
 
@@ -268,13 +268,11 @@ func (s *StylingExample) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	)
 	palette := col(8,
 		label("Using Colors::for_appearance() for consistent theming", 12, c.disabled),
-		row(8,
+		gpui.NewDiv().FlexRow().FlexWrap().Gap(8).Child(
 			swatch(c, "background", c.background),
 			swatch(c, "container", c.container),
 			swatch(c, "selected", c.selected),
 			swatch(c, "success", successGreen),
-		),
-		row(8,
 			swatch(c, "warning", warningAmber),
 			swatch(c, "error", errorRed),
 			swatch(c, "border", c.border),

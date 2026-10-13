@@ -233,11 +233,9 @@ row `ID`s only need to be unique among the rows being rendered.
 
 ## Modal overlay with paint order
 
-There is no absolute positioning, but paint order is tree order (a later
-sibling paints on top and wins hit testing), and negative margins are
-supported. An overlay is therefore a later sibling pulled back over the page
-with a negative top margin. Sizes must be definite here; `FlexNone()` stops the
-column from shrinking the two stacked layers.
+Paint order is tree order: a later sibling paints on top and wins hit testing.
+An `Absolute().Inset(0)` overlay fills the parent without consuming flex space.
+Place the scrim last so it covers the page.
 
 ```go
 const (
@@ -268,7 +266,7 @@ func (p *Page) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 				Child(gpui.NewText("Close").TextColor(gpui.White)),
 		)
 
-	scrim := gpui.NewDiv().ID("scrim").SizeWH(winW, winH).FlexNone().Mt(-winH).
+	scrim := gpui.NewDiv().ID("scrim").Absolute().Inset(0).
 		FlexCol().ItemsCenter().JustifyCenter().Bg(gpui.Black.Opacity(0.5)).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.open = false; w.Refresh() }).
 		Child(dialog)

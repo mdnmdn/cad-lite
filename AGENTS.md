@@ -15,15 +15,15 @@ and process: `_docs/roadmap.md`. Repo map and where to add things:
 ## Current status (2026-10-12)
 
 - **Works:**
-  - Flexbox layout, including margins (auto margins too), gaps, min/max and grow/shrink/basis.
+  - Flexbox layout with wrapping and absolute positioning, including margins (auto margins too), gaps, min/max and grow/shrink/basis.
   - Elements: `Div`, `Text`, `StyledText`, `TextInput`, the virtualized `UniformList`, scroll containers.
-  - Styling: borders, rounded corners and clips, gradients, box shadows, opacity, hover/focus/focus-visible styles.
+  - Styling: borders, rounded corners and clips, gradients, box shadows, opacity, hover/focus/focus-visible/active styles.
   - Text: style inheritance, font family lookup with system fallback, HarfBuzz shaping and wrapping.
   - Entities with observe, emit and release; keymap, actions, key contexts, tab order.
   - Headless platform and PNG output.
   - Ebiten backend, with a snapshot key (`cmd/ctrl-shift-s`).
 - **Examples:** 17 under `examples/`. 14 are ports of gpui-ce examples; each file's header comment says what was not ported.
-- **Missing:** animation, images/SVG, absolute positioning, flex-wrap, grid, `Active()` styles, colour emoji, IME, multi-window, drag and drop. Priorities are in `_docs/roadmap.md` §3.
+- **Missing:** animation, images/SVG, grid, colour emoji, IME, multi-window, drag and drop. Priorities are in `_docs/roadmap.md` §3.
 - **Performance:** a full todo frame at scale 2 takes about 1.2 ms (`go test ./gpui -run X -bench Draw`). Treat a clear regression as a bug.
 
 ## Rules

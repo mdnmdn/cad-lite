@@ -33,6 +33,8 @@ type Window struct {
 	// hovered maps the global-id key of each currently hovered element to its
 	// hitbox depth; callbacks are looked up in the rendered frame when fired.
 	hovered map[string]int
+	// active captures the primary press path, pruned on leave and before paint.
+	active map[string]struct{}
 
 	// hitboxStack and keyStack hold the indices of the innermost enclosing
 	// hitbox / key node while prepainting, giving each new one its parent.
@@ -159,7 +161,8 @@ type MouseListener struct {
 	focusID FocusID
 	// hoverStyle marks an element whose paint depends on hover, so hover
 	// changes must redraw.
-	hoverStyle bool
+	hoverStyle  bool
+	activeStyle bool
 	// parent is the index of the nearest ancestor hitbox, or -1; depth is
 	// the number of ancestor hitboxes.
 	parent, depth int
@@ -667,6 +670,7 @@ func (w *Window) Draw(cx *App) {
 	if w.root != nil {
 		el = IntoElementOf(w.root.Render(w, cx))
 	}
+	var rn *renderNode
 	if el != nil {
 		rootPath := elementIDOf(el)
 		gid := GlobalElementID{Path: append([]ElementPathKey(nil), rootPath.Path...)}
@@ -676,10 +680,11 @@ func (w *Window) Draw(cx *App) {
 			b := w.Bounds()
 			Layout(rootNode, Definite(float32(b.Width()), float32(b.Height())))
 		}
-		rn := w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
+		rn = w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
 		w.prepaintTree(rn, cx, true)
-		w.paintTree(rn, cx)
 	}
+	w.retainActive(&w.nextFrame, false)
+	w.paintTree(rn, cx)
 	if cx != nil {
 		cx.drawing = prevDrawing
 		w.renderedEntities, w.nextEntities = w.nextEntities, w.renderedEntities
@@ -1009,6 +1014,11 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	switch e := input.(type) {
 	case MouseDownEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		if e.Button == MouseLeft {
+			w.beginActive(e.Position)
+		} else {
+			w.retainActive(&w.renderedFrame, true)
+		}
 		w.setFocusVisible(false)
 		ev := e
 		// Auto-focus is skipped once a handler moved focus itself (GPUI's
@@ -1029,6 +1039,14 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		})
 	case MouseUpEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		if e.Button == MouseLeft {
+			if len(w.active) > 0 {
+				clear(w.active)
+				w.Refresh()
+			}
+		} else {
+			w.retainActive(&w.renderedFrame, true)
+		}
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseUp != nil {
@@ -1037,6 +1055,7 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		})
 	case MouseMoveEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		w.retainActive(&w.renderedFrame, true)
 		w.updateHover(e.Position, cx)
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
@@ -1076,6 +1095,57 @@ func (w *Window) hitPath(pos Point) []int {
 		path = append(path, i)
 	}
 	return path
+}
+
+func (w *Window) beginActive(pos Point) {
+	changed := len(w.active) > 0
+	clear(w.active)
+	for _, i := range w.hitPath(pos) {
+		l := &w.renderedFrame.mouseListeners[i]
+		if !l.activeStyle {
+			continue
+		}
+		if w.active == nil {
+			w.active = make(map[string]struct{})
+		}
+		w.active[globalIDKey(l.elementID)] = struct{}{}
+		changed = true
+	}
+	if changed {
+		w.Refresh()
+	}
+}
+
+func (w *Window) isActiveElement(id GlobalElementID) bool {
+	if len(w.active) == 0 {
+		return false
+	}
+	_, ok := w.active[globalIDKey(id)]
+	return ok
+}
+
+func (w *Window) retainActive(frame *Frame, refresh bool) {
+	if len(w.active) == 0 {
+		return
+	}
+	changed := false
+	for key := range w.active {
+		found := false
+		for i := frame.hitboxes.HitTest(w.mousePosition); i >= 0; i = frame.mouseListeners[i].parent {
+			l := &frame.mouseListeners[i]
+			if l.activeStyle && globalIDKey(l.elementID) == key {
+				found = true
+				break
+			}
+		}
+		if !found {
+			delete(w.active, key)
+			changed = true
+		}
+	}
+	if changed && refresh {
+		w.Refresh()
+	}
 }
 
 // dispatchMouse runs call over the hit path at pos, innermost first, each
@@ -1165,6 +1235,7 @@ func (w *Window) updateHover(pos Point, cx *App) {
 func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 	ev := e
 	w.mousePosition, w.hasMouse = e.Position, true
+	w.retainActive(&w.renderedFrame, true)
 	w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 		if l.OnScrollWheel != nil {
 			l.OnScrollWheel(&ev, w, cx)

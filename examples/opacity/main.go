@@ -5,10 +5,8 @@
 // Ported from gpui-ce crates/gpui/examples/legacy/opacity.rs
 //
 // Not ported: img and svg children, the emoji row (letters stand in: the
-// bundled fonts have no emoji glyphs), the wavy text decoration, absolute
-// positioning (the panel sits below the background text instead of
-// overlapping it, so only the border box and shadow show opacity against the
-// grey page) and the asset source.
+// bundled fonts have no emoji glyphs), the wavy text decoration and the asset
+// source.
 package main
 
 import (
@@ -59,7 +57,7 @@ func (o *Opacity) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	}
 
 	panel := gpui.NewDiv().ID("panel").OnClick(o.startAnimation).
-		Flex1().Opacity(o.opacity).FlexCol().JustifyCenter().ItemsCenter().
+		Absolute().Inset(32).Opacity(o.opacity).FlexCol().JustifyCenter().ItemsCenter().
 		Bg(gpui.White).Border(3, red).TextColor(yellow).Child(
 		gpui.NewDiv().FlexCol().Gap(8).JustifyCenter().ItemsCenter().SizeWH(300, 300).
 			Bg(blue).Border(3, gpui.Black).
@@ -75,10 +73,10 @@ func (o *Opacity) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	)
 
 	return gpui.NewDiv().FlexCol().SizeFull().Bg(gpui.MustParseHex("#e0e0e0")).Child(
-		gpui.NewDiv().FlexRow().JustifyCenter().ItemsCenter().SizeH(56).Border(1, gpui.Black).Child(
+		gpui.NewDiv().SizeFull().FlexCol().JustifyCenter().ItemsCenter().Border(1, gpui.Black).Child(
 			gpui.NewText("This is background text.").TextSize(20).TextColor(blue),
 		),
-		gpui.NewDiv().Flex1().FlexCol().P(32).Child(panel),
+		panel,
 	)
 }
 

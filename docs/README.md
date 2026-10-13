@@ -35,7 +35,7 @@ How each subsystem works and why.
 - [concepts/layout.md](concepts/layout.md) - the flexbox engine as
   implemented, and its limits.
 - [concepts/styling.md](concepts/styling.md) - `Style`, `StyledMixin`,
-  colours, borders, radii, gradients, shadows, opacity, hover/focus styles,
+  colours, borders, radii, gradients, shadows, opacity, hover/focus/active styles,
   margins and flex shorthands, text style inheritance, fonts.
 - [concepts/events-and-input.md](concepts/events-and-input.md) - mouse and
   keyboard dispatch, keymap, actions, focus, `TextInput`, clipboard.

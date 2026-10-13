@@ -36,6 +36,7 @@ type Div struct {
 	hasTabIndex bool
 	tabStop     *bool
 
+	activeStyle       *StyleRefinement
 	hoverStyle        *StyleRefinement
 	focusStyle        *StyleRefinement
 	focusVisibleStyle *StyleRefinement
@@ -206,6 +207,14 @@ func (d *Div) Hover(f func(*StyledMixin) *StyledMixin) *Div {
 	return d
 }
 
+// Active sets a paint refinement while a primary-button press stays on the
+// div's hit path. It overrides Hover. Leaving cancels it until another press;
+// release clears it even outside. Stable IDs preserve the press across redraws.
+func (d *Div) Active(f func(*StyledMixin) *StyledMixin) *Div {
+	d.activeStyle = d.interactionStyle(f)
+	return d
+}
+
 // Focus sets a style refinement applied while the div's focus handle is
 // focused (GPUI's .focus).
 func (d *Div) Focus(f func(*StyledMixin) *StyledMixin) *Div {
@@ -215,7 +224,7 @@ func (d *Div) Focus(f func(*StyledMixin) *StyledMixin) *Div {
 
 // FocusVisible sets a style refinement applied while the div is focused
 // and the last input was the keyboard (GPUI's .focus_visible, CSS
-// :focus-visible). It applies after Focus and before Hover.
+// :focus-visible). It applies after Focus and before Hover and Active.
 func (d *Div) FocusVisible(f func(*StyledMixin) *StyledMixin) *Div {
 	d.focusVisibleStyle = d.interactionStyle(f)
 	return d
@@ -481,9 +490,10 @@ func (st *divPrepaint) paintOpacity(w *Window) float32 {
 	d := st.d
 	focused := st.focusID != 0 && w.focus == st.focusID
 	hovered := d.hoverStyle != nil && w.isHoveredHitbox(st.hitbox)
+	pressed := d.activeStyle != nil && w.isActiveElement(st.globalID)
 	r := &d.style
 	var active TextFields
-	if (focused && (d.focusStyle != nil || d.focusVisibleStyle != nil)) || hovered {
+	if (focused && (d.focusStyle != nil || d.focusVisibleStyle != nil)) || hovered || pressed {
 		m := d.style
 		if focused {
 			m.merge(d.focusStyle)
@@ -496,6 +506,10 @@ func (st *divPrepaint) paintOpacity(w *Window) float32 {
 		if hovered {
 			m.merge(d.hoverStyle)
 			active |= d.hoverStyle.interactionText()
+		}
+		if pressed {
+			m.merge(d.activeStyle)
+			active |= d.activeStyle.interactionText()
 		}
 		st.style = m.Refine(DefaultStyle())
 		r = &m
@@ -576,6 +590,7 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	ml.OnHoverEnd = d.onHoverEnd
 	ml.focusID = focusID
 	ml.hoverStyle = d.hoverStyle != nil
+	ml.activeStyle = d.activeStyle != nil
 
 	if style.Overflow != OverflowVisible {
 		st.clipped = true

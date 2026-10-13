@@ -53,7 +53,7 @@ All style builders return `*Div`
 
 | Method | Meaning |
 |---|---|
-| `ID(id string) *Div` | Local element id. Keys retained state (scroll offset, implicit focus handle), hover bookkeeping and click pairing; give interactive and scrollable divs a stable one. |
+| `ID(id string) *Div` | Local element id. Keys retained state (scroll offset, implicit focus handle), hover/active bookkeeping and click pairing; give interactive and scrollable divs a stable one. |
 | `Child(children ...IntoElement) *Div` | Append children (nil children are skipped). |
 | `Children(children ...IntoElement) *Div` | Alias of `Child`. |
 | `IntoElement() Element` | Adapter that makes `*Div` an `Element` (see the adapter pattern in [concepts/elements.md](../concepts/elements.md)). |
@@ -94,7 +94,7 @@ Each setter holds one handler; a second call replaces the first.
 |---|---|
 | `TrackScroll(h *ScrollHandle) *Div` | Bind `h` to this scroll container. |
 | `ShowScrollbar() *Div` | Thin overlay scrollbar when content overflows. |
-| `Hover(f)`, `Focus(f)`, `FocusVisible(f)` | Interaction style refinements; see [style-builders.md](style-builders.md#interaction-styles-div-only). |
+| `Hover(f)`, `Focus(f)`, `FocusVisible(f)`, `Active(f)` | Interaction style refinements; see [style-builders.md](style-builders.md#interaction-styles-div-only). |
 
 What a `Div` does per phase: it registers a hitbox always, mouse listeners, a
 key node when it has key handlers, actions, a key context or a focus handle,

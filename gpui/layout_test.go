@@ -387,3 +387,140 @@ func TestLayoutFlexMaxWidthViolationRedistributes(t *testing.T) {
 	wantRect(t, "g1", g1.Rect, 0, 0, 50, 10)
 	wantRect(t, "g2", g2.Rect, 50, 0, 250, 10)
 }
+
+func TestLayoutAbsoluteDoesNotAffectFlow(t *testing.T) {
+	for _, direction := range []gpui.Direction{gpui.DirectionRow, gpui.DirectionColumn} {
+		a, b, overlay := box(20, 10), box(20, 10), box(900, 800)
+		overlay.Style.Position = gpui.PositionAbsolute
+		overlay.Style.Margin = gpui.Edges{Top: 100, Left: 100}
+		overlay.Style.FlexGrow = 10
+		hidden := box(999, 999)
+		hidden.Style.Position, hidden.Style.Display = gpui.PositionAbsolute, false
+		r := node(func(s *gpui.Style) { s.Direction = direction; s.Gap = 5 }, a, overlay, nil, hidden, b)
+		gpui.Layout(r, gpui.Available{})
+		if direction == gpui.DirectionRow {
+			wantRect(t, "parent", r.Rect, 0, 0, 45, 10)
+			wantRect(t, "second", b.Rect, 25, 0, 20, 10)
+		} else {
+			wantRect(t, "parent", r.Rect, 0, 0, 20, 25)
+			wantRect(t, "second", b.Rect, 0, 15, 20, 10)
+		}
+		wantRect(t, "hidden", hidden.Rect, 0, 0, 0, 0)
+	}
+	abs := box(1000, 1000)
+	abs.Style.Position = gpui.PositionAbsolute
+	container := node(nil, abs)
+	other := box(20, 20)
+	r := node(row, container, other)
+	gpui.Layout(r, gpui.Definite(100, 100))
+	wantRect(t, "empty container", container.Rect, 0, 0, 0, 100)
+	wantRect(t, "other", other.Rect, 0, 0, 20, 20)
+}
+
+func TestLayoutAbsoluteOffsetsAndSizing(t *testing.T) {
+	cases := []struct {
+		name       string
+		style      func(*gpui.Style)
+		x, y, w, h float32
+	}{
+		{"unset", func(s *gpui.Style) {}, 0, 0, 40, 20},
+		{"leading", func(s *gpui.Style) { s.Left, s.Top = gpui.Px(12), gpui.Px(8) }, 12, 8, 40, 20},
+		{"trailing", func(s *gpui.Style) { s.Right, s.Bottom = gpui.Px(12), gpui.Px(8) }, 148, 72, 40, 20},
+		{"stretch", func(s *gpui.Style) {
+			s.Width, s.Height = gpui.Auto(), gpui.Auto()
+			s.Left, s.Right, s.Top, s.Bottom = gpui.Px(10), gpui.Px(20), gpui.Px(5), gpui.Px(15)
+		}, 10, 5, 170, 80},
+		{"clamped stretch", func(s *gpui.Style) {
+			s.Width, s.Height = gpui.Auto(), gpui.Auto()
+			s.Left, s.Right, s.Top, s.Bottom = gpui.Px(10), gpui.Px(20), gpui.Px(5), gpui.Px(15)
+			s.MaxWidth, s.MinHeight = gpui.Px(50), gpui.Px(90)
+		}, 10, 5, 50, 90},
+		{"explicit wins", func(s *gpui.Style) {
+			s.Left, s.Right, s.Top, s.Bottom = gpui.Px(10), gpui.Px(20), gpui.Px(5), gpui.Px(15)
+		}, 10, 5, 40, 20},
+		{"negative", func(s *gpui.Style) { s.Left, s.Top = gpui.Px(-10), gpui.Px(-5) }, -10, -5, 40, 20},
+		{"fixed margins", func(s *gpui.Style) { s.Left, s.Top = gpui.Px(10), gpui.Px(5); s.Margin = gpui.Edges{Left: 3, Top: 4} }, 13, 9, 40, 20},
+		{"auto margins", func(s *gpui.Style) {
+			s.Margin = gpui.Edges{Left: 30, Top: 40}
+			s.MarginAuto = gpui.AutoEdges{Left: true, Top: true}
+		}, 0, 0, 40, 20},
+		{"nonnegative stretch", func(s *gpui.Style) { s.Width = gpui.Auto(); s.Left, s.Right = gpui.Px(120), gpui.Px(120) }, 120, 0, 0, 20},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := box(40, 20)
+			c.Style.Position = gpui.PositionAbsolute
+			tc.style(&c.Style)
+			r := node(func(s *gpui.Style) {
+				s.Padding = gpui.Edges{Top: 25, Right: 25, Bottom: 25, Left: 25}
+				s.Justify = gpui.JustifyEnd
+				s.AlignItems = gpui.AlignCenter
+			}, c)
+			gpui.Layout(r, gpui.Definite(200, 100))
+			wantRect(t, "absolute", c.Rect, tc.x, tc.y, tc.w, tc.h)
+		})
+	}
+}
+
+func TestLayoutAbsoluteContentSizingNestingAndOverflow(t *testing.T) {
+	text := textNode("aaaa bbbb cccc")
+	text.Style.Position, text.Style.Left = gpui.PositionAbsolute, gpui.Px(100)
+	inner := box(30, 20)
+	inner.Style.Position, inner.Style.Right, inner.Style.Bottom = gpui.PositionAbsolute, gpui.Px(-20), gpui.Px(-10)
+	middle := node(func(s *gpui.Style) {
+		s.Position = gpui.PositionAbsolute
+		s.Width, s.Height = gpui.Px(80), gpui.Px(60)
+		s.Left, s.Top = gpui.Px(30), gpui.Px(15)
+	}, inner)
+	root := node(nil, text, middle)
+	gpui.Layout(root, gpui.Definite(200, 100))
+	wantRect(t, "text", text.Rect, 100, 0, 90, 40)
+	wantRect(t, "middle", middle.Rect, 30, 15, 80, 60)
+	wantRect(t, "inner", inner.Rect, 70, 50, 30, 20)
+	if middle.ContentSize != (gpui.Size{W: 100, H: 70}) {
+		t.Errorf("overflow = %v", middle.ContentSize)
+	}
+	outside := box(50, 40)
+	outside.Style.Position, outside.Style.Left, outside.Style.Top = gpui.PositionAbsolute, gpui.Px(180), gpui.Px(90)
+	root.Children = append(root.Children, outside)
+	gpui.Layout(root, gpui.Definite(200, 100))
+	if w, h := root.ScrollMax(); w != 30 || h != 30 {
+		t.Errorf("ScrollMax = %v,%v", w, h)
+	}
+}
+
+func TestAbsoluteOverlapPaintOrder(t *testing.T) {
+	for _, absoluteFirst := range []bool{false, true} {
+		root := gpui.RenderFunc(func(_ *gpui.Window, _ *gpui.App) gpui.IntoElement {
+			a := gpui.NewDiv().Absolute().Inset(10).Bg(gpui.Red500)
+			b := gpui.NewDiv().SizeWH(50, 50).Bg(gpui.Blue500)
+			if absoluteFirst {
+				return gpui.NewDiv().SizeWH(60, 60).Child(a, b)
+			}
+			return gpui.NewDiv().SizeWH(60, 60).Child(b, a)
+		})
+		img, err := gpui.RenderToImage(60, 60, 1, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := gpui.Red500
+		if absoluteFirst {
+			want = gpui.Blue500
+		}
+		r, g, b, _ := img.At(20, 20).RGBA()
+		if uint8(r>>8) != want.R || uint8(g>>8) != want.G || uint8(b>>8) != want.B {
+			t.Errorf("absoluteFirst=%v: pixel=%v want=%v", absoluteFirst, img.At(20, 20), want)
+		}
+	}
+}
+
+func TestAbsoluteBuilders(t *testing.T) {
+	s := gpui.NewDiv().Absolute().Inset(5).InsetX(10).InsetY(20).Top(1).Right(2).Bottom(3).Left(4).ResolvedStyle(gpui.DefaultStyle())
+	if s.Position != gpui.PositionAbsolute || s.Top != gpui.Px(1) || s.Right != gpui.Px(2) || s.Bottom != gpui.Px(3) || s.Left != gpui.Px(4) {
+		t.Fatalf("style = %+v", s)
+	}
+	s = gpui.NewText("x").Absolute().Inset(5).Relative().ResolvedStyle(gpui.DefaultStyle())
+	if s.Position != gpui.PositionRelative {
+		t.Fatal("Relative did not reset Position")
+	}
+}

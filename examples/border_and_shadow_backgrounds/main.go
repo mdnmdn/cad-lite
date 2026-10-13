@@ -5,8 +5,7 @@
 //
 // Not ported: gradient borders and gradient shadows (each uses the solid
 // colour of its gradient's first stop, so the ocean/sunset blend is lost),
-// rounded_smoothing (corners are circular) and flex_wrap (the four panels are
-// laid out as two rows of two). The -scroll flag seeds a scrolled state for
+// rounded_smoothing (corners are circular). The -scroll flag seeds a scrolled state for
 // PNG rendering.
 package main
 
@@ -74,21 +73,15 @@ func (s *Showcase) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		gpui.NewBoxShadow(0, 0, ocean(0.7)).WithBlur(8).WithSpread(4).AsInset(),
 	)
 
-	row := func(children ...gpui.IntoElement) *gpui.Div {
-		return gpui.NewDiv().FlexRow().JustifyCenter().Gap(24).Child(children...)
-	}
-
 	return gpui.NewDiv().ID("border-and-shadow-backgrounds").TrackScroll(s.scroll).
 		SizeFull().OverflowYScroll().Bg(hex("#080c18")).P(32).FlexCol().Gap(24).Child(
 		gpui.NewDiv().FlexCol().Gap(8).Child(
 			gpui.NewText("Background borders & shadows").TextSize(24).TextColor(hex("#f1f5f9")).FontWeight(700),
 			gpui.NewText("Coloured borders and box-shadow paint on rounded cards.").TextSize(16).TextColor(hex("#a7b2c9")),
 		),
-		row(
+		gpui.NewDiv().FlexRow().FlexWrap().JustifyCenter().Gap(24).Child(
 			panel("Border background", "A border follows the rounded quad.", border),
 			panel("Drop-shadow backgrounds", "Two translucent shadows overlap outside the card.", dropShadow),
-		),
-		row(
 			panel("Inset-shadow background", "A warm shadow is blurred and clipped inside the card.", insetShadow),
 			panel("Border + drop + inset", "Border, drop and inset paths render on one rounded element.", combined),
 		),

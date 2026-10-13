@@ -98,7 +98,9 @@ means that axis is indefinite (max-content sizing). `Layout` itself and
 
 | Type | Values | Meaning |
 |---|---|---|
+| `Position` | `PositionRelative` (zero value), `PositionAbsolute` | Normal flex flow or out-of-flow anchoring to the immediate parent box. Relative offsets are ignored. |
 | `Direction` | `DirectionColumn` (zero value), `DirectionRow` | Flex main axis. |
+| `AlignContent` | `AlignContentStretch` (zero value), `AlignContentStart`, `AlignContentCenter`, `AlignContentEnd`, `AlignContentSpaceBetween`, `AlignContentSpaceAround` | Cross-axis distribution of wrapped lines, including a single line. Ignored without Wrap. |
 | `Justify` | `JustifyStart`, `JustifyCenter`, `JustifyEnd`, `JustifySpaceBetween`, `JustifySpaceAround` | Main-axis distribution. |
 | `Align` | `AlignStretch` (zero value), `AlignStart`, `AlignCenter`, `AlignEnd`; `AlignSelfAuto` (= 255) | Cross-axis alignment (`AlignItems`, `AlignSelf`). `AlignSelfAuto` on a child means "inherit the parent's `AlignItems`". |
 | `OverflowKind` | `OverflowVisible` (zero value), `OverflowHidden`, `OverflowScroll` | Clipping and scrollability. Never changes how descendants are laid out. |

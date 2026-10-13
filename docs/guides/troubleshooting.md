@@ -93,7 +93,7 @@ costs nothing; a frame costs roughly the same whatever changed
 ([performance notes](../architecture.md#performance-notes)).
 
 - **Do not redraw needlessly.** Do not call `Refresh()` from `OnMouseMove` or on
-  a timer unless something changed. Hover and focus styles redraw on their own.
+  a timer unless something changed. Hover, focus and pressed styles redraw on their own.
   An animation loop that refreshes every frame redraws the whole window every
   frame; there is no animation API.
 - **Window size and scale.** Cost grows with pixel count: a window at scale 2
@@ -338,7 +338,7 @@ typing needs `KeyDownEvent{PreferCharacterInput: true, Keystroke{KeyChar}}`.
   returns `*StyledMixin`, which ends the typed chain; use the builders
   re-declared on `*Div` / `*Text`, or call them as statements on a variable
   ([style builders](../reference/style-builders.md#how-the-builders-are-organised)).
-- **Overlapping elements.** There is no absolute positioning; overlap with
+- **Overlapping elements.** Use `Absolute()` and pixel offsets, or overlap with
   negative margins ([cookbook](cookbook.md#modal-overlay-with-paint-order)).
 - **Shortcut works on Linux but not as written.** `cmd-` is the Super key
   there; add a `ctrl-` binding.

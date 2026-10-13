@@ -1,7 +1,7 @@
 # Layout
 
 Source: `gpui/layout.go` (engine), `gpui/style.go` (inputs), `gpui/div.go` and
-`gpui/text_elem.go` (node construction). The engine is a single-line flexbox
+`gpui/text_elem.go` (node construction). The engine is a flexbox with optional wrapping
 modelled on CSS Flexbox / Taffy and is independent of elements: it operates on
 a `LayoutNode` tree.
 
@@ -49,7 +49,7 @@ gpui.Layout(root, gpui.Definite(350, 100))
 - **The root** is forced to the window size on each bounded axis unless its
   length is a `Px`.
 - **`Display: false`** children (`Hidden()`) are skipped: zero rect, no gap.
-- **One flex line**, LTR. `Direction` is `DirectionColumn` (default) or
+- **One flex line by default**, optional wrapping with `FlexWrap()`, LTR. `Direction` is `DirectionColumn` (default) or
   `DirectionRow`.
 
 ## Lengths
@@ -83,7 +83,9 @@ definite width.
 
 ## Flex algorithm (per container)
 
-`layoutFlex` follows CSS Flexbox section 9, one line:
+Without wrapping, `layoutFlex` follows CSS Flexbox section 9, one line.
+Wrapped containers form lines first and run flex resolution on each line
+([wrapped flex lines](#wrapped-flex-lines)):
 
 1. **Base size and bounds per item.** Main length `Flex(g)` -> base 0, grow
    `g`, shrink 1. Otherwise a `Px` `FlexBasis` is the base (`Flex1()` sets
@@ -94,7 +96,7 @@ definite width.
 2. **Automatic minimum size** (when `MinWidth`/`MinHeight` is `Auto`): a `Px`
    min wins; a scroll container (`OverflowHidden`/`OverflowScroll`) gets 0; a
    `Px` main size gives that size; otherwise **row**: min-content width (text:
-   longest word; container: sum of children along the main axis, max across it;
+   longest word; no-wrap row: sum of children, wrapped row/column: max;
    a `Px` width counts as itself), **column**: measured content height.
    Consequence: items refuse to shrink below their content/declared size
    unless you set `MinW(0)`/`MinH(0)` or make them scroll containers. A `Px`-
@@ -125,8 +127,9 @@ definite width.
 - `AlignItems`: `AlignStretch` (default), `Start`, `Center`, `End`. A child's
   `AlignSelf` overrides it unless it is `AlignSelfAuto` (the default). There
   is no `AlignSelf` fluent builder; set `StyleRef().AlignSelf`.
-- `Gap` is main-axis only and applies between **visible** children (there is
-  no separate row/column gap).
+- `Gap` applies between **visible in-flow** children on a line. With wrapping
+  it also separates lines. `ColumnGap` overrides horizontal spacing; `RowGap`
+  overrides vertical spacing. Calling `Gap` resets both overrides.
 - Padding insets the content box on all four sides.
 
 ### Margins
@@ -166,6 +169,84 @@ Verified example (row, width 300, three 40x20 `Px` children, `Gap(10)`,
 `JustifySpaceBetween`): x = 0, 130, 260 (free space 160 split into 80 per
 gap, plus the 10px gap).
 
+### Wrapped flex lines
+
+`FlexWrap()` allows row items to continue on another row, or column items to
+continue in another column. `FlexNoWrap()` restores the default. Lines form
+before flex grow/shrink: an item's hypothetical main size (basis or natural
+size, clamped by min/max), fixed margins and the main gap must fit. Exact fits
+stay together; oversized items occupy a line alone and may shrink if their
+minimum allows it. Hidden and absolute children do not form lines.
+
+The wrapping limit is the definite main size, otherwise bounded available space,
+with a pixel maximum also providing a limit when available space is indefinite.
+Without a limit there is one line. Auto main size uses the largest line's
+content contribution; flexing resolves each line against the final parent size.
+`Flex1`, `FlexAuto`, justification and auto margins operate independently on
+each line. A wrapped row's min-content width is its widest child's contribution.
+Text is measured again at its resolved width so line heights reflect wrapping.
+
+`Gap(v)` retains its main-axis behavior without wrapping and separates both
+items and lines with wrapping. `ColumnGap(v)` overrides physical horizontal
+gaps; `RowGap(v)` overrides physical vertical gaps, including an explicit zero.
+These fields use `Length`: `Auto` falls back to `Gap`, `Px` overrides. A later
+`Gap` call resets both overrides; later axis setters replace only their axis.
+The cross gap has no effect without wrapping.
+
+```go
+func chips() *gpui.Div {
+    return gpui.NewDiv().SizeW(180).FlexRow().FlexWrap().Gap(8).
+        RowGap(12).ContentStart().Child(
+            gpui.NewDiv().SizeWH(80, 24).Bg(gpui.Blue500),
+            gpui.NewDiv().SizeWH(80, 24).Bg(gpui.Green600),
+            gpui.NewDiv().SizeWH(80, 24).Bg(gpui.Red500),
+        )
+}
+```
+
+`ContentStart`, `ContentCenter`, `ContentEnd`, `ContentBetween`, `ContentAround`
+and `ContentStretch` distribute wrapped lines on the cross axis, including a
+single wrapped line. The default is stretch: positive free space is divided
+equally among lines. `Items*`/`AlignSelf` align children within their own line;
+auto cross margins override this alignment. A content-sized cross axis is the
+sum of natural line sizes and cross gaps, clamped by its min/max. Negative free
+space does not stretch lines; between falls back to start and around to center.
+These content builders have no effect without `FlexWrap`. Wrap-reverse is absent.
+
+### Absolute positioning
+
+`Absolute()` removes an element from flex flow: it contributes no size, minimum,
+gap or alignment to its parent. `Relative()` restores normal flow; offsets do
+not translate an in-flow element. Every absolute child anchors to its immediate
+parent's border box, even when that parent has padding. Nested offsets remain
+parent-relative. Later siblings paint above earlier siblings, including ordinary
+flex children; there is no z-index.
+
+```go
+func badge() *gpui.Div {
+    return gpui.NewDiv().SizeWH(120, 80).P(12).Bg(gpui.Gray100).Child(
+        gpui.NewText("Card"),
+        gpui.NewDiv().Absolute().Top(4).Right(4).P(4).Bg(gpui.Red500).
+            Child(gpui.NewText("New").TextColor(gpui.White)),
+    )
+}
+```
+
+`Top`, `Right`, `Bottom`, `Left` accept logical pixels (negative values allowed).
+`Inset` sets all edges, `InsetX` sets left/right and `InsetY` sets top/bottom.
+Unset offsets are `Auto`; reset an edge via `StyleRef().Top = &autoLength` where
+`autoLength := gpui.Auto()`. Opposite set edges stretch an auto-sized axis,
+clamped by its minimum and maximum. A definite pixel size wins; with two edges
+and a size, left/top wins. A sole right/bottom offset anchors the sized box to
+that edge. With no offsets the box starts at zero, plus any fixed leading margin.
+
+Otherwise auto sizes use content measured within the remaining parent space.
+Flex sizes act as Auto on absolute elements; grow/shrink/basis and parent
+alignment do not apply. Fixed margins participate in the offset calculations;
+auto margins count as zero. Absolute content can extend positive scrollable
+overflow without enlarging a content-sized parent. Percentage offsets, CSS
+static-position placement, relative translation and fixed positioning are absent.
+
 ### Text in layout
 
 Text leaves are `LayoutNode`s with `Measure` set. The wrap width passed to
@@ -199,9 +280,9 @@ past it extend its `ContentSize`.
   box; the layout engine does not inset content by the border width, so add
   matching padding yourself (`TextInput` does this with `P(8)` plus a 1px
   border).
-- No wrap (`flex-wrap`), no `order`, no margin collapsing, no percentages
+- No wrap-reverse, no `order`, no margin collapsing, no percentages
   (flex-basis is `Auto` or pixels only),
-  no aspect ratio, no absolute/relative positioning, no row/column gap split,
+  no aspect ratio, no relative translation or fixed positioning,
   no baseline alignment, no RTL.
 - `Px`-sized items do not shrink.
 - Hit testing and clipping: hitboxes are clipped to the enclosing clip
@@ -209,4 +290,4 @@ past it extend its `ContentSize`.
 - Layout is recomputed from scratch each frame (with per-call measure
   memoization); there is no incremental layout.
 
-See also: [reference/style-builders.md](../reference/style-builders.md) (layout, sizing, spacing and flex builders), [reference/geometry-and-color.md](../reference/geometry-and-color.md) (`Length`, `Available`, enums) and the [cookbook](../guides/cookbook.md#modal-overlay-with-paint-order) for overlap with negative margins.
+See also: [reference/style-builders.md](../reference/style-builders.md) (layout, sizing, spacing and flex builders), [reference/geometry-and-color.md](../reference/geometry-and-color.md) (`Length`, `Available`, enums) and the [cookbook](../guides/cookbook.md#modal-overlay-with-paint-order) for an absolute modal overlay.

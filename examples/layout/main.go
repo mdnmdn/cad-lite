@@ -5,8 +5,7 @@
 // Ported from gpui-ce crates/gpui/examples/learn/layout.rs
 //
 // Not ported: CSS grid (grid_cols/col_span/row_span) is approximated with
-// flex rows; absolute positioning in the stack pattern is approximated with
-// staggered padding (the boxes do not overlap).
+// flex rows.
 package main
 
 import (
@@ -152,11 +151,11 @@ func centering(c colors) *gpui.Div {
 
 func stack(c colors) *gpui.Div {
 	box := func(col gpui.Rgba, top, left float32) *gpui.Div {
-		return gpui.NewDiv().Pt(top).Pl(left).Child(gpui.NewDiv().SizeWH(40, 40).Bg(col.Opacity(0.7)).Rounded(6))
+		return gpui.NewDiv().Absolute().Top(top).Left(left).SizeWH(40, 40).Bg(col.Opacity(0.7)).Rounded(6)
 	}
 	return titled(c, "Stack: Overlapping with absolute positioning",
 		gpui.NewDiv().SizeH(80).FlexRow().ItemsStart().Bg(c.container).Rounded(6).Child(
-			box(red, 8, 8), box(green, 16, 0), box(blue, 24, 0),
+			box(red, 8, 8), box(green, 16, 24), box(blue, 24, 40),
 		), 8)
 }
 

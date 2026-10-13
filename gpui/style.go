@@ -38,6 +38,16 @@ func (l Length) IsAuto() bool { return l.Kind == LengthAuto }
 // IsFlex reports whether the length is a flex factor.
 func (l Length) IsFlex() bool { return l.Kind == LengthFlex }
 
+// Position selects whether a box participates in its parent's flex flow.
+type Position uint8
+
+const (
+	// PositionRelative keeps the box in normal flex flow; offsets are ignored.
+	PositionRelative Position = iota
+	// PositionAbsolute positions the box against its immediate parent's box.
+	PositionAbsolute
+)
+
 // Direction selects a flex container's main axis.
 type Direction uint8
 
@@ -46,6 +56,24 @@ const (
 	DirectionColumn Direction = iota
 	// DirectionRow lays children out horizontally; main axis is width.
 	DirectionRow
+)
+
+// AlignContent distributes wrapped flex lines on the cross axis.
+type AlignContent uint8
+
+const (
+	// AlignContentStretch adds positive free cross space equally to lines.
+	AlignContentStretch AlignContent = iota
+	// AlignContentStart packs lines at the cross-axis start.
+	AlignContentStart
+	// AlignContentCenter centers lines on the cross axis.
+	AlignContentCenter
+	// AlignContentEnd packs lines at the cross-axis end.
+	AlignContentEnd
+	// AlignContentSpaceBetween distributes free space between lines.
+	AlignContentSpaceBetween
+	// AlignContentSpaceAround distributes free space around lines.
+	AlignContentSpaceAround
 )
 
 // Justify is the main-axis distribution of a flex container.
@@ -150,6 +178,15 @@ func (t TextStyle) ResolvedLineHeight() Pixels {
 type Style struct {
 	Display   bool // false means Display:none; the element is skipped entirely
 	Direction Direction
+	// Wrap enables multiple flex lines.
+	Wrap bool
+	// AlignContent distributes wrapped lines within the cross size.
+	AlignContent AlignContent
+	// RowGap and ColumnGap override Gap on physical axes; Auto keeps the fallback.
+	RowGap, ColumnGap Length
+	Position          Position
+	// Top, Right, Bottom and Left are absolute offsets; Auto leaves an edge unset.
+	Top, Right, Bottom, Left Length
 
 	Width, Height       Length
 	MinWidth, MinHeight Length // LengthAuto means the automatic minimum size
@@ -303,8 +340,13 @@ func (s Style) crossPaddingEnd(isRow bool) Pixels {
 // Every field is a pointer so that "unset" is distinguishable from the zero
 // value; Refine fills the unset fields from a base Style.
 type StyleRefinement struct {
-	Display   *bool
-	Direction *Direction
+	Display                  *bool
+	Direction                *Direction
+	Wrap                     *bool
+	AlignContent             *AlignContent
+	RowGap, ColumnGap        *Length
+	Position                 *Position
+	Top, Right, Bottom, Left *Length
 
 	Width, Height       *Length
 	MinWidth, MinHeight *Length
@@ -407,6 +449,33 @@ func (r *StyleRefinement) Refine(base Style) Style {
 	if r.Direction != nil {
 		out.Direction = *r.Direction
 	}
+	if r.Wrap != nil {
+		out.Wrap = *r.Wrap
+	}
+	if r.AlignContent != nil {
+		out.AlignContent = *r.AlignContent
+	}
+	if r.RowGap != nil {
+		out.RowGap = *r.RowGap
+	}
+	if r.ColumnGap != nil {
+		out.ColumnGap = *r.ColumnGap
+	}
+	if r.Position != nil {
+		out.Position = *r.Position
+	}
+	if r.Top != nil {
+		out.Top = *r.Top
+	}
+	if r.Right != nil {
+		out.Right = *r.Right
+	}
+	if r.Bottom != nil {
+		out.Bottom = *r.Bottom
+	}
+	if r.Left != nil {
+		out.Left = *r.Left
+	}
 	if r.Width != nil {
 		out.Width = *r.Width
 	}
@@ -490,6 +559,15 @@ func (r *StyleRefinement) merge(o *StyleRefinement) {
 	}
 	mergePtr(&r.Display, o.Display)
 	mergePtr(&r.Direction, o.Direction)
+	mergePtr(&r.Wrap, o.Wrap)
+	mergePtr(&r.AlignContent, o.AlignContent)
+	mergePtr(&r.RowGap, o.RowGap)
+	mergePtr(&r.ColumnGap, o.ColumnGap)
+	mergePtr(&r.Position, o.Position)
+	mergePtr(&r.Top, o.Top)
+	mergePtr(&r.Right, o.Right)
+	mergePtr(&r.Bottom, o.Bottom)
+	mergePtr(&r.Left, o.Left)
 	mergePtr(&r.Width, o.Width)
 	mergePtr(&r.Height, o.Height)
 	mergePtr(&r.MinWidth, o.MinWidth)

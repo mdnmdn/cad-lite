@@ -201,7 +201,7 @@ func minContentWidth(n *LayoutNode) Pixels {
 		isRow := s.Direction == DirectionRow
 		k := 0
 		for _, c := range n.Children {
-			if c == nil || !c.Style.Display {
+			if c == nil || !c.Style.Display || c.Style.Position == PositionAbsolute {
 				continue
 			}
 			k++
@@ -213,14 +213,14 @@ func minContentWidth(n *LayoutNode) Pixels {
 			}
 			ms, me, _, _ := c.Style.margins(true)
 			cw += ms + me
-			if isRow {
+			if isRow && !s.Wrap {
 				v += cw
 			} else {
 				v = maxPixels(v, cw)
 			}
 		}
-		if isRow && k > 1 {
-			v += s.Gap * Pixels(k-1)
+		if isRow && !s.Wrap && k > 1 {
+			v += s.mainGap() * Pixels(k-1)
 		}
 	}
 	return clampLength(v+s.Padding.Horizontal(), s.MinWidth, s.MaxWidth)
@@ -266,6 +266,9 @@ func (s Style) margins(horizontal bool) (start, end Pixels, autoStart, autoEnd b
 // the node's final size forced) it also writes the children's parent-relative
 // Rects, arranges them recursively and sets ContentSize.
 func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
+	if n.Style.Wrap {
+		return layoutWrapped(n, avail, f, place)
+	}
 	s := n.Style
 	isRow := s.Direction == DirectionRow
 	pad := s.Padding
@@ -308,12 +311,15 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 			}
 			continue
 		}
+		if c.Style.Position == PositionAbsolute {
+			continue
+		}
 		items = append(items, flexItem{node: c})
 	}
 	k := len(items)
 	var gapsTotal Pixels
 	if k > 1 {
-		gapsTotal = s.Gap * Pixels(k-1)
+		gapsTotal = s.mainGap() * Pixels(k-1)
 	}
 
 	// The space an item sees on the cross axis (a maximum unless definite,
@@ -517,7 +523,7 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 			pos += perAuto
 		}
 		it.mainPos = pos
-		pos += st.target[i] + it.mEnd + s.Gap + between
+		pos += st.target[i] + it.mEnd + s.mainGap() + between
 		if it.autoME {
 			pos += perAuto
 		}
@@ -564,7 +570,79 @@ func layoutFlex(n *LayoutNode, avail Available, f forcedSize, place bool) Size {
 		extentCross = maxPixels(extentCross, endCross+s.crossPaddingEnd(isRow))
 	}
 	n.ContentSize = mapAxis(extentMain, extentCross, isRow)
+	layoutAbsoluteChildren(n)
 	return size
+}
+
+func layoutAbsoluteChildren(n *LayoutNode) {
+	size := n.Rect.Size
+	isRow := n.Style.Direction == DirectionRow
+	extentMain, extentCross := n.ContentSize.axis(isRow), n.ContentSize.axis(!isRow)
+	for _, c := range n.Children {
+		if c == nil || !c.Style.Display || c.Style.Position != PositionAbsolute {
+			continue
+		}
+		layoutAbsolute(c, size)
+		end := c.Rect.Max()
+		mr, mb := c.Style.Margin.Right, c.Style.Margin.Bottom
+		if c.Style.MarginAuto.Right {
+			mr = 0
+		}
+		if c.Style.MarginAuto.Bottom {
+			mb = 0
+		}
+		end.X += mr
+		end.Y += mb
+		if c.Style.Overflow == OverflowVisible {
+			end.X += maxPixels(0, c.ContentSize.W-c.Rect.Size.W)
+			end.Y += maxPixels(0, c.ContentSize.H-c.Rect.Size.H)
+		}
+		extentMain = maxPixels(extentMain, Size{W: end.X, H: end.Y}.axis(isRow))
+		extentCross = maxPixels(extentCross, Size{W: end.X, H: end.Y}.axis(!isRow))
+	}
+	n.ContentSize = mapAxis(extentMain, extentCross, isRow)
+}
+
+func absoluteAxis(parent Pixels, start, end, pref, lo, hi Length, ms, me Pixels) (Pixels, Pixels, bool) {
+	available := parent - ms - me
+	if start.IsPx() {
+		available -= start.Val
+	}
+	if end.IsPx() {
+		available -= end.Val
+	}
+	available = maxPixels(0, available)
+	if pref.IsPx() {
+		return available, 0, false
+	}
+	if start.IsPx() && end.IsPx() {
+		return available, clampLength(available, lo, hi), true
+	}
+	return available, 0, false
+}
+
+func absoluteOrigin(parent, size Pixels, start, end Length, ms, me Pixels) Pixels {
+	if start.IsPx() {
+		return start.Val + ms
+	}
+	if end.IsPx() {
+		return parent - end.Val - me - size
+	}
+	return ms
+}
+
+func layoutAbsolute(n *LayoutNode, parent Size) {
+	s := n.Style
+	ml, mr, _, _ := s.margins(true)
+	mt, mb, _, _ := s.margins(false)
+	aw, fw, hasW := absoluteAxis(parent.W, s.Left, s.Right, s.Width, s.MinWidth, s.MaxWidth, ml, mr)
+	ah, fh, hasH := absoluteAxis(parent.H, s.Top, s.Bottom, s.Height, s.MinHeight, s.MaxHeight, mt, mb)
+	size := measureNode(n, Definite(float32(aw), float32(ah)), forcedSize{w: fw, h: fh, hasW: hasW, hasH: hasH})
+	n.Rect = Bounds{Origin: Point{
+		X: absoluteOrigin(parent.W, size.W, s.Left, s.Right, ml, mr),
+		Y: absoluteOrigin(parent.H, size.H, s.Top, s.Bottom, mt, mb),
+	}, Size: size}
+	arrangeNode(n)
 }
 
 // arrangeNode lays out n's children inside n.Rect, which the caller has set.

@@ -7,12 +7,12 @@ go-gpui/
   gpui/                  core (package gpui)
     geometry.go color.go   Pixels, Point, Size, Bounds, Edges, Corners, Rgba/Hsla
     style.go styled.go     Style, StyleRefinement, StyledMixin (fluent builders)
-    layout.go              flexbox engine over LayoutNode
+    layout.go layout_wrap.go flexbox lines and absolute positioning over LayoutNode
     element.go div.go      Element interface, Div
     text_elem.go           Text, StyledText, Str
     background.go shadow.go Fill/gradients, BoxShadow, paintBox
     scroll.go uniform_list.go ScrollHandle, scrollbars, UniformList
-    styled_layout.go       Div/Text wrappers for margins and flex shorthands
+    styled_layout.go       Div/Text wrappers for margins, positioning and flex shorthands
     scene.go raster.go     Scene primitives, CPU rasterizer, scaleScene
     bounds.go              hitbox list (BoundsTree)
     events.go keymap.go    input events, keystrokes, keybindings, key contexts
@@ -199,7 +199,7 @@ Layout is finished before paint, so anything resolved at paint cannot change
 sizes. Two things are resolved per frame at paint:
 
 - **Interaction styles.** `Div.paintOpacity` (`gpui/div.go`) merges the
-  `Focus`, `FocusVisible` and `Hover` refinements over the base style and
+  `Focus`, `FocusVisible`, `Hover` and `Active` refinements over the base style and
   returns the div's opacity, which `paintTree` multiplies into `Window.opacity`
   (nested opacities multiply; `Text` and `StyledText` carry theirs through
   `textPrepaint`).
@@ -288,7 +288,8 @@ frames. The headless window does not implement `FrameRequester`: a
   glyph masks keyed by `(face, glyph, size, scale)` (limit 4096). Text that
   does not change between frames costs a map lookup, not a re-shape.
 - **Redraw only on demand.** Idle apps do no layout, raster or upload.
-  Hover and pointer motion only redraw if a handler calls `Refresh`.
+  Hover/Active styles redraw on their transitions; other pointer handlers redraw
+  when they call `Refresh`.
 - **Hit testing** is a linear scan over the frame's hitboxes (highest paint
   order wins), which is fine at POC scale.
 

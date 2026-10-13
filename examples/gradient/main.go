@@ -5,7 +5,7 @@
 // Ported from gpui-ce crates/gpui/examples/legacy/gradient.rs
 //
 // Not ported: the canvas/paint_path trapezoid with a gradient fill (a plain
-// gradient box stands in) and the button's active() style. The -oklab flag
+// gradient box stands in). The -oklab flag
 // seeds the Oklab colour space for PNG rendering.
 package main
 
@@ -55,6 +55,7 @@ func (g *GradientViewer) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		gpui.NewDiv().FlexRow().Gap(8).JustifyBetween().ItemsCenter().Child(
 			gpui.NewText("Gradient Examples").TextSize(14).TextColor(gpui.Black),
 			gpui.NewDiv().ID("method").Px_(12).Py_(4).Bg(gpui.Black).
+				Active(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray700) }).
 				OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 					if g.colorSpace == gpui.ColorSpaceOklab {
 						g.colorSpace = gpui.ColorSpaceSrgb

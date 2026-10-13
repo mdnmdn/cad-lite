@@ -53,8 +53,9 @@ Style and layout:
 |------|----------------|
 | `style.go` | `Style`, `StyleRefinement`, lengths, `TextFields`, overflow, display |
 | `styled.go` | `StyledMixin`: Tailwind-like fluent builders shared by `Div`/`Text` |
-| `styled_layout.go` | margin and flex-basis forwarders for `*Div` and `*Text` |
-| `layout.go` | flexbox engine: `LayoutNode`, measure, resolve |
+| `styled_layout.go` | margin, position, wrap/gap/alignment and flex-basis builders/forwarders for `*Div` and `*Text` |
+| `layout.go` | flexbox engine: `LayoutNode`, measure, resolve, absolute positioning |
+| `layout_wrap.go` | wrapped line formation, per-line sizing and align-content |
 
 Elements:
 
@@ -102,9 +103,9 @@ Tests (package `gpui_test` unless noted internal), grouped by area:
 | Area | Files |
 |------|-------|
 | Geometry/bounds/scene/raster | `bounds_test.go`*, `scene_test.go`*, `raster_test.go`*, `paint_order_test.go`, `paint_features_test.go`, `bench_test.go` |
-| Layout | `layout_test.go`, `layout_margin_test.go`, `styled_wrap_test.go` |
+| Layout | `layout_test.go`, `layout_wrap_test.go`, `layout_margin_test.go`, `styled_wrap_test.go` |
 | Text/fonts | `text_test.go`*, `text_features_test.go`*, `text_elem_test.go`, `text_cascade_test.go`, `font_test.go`*, `glyph_fix_test.go`* |
-| Events/input/keymap/focus | `events_test.go`, `dispatch_test.go`, `hover_test.go`, `input_test.go`, `keymap_test.go`, `action_key_test.go`, `scroll_focus_test.go`, `scroll_stop_test.go` |
+| Events/input/keymap/focus | `events_test.go`, `dispatch_test.go`, `hover_test.go`, `active_test.go`, `input_test.go`, `keymap_test.go`, `action_key_test.go`, `scroll_focus_test.go`, `scroll_stop_test.go` |
 | Entities/app | `entity_release_test.go`, `subscription_test.go`, `custom_element_test.go`, `core_test.go`* |
 | Headless/clipboard | `headless_test.go`, `clipboard_test.go`, `clipboard_internal_test.go`* |
 | Review regressions | `review_fixes_test.go`, `review_fixes_internal_test.go`* |

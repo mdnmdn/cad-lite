@@ -132,6 +132,8 @@ func (m *StyledMixin) FlexCol() *StyledMixin {
 func (m *StyledMixin) Gap(v float32) *StyledMixin {
 	g := Pixels(v)
 	m.style.Gap = &g
+	a := Auto()
+	m.style.RowGap, m.style.ColumnGap = &a, &a
 	return m
 }
 

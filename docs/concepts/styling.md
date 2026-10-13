@@ -6,7 +6,7 @@ Source: `gpui/style.go`, `gpui/styled.go`, `gpui/color.go`,
 ## Style and StyleRefinement
 
 `Style` is the fully-resolved record the layout engine and painters read:
-display, direction, width/height and min/max lengths, margin (with per-edge
+display, direction, position and offsets, width/height and min/max lengths, margin (with per-edge
 auto flags), padding, gap, flex grow/shrink/basis, justify/align, overflow,
 border widths/colour, corner radii, `Background`, `BoxShadows`, `Opacity` and a
 `TextStyle`. `DefaultStyle()` is the starting point.
@@ -24,7 +24,9 @@ a box: `Text`/`StyledText` accept `Bg`/`Border`/`Shadow` but draw none of them
 | Group | Methods |
 |---|---|
 | Size | `SizeWH(w,h)`, `SizeW`, `SizeH`, `SizeFull()`, `MinW/MinH/MaxW/MaxH` |
-| Flex | `Flex()`, `FlexRow()`, `FlexCol()`, `Flex1()`, `FlexAuto()`, `FlexNone()`, `FlexBasis(v)`, `FlexGrow(v)`, `FlexShrink(v)`, `Gap(v)` |
+| Flex | `Flex()`, `FlexRow()`, `FlexCol()`, `Flex1()`, `FlexAuto()`, `FlexNone()`, `FlexBasis(v)`, `FlexGrow(v)`, `FlexShrink(v)`, `Gap(v)`, `FlexWrap()`, `FlexNoWrap()`, `RowGap(v)`, `ColumnGap(v)` |
+| Position | `Absolute()`, `Relative()`, `Top/Right/Bottom/Left(v)`, `Inset(v)`, `InsetX(v)`, `InsetY(v)`; see [layout](layout.md#absolute-positioning) |
+| Line alignment | `ContentStart/Center/End/Stretch/Between/Around()`; requires `FlexWrap()` |
 | Alignment | `ItemsStart/Center/End/Stretch()`, `JustifyStart/Center/End/Between/Around()` |
 | Spacing | `P(v)`, `Px_`, `Py_`, `Pt`, `Pr`, `Pb`, `Pl`; margins `M(v)`, `Mx`, `My`, `Mt`, `Mr`, `Mb`, `Ml` and auto margins `MAuto`, `MxAuto`, `MyAuto`, `MtAuto`, `MrAuto`, `MbAuto`, `MlAuto` |
 | Paint | `Bg(fill)`, `Rounded(px)`, `RoundedAll(tl,tr,br,bl)`, `Border(w, c)`, `Opacity(f)`, `Shadow(...)`, `ShadowNone()`, `Shadow2xs()`, `ShadowXs/Sm/Md/Lg/Xl()`, `Shadow2xl()` |
@@ -166,7 +168,7 @@ and `StyledText`. It is not a group layer: where two children overlap
 inside a translucent parent, both are blended individually and the overlap is
 denser than a flattened layer would be.
 
-## Interaction styles: hover, focus, focus-visible
+## Interaction styles: hover, focus, focus-visible, active
 
 `Div` has GPUI's state-dependent refinements:
 
@@ -174,7 +176,8 @@ denser than a flattened layer would be.
 btn := gpui.NewDiv().ID("save").TabIndex(0).P(8).Bg(gpui.Blue500).
     Hover(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Blue600) }).
     Focus(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(2, gpui.Gray400) }).
-    FocusVisible(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(2, gpui.Green600) })
+    FocusVisible(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(2, gpui.Green600) }).
+    Active(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray700) })
 ```
 
 - `Hover` applies while the pointer is over the div's hitbox (it follows the
@@ -185,7 +188,11 @@ btn := gpui.NewDiv().ID("save").TabIndex(0).P(8).Bg(gpui.Blue500).
 - `FocusVisible` additionally requires the last input to be the keyboard
   (`Window.FocusVisible()`: key press sets it, mouse press clears it), like CSS
   `:focus-visible`.
-- Precedence: base style, then `Focus`, then `FocusVisible`, then `Hover`.
+- `Active` captures primary-button presses on the hit path, including ancestors.
+  Release or leaving cancels it; returning while held does not reactivate it.
+  Stable IDs retain it across redraws; hidden/removed/occluded elements lose it.
+  Secondary buttons do not activate it, and no handler is needed.
+- Precedence: base style, then `Focus`, then `FocusVisible`, then `Hover`, then `Active`.
 
 They are resolved at paint (`paintOpacity` in `gpui/div.go`), so layout
 fields set in them (size, padding, margin, flex) have **no effect**. Their
@@ -198,7 +205,7 @@ itself. Text fields that affect layout (`TextSize`, `FontWeight`,
 descendant text. The paint-time override is pushed only by `Div` and
 `UniformList`: text inside a custom `RequestLayoutWithChildren` container does
 not stop an outer div's hover colour from applying. Visual-only properties (`Bg`, `Border`, `Rounded`, `Shadow`,
-`Opacity`, text colour) are the intended use. There is no `active()` style.
+`Opacity`, text colour) are the intended use. `Active` applies last while a primary press stays on the hit path.
 
 The older manual pattern still works and is the way to change layout or text
 on hover: store `hovered` in your view, set it from

@@ -52,16 +52,17 @@ func main() {
 
 ## Features
 
-Supported: flexbox (grow/shrink/basis, margins incl. auto, gaps, min/max),
+Supported: flexbox (wrapping, grow/shrink/basis, margins incl. auto, row/column gaps, min/max),
+absolute positioning,
 `Div`/`Text`/`StyledText`/`TextInput`, `UniformList`, scroll containers and
 scrollbars, borders, rounded corners and clips, linear gradients (sRGB/Oklab),
-box shadows (outset/inset), opacity, hover/focus/focus-visible styles, text
+box shadows (outset/inset), opacity, hover/focus/focus-visible/active styles, text
 style inheritance, font family with system fallback, HarfBuzz shaping and
 wrapping, mouse/keyboard events, actions and key contexts, tab order, clipboard,
 entities with observe/emit, headless rendering and input injection.
 
 Not supported yet: animation API (examples step state in `Render`), images and
-SVG, absolute positioning, `flex-wrap`, CSS grid, `Active()` style, colour
+SVG, CSS grid, colour
 emoji, IME composition UI, multiple windows in the ebiten backend, italic and
 intermediate font weights, drag and drop, key chords. The full list is in
 `_docs/roadmap.md` (section 3, "Open work").

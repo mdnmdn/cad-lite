@@ -51,7 +51,48 @@ Rules that apply to every builder:
 | `FlexCol()` | Flex container with a vertical main axis. | Div, Text |
 | `Hidden()` | Display:none: no layout space, no paint, no hit testing. | Div, Text |
 | `Visible()` | Undo `Hidden()`. | Div, Text |
-| `Gap(v float32)` | Main-axis gutter between adjacent visible children (there is no separate row/column gap). | Div, Text |
+| `Gap(v float32)` | Main gap; with wrapping, also line gap. Resets RowGap/ColumnGap overrides. | Div, Text |
+
+### Layout: wrapping and line alignment
+
+| Builder | Meaning | Returns the concrete type on |
+|---|---|---|
+| `FlexWrap()` | Enable wrapped flex lines. | Div, Text |
+| `FlexNoWrap()` | Restore one flex line. | Div, Text |
+| `RowGap(v float32)` | Override physical vertical gap, including zero. | Div, Text |
+| `ColumnGap(v float32)` | Override physical horizontal gap, including zero. | Div, Text |
+| `ContentStretch()` | Divide positive cross free space equally among wrapped lines (default). | Div, Text |
+| `ContentStart()` | Pack wrapped lines at cross start. | Div, Text |
+| `ContentCenter()` | Center wrapped lines. | Div, Text |
+| `ContentEnd()` | Pack wrapped lines at cross end. | Div, Text |
+| `ContentBetween()` | Distribute cross free space between wrapped lines. | Div, Text |
+| `ContentAround()` | Distribute cross free space around wrapped lines. | Div, Text |
+
+`RowGap`/`ColumnGap` default to `Auto` (fallback to Gap), with `Px` overrides.
+Gap resets both overrides, so the last call setting each axis wins. Content
+alignment and cross gaps are ignored without wrapping. StyledText and
+UniformList inherit these builders without preserving their concrete chain.
+See [wrapped flex lines](../concepts/layout.md#wrapped-flex-lines).
+
+### Layout: position
+
+| Builder | Meaning | Returns the concrete type on |
+|---|---|---|
+| `Absolute()` | Remove from flex flow and anchor to immediate parent border box. | Div, Text |
+| `Relative()` | Restore normal flow; offsets are ignored. | Div, Text |
+| `Top(v float32)` | Absolute top offset in logical pixels. | Div, Text |
+| `Right(v float32)` | Absolute right offset in logical pixels. | Div, Text |
+| `Bottom(v float32)` | Absolute bottom offset in logical pixels. | Div, Text |
+| `Left(v float32)` | Absolute left offset in logical pixels. | Div, Text |
+| `Inset(v float32)` | Set all four absolute offsets. | Div, Text |
+| `InsetX(v float32)` | Set left and right absolute offsets. | Div, Text |
+| `InsetY(v float32)` | Set top and bottom absolute offsets. | Div, Text |
+
+Offsets default to `Auto`. Opposite offsets stretch an auto-sized axis subject
+to min/max; a pixel size and leading offset take precedence. See
+[absolute positioning](../concepts/layout.md#absolute-positioning) for sizing,
+margins, overflow and limitations. StyledText and UniformList inherit these
+methods from the mixin without preserving their concrete chain.
 
 ### Layout: alignment
 
@@ -170,9 +211,16 @@ text colour and strikethrough cascade to descendant text.
 
 | Builder | Meaning |
 |---|---|
-| `Hover(f func(*StyledMixin) *StyledMixin) *Div` | Applied while the pointer is over the div or a descendant. Applied last. |
+| `Hover(f func(*StyledMixin) *StyledMixin) *Div` | Applied while the pointer is over the div or a descendant. Applied before `Active`. |
 | `Focus(f func(*StyledMixin) *StyledMixin) *Div` | Applied while the div's focus handle is focused. Applied first. |
-| `FocusVisible(f func(*StyledMixin) *StyledMixin) *Div` | Applied while focused and the last input was the keyboard (CSS `:focus-visible`). Applied after `Focus`, before `Hover`. |
+| `FocusVisible(f func(*StyledMixin) *StyledMixin) *Div` | Applied while focused and the last input was the keyboard (CSS `:focus-visible`). Applied after `Focus`, before `Hover` and `Active`. |
+| `Active(f func(*StyledMixin) *StyledMixin) *Div` | Primary press on the hit path, including ancestors; applied last. Clears on primary release or leave; re-entry needs a new press. |
+
+Active tracks GlobalElementID across redraws (use stable IDs) and cancels when
+the element disappears, loses Active, or leaves the current hit path. Secondary
+buttons do not activate it. StopPropagation does not block its state transitions,
+and no click handler is required. Press/release/cancellation redraw automatically.
+`Active(nil)` removes the refinement. See [pressed styles](../concepts/events-and-input.md#pressed-styles).
 
 ```go
 package snippet
@@ -183,7 +231,8 @@ func focusRing() *gpui.Div {
 	return gpui.NewDiv().ID("f").TabIndex(0).P(8).Border(1, gpui.Gray300).
 		Focus(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(2, gpui.Blue500) }).
 		FocusVisible(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray100) }).
-		Hover(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray200) })
+		Hover(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray200) }).
+		Active(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(gpui.Gray300) })
 }
 ```
 
@@ -208,9 +257,9 @@ Set these through `StyleRef()` (returns `*StyleRefinement`) or by building a
 - `AlignSelf` (a per-child override of `AlignItems`);
 - `ScrollAxes` beyond what the `Overflow*Scroll` builders pick.
 
-There is no builder for absolute positioning, `flex-wrap`, percentages, grid,
-cursor styles, `active()` styles or italic. Negative margins are the
-supported way to overlap siblings
+There is no builder for wrap-reverse, percentages, grid,
+cursor styles or italic. Absolute positioning and negative
+margins can overlap siblings
 ([cookbook](../guides/cookbook.md#modal-overlay-with-paint-order)).
 
 ## `Style` and `StyleRefinement`
@@ -219,9 +268,11 @@ supported way to overlap siblings
 func DefaultStyle() Style       // visible, column, auto sizes, shrink 1, stretch, opacity 1
 
 type Style struct {
-    Display bool; Direction Direction
+    Display bool; Direction Direction; Position Position
+    Top, Right, Bottom, Left Length
     Width, Height, MinWidth, MinHeight, MaxWidth, MaxHeight Length
     Margin, Padding Edges; MarginAuto AutoEdges; Gap Pixels
+    Wrap bool; AlignContent AlignContent; RowGap, ColumnGap Length
     FlexGrow, FlexShrink float32; FlexBasis Length
     Justify Justify; AlignItems, AlignSelf Align; Overflow OverflowKind
     BorderWidths Edges; BorderColor Rgba; CornerRadii Corners
@@ -251,7 +302,7 @@ Enums and value types used by `Style` are in
 
 | Type | Chain-preserving builders |
 |---|---|
-| `*Div` | Every mixin builder, plus `Hover`, `Focus`, `FocusVisible`, `ShowScrollbar`, events, focus and child methods. |
+| `*Div` | Every mixin builder, plus `Hover`, `Focus`, `FocusVisible`, `Active`, `ShowScrollbar`, events, focus and child methods. |
 | `*Text` | All mixin builders except `Opacity`, `OverflowXScroll`, `OverflowYScroll`, `Shadow` and the shadow presets; plus `Text(s)`. |
 | `*UniformList` | `Bg`, `Border`, `Flex1`, `MaxH`, `MinH`, `Opacity`, `P`, `Px_`, `Py_`, `Rounded`, `ShowScrollbar`, `SizeFull`, `SizeH`, `SizeW`, `SizeWH`, `TextColor`, `TrackScroll`. |
 | `*StyledText` | None: it only embeds the mixin. Style it through a variable or wrap it in a `Div`. |

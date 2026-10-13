@@ -127,7 +127,11 @@ all, calling `w.Refresh()` from handlers; that is what most examples do
 | `.overflow_hidden()` | `.OverflowHidden()` |
 | `.overflow_scroll()` / `.overflow_y_scroll()` | `.OverflowScroll()` / `.OverflowYScroll()` (+ `.ID(..)`) |
 | `.hidden()` | `.Hidden()` |
-| `.absolute()`, `.top()`, `.left()`, `grid`, `.flex_wrap()` | not supported (use negative margins to overlap: [cookbook](cookbook.md#modal-overlay-with-paint-order)) |
+| `.absolute()`, `.relative()`, `.top()`, `.right()`, `.bottom()`, `.left()`, `.inset()` | `Absolute()`, `Relative()`, `Top(v)`, `Right(v)`, `Bottom(v)`, `Left(v)`, `Inset(v)`; pixel offsets, immediate-parent anchoring |
+| `.flex_wrap()`, `.flex_nowrap()` | `FlexWrap()`, `FlexNoWrap()` |
+| `.gap_x_2()`, `.gap_y_2()` | `ColumnGap(8)`, `RowGap(8)` |
+| `.content_start()`, `.content_center()`, `.content_end()`, `.content_stretch()`, `.content_between()`, `.content_around()` | `ContentStart()`, `ContentCenter()`, `ContentEnd()`, `ContentStretch()`, `ContentBetween()`, `ContentAround()` |
+| `grid` | not supported |
 
 Tailwind steps at the default 16 px rem: `_1`=4, `_2`=8, `_3`=12, `_4`=16, `_6`=24,
 `_8`=32 px. Go takes plain `float32` pixels everywhere.
@@ -154,7 +158,8 @@ Tailwind steps at the default 16 px rem: `_1`=4, `_2`=8, `_3`=12, `_4`=16, `_6`=
 | `.opacity(0.5)` | `.Opacity(0.5)` |
 | `.hover(\|s\| s.bg(c))` | `.Hover(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Bg(c) })` |
 | `.focus(..)` / `.focus_visible(..)` | `.Focus(..)` / `.FocusVisible(..)` |
-| `.active(..)`, `.group_hover(..)`, `.cursor_pointer()` | not supported |
+| `.active(..)` | `Active(func(*StyledMixin) *StyledMixin)`; primary press, cancelled on leave |
+| `.group_hover(..)`, `.cursor_pointer()` | not supported |
 | `px(10.)`, `rems(1.)`, `relative(0.5)` | plain `float32` pixels in builders; `gpui.Px(10)` only when you need a `Length`; no `rems`, no percentages (`SizeFull`/`Flex1` instead) |
 | `point(px(1.), px(2.))` / `size(..)` / `Bounds::new(..)` | `gpui.Point{X: 1, Y: 2}` / `gpui.Size{W, H}` / `gpui.NewBounds(x, y, w, h)` |
 
@@ -220,7 +225,7 @@ These are intentional POC choices or limits; the first few catch most ports.
   at its automatic minimum size unless it clips (`OverflowHidden`).
 - **`SizeFull` is not `100%`.** It sets both axes to `Flex(1)` with zero
   minimums, so in a row it shares width with siblings instead of overflowing.
-- **No percentages, rems, absolute positioning, `flex-wrap`, grid, `active`,
+- **No percentages, rems, relative translation, wrap-reverse, grid,
   `group_hover`, cursors, drag and drop, `img`/`svg`, animations.** Borders
   paint inside the box and do not enter layout (add padding yourself).
 - **`TextInput` is not an entity.** GPUI's text field example is an entity

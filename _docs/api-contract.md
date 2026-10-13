@@ -74,8 +74,21 @@ func Auto() Length
 func Px(v float32) Length
 func Flex(g float32) Length
 
+type Position uint8
+const (PositionRelative Position = iota; PositionAbsolute)
+
 type Direction uint8
 const (DirectionColumn Direction = iota; DirectionRow)
+
+type AlignContent uint8
+const (
+    AlignContentStretch AlignContent = iota
+    AlignContentStart
+    AlignContentCenter
+    AlignContentEnd
+    AlignContentSpaceBetween
+    AlignContentSpaceAround
+)
 
 type Justify uint8
 const (
@@ -106,6 +119,11 @@ const (
 type Style struct {
     Display  bool // false => hidden (Display:none), skipped entirely
     Direction Direction
+    Wrap bool // false (default) keeps one flex line
+    AlignContent AlignContent // Stretch (default); wrapped-line cross distribution
+    RowGap, ColumnGap Length // Auto falls back to Gap; Px overrides physical axis
+    Position Position // Relative (default) participates in flex; Absolute does not
+    Top, Right, Bottom, Left Length // Auto (default) or Px; only for Absolute
 
     Width, Height             Length
     MinWidth, MinHeight       Length // LengthAuto => automatic minimum size
@@ -151,6 +169,11 @@ const (
 type StyleRefinement struct {
     Display   *bool
     Direction *Direction
+    Wrap *bool
+    AlignContent *AlignContent
+    RowGap, ColumnGap *Length
+    Position *Position
+    Top, Right, Bottom, Left *Length
     Width, Height             *Length
     MinWidth, MinHeight       *Length
     MaxWidth, MaxHeight       *Length
@@ -234,7 +257,21 @@ func (m *StyledMixin) FlexBasis(v float32) *T       // definite flex-basis in px
 func (m *StyledMixin) Flex() *T                     // display:flex, default DirectionColumn
 func (m *StyledMixin) FlexRow() *T                  // Direction=Row
 func (m *StyledMixin) FlexCol() *T                  // Direction=Column
-func (m *StyledMixin) Gap(v float32) *T
+func (m *StyledMixin) Absolute() *T
+func (m *StyledMixin) Relative() *T // restores in-flow layout; offsets are ignored
+func (m *StyledMixin) Top(v float32) *T
+func (m *StyledMixin) Right(v float32) *T
+func (m *StyledMixin) Bottom(v float32) *T
+func (m *StyledMixin) Left(v float32) *T
+func (m *StyledMixin) Inset(v float32) *T // all four offsets
+func (m *StyledMixin) InsetX(v float32) *T // left and right
+func (m *StyledMixin) InsetY(v float32) *T // top and bottom
+func (m *StyledMixin) FlexWrap() *T
+func (m *StyledMixin) FlexNoWrap() *T
+func (m *StyledMixin) RowGap(v float32) *T
+func (m *StyledMixin) ColumnGap(v float32) *T
+func (m *StyledMixin) ContentStretch() *T / ContentStart / ContentCenter / ContentEnd / ContentBetween / ContentAround
+func (m *StyledMixin) Gap(v float32) *T // resets RowGap and ColumnGap to Auto
 func (m *StyledMixin) P(v float32) *T
 func (m *StyledMixin) Px_(v float32) *T             // padding-left  (named to avoid clash with Px())
 func (m *StyledMixin) Py_(v float32) *T
@@ -363,6 +400,59 @@ product of the ancestors' `Opacity` and multiplies the alpha of every
 primitive painted inside the subtree (overlapping children are not
 composited as a group, exactly as in GPUI). Opacity 1 changes nothing.
 
+### Wrapped flex lines
+
+FlexWrap enables wrapping; FlexNoWrap restores the default single-line layout.
+These builders, RowGap, ColumnGap and ContentStretch/Start/Center/End/Between/Around
+preserve Div and Text chains. Wrap-reverse is unsupported.
+
+Gap keeps its original main-axis meaning for no-wrap containers. With Wrap it
+also separates lines. RowGap overrides vertical spacing; ColumnGap overrides
+horizontal spacing (both Length Auto by default, Px overrides; Flex acts as Auto).
+Gap resets both overrides to Auto, so the last call setting an axis wins.
+Cross-axis gaps and AlignContent are ignored in no-wrap containers.
+
+Wrap greedily collects visible in-flow children by hypothetical outer main size
+(including fixed margins; auto margins count as zero) plus main gap. Exact fits
+stay on the line; an oversized item forms a singleton. The wrapping limit is a
+definite main size, otherwise bounded available main space, further capped by
+MaxWidth/MaxHeight. An indefinite main axis without a maximum forms one line.
+Auto main size is the largest collected line's content contribution, capped by
+the limit, with its own min/max applied. All lines resolve flex sizing against
+that final main size, with independent grow/shrink, auto margins and Justify.
+A wrapped row's automatic min-content width is the largest child's contribution.
+
+Natural cross size is the sum of line cross sizes plus cross gaps. With a final
+cross size, AlignContent distributes remaining space: Start, Center, End,
+SpaceBetween, SpaceAround, or Stretch (default, adds positive free space equally
+to lines). This applies even with one wrapped line. Items align/stretch within
+each resulting line via AlignItems/AlignSelf and auto margins. Negative free
+space is not stretched; SpaceBetween falls back to Start and SpaceAround to
+Center. Absolute children do not form lines and anchor once to the final parent.
+
+### Absolute positioning
+
+`Absolute`, `Relative`, `Top`, `Right`, `Bottom`, `Left`, `Inset`, `InsetX`,
+`InsetY` preserve fluent chains on Div and Text; other elements inherit mixin
+methods. Position defaults to PositionRelative, meaning normal flex flow.
+Relative offsets do not translate the box. PositionAbsolute children are
+excluded from flex sizing, automatic minimums, gaps, alignment and justification.
+They are arranged after their immediate parent's final size is known, relative
+to its border box (padding does not shift their origin). They retain tree/scene
+paint order, with no separate stacking context or z-index.
+
+Offsets are logical pixels, default Auto (unset); negative values are allowed.
+A LengthFlex offset acts as unset. On an axis, an explicit Px size wins;
+otherwise two set edges stretch to the nonnegative remaining space, respecting
+Min/Max. With fewer set edges the size is content-based, measured within the
+remaining parent space. Flex lengths on absolute sizes act as Auto; flex grow,
+shrink and basis have no effect. The leading edge wins when both edges and a
+size are set; a sole trailing edge anchors the sized box there. With neither
+edge set the origin is zero, not a CSS static position. Fixed margins inset the
+margin box; auto margins count as zero. Absolute descendants can enlarge
+positive scrollable overflow but never the parent's content-based size.
+Percentages, relative translation and viewport/fixed positioning are unsupported.
+
 ## 4. `layout.go` — the flexbox engine
 
 The engine is a plain function-based two-pass layout. It knows nothing about
@@ -404,7 +494,8 @@ func (n *LayoutNode) ScrollMax() (w, h Pixels)
 
 Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
 
-- One flex line, LTR, no wrap. `Display:false` children are
+- By default one flex line, LTR; Wrap uses the wrapped-line rules in section 3.
+  `Display:false` children are
   skipped entirely (zero rect, no gap). Sizes are border-box (padding
   included); leaves include their padding too. `Rect` is the border box;
   margins sit outside it.
@@ -430,7 +521,8 @@ Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
   only the parent can force a size (stretch, flex grow/shrink). The root is
   the exception: `Layout` forces the root to `available` on every bounded axis
   whose `Length` is not `LengthPx` (a window root fills the window).
-- `Gap` is a fixed gutter: `gapsTotal = Gap*(k-1)`, always subtracted before
+- The effective main gap (Gap, overridden by RowGap/ColumnGap on its axis)
+  is a fixed gutter: `gapsTotal = mainGap*(k-1)` per line, subtracted before
   `justify-content` sees free space, always re-added between items.
 - Flex base size: `LengthFlex(g)` main length→base 0, grow g, shrink 1;
   otherwise a `Px` `FlexBasis` wins (`Flex1()` = basis `Px(0)`), else
@@ -441,8 +533,9 @@ Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
 - Automatic minimum size (`Min*=LengthAuto`, main axis only): **0 if the node
   is a scroll container** (`Overflow != Visible`); otherwise a definite
   `LengthPx` preferred size, else the min-content size, capped by a definite
-  `Max*`. Min-content width: text = longest word (`Measure(..., 0)`), row =
-  sum of children's min-content widths + gaps, column = max, plus padding;
+  `Max*`. Min-content width: text = longest word (`Measure(..., 0)`), no-wrap row =
+  sum of children's min-content widths + gaps, wrapped row and column = max,
+  plus padding; absolute and hidden children are excluded;
   scroll-container children contribute 0 unless they have a `LengthPx` width.
   Min-content height = content height at the given width. So a wrapping text
   item shrinks down to its longest word without `MinW(0)`. The cross axis has
@@ -450,18 +543,19 @@ Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
 - Hypothetical main size = clamp(base, min, max), floored at 0.
 - Resolve flexible lengths per CSS §9.7 (freeze inflexible items, iterate,
   fix min/max violations, freeze violators, repeat until all frozen) against
-  the container's inner main size. That size is the definite main size if
+  each line's final inner main size. For the default no-wrap case that size is the definite main size if
   there is one; otherwise the sum of the items' max-content contributions
   (for a `LengthFlex` length or a `Px` basis smaller than the content: the
   clamped max-content size) + margins + gaps, capped by a bounded available
   main length.
-- Cross size: if the container's cross is definite, `lineCross = innerCross`;
+- No-wrap cross size: if the container's cross is definite, `lineCross = innerCross`;
   else `lineCross = max_i(itemCross)` where each item's cross is measured at its
   final main size (content height, not the available height). `align-items:
   stretch` applies only on the cross axis and only when the child's cross
   `Length` is `LengthAuto`; it sets the child's cross size to `lineCross`
   (clamped). A `LengthFlex` cross length (e.g. `SizeFull`) fills `lineCross`
-  regardless of alignment (the POC's `100%`).
+  regardless of alignment (the POC's `100%`). Wrapped lines first measure their
+  natural cross sizes and then apply AlignContent as specified in section 3.
 - `justify-content` offsets with the fallback: if `k<=1 || free<=0`, then
   `SpaceBetween→Start` and `SpaceAround→Center`. `SpaceBetween` adds
   `free/(k-1)` after every item but the last; `SpaceAround` starts at
@@ -602,14 +696,15 @@ func (d *Div) TrackFocus(h *FocusHandle) *Div
 func (d *Div) KeyContext(ctx string) *Div
 func (d *Div) TabIndex(i int) *Div   // also makes the div a tab stop
 func (d *Div) TabStop(b bool) *Div
-// Interaction style refinements (GPUI .hover/.focus/.focus_visible). f gets
+// Interaction style refinements (GPUI .hover/.focus/.focus_visible/.active). f gets
 // an empty StyledMixin and returns it; the set fields override the base
-// style at paint. Applied in the order base, Focus, FocusVisible, Hover.
+// style at paint. Applied in the order base, Focus, FocusVisible, Hover, Active.
 // They are paint-time only: layout fields set in them are ignored. Their
 // TextColor/TextStrikethrough reach descendant Text/StyledText through a
 // paint-time text-override stack (fields a text element, or a nearer
 // Div/UniformList, sets itself win); layout-affecting text fields (size,
 // weight, family, line height) are ignored for descendants.
+func (d *Div) Active(f func(*StyledMixin) *StyledMixin) *Div
 func (d *Div) Hover(f func(*StyledMixin) *StyledMixin) *Div
 func (d *Div) Focus(f func(*StyledMixin) *StyledMixin) *Div
 func (d *Div) FocusVisible(f func(*StyledMixin) *StyledMixin) *Div
@@ -665,6 +760,30 @@ uses them. Hitboxes are clipped to the enclosing scroll/clip containers, so
 scrolled-out children are not hit. With `ShowScrollbar()`, a scroll
 container with overflow on a scrolling axis paints a thin overlay thumb
 (6px, 2px inset, gray α≈0.55, not draggable) after its children.
+
+### Pressed interaction style
+
+`Div.Active(f)` refines paint while the primary (MouseLeft) button is held
+inside the element. Primary down captures Active-enabled elements on the
+current topmost hit path, including ancestors; occluded siblings do not activate.
+This state is independent of mouse-handler bubbling/StopPropagation and does
+not require an OnClick or OnMouseDown handler. Primary up clears all captured
+state even outside the target or when a handler stops propagation. Secondary
+buttons do not start or end primary active state, but their reported pointer
+position can still cancel a press that has left the hit path.
+
+Keys are GlobalElementIDs across redraws; stable explicit IDs are recommended.
+Movement or redraw cancels a captured element when it is no longer on the hit
+path, hidden, removed or no longer has Active. Re-entering does not restore it;
+a new primary down is required. Nested ancestors can remain active when the
+pointer leaves only the child. Reconciliation uses the new frame before paint
+so geometry/occlusion changes cannot paint stale pressed state.
+
+Interaction precedence is base, Focus, FocusVisible, Hover, then Active.
+Active is paint-only like other interaction refinements: layout fields and
+text metrics are ignored; colour/strikethrough reach descendant text and
+opacity multiplies subtree painting. Press/release/cancellation automatically
+request redraws. Active(nil) clears the refinement.
 
 ### `uniform_list.go`
 

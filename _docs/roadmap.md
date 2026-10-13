@@ -5,17 +5,24 @@ It replaces the former first-wave plan and work-in-progress notes
 (activity registry). Contract: [api-contract.md](api-contract.md) (change
 signatures there first). Layout of the repo: [project-structure.md](project-structure.md).
 
-Last updated: 2026-10-12.
+Last updated: 2026-10-13.
+
+Current wave: **S1 — done (verified, uncommitted)**, implemented by agent `l1`,
+independently reviewed by `review_l1`, coordinated by Jake.
+L1 and L2 remain verified and uncommitted. No commits authorized.
+Next dependency-free P1 interaction milestone: I1 (scrollbar drag / track click).
 
 ## 1. Status summary
 
 What works today:
 
 - Core UI in `gpui/` (stdlib + `x/image` + `go-text/typesetting`): geometry,
-  colour, flexbox layout (grow/shrink/basis, margins incl. auto, gaps, min/max),
+  colour, flexbox layout (grow/shrink/basis, margins incl. auto, gaps, min/max,
+  row/column wrapping, axis gaps and align-content),
+  parent-relative absolute positioning with pixel offsets and inset,
   `Div`, `Text`, `StyledText`, `TextInput`, `UniformList`, scroll containers
   with display-only scrollbars, borders, rounded corners and clips, linear
-  gradients (sRGB/Oklab), box shadows (outset/inset), opacity, hover / focus /
+  gradients (sRGB/Oklab), box shadows (outset/inset), opacity, active / hover / focus /
   focus-visible styles, text style inheritance, font families with system
   fallback, HarfBuzz shaping and wrapping.
 - Retained entities with observe/emit/release, keymap + actions + key contexts,
@@ -26,8 +33,8 @@ What works today:
   clipboard, snapshot key (`cmd/ctrl-shift-s`).
 - 17 examples, each with `-png PATH` headless rendering; user docs in `docs/`.
 
-Not yet working: see section 3 (animation, images/SVG, absolute positioning,
-flex-wrap, grid, `Active()`, colour emoji, IME, multi-window, drag and drop,
+Not yet working: see section 3 (animation, images/SVG,
+grid, colour emoji, IME, multi-window, drag and drop,
 italic/intermediate weights, key chords). The interactive ebiten window has
 never been run in the agent environment (no Metal device); headless rendering is
 what the tests cover.
@@ -86,6 +93,26 @@ Commit hashes from `git log --oneline` (oldest first within a group).
 | `5dbd7ea` | Text style inheritance, line height, newlines, font family + fallback; margins and auto margins, `Flex1` basis 0 / `FlexAuto` / `FlexNone` / `FlexBasis`, rounded child clips, scene-order paint, action keys + bare-key bindings, entity release, custom element layout |
 | `69be5b1` | `TextInput` keeps placeholder and height when focused and empty; caret centred |
 
+### Verified working-tree milestones
+
+These changes are complete locally but have no commit hash yet.
+
+| ID | Status | What and evidence |
+|----|--------|-------------------|
+| L1 | done, uncommitted (2026-10-13) | Absolute positioning: `Position`, `Absolute` / `Relative`, edge and inset builders; out-of-flow sizing, constrained stretching, nested placement, overflow and scene-order overlap tests. Contract and user docs updated; new layout and revised cookbook snippets compile. Independent review found no correctness issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Before/after PNGs inspected in `_tmp/l1-before` and `_tmp/l1-after`: layout changes only its stack region, opacity intentionally overlaps background text, todo is pixel-identical. Todo scale-2 benchmark: 1.29 ms before, 1.21 ms after (single runs; no regression observed). Real-window checks not run: no display/GPU access. |
+| L2 | done, uncommitted (2026-10-13) | Row/column `FlexWrap` / `FlexNoWrap`, `RowGap` / `ColumnGap`, six align-content modes; per-line flex resolution, constraint and absolute-child coverage. Contract, user docs and project map updated; wrapping snippet compiles. Independent review found no blocking issues; stale contract wording corrected. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Before/after PNGs in `_tmp/l2-before` and `_tmp/l2-after` inspected: default styling/border and todo/layout/opacity controls pixel-identical; narrow styling palette reflows and narrow border cards form one column instead of clipped pairs. Todo scale-2 benchmark: 1.30 ms/frame (single run, within baseline variation); allocation count unchanged. No real-window checks available. |
+| S1 | done, uncommitted (2026-10-13) | `Div.Active` primary-button paint refinement with stable hit-path identity, ancestor activation, release/leave/removal/occlusion cancellation and precedence after Hover. Headless tests include stopped propagation, redraw lifecycle, inherited text/opacity and ignored layout refinements. Styling and gradient examples, contract and user docs updated; three snippets compile. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check` and todo PNG smoke pass. Resting styling/gradient and todo/layout/opacity renders pixel-identical; pressed/released previews inspected in `_tmp/s1-after`, release matches hovered baseline. Paired isolated before/current benchmarks (1s, count 3) show no material S1 slowdown: Todo2 medians 1.964/2.009 ms, Todo1 .835/.866 ms, Gallery2 3.303/3.216 ms, allocation counts unchanged; elevated absolute times occur in both copies. No real-window checks available. |
+
+L1 limits: logical-pixel offsets only; immediate parent border box is the anchor.
+No relative translation, CSS static-position placement, fixed positioning or
+z-index; absolute auto margins count as zero. These are documented in the contract.
+
+L2 limit: wrap-reverse remains unsupported (optional in the milestone).
+
+S1 limits: primary button only, paint-time refinements and rectangular hit paths.
+Leave cancels until another press; secondary event positions can also cancel
+if they report a pointer outside the captured path.
+
 ### Review waves
 
 | Commit | What |
@@ -121,8 +148,6 @@ standard verification (section 1) and a contract update when signatures change.
 
 | ID | Pri | Size | Deps | Milestone | Acceptance criteria |
 |----|-----|------|------|-----------|---------------------|
-| L1 | P1 | M | - | Absolute positioning (`position: absolute`, `Top/Left/Right/Bottom`, inset) | Child removed from flex flow and placed relative to the parent box; overlapping paint order follows scene order; unit tests in `layout_test.go`; `layout` and `opacity` examples use real overlap instead of staggered padding |
-| L2 | P1 | M | - | `flex-wrap` (`FlexWrap`, wrap-reverse optional, row/column gaps) | Items wrap by main-axis size; gap and `align-content` handled; tests; `styling` and `border_and_shadow_backgrounds` use it instead of hand-split rows |
 | L3 | P3 | L | L1, L2 | CSS grid (`grid_cols`, `col_span`, `row_span`) - decide first whether to ship at all | Decision recorded here; if shipped, fixed and fractional tracks, spans, gap; `layout`, `interactive_elements`, `text` use it |
 | L4 | P2 | S | - | Borders included in layout sizes (currently not) | A bordered box with fixed width keeps content width minus border; tests |
 | L5 | P3 | S | - | Resize and scale-change test coverage and API. Handling itself exists: `ebitenplatform` `Layout` re-reads the monitor scale and size every frame, updates the window bounds and requests a redraw, and `Window.Draw` re-reads `ScaleFactor` | `HeadlessWindow` has a `Resize` (and scale setter) so a test can resize, relayout and re-rasterize; test covers relayout at a new size and scale; optionally a resize callback for apps |
@@ -133,7 +158,6 @@ standard verification (section 1) and a contract update when signatures change.
 
 | ID | Pri | Size | Deps | Milestone | Acceptance criteria |
 |----|-----|------|------|-----------|---------------------|
-| S1 | P1 | M | - | `Active()` (pressed) style | Applies while the mouse is down inside the element; cleared on release or leave; works with hover; `gradient` and `styling` examples use it |
 | S2 | P2 | M | - | Size/weight/family/line-height in `Hover`/`Focus`/`FocusVisible` refinements | Refinements that change text metrics trigger relayout (or are documented as unsupported with a panic-free no-op); tests |
 | S3 | P2 | S | - | Hover text override inside custom `RequestLayoutWithChildren` containers | Custom containers push and pop paint-time overrides so they can re-assert their own colour; test |
 | S4 | P2 | S | - | `Text`/`StyledText` Bg/Border/Shadow: paint the box, or drop the builders | Decision recorded; either the box paints (test with pixel check) or the builders are removed from `Text` and the contract |
@@ -201,17 +225,17 @@ top of each `examples/*/main.go`.
 
 | gpui-ce example | Status | Local example | Blocked by / not ported |
 |-----------------|--------|---------------|--------------------------|
-| `border_and_shadow_backgrounds` | ported | `border_and_shadow_backgrounds` | gradient borders/shadows (S7), rounded smoothing (E8), flex-wrap (L2) |
+| `border_and_shadow_backgrounds` | ported | `border_and_shadow_backgrounds` | gradient borders/shadows (S7), rounded smoothing (E8) |
 | `learn/actions_and_keybinds` | ported | `actions_and_keybinds` | - |
 | `learn/interactive_elements` | ported | `interactive_elements` | drag API (I5), dashed border (S7), cursors (I6), grid (L3) |
-| `learn/layout` | ported | `layout` | grid (L3), absolute (L1) |
-| `learn/styling` | ported | `styling` | `Active()` (S1), cursors (I6), flex-wrap (L2), app menu |
+| `learn/layout` | ported | `layout` | grid (L3) |
+| `learn/styling` | ported | `styling` | cursors (I6), app menu |
 | `learn/text` | ported | `text` | italic/weights (S6), underline/strike colour (S8), ellipsis/line-clamp, grid (L3), tofu glyphs |
 | `learn/uniform_list` | ported | `uniform_list` | `Colors::for_appearance` |
 | `legacy/focus_visible` | ported | `focus_visible` | cursor_pointer (I6), E10 |
-| `legacy/gradient` | ported | `gradient` | canvas/paint_path (E8), `Active()` (S1) |
+| `legacy/gradient` | ported | `gradient` | canvas/paint_path (E8) |
 | `legacy/hello_world` | ported | `hello_world` | shadow_lg root, dashed borders (S7) |
-| `legacy/opacity` | ported | `opacity` | img/svg (E3, E4), emoji (S10), wavy decoration (S8), absolute (L1) |
+| `legacy/opacity` | ported | `opacity` | img/svg (E3, E4), emoji (S10), wavy decoration (S8) |
 | `legacy/scrollable` | ported | `scrollable` | example font loader |
 | `legacy/tab_stop` | ported | `tab_stop` | E10 |
 | `legacy/tree` | ported | `tree` | - |

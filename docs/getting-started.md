@@ -92,7 +92,7 @@ func (c *Counter) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 ```
 
 Give interactive elements a stable `.ID(...)`: hover, click identity and
-scroll offsets are keyed by it. `Hover`/`Focus`/`FocusVisible` take a closure
+scroll offsets are keyed by it. `Hover`/`Focus`/`FocusVisible`/`Active` take a closure
 that returns a style refinement (visual properties only; see styling.md).
 Open it with `return &Counter{}` in the `build` function.
 
