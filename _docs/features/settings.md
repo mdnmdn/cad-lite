@@ -37,8 +37,9 @@ behaviour and the default agent. Changes show at once and are saved to a TOML fi
   `LC_MESSAGES`, `LANG`, in that order; English when none names a supported language). The workspace
   stores the choice and calls the hook installed with `Workspace.SetLanguageHandler` (on
   registration, on load and on every change); `cmd/cad` installs a hook that calls
-  `i18n.Set(i18n.FromSetting(lang))`, so prompts, history lines, keywords and the settings warnings
-  switch language at once. Command names stay valid in English whatever the language, Italian
+  `i18n.Set(i18n.FromSetting(lang))`, and `Workspace.change` sets the language itself before the
+  hook runs, so prompts, history lines, keywords, panel labels, tooltips and the settings warnings
+  switch language with the next frame. Command names stay valid in English whatever the language, Italian
   names are extra aliases (see [Command line](command-line.md)), and an AI agent driving the
   drawing always gets English. Warnings produced while the file is read are in the system language,
   because the stored choice is not known yet.
