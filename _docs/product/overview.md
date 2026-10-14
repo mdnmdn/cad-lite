@@ -24,7 +24,7 @@ for viewing and light editing, and the application is designed so that build sta
 
 ## Users and workflow
 
-The user is a professional drafter or engineer who already knows AutoCAD's interaction model and
+The user is a professional drafter or engineer who knows AutoCAD's interaction model and
 expects it to carry over:
 
 - the command line is the primary input: a command name or alias, then answers to its prompts;

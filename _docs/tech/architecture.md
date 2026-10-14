@@ -35,8 +35,9 @@ UI shell and one rendering adapter touch the graphics stack.
 ├──────────────────────────────┬──────────────────────────────┤
 │ Geometry kernel (geom/)      │ Spatial index (spatial/)      │
 └──────────────────────────────┴──────────────────────────────┘
-        UI framework: internal/gpui (+ internal/gpui/ebitenplatform)
 ```
+
+The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenplatform` as its display backend.
 
 `cmd/cad` wires the layers together and chooses the platform: an ebiten window, or a headless
 window that renders one frame to PNG. Every package's purpose is listed in the
