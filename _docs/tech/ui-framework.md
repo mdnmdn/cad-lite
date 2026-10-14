@@ -7,7 +7,7 @@ summary: The boundary between go-draw and the internal/gpui library, what the ap
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/theme.go, ui/workspace.go, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go]
+code_anchors: [ui/theme.go, ui/workspace.go, ui/icon.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -39,6 +39,7 @@ What go-draw uses from the library:
 | Keymap, `NewAction`, key context `cad` | Shortcuts (see the command line feature) |
 | `HeadlessPlatform`, `HeadlessWindow.Dispatch` | `-png` renders and UI tests |
 | `ebitenplatform.New` | The desktop window |
+| `Window.PaintGlyph` | Every icon: an alpha mask tinted with one theme colour |
 
 `Stroke`, `Canvas` and `TextInput.OnEscape` exist in the library for go-draw. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
@@ -75,6 +76,30 @@ in `ui/theme.go`:
 `TextInput` draws its own light field, so the command-line field is light on the dark shell; the
 library has no styling hook for it (backlog).
 
+## Icons
+
+Icons are monochrome SVG files that the shell rasterizes to an alpha mask and tints with a theme
+colour, the analogue of GPUI's `paint_svg`:
+
+1. `assets/icons/<name>.svg`, one per row of the registry `assets/icons/icons.yaml` (categories
+   draw, modify, edit, view, snap, measure and layer; `source` is `custom` or `adopted:<lucide-name>`
+   from Lucide under ISC, with the licence in `assets/icons/LICENSE-lucide`).
+2. `icons.SVG(name)` returns the embedded source. The package is data only and imports `embed`;
+   its `Name` constants are generated into `names_gen.go` by `just icons-gen`.
+3. `ui.IconMask(name, px)` parses the file with oksvg, rasterizes it with rasterx at the device
+   size, keeps only the alpha channel and caches the mask by name and device pixels. Both libraries
+   are pure Go, so the `js/wasm` build keeps working.
+4. `ui.NewIcon(name, size, color)` is the element: a square leaf that does not shrink in a flex
+   row and paints the mask through `Window.PaintGlyph`, snapped to the device grid.
+
+Colour inside a file is discarded, so a theme decision is a token at the call site (`uiText`,
+`uiMuted`, `uiOn`), never part of an SVG. The icon spec (24-unit viewBox, stroke, ink envelope,
+banned tags), the registry rules and the draw, render, review loop are owned by the skill
+`.claude/skills/go-draw-icons/SKILL.md`; the commands are in [Operations](operations.md).
+
+Only `ui` imports `assets/icons`, oksvg and rasterx; the core packages never do
+([Architecture](architecture.md)).
+
 ## Rationale
 
 **gpui instead of Dear ImGui.** The specification proposed Dear ImGui through cimgui-go. gpui needs
@@ -83,8 +108,13 @@ behaviour is tested and screenshotted without a display; and it lives in this re
 canvas got the primitives it needed. The cost — widgets built by hand, a CPU rasterizer — is in the
 decision register.
 
+**oksvg and rasterx for icons.** They are the one SVG rasterizer that is pure Go, so icons cost
+the application no cgo and no wasm exclusion. The review sheets are rendered by resvg instead, so
+the tool and the application differ slightly on edge pixels (decision register).
+
 ## Related docs
 
 - [Architecture](architecture.md) — which packages may import gpui
 - [Rendering](rendering.md) — how the canvas uses `Stroke` and `Quad`
-- [Decision register](decisions.md) — gpui over ImGui, and the library's place in the module
+- [Decision register](decisions.md) — gpui over ImGui, the library's place in the module, and the icon rasterizer
+- [Operations](operations.md) — the `icons-*` commands

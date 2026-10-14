@@ -39,7 +39,7 @@ history.
 - Typed answers take the forms the [command system](../tech/command-system.md) lists: `x,y`,
   `@dx,dy`, `d<angle`, `@d<angle`, a bare number for direct distance entry, keywords by name or
   shortcut. An invalid answer prints the error and the prompt stays.
-- Toolbar buttons run their command as if typed; the button of the running command is highlighted.
+- Toolbar buttons run their command as if typed; the [canvas](canvas.md) document owns the toolbar's layout and icons.
 - The field clears after every submission, cancel and canvas click that answers a prompt.
 
 Shortcuts, active anywhere in the window:

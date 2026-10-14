@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, crosshair a
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/icon.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -71,12 +71,19 @@ entities on an off layer are neither drawn nor selectable.
 With nothing selected it reads `No selection`. Otherwise it shows the count and a line per entity
 class (`LINE × 3`); a single selected entity also shows its layer and handle. The panel is read-only.
 
+### Toolbar
+
+Each button is an icon over a 10px label, in groups separated by a rule: Line, Polyline, Circle,
+Arc, Rect; Move, Copy, Rotate, Scale, Erase; Dist, Area; Undo, Redo, Zoom. A button runs its command
+as if typed, and the button of the running command is highlighted. The icons come from the
+[icon pipeline](../tech/ui-framework.md); a command without a button is still reached by typing it.
+
 ### Status bar
 
 | Part | Shows |
 |---|---|
 | Coordinates | The cursor in model units: the snapped point while a point is asked for, otherwise the pointer |
-| GRID, OSNAP, ORTHO | Toggles. Bright when on, muted when off; click or press F7, F3, F8 |
+| GRID, OSNAP, ORTHO | Toggles, each with a 14px icon. Bright (`uiOn`) when on, muted (`uiMuted`) when off; click or press F7, F3, F8 |
 | Right side | `Layer <current>`, the entity count, and `1 px = <size> units` |
 
 ## Contract
@@ -91,8 +98,8 @@ class (`LINE × 3`); a single selected entity also shows its layer and handle. T
 ## Implementation
 
 `ui.Workspace` in `ui/workspace.go` is the root view: toolbar, then the canvas beside `sidePanel`
-(layers and properties), then `commandArea`, then `statusBar`. The toolbar buttons run the
-commands they name. `Bindings` registers the key bindings for the `cad` key context.
+(layers and properties), then `commandArea`, then `statusBar`. `Workspace.button` builds a toolbar
+button around `ui.NewIcon` (`ui/icon.go`), and `statusBar` does the same for the toggles. `Bindings` registers the key bindings for the `cad` key context.
 
 `ui/canvas.go` holds the canvas. `Workspace.canvasElement` wires mouse down, move, up and wheel
 to `Session.Click`, `Session.SelectBox`, `Workspace.pointerMoved` and the view. `pointerMoved`

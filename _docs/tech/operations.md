@@ -7,7 +7,7 @@ summary: How to build, run, test and render go-draw, build the browser binary, a
 read_when: you need a build, run, test or docs command, or you are changing one
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [justfile, cmd/cad/main.go, tools/docs/main.go]
+code_anchors: [justfile, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -33,6 +33,20 @@ output (renders, binaries, experiments) goes in `_tmp/`, which is gitignored and
 | Docs a change touches | `go run ./tools/docs touched [paths…]` | `just docs-touched` |
 | Docs whose code moved | `go run ./tools/docs drift` | `just docs-drift` |
 | Regenerate index and code map | `go run ./tools/docs index` | `just docs-index` |
+| Check the icon registry and SVGs; fails if `names_gen.go` is stale | `uv run tools/icons/icons.py check` | `just icons-check` |
+| Regenerate `assets/icons/names_gen.go` | `uv run tools/icons/icons.py codegen` | `just icons-gen` |
+| Review sheet for some icons | `uv run tools/icons/icons.py sheet draw-line` | `just icons-sheet draw-line` (or `--category draw`) |
+| Copy Lucide icons in as `adopted:` rows | `uv run tools/icons/icons.py adopt [NAME…]` | `just icons-adopt` |
+| Compare competing takes in `assets/icons/variants/` | `uv run tools/icons/icons.py variants` | `just icons-variants --category draw` |
+| One contact sheet per category | `uv run tools/icons/icons.py audit` | `just icons-audit` |
+| List icons that look alike | `uv run tools/icons/icons.py dupes` | `just icons-dupes` |
+
+The icon commands need [`uv`](https://docs.astral.sh/uv/), which installs the script's Python
+dependencies on first run; sheets are rendered by resvg, not by the application's rasterizer.
+`icons-adopt` downloads the pinned `lucide-static` package from `registry.npmjs.org` into `_tmp/`
+(or reads the `icons/` directory named by `LUCIDE_DIR`), so it needs npm registry access. The
+`preview/` and `variants/` directories under `assets/icons/` are gitignored. The icon workflow is
+in `.claude/skills/go-draw-icons/SKILL.md`.
 
 Run `go mod tidy` after adding an import.
 

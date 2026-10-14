@@ -51,6 +51,8 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 2. **The core never sees the screen.** `geom`, `doc`, `spatial`, `fileio`, `render` and `cmdsys`
    never import `internal/gpui`, ebiten or any graphics package. Only `render/gpuirender`, `ui` and
    `cmd/` import `internal/gpui`, and only `cmd/` imports `internal/gpui/ebitenplatform`.
+   `assets/icons` is a data package (embedded SVGs, imports only `embed`) that only `ui` imports,
+   together with the SVG rasterizer; see [UI framework](ui-framework.md).
 3. **No cgo in the default build.** Everything that builds without tags is pure Go, so the
    application compiles for `js/wasm`. A future cgo dependency (a DWG library) lives behind a build
    tag in its own `fileio` plugin.

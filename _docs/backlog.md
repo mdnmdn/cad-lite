@@ -59,3 +59,11 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 ## Further items
 
 New lines are appended below this heading.
+
+| id | Item | Affects |
+|---|---|---|
+| G21 | Toolbar tooltips and keyboard hints | [Drawing canvas](features/canvas.md) |
+| G22 | The layer-visible, layer-hidden and layer-current icons are drawn but unused; the layers panel shows `on` and `off` text | [Drawing canvas](features/canvas.md) |
+| G23 | The view-pan, view-zoom-extents, measure-angle, measure-radius and measure-id-point icons have no toolbar buttons | [Drawing canvas](features/canvas.md) |
+| G24 | A Go render helper so the icon sheets use oksvg, the application's rasterizer, instead of resvg | [Operations](tech/operations.md) |
+| G25 | measure-radius may need a redraw after review | [UI framework](tech/ui-framework.md) |
