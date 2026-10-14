@@ -21,11 +21,16 @@ func agentPanelWidth(window float32) float32 { return min(510, max(300, window/4
 // agentOutputLimit caps the tool output shown in a block, in runes.
 const agentOutputLimit = 280
 
+// agentTip is the agent button's tooltip.
+func (ws *Workspace) agentTip() string {
+	return toolTip(i18n.CommandName("AI"), ws.keyHint(actionAgent, "AI"), i18n.T("ui.toolbar.agent_tip"))
+}
+
 // agentToggle is the title bar's button that shows and hides the agent panel; it carries a dot
 // while an agent session is live (amber when a background tab wants attention).
 func (ws *Workspace) agentToggle() *gpui.Div {
 	on := ws.agent != nil && ws.agent.visible
-	b := iconButton("tool-agent", i18n.T("ui.toolbar.agent_tip"), icons.AppAgent, on, func(w *gpui.Window) { ws.AgentPanel().Toggle(w) })
+	b := iconButton("tool-agent", ws.agentTip(), icons.AppAgent, on, func(w *gpui.Window) { ws.AgentPanel().Toggle(w) })
 	if ws.agent != nil {
 		if live, attn := ws.agent.Live(); attn {
 			b.Relative().Child(gpui.NewDiv().Absolute().Top(3).Right(3).Child(dot(8, uiWarn)))

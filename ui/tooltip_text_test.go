@@ -66,6 +66,7 @@ func TestFileAndSettingsTips(t *testing.T) {
 		{ws.openTip(), "Open (Ctrl+O / OPEN)", "file to open"},
 		{ws.saveTip(), "Save (Ctrl+S / QSAVE)", "Save as (Ctrl+Shift+S / SAVEAS)"},
 		{ws.settingsTip(), "Options (Ctrl+, / OP)", "language"},
+		{ws.agentTip(), "AI agent (F2 / AI)", "agent panel"},
 	} {
 		head, desc, _ := strings.Cut(tc.got, "\n")
 		if head != tc.head || !strings.Contains(desc, tc.has) {

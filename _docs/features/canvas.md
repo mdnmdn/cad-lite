@@ -151,9 +151,9 @@ the file name, or `Untitled` while the drawing has no file, and a dot before the
 changes (`Session.Dirty`); its tooltip gives the path. The agent button is filled while the panel is
 open and carries a dot while a session is live (amber when a background tab wants attention). Open and Save show the
 system file dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. Undo and
-Redo run `U` and `REDO` and show the command tooltips (see Tooltips); Open, Save and Settings show the
-same kind of tooltip, their description from `ui.toolbar.open_tip`, `save_tip` and `settings_tip`
-(Save's names Save as and its keys), and the agent button shows `ui.toolbar.agent_tip`.
+Redo run `U` and `REDO` and show the command tooltips (see Tooltips); Open, Save, Settings and the
+agent button show the same kind of tooltip, their description from `ui.toolbar.open_tip`, `save_tip`,
+`settings_tip` and `agent_tip` (Save's names Save as and its keys).
 
 The brand depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`): Linux and the web show the
 application icon and the bold `Cad-lite` wordmark, macOS shows the icon alone (32 px, the 32 and 64 px

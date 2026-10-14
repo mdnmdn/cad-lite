@@ -567,7 +567,7 @@ they are new tooltips and new language-picker rows.
 | Literal | Key |
 |---|---|
 | `NewText("Agent") on the AI button` | `ui.toolbar.agent` |
-| `"AI agent — opens the agent panel: describe a drawing in words and the agent draws it (F2 / AI)"` | `ui.toolbar.agent_tip` |
+| `"Opens the agent panel: describe a drawing in words and the agent draws it"` | `ui.toolbar.agent_tip` |
 | `"AGENT"` | `ui.agent.title` |
 | `"+"` | `ui.agent.new_tab` |
 | `"New conversation — opens another tab"` | `ui.agent.new_tab_tip` |

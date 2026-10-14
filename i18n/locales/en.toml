@@ -763,7 +763,7 @@ history_empty = "No commands yet"
 
 [ui.toolbar]
 settings_tip = "Theme, UI scale, drawing aids, language"
-agent_tip = "AI agent — opens the agent panel: describe a drawing in words and the agent draws it (F2 / AI)"
+agent_tip = "Opens the agent panel: describe a drawing in words and the agent draws it"
 ribbon_collapse_tip = "Collapse the ribbon — hides the command buttons; the commands stay on the command line"
 ribbon_expand_tip = "Show the ribbon — the Draw, Modify and Utilities buttons"
 open_tip = "Chooses a drawing file to open"

@@ -764,7 +764,7 @@ history_empty = "Ancora nessun comando"
 
 [ui.toolbar]
 settings_tip = "Tema, scala dell'interfaccia, ausili di disegno, lingua"
-agent_tip = "Agente IA — apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza (F2 / AGENTE)"
+agent_tip = "Apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza"
 ribbon_collapse_tip = "Comprimi la barra multifunzione — nasconde i pulsanti dei comandi; i comandi restano sulla riga di comando"
 ribbon_expand_tip = "Mostra la barra multifunzione — i pulsanti Disegna, Modifica e Utilità"
 open_tip = "Sceglie un file di disegno da aprire"
