@@ -3,6 +3,7 @@ package jsonrpc
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 // Error is a JSON-RPC error object.
@@ -13,7 +14,7 @@ type Error struct {
 }
 
 // Error implements error.
-func (e *Error) Error() string { panic("todo: WP1") }
+func (e *Error) Error() string { return fmt.Sprintf("jsonrpc error %d: %s", e.Code, e.Message) }
 
 // Standard JSON-RPC error codes.
 const (

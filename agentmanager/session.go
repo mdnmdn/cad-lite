@@ -3,6 +3,7 @@ package agentmanager
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 // Session is one live agent conversation. Methods are goroutine-safe.
@@ -36,19 +37,61 @@ type PermissionAnswer struct {
 
 // Queue is an unbounded, ordered event queue shared by every backend: Push never blocks, and
 // Events delivers in push order until Close, after which the channel is closed once drained.
-type Queue struct{ _ struct{} }
+type Queue struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	buf    []Event
+	closed bool
+	out    chan Event
+}
 
 // NewQueue returns an empty Queue and starts its forwarding goroutine.
-func NewQueue() *Queue { panic("todo: WP1") }
+func NewQueue() *Queue {
+	q := &Queue{out: make(chan Event)}
+	q.cond = sync.NewCond(&q.mu)
+	go q.run()
+	return q
+}
+
+func (q *Queue) run() {
+	defer close(q.out)
+	for {
+		q.mu.Lock()
+		for len(q.buf) == 0 && !q.closed {
+			q.cond.Wait()
+		}
+		if len(q.buf) == 0 {
+			q.mu.Unlock()
+			return
+		}
+		ev := q.buf[0]
+		q.buf[0] = nil
+		q.buf = q.buf[1:]
+		q.mu.Unlock()
+		q.out <- ev
+	}
+}
 
 // Push appends ev; it never blocks. Pushes after Close are dropped.
-func (q *Queue) Push(ev Event) { panic("todo: WP1") }
+func (q *Queue) Push(ev Event) {
+	q.mu.Lock()
+	if !q.closed {
+		q.buf = append(q.buf, ev)
+		q.cond.Signal()
+	}
+	q.mu.Unlock()
+}
 
 // Events is the consumer side; it is closed after Close once every queued event was delivered.
-func (q *Queue) Events() <-chan Event { panic("todo: WP1") }
+func (q *Queue) Events() <-chan Event { return q.out }
 
 // Close ends the queue after the already pushed events are delivered. Idempotent.
-func (q *Queue) Close() { panic("todo: WP1") }
+func (q *Queue) Close() {
+	q.mu.Lock()
+	q.closed = true
+	q.cond.Broadcast()
+	q.mu.Unlock()
+}
 
 // ErrClosed is returned by Session methods after the session is closed or
 // its agent process has exited.

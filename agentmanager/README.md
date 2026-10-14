@@ -23,4 +23,4 @@ Standard library only; imports nothing from go-draw.
 
 ## Status
 
-Scaffold: the API is declared and compiles; bodies are `panic("todo: WPn")` stubs. See `_docs/roadmap.md`.
+Core done: neutral types, `Queue`, `AllowMCP`, `jsonrpc`, `internal/proc`, fake-agent framework and `harnesses`. Backends (`acp`, `claude`, `codex`), `mcp` and `transcript` are owned by other work packages and may still be stubs. See `_docs/testing.md`.

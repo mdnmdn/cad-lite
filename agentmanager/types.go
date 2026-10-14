@@ -91,8 +91,11 @@ type ToolCall struct {
 
 // ToolCallPatch is a partial update: nil/empty = unchanged; Content replaces.
 type ToolCallPatch struct {
-	ID        string
-	Title     *string
+	ID    string
+	Title *string
+	// MCPServer names the MCP server that owns the tool, when the backend knows it
+	// (Claude's mcp__server__tool names, ACP/Codex MCP tool-call items); empty otherwise.
+	MCPServer string
 	Kind      *ToolKind
 	Status    *ToolStatus
 	Output    *string // human-readable result text, when known

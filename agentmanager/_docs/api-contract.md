@@ -222,3 +222,7 @@ handshakes (ACP, Codex), returns a Session; MCP injection and Close semantics as
 ## Session errors
 
 `agentmanager.ErrClosed` is returned by every `Session` method after `Close` or after the agent process exits. Backends wrap or return it as is; `jsonrpc.ErrClosed` stays internal to the connection layer.
+
+## ToolCallPatch.MCPServer
+
+`ToolCallPatch` carries `MCPServer string`: the owning MCP server when the backend knows it. Backends set it (Claude from `mcp__server__tool`, Codex from MCP tool-call items, ACP from the tool call's MCP metadata or title). `AllowMCP` matches on it first and falls back to title prefixes.

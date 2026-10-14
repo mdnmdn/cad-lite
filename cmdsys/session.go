@@ -30,6 +30,7 @@ type Session struct {
 	prompt  *Prompt
 	last    string
 	history []string
+	printed int
 
 	// dispatching is set while a command's Start or Input runs.
 	dispatching bool
@@ -120,7 +121,13 @@ func (s *Session) CurrentPrompt() *Prompt { return s.prompt }
 // History returns the command history, oldest first.
 func (s *Session) History() []string { return s.history }
 
+// HistoryTotal returns how many lines have ever been printed to the history.
+// It only grows, unlike History, which is capped at HistoryLimit lines, so
+// the difference of two readings is the number of lines printed between them.
+func (s *Session) HistoryTotal() int { return s.printed }
+
 func (s *Session) print(line string) {
+	s.printed++
 	s.history = append(s.history, line)
 	if n := len(s.history) - HistoryLimit; n > 0 {
 		s.history = s.history[n:]
