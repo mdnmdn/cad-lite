@@ -1,4 +1,4 @@
-module go-gpui
+module go-draw
 
 go 1.26.1
 
