@@ -792,6 +792,8 @@ default_name = "drawing"
 filter_all_supported = "All supported files"
 filter_all = "All files"
 filter_ext = "%s drawing"
+unsupported = "Cannot open %s: Cad-lite opens %s files."
+not_opened = "%s not opened: one drawing is open at a time."
 
 [ui.recent]
 menu_tip = "Recent — the drawings and folders you used lately; pick a file to open it or a folder to browse it"

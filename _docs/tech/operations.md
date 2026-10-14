@@ -63,10 +63,11 @@ Run `go mod tidy` after adding an import.
 
 | Flag | Meaning |
 |---|---|
-| `-open PATH` | Open a DXF or DWG file at startup |
+| `-open PATH` | Open a DXF or DWG file at startup; a bad file stops the program |
+| `FILE ...` (after the flags) | Open the first readable drawing at startup as a dropped file is; problems go to the command history. Not together with `-open` |
 | `-script TEXT` | Run a command script after opening (AutoCAD script rules) |
 | `-demo` | Draw the demo plate at startup |
-| `-png PATH` | Render one frame headlessly and exit; draws the demo plate unless `-open` or `-script` is given |
+| `-png PATH` | Render one frame headlessly and exit; draws the demo plate unless `-open`, a file argument or `-script` is given |
 | `-hover X,Y` | With `-png`: move the pointer to the model point first, so snaps and previews show |
 | `-width`, `-height` | Window size in logical pixels; without them the size saved in the settings file, else 1280×800 |
 | `-version` | Print the version (`dev` unless the build sets `-X main.version=...`) and exit |

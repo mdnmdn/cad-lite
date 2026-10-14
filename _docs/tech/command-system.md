@@ -189,6 +189,8 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 - **Commands build text from whole sentences.** A command calls `Context.T`, `Context.Say` or
   `Context.SayPlural` with a key (`cmd.<name>.prompt.*`, `msg.*`), never assembling a sentence from
   fragments, so word order stays the catalog's. `Context.Cmd` gives a command's display name.
+  `Session.Say` prints a catalog line the same way for the UI, when no command is running to say it
+  (a dropped file Cad-lite cannot open).
 - **Keywords keep their English id** in `Prompt.Keywords` and in `Input.Keyword`; the display
   (`i18n.PromptKeywords`) and the matching (`i18n.MatchKeywords`) are localized. English always
   matches, whatever the language.

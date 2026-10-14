@@ -158,6 +158,7 @@ type MouseListener struct {
 	OnClick       func(*ClickEvent, *Window, *App)
 	OnScrollWheel func(*ScrollWheelEvent, *Window, *App)
 	OnPinch       func(*PinchEvent, *Window, *App)
+	OnFileDrop    func(*FileDropEvent, *Window, *App)
 	OnHoverStart  func(*Window, *App)
 	OnHoverEnd    func(*Window, *App)
 	tooltip       string
@@ -1183,6 +1184,9 @@ func (w *Window) toUICoords(input PlatformInput) PlatformInput {
 	case PinchEvent:
 		e.Position = div(e.Position)
 		return e
+	case FileDropEvent:
+		e.Position = div(e.Position)
+		return e
 	case ClickEvent:
 		if e.Up != nil {
 			up := *e.Up
@@ -1305,6 +1309,9 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	case PinchEvent:
 		w.dismissTooltip()
 		w.dispatchPinch(e, cx)
+	case FileDropEvent:
+		w.dismissTooltip()
+		w.dispatchFileDrop(e, cx)
 	case KeyDownEvent:
 		w.dismissTooltip()
 		w.setFocusVisible(true)
@@ -1494,6 +1501,18 @@ func (w *Window) dispatchPinch(e PinchEvent, cx *App) {
 	w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 		if l.OnPinch != nil {
 			l.OnPinch(&ev, w, cx)
+		}
+	})
+}
+
+// dispatchFileDrop runs OnFileDrop over the hit path at the drop position,
+// innermost first, until a handler calls StopPropagation.
+func (w *Window) dispatchFileDrop(e FileDropEvent, cx *App) {
+	ev := e
+	w.mousePosition, w.hasMouse = e.Position, true
+	w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
+		if l.OnFileDrop != nil {
+			l.OnFileDrop(&ev, w, cx)
 		}
 	})
 }

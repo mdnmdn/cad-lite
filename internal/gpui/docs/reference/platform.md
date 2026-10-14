@@ -184,6 +184,11 @@ snapshot shortcut saves the last presented frame as
 `snapshot-YYYYMMDD-HHMMSS.png` in the working directory and is swallowed (not
 dispatched to the app).
 
+Files dropped on the window arrive as `FileDropEvent`s. On macOS, `Run` also
+installs a handler for the open-documents Apple event (Finder, the Dock icon)
+before `ebiten.RunGame`; its paths reach `App.OpenPaths`. Limits are in the
+API contract (§17).
+
 ## Clipboard
 
 ```text

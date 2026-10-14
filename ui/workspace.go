@@ -220,6 +220,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 			ws.zoom.End(w)
 			ws.endDrag(w)
 		}).
+		OnFileDrop(ws.onFileDrop).
 		Child(ws.chrome(win, sideW, agentW, cmdline, w, cx)...).
 		Child(ws.statusBar(), ws.openMenuOverlay()))
 }

@@ -3,11 +3,11 @@ id: feat-dxf-files
 title: DXF files
 kind: feature
 status: current
-summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
-read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs or the -open flag, which file types they accept, how file problems are reported to the user, or the Windows file associations
+summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line, the -open flag and files the OS hands over (dropped, opened from Finder or the Dock, file arguments), how warnings and errors are reported, and where the lossy edges are.
+read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+code_anchors: [packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -78,6 +78,18 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
 - The path is typed text, so Space does not submit it. The file format is chosen by the extension,
   case-insensitively: `.dxf` is read and written, `.dwg` is read only.
 - `-open PATH` on the command line opens a file at startup and zooms to its extents.
+- **Files from the operating system.** A file dropped on the window, a file opened from Finder or
+  dropped on the Dock icon (macOS), and files named after the flags (`cad-lite plan.dxf`, which is how
+  Windows "Open with" and the Linux desktop entry pass them) all take one path: the first file whose
+  extension a reader reads runs OPEN with that path, so the `Save changes` question, the undo reset and
+  the project switch happen as for a typed OPEN, and a launch file is fitted once the canvas has its
+  size. Every other path is reported in the history and nothing else happens:
+  `Cannot open notes.txt: Cad-lite opens DWG, DXF files.` for a file no reader reads (a dropped folder
+  included), and `b.dxf not opened: one drawing is open at a time.` for each further drawing. A drop
+  lands anywhere on the window, the settings panel included. File arguments and `-open` do not mix;
+  given both, the application stops with a usage error. The macOS bundle declares DXF (editor) and DWG
+  (viewer) as document types at the `Alternate` rank, so Cad-lite is offered in "Open With" without
+  becoming the default; the Linux desktop entry lists the DXF and DWG MIME types and passes `%F`.
 - Opening replaces the drawing, its undo history and the selection; the previous drawing is saved only if the user answers Yes to `Save changes`.
 - Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC` and
   polylines. What else is read, what is kept and which DXF version is written are owned by
@@ -144,6 +156,9 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
 
 ## Contract
 
+- Entry point: `Workspace.OpenPaths(paths)` is the one function for files the OS hands over; with
+  document tabs (backlog N1) it is where each supported path is redirected to a tab of its own.
+
 - Commands: OPEN, SAVE, NEW, registered in `cmdsys/commands`; prompt kind `InputText`.
 - Interface: `cmdsys.FileHandler` (`Open`, `Save`), implemented by `fileio.Registry`; the session
   receives it through `Session.SetFiles`. A handler that also has `WritablePath(path) string`
@@ -162,7 +177,16 @@ in `fileio/format.go` picks the codec by extension; `fileio/dxf.Codec` reads and
 `fileio/dwg.Codec` reads. `writablePath` in `cmdsys/commands/files.go` swaps a `.dwg` default for
 `.dxf`. `cmd/cad`
 builds the registry, opens `-open` before creating the workspace and calls
-`Workspace.FitOnFirstFrame`.
+`Workspace.FitOnFirstFrame`. File arguments go through `fileArgs` (which refuses them together with
+`-open`) and `launchArgs` (which drops the `-psn_` argument older macOS launches add) and then to
+`Workspace.OpenPaths`; `cmd/cad` also hands `gpui.App.OnOpenPaths` requests (the macOS open-documents
+event) to it.
+
+`ui/openpaths.go` holds `Workspace.OpenPaths`: it checks each path with the handler's `CanRead`,
+reports the others through `Session.Say`, then runs OPEN and submits the first path, as `pollDialog`
+does. The root view's `OnFileDrop` listener (`onFileDrop`) feeds it the paths of a
+`gpui.FileDropEvent`. How the platform produces the drop and the open-documents event, and their
+limits, is in the gpui contract (`internal/gpui/_docs/api-contract.md`, the ebiten platform section).
 
 `ui/filedialog.go` holds the button wiring: `Workspace.openFile`, `saveFile` and `saveFileAs` call
 `startDialog`, which runs the `ui.FileDialog` on a goroutine and polls its answer with a `gpui.Window.After`
@@ -186,6 +210,8 @@ macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs o
 - Saving writes unknown entities of R12 classes and the preserved tables and blocks. Unknown
   entities of other classes are absent from the saved file, each with a warning, so a round trip of
   a file that has them is lossy.
+- A dropped or OS-opened file that fails to read reports `Open failed: ...` like a typed path; an
+  unsupported one is reported before OPEN starts, so no command runs.
 - A DWG that cannot be read to the end opens with what could be: a damaged or CRC-failing object is
   counted in a warning and left out; an unreadable file header or section map is an error.
 - The reader rejects binary DXF, files that end inside a group-code pair and sections without `ENDSEC`.

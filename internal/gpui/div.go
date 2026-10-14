@@ -24,6 +24,7 @@ type Div struct {
 	onClick       func(*ClickEvent, *Window, *App)
 	onScrollWheel func(*ScrollWheelEvent, *Window, *App)
 	onPinch       func(*PinchEvent, *Window, *App)
+	onFileDrop    func(*FileDropEvent, *Window, *App)
 	onKeyDown     func(*KeyDownEvent, *Window, *App)
 	onKeyUp       func(*KeyUpEvent, *Window, *App)
 	onHoverStart  func(*Window, *App)
@@ -134,6 +135,14 @@ func (d *Div) OnScrollWheel(f func(*ScrollWheelEvent, *Window, *App)) *Div {
 // OnScrollWheel (innermost first); Window.StopPropagation halts the traversal.
 func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div {
 	d.onPinch = f
+	return d
+}
+
+// OnFileDrop registers a listener for files dropped on the window from the OS.
+// It runs along the hit path at the drop position like OnPinch (innermost
+// first); Window.StopPropagation halts the traversal.
+func (d *Div) OnFileDrop(f func(*FileDropEvent, *Window, *App)) *Div {
+	d.onFileDrop = f
 	return d
 }
 
@@ -603,6 +612,7 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	ml.OnClick = d.onClick
 	ml.OnScrollWheel = d.onScrollWheel
 	ml.OnPinch = d.onPinch
+	ml.OnFileDrop = d.onFileDrop
 	ml.OnHoverStart = d.onHoverStart
 	ml.OnHoverEnd = d.onHoverEnd
 	ml.tooltip = d.tooltip

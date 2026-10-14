@@ -110,6 +110,17 @@ type PinchEvent struct {
 
 func (e PinchEvent) isPlatformInput() {}
 
+// FileDropEvent is files or folders dragged from the OS and dropped on the
+// window at Position. Paths are absolute paths in the real file system, sorted
+// by name. Backends that cannot see real paths (a browser) never send it.
+type FileDropEvent struct {
+	Position  Point
+	Paths     []string
+	Modifiers Modifiers
+}
+
+func (e FileDropEvent) isPlatformInput() {}
+
 // ClickEvent is a completed click (a press-release pair on the same target).
 type ClickEvent struct {
 	Up *MouseUpEvent

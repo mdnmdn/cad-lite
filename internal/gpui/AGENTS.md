@@ -30,7 +30,7 @@ and process: `_docs/roadmap.md`. Repo map and where to add things:
   - Headless platform and PNG output.
   - Ebiten backend, with a snapshot key (`cmd/ctrl-shift-s`).
 - **Examples:** 17 under `examples/`. 14 are ports of gpui-ce examples; each file's header comment says what was not ported.
-- **Missing:** animation, images/SVG, grid, colour emoji, IME, multi-window, drag and drop. Priorities are in `_docs/roadmap.md` §3.
+- **Missing:** animation, images/SVG, grid, colour emoji, IME, multi-window, in-app drag and drop (files dropped from the OS arrive as `FileDropEvent`). Priorities are in `_docs/roadmap.md` §3.
 - **Performance:** a full todo frame at scale 2 takes about 1.2 ms (`go test . -run X -bench Draw`). Treat a clear regression as a bug.
 
 ## Rules

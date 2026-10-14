@@ -41,6 +41,7 @@ What Cad-lite uses from the library:
 | `ebitenplatform.New` | The desktop window |
 | `Window.PaintGlyph` | Every icon: an alpha mask tinted with one theme colour |
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
+| `Div.OnFileDrop`, `App.OnOpenPaths` | Files dropped on the window and files the OS asks the app to open (macOS Finder and Dock), both into `Workspace.OpenPaths` |
 
 `Stroke`, `Canvas`, `TextInput.OnEscape` and `TextInput.Multiline` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.

@@ -793,6 +793,8 @@ default_name = "disegno"
 filter_all_supported = "Tutti i file supportati"
 filter_all = "Tutti i file"
 filter_ext = "Disegno %s"
+unsupported = "Impossibile aprire %s: Cad-lite apre file %s."
+not_opened = "%s non aperto: si apre un disegno alla volta."
 
 [ui.recent]
 menu_tip = "Recenti — i disegni e le cartelle usati di recente; scegli un file per aprirlo o una cartella per sfogliarla"

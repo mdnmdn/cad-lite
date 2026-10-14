@@ -251,6 +251,10 @@ func (s *Session) print(line string) {
 	}
 }
 
+// Say writes the translated message key to the command history, as a command's Context.Say does.
+// The UI uses it for messages no command prints, such as a dropped file it cannot open.
+func (s *Session) Say(key string, args ...any) { s.print(s.Translator().T(key, args...)) }
+
 // Run starts the named command, cancelling any running one.
 func (s *Session) Run(name string) bool {
 	cmd, ok := s.lookupCommand(name)

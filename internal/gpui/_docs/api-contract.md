@@ -679,6 +679,7 @@ type Div struct {
     onClick      func(*ClickEvent, *Window, *App)
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
     onPinch      func(*PinchEvent, *Window, *App)
+    onFileDrop   func(*FileDropEvent, *Window, *App)
     onKeyDown    func(*KeyDownEvent, *Window, *App)
     onKeyUp      func(*KeyUpEvent, *Window, *App)
     onHoverStart func(*Window, *App)
@@ -700,6 +701,7 @@ func (d *Div) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) *Div
 func (d *Div) OnClick(f func(*ClickEvent, *Window, *App)) *Div
 func (d *Div) OnScrollWheel(f func(*ScrollWheelEvent, *Window, *App)) *Div
 func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div
+func (d *Div) OnFileDrop(f func(*FileDropEvent, *Window, *App)) *Div
 func (d *Div) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *Div
 func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div
@@ -840,6 +842,10 @@ func (h *ScrollHandle) ScrollToBottom()
 Pinch semantics: `OnPinch` listeners run along the hit path at the event
 position, innermost first, until one calls `Window.StopPropagation()`. A pinch
 never scrolls containers.
+
+File drop semantics: `OnFileDrop` listeners run along the hit path at the drop
+position, innermost first, until one calls `Window.StopPropagation()`, as
+pinch does. A drop no listener takes is ignored.
 
 Scroll semantics: `OnScrollWheel` listeners run first (bubble, innermost
 first); if one calls `Window.StopPropagation()` no container scrolls. Then
@@ -1195,6 +1201,15 @@ type ScrollWheelEvent struct {
 type PinchEvent struct {
     Position Point
     Delta float32
+    Modifiers Modifiers
+}
+// FileDropEvent is files or folders dragged from the OS and dropped on the
+// window at Position. Paths are absolute paths in the real file system,
+// sorted by name; a backend that cannot see real paths (a browser) sends no
+// event. DispatchEvent divides Position by the UI scale.
+type FileDropEvent struct {
+    Position Point
+    Paths []string
     Modifiers Modifiers
 }
 type ClickEvent struct {
@@ -1580,6 +1595,15 @@ func (a *App) UpdateGlobal(f func(any))
 func (a *App) Keymap() *Keymap
 func (a *App) NewFocusHandle() *FocusHandle
 func (a *App) Platform() Platform
+// OnOpenPaths sets the handler for the OS asking the app to open files with no
+// window position (macOS: a file opened from Finder or dropped on the Dock
+// icon). It replaces any earlier handler; nil removes it. Requests that came
+// while no handler was set are delivered to f at once, in order.
+func (a *App) OnOpenPaths(f func(paths []string, cx *App))
+// OpenPaths hands an open-files request to the OnOpenPaths handler inside
+// App.Update, or queues it until one is set. Platforms call it on the UI
+// goroutine; tests call it to inject the request. Empty requests are dropped.
+func (a *App) OpenPaths(paths []string)
 func (a *App) flushEffects()   // unexported
 ```
 
@@ -1761,6 +1785,7 @@ type mouseListener struct {
     onClick      func(*ClickEvent, *Window, *App)
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
     onPinch      func(*PinchEvent, *Window, *App)
+    onFileDrop   func(*FileDropEvent, *Window, *App)
     keyContext   string
 }
 type keyNode struct {
@@ -2183,6 +2208,32 @@ Input mapping in `Update`:
   into `PinchEvent`s. Any failure to install logs once and leaves pinch
   unsupported. Smart magnify (double-tap) is not handled. Other OSes have no
   native source; Windows precision touchpads deliver a pinch as Ctrl+wheel.
+- File drops: `ebiten.DroppedFiles()` (non-nil only on the tick of a drop) →
+  one `FileDropEvent` at the cursor position, which GLFW moves to the drop
+  point before reporting the drop on every desktop OS. ebiten hands over a
+  virtual `fs.FS` rooted at the deepest directory holding every dropped path,
+  whose entries implement `ebiten.AbsPather` on desktops (ebiten 2.10+);
+  `droppedPaths` walks it back to the dropped paths. A root entry that is a
+  file is a dropped file; a directory is a dropped folder unless it lists
+  fewer entries than the real directory, in which case it is only the way to
+  dropped paths further down (files dropped from several folders at once) and
+  is walked. An entry with no `AbsPath` (a browser drop, whose files exist
+  only in memory) is skipped, so `GOOS=js` sends no event. Drop order is lost:
+  the virtual file system sorts by name.
+- macOS open-documents: GLFW installs no handler for the `odoc` Apple event
+  (a file opened from Finder, or dropped on the Dock icon), so
+  `openfiles_darwin.go` registers one through `purego/objc` on
+  `NSAppleEventManager` for `kCoreEventClass`/`kAEOpenDocuments`. `Run`
+  arranges it on the main thread before `ebiten.RunGame`: it installs the
+  handler and again from an `NSApplicationWillFinishLaunchingNotification`
+  observer, because `NSApplication` installs its own Apple event handlers while
+  launching and the `odoc` of a launch-by-document is dispatched right after
+  that notification, inside GLFW's initial `[NSApp run]`. The handler reads each
+  item's `fileURLValue` path and pushes the batch to a mutex-guarded queue;
+  `Update` drains it into `App.OpenPaths`. Other OSes pass files to open as
+  command-line arguments, which is the app's business. A failure to install
+  logs once and leaves the event unhandled (AppKit then reports that the
+  document cannot be opened).
 - `ebiten.AppendInputChars` → `KeyDownEvent{PreferCharacterInput:true}` per
   rune, always — except while a shortcut modifier is held: Cmd on darwin,
   Super elsewhere (`ModPlatform`), or Ctrl unless it is AltGr (Ctrl+Alt on

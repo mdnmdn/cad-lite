@@ -6,7 +6,7 @@ Source: `events.go`, `window.go` (dispatch), `keymap.go`,
 
 The platform turns OS input into `PlatformInput` values (`MouseDownEvent`,
 `MouseUpEvent`, `MouseMoveEvent`, `ClickEvent`, `ScrollWheelEvent`, `PinchEvent`,
-`KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
+`FileDropEvent`, `KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
 `Window.DispatchEvent(input, app)`, which runs inside `App.Update` itself, so
 effects queued by handlers flush once after dispatch. Dispatch reads the
 **rendered frame** - the hitboxes and key nodes recorded during the last
@@ -169,6 +169,22 @@ pinch as Ctrl+wheel instead, so an application that zooms should handle both:
 `OnPinch` and a Ctrl `ScrollWheelEvent`. In the browser the backend sets
 `Control` on that wheel event from `WheelEvent.ctrlKey`, since a pinch has no
 Control keydown. Smart magnify (two-finger double tap) is not delivered.
+
+### Files from the OS
+
+`FileDropEvent{Position, Paths, Modifiers}` is files or folders dragged from the
+OS and dropped on the window; `Paths` are absolute real paths, sorted by name.
+`OnFileDrop` listeners run along the hit path at `Position`, innermost first,
+until `Window.StopPropagation()`, as pinch does. The ebiten backend sends it on
+desktops (from `ebiten.DroppedFiles`, at the cursor position, which GLFW moves
+to the drop point); a browser drop has no real paths and sends nothing.
+
+A request to open files that has no window position (macOS: a file opened from
+Finder or dropped on the Dock icon) goes to the app instead: register
+`App.OnOpenPaths(func(paths []string, cx *App))`, and the platform calls
+`App.OpenPaths(paths)`. Requests made before a handler is set are kept and
+delivered when it is, so a launch-by-document is not lost. Tests inject both
+directly: `HeadlessWindow.Dispatch(FileDropEvent{...})` and `App.OpenPaths`.
 
 ### Scrollbar input
 
