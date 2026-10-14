@@ -53,10 +53,11 @@ Points are model space and pre-tessellated; `Owner` names the entity an item dra
 per **zoom band** — `render.Band(scale)` is `floor(log2(scale))`, and the band's chord tolerance
 (`BandTolerance`) is a quarter pixel at the band's lowest scale — so zooming within a band reuses the
 tessellation. `Invalidate` drops the entries of a change set's handles; `InvalidateAll` drops
-everything and runs after any command-line input, because layer colour edits are not journalled.
-`SyncLayers` drops everything only when the layer table's names, colours or lineweights differ from
-those the cache was built against; the agent's MCP refresh hook uses it, so an agent's single-entity
-edit keeps every other entity's tessellation.
+everything (a background, theme or lineweight-display change). Layer edits are not journalled, so
+after every command-line submission and every mutating MCP call the workspace calls `SyncLayers`
+instead (D27): it drops everything only when the layer table's names, colours or lineweights differ
+from those the cache was built against, so a single-entity edit keeps every other entity's
+tessellation.
 
 **Colour.** `ByLayer` resolves through the entity's layer. ACI 7 is black or white, whichever
 contrasts with the background. `render.ACI` maps the other indices through `doc.ACIRGB`: 1–9 and the greys 250–255 are

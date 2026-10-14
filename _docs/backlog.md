@@ -35,7 +35,6 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 |---|---|---|
 | G1 | Unknown objects in OBJECTS and CLASSES, unmodelled header variables and paper-space (code 67) entities are not preserved or separated; unknown entities of classes R12 lacks cannot be saved until G2 | [DXF files](features/dxf-files.md), [File I/O](tech/file-io.md) |
 | G2 | Writing newer DXF versions (AC1015+: handles and owners, BLOCK_RECORD, CLASSES, OBJECTS) so unknown SPLINE, MTEXT, HATCH and custom entities survive a save; a binary DXF reader | [File I/O](tech/file-io.md) |
-| G3 | R-tree: the spatial index is a linear scan | [Geometry kernel](tech/geometry-kernel.md) |
 | G4 | Pointer move re-rasterises the whole window; no base-layer cache | [Rendering](tech/rendering.md), [Drawing canvas](features/canvas.md) |
 | G5 | No large-drawing benchmark and no DXF corpus test | [Testing](tech/testing.md) |
 | G6 | HiDPI, clipboard, IME and window resize are not exercised in the real-window harness | [Operations](tech/operations.md) |
@@ -47,7 +46,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G12 | Browser build: file open and save need browser APIs; the file registry is operating-system based | [Operations](tech/operations.md), [DXF files](features/dxf-files.md) |
 | G13 | Base-layer caching, the answer to R1 | [Rendering](tech/rendering.md) |
 | G15 | The operating system cursor is not hidden over the canvas; it needs a platform API. The crosshair can linger when the pointer leaves through the window edge, because the platform sends no leave event | [Drawing canvas](features/canvas.md) |
-| G16 | Layer table edits are not journalled, so they are not undoable and the render cache is cleared on every command-line submission (D11) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
+| G16 | Layer table edits are not journalled, so they are not undoable (the render cache detects them by comparing the layer table, D27) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
 | G17 | Paper space and layouts, view rotation, UCS | [Product overview](product/overview.md) |
 | G18 | Typed OPEN and SAVEAS never show the native dialog (FILEDIA is a stored variable with no effect); the dialogs are reached only from the buttons and shortcuts | [DXF files](features/dxf-files.md) |
 | G20 | Command-line autocomplete, history recall and F1 help | [Command line](features/command-line.md) |
@@ -58,7 +57,6 @@ New lines are appended below this heading.
 
 | id | Item | Affects |
 |---|---|---|
-| G21 | Toolbar tooltips and keyboard hints | [Drawing canvas](features/canvas.md) |
 | G22 | The layer-visible, layer-hidden and layer-current icons are drawn but unused; the layers panel shows `on` and `off` text | [Drawing canvas](features/canvas.md) |
 | G23 | The view-pan, view-zoom-extents, measure-angle, measure-radius and measure-id-point icons have no toolbar buttons | [Drawing canvas](features/canvas.md) |
 | G24 | A Go render helper so the icon sheets use oksvg, the application's rasterizer, instead of resvg | [Operations](tech/operations.md) |
@@ -82,8 +80,6 @@ New lines are appended below this heading.
 | G43 | Settings: a key-binding editor | [Settings](features/settings.md) |
 | G44 | gpui has no pointer capture, so the UI-scale slider applies only on release instead of live while dragging | [Settings](features/settings.md) |
 | G45 | Tab traversal: no Tab binding to FocusNext, so the panels cannot be walked by keyboard | [UI framework](tech/ui-framework.md) |
-| G46 | Performance: `spatial.Index.Query` scans and sorts on every frame, `Drawing.Layer(name)` is a linear lookup per entity per frame, `InvalidateAll` runs on every mutating MCP call and `Txn.Erase` is O(n) per entity | [Rendering](tech/rendering.md), [Document model](tech/document-model.md) |
-| G47 | Performance: `cadmcp.Snapshot` renders and PNG-encodes up to 2048x2048 on the UI goroutine; cap the pixel count or render off the goroutine | [Agent integration](tech/agent-integration.md) |
 | G48 | `tools/gui` runs `RemoveAll` on `-out/<scenario>`; refuse paths outside `_tmp/` unless `-force` | [Testing](tech/testing.md) |
 | G49 | The `cad` MCP server has no cap on batch length and no `WriteTimeout` (only `IdleTimeout` and the header timeout are set) | [Agent integration](tech/agent-integration.md) |
 | G50 | SAVE has no path allow-list (agents cannot run it, humans can); the window close button skips the "Save changes" question (G59) | [DXF files](features/dxf-files.md) |

@@ -104,7 +104,7 @@ func (ws *Workspace) submit(text string, w *gpui.Window) {
 	n := ws.session.RunCount()
 	ws.session.Submit(text)
 	ws.noteIfRan(n)
-	ws.builder.InvalidateAll()
+	ws.builder.SyncLayers()
 	w.Refresh()
 }
 
