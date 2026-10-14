@@ -457,6 +457,7 @@ func TestPermissionShapes(t *testing.T) {
 		{"op": "send", "frame": map[string]any{"id": 15, "method": "item/tool/requestUserInput", "params": map[string]any{}}},
 		{"op": "send", "frame": map[string]any{"id": 16, "method": "item/fileChange/requestApproval", "params": map[string]any{"itemId": "f1"}}},
 		{"op": "send", "frame": map[string]any{"method": "serverRequest/resolved", "params": map[string]any{"threadId": "t-9", "requestId": 16}}},
+		{"op": "send", "frame": map[string]any{"method": "error", "params": map[string]any{"message": "sync-after-withdrawal"}}},
 		{"op": "wait-for-reply", "var": "never"},
 	}
 	b, _ := json.Marshal(map[string]any{"steps": steps})
@@ -465,9 +466,15 @@ func TestPermissionShapes(t *testing.T) {
 	next(t, s)
 	s.Prompt(context.Background(), "go")
 	reqs := map[string]agentmanager.PermissionRequest{}
-	for len(reqs) < 4 {
-		if r, ok := next(t, s).(agentmanager.PermissionRequest); ok {
-			reqs[r.RequestID] = r
+	synced := false
+	for len(reqs) < 4 || !synced {
+		switch ev := next(t, s).(type) {
+		case agentmanager.PermissionRequest:
+			reqs[ev.RequestID] = ev
+		case agentmanager.Log:
+			// The reader goroutine handles frames in order, so this marker proves
+			// the withdrawal of request 16 has already been applied.
+			synced = synced || ev.Message == "sync-after-withdrawal"
 		}
 	}
 	if r := reqs["11"]; *r.Call.Title != "ls -l" {
