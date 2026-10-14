@@ -2,7 +2,7 @@
 
 Guidance for AI agents working in `agentmanager/`, a standalone Go library that launches coding
 agents (opencode, Claude Code, Codex) and exposes one neutral session API. Plan:
-`../_docs/inbox/agent-manager-port.md`. Frozen API: `_docs/api-contract.md`. Start at `_docs/index.md`.
+`../_docs/inbox/completed/agent-manager-port.md`. Frozen API: `_docs/api-contract.md`. Start at `_docs/index.md`.
 
 ## Rules
 

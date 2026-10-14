@@ -7,7 +7,7 @@ summary: How go-draw hosts AI agents: the separate agentmanager module, the in-p
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod]
+code_anchors: [ui/agent.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -83,6 +83,25 @@ the agent's edits between frames.
   user and has no allow-all control.
 - go-draw requests no permissive harness mode (no bypass or full-auto flags). Where a protocol allows it,
   the backends run shell and file tools sandboxed read-only; see the agentmanager API contract.
+
+## Verification status
+
+| harness | status |
+|---|---|
+| Claude Code (`claude`, 2.1.299) | Verified live: start, MCP tool calls through the `cad` server with the auto-allow policy, permission round trips, interrupt. Claude defers MCP tools behind `ToolSearch`, so the first drawing call shows an extra `ToolSearch` tool card in the transcript. |
+| opencode (ACP) | Not run live. Verified against the fake agent only; wire details are marked unverified in `agentmanager/_docs/protocols.md`. |
+| Codex (`codex`) | Not run live. Verified against the fake agent only; wire details unverified, as above. |
+
+`ui/agent_e2e_test.go` runs all three backends through the real panel, the real `cad` MCP server and the
+real `Dispatcher`, against `agentmanager`'s fake agent (built with `go build` from the nested module). The
+fake makes a real MCP `add_line` call; the test pumps the UI timer until the drawing has the line and the
+transcript's tool card is completed. A second test calls `render_png` over HTTP and decodes the PNG. They
+skip on `js` or when `go` is missing. Interactive behaviour in a window has not been run in the agent
+environment (see [Operations](operations.md)).
+
+ACP decisions that affect the panel: the history an agent replays during `session/load` is suppressed, so a
+resumed session does not repeat old messages; when an opencode build lacks HTTP MCP support, its
+environment-variable fallback restarts the agent process once, so the session may start slowly.
 
 ## Build constraint
 

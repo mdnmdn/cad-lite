@@ -69,5 +69,7 @@ New lines are appended below this heading.
 | G25 | measure-radius may need a redraw after review | [UI framework](tech/ui-framework.md) |
 | G26 | The agent panel prompt is a single-line field; a multi-line prompt needs `TextInput` support | [Agent panel](features/agent-panel.md) |
 | G27 | Resume a previous agent session, pick a model, persist the transcript with the drawing | [Agent panel](features/agent-panel.md) |
-| G28 | Live smoke tests of the opencode and Codex backends against the real CLIs; only fakes run in CI | [Agent integration](tech/agent-integration.md) |
+| G28 | Live smoke tests of the opencode and Codex backends against the real CLIs; only fakes run in CI (Claude Code is verified live) | [Agent integration](tech/agent-integration.md) |
 | G29 | Alternative to image results: a small CLI, found through an environment variable, that talks to the running instance and writes a PNG for agents whose harness drops MCP images | [Agent integration](tech/agent-integration.md) |
+| G30 | Agent token usage: `TurnEnd` has no usage field, so usage only reaches the debug log and the panel cannot show it | [Agent panel](features/agent-panel.md) |
+| G31 | Live tests of agent session resume and of killing the Claude process on close | [Agent integration](tech/agent-integration.md) |

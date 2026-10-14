@@ -23,4 +23,6 @@ Standard library only; imports nothing from go-draw.
 
 ## Status
 
-Core done: neutral types, `Queue`, `AllowMCP`, `jsonrpc`, `internal/proc`, fake-agent framework and `harnesses`. Backends (`acp`, `claude`, `codex`), `mcp` and `transcript` are owned by other work packages and may still be stubs. See `_docs/testing.md`.
+Implemented: root API, `jsonrpc`, `mcp`, `transcript`, `harnesses` and the three backends. Verified live against
+Claude Code 2.1.299 only; opencode (ACP) and codex are verified against the fake agent and their wire details are
+unverified until run live. See `_docs/roadmap.md` and `_docs/testing.md`.

@@ -35,7 +35,8 @@ agent session.
 
 JSON-RPC over NDJSON stdio, no `jsonrpc` member required on frames. Needs codex >= 0.100. No `codex` CLI was
 available when this was written: everything is verified against `internal/fakeagent` only (`RunCodex`); the wire
-shapes marked unverified in the plan stay so until a gated live run.
+shapes are **unverified** until a gated live run: the `-c mcp_servers` override keys, `bearer_token_env_var`, the
+approval request and `mcpToolCall` item shapes, `thread/resume` params.
 
 - **Launch.** `codex -c k=v ... app-server --listen stdio://` then `Config.Args`; `-c` overrides precede the
   subcommand. Managed overrides: `sandbox_mode="read-only"`, `approval_policy="on-request"` (no permissive mode),
@@ -65,7 +66,7 @@ shapes marked unverified in the plan stay so until a gated live run.
 - **Exit.** Process gone -> `Exited` (Err carries the exit error and stderr tail unless `Close` was called), events
   closed, methods return `agentmanager.ErrClosed`. `Close` closes stdin, waits <= 10 s, kills the process group.
 - **Fake scenarios** (`FAKEAGENT_SCENARIO` builtins): `echo-turn`, `tool-turn`, `mcp-turn`, `hold-turn`,
-  `late-ack-turn`, `cancel-ask-turn`, `crash-turn`, `no-handshake`.
+  `late-ack-turn`, `cancel-ask-turn`, `crash-turn`, `no-handshake`, and `mcp-call-turn` (a real MCP `tools/call`).
 
 ## Claude Code (package `claude`)
 
@@ -81,7 +82,8 @@ against Claude Code 2.1.299 (see "Live test").
 - **MCP config.** `{"mcpServers":{"<name>":{"type":"http","url":URL,"headers":{"Authorization":"Bearer T"}}}}` in a
   0600 temp file (the token never appears in argv); removed on `Close` or process exit. Claude names the tools
   `mcp__<name>__<tool>`; the backend sets `ToolCall.MCPServer`/`MCPTool` and `ToolCallPatch.MCPServer` from that.
-  Claude 2.1.x defers MCP tools behind its `ToolSearch` tool, so the first MCP use shows an extra `ToolSearch` call.
+  Claude 2.1.299 defers MCP tools behind its `ToolSearch` tool (live finding), so the first MCP use in a session
+  shows an extra `ToolSearch` tool call before the `mcp__cad__*` call; it is an ordinary tool block, not an error.
 - **Env.** `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_SESSION_ID`,
   `CLAUDE_CODE_SSE_PORT` are removed so a launch from inside Claude does not inherit the parent.
 - **No handshake.** `Open` returns right after the spawn. Claude emits `system/init` only after the first user
@@ -120,6 +122,10 @@ against Claude Code 2.1.299 (see "Live test").
   kills the process group, and removes the temp config. When the process ends without `Close`, `Exited{Err}` carries
   the exit error plus the stderr tail; the running turn is abandoned (no `TurnEnd`) and every method returns
   `agentmanager.ErrClosed`.
+- **Live findings (2.1.299).** MCP tools are deferred behind `ToolSearch` (see MCP config above). Read-only `Bash`
+  such as `echo` is auto-allowed by Claude itself and never reaches `can_use_tool`; use `touch` or similar to
+  provoke an ask. `result.usage` is not forwarded as an event (`TurnEnd` has no usage field); it is written to
+  `Logger.Debugf` only.
 - **Live test.** `AGENTMANAGER_LIVE_CLAUDE=1 go test ./claude -run Live -v` (needs auth and network). Confirmed on
   2.1.299: init after the first line, partial deltas with no duplicated final text, `mcp__cad__ping` through our
   `mcp.Server` with bearer auth and `AllowMCP("cad")` auto-allow, allow and deny round trips (`Bash` needs a non-read-only
@@ -130,7 +136,13 @@ against Claude Code 2.1.299 (see "Live test").
 Generic Agent Client Protocol v1 client (JSON-RPC 2.0, newline-delimited, stdio). `acp.New(Command)` serves any
 ACP agent; `acp.OpenCode()` is the preset for `opencode acp`. `Config.Binary` overrides the executable and
 `Config.Args` is appended after `acp`. There is no `opencode` CLI in the test environment: everything is verified
-against `internal/fakeagent` (builtins `echo-turn`, `tool-turn`, see its `RunACP` comment); a live run is not done.
+against `internal/fakeagent` (builtins `echo-turn`, `tool-turn`, see its `RunACP` comment); a live run is not done,
+so the opencode wire details here (auth method ids, the `OPENCODE_CONFIG_CONTENT` shape, tool title formats for
+MCP derivation, `session/load`) are **unverified**.
+
+Decisions: (1) the history an agent replays during `session/load` is suppressed (`loading` flag in the session), so
+resuming does not duplicate the transcript. (2) The opencode MCP env fallback restarts the process once with
+`OPENCODE_CONFIG_CONTENT`, because that variable is read at startup and cannot be added to a running agent.
 
 - **Handshake** (each step 30 s). `initialize {protocolVersion:1, clientInfo, clientCapabilities:{fs:{readTextFile:false,
   writeTextFile:false}, terminal:false}}`; a reply with another protocol version aborts. `authenticate` is sent only

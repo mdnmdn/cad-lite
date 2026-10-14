@@ -1,14 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 // RunACP plays sc as the acp protocol over in/out and returns the exit code.
@@ -275,72 +272,27 @@ func acpMCPTargets(v any) []acpMCPTarget {
 func (a *acpFake) callMCP(tool, args string) (string, error) {
 	targets := a.mcp
 	if len(targets) == 0 {
-		var cfg struct {
-			MCP map[string]struct {
-				URL     string            `json:"url"`
-				Headers map[string]string `json:"headers"`
-			} `json:"mcp"`
-		}
-		if json.Unmarshal([]byte(os.Getenv("OPENCODE_CONFIG_CONTENT")), &cfg) == nil {
-			for _, e := range cfg.MCP {
-				targets = append(targets, acpMCPTarget{e.URL, e.Headers["Authorization"]})
-			}
-		}
+		targets = opencodeEnvTargets()
 	}
 	if len(targets) == 0 {
 		return "", fmt.Errorf("no MCP server configured")
 	}
-	t := targets[0]
-	if args == "" {
-		args = "{}"
+	return callMCPTool(targets[0], tool, args)
+}
+
+// opencodeEnvTargets reads the MCP servers the opencode backend passes in OPENCODE_CONFIG_CONTENT.
+func opencodeEnvTargets() []acpMCPTarget {
+	var cfg struct {
+		MCP map[string]struct {
+			URL     string            `json:"url"`
+			Headers map[string]string `json:"headers"`
+		} `json:"mcp"`
 	}
-	post := func(body string) (string, error) {
-		req, err := http.NewRequest("POST", t.url, bytes.NewReader([]byte(body)))
-		if err != nil {
-			return "", err
+	var out []acpMCPTarget
+	if json.Unmarshal([]byte(os.Getenv("OPENCODE_CONFIG_CONTENT")), &cfg) == nil {
+		for _, e := range cfg.MCP {
+			out = append(out, acpMCPTarget{e.URL, e.Headers["Authorization"]})
 		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json, text/event-stream")
-		if t.auth != "" {
-			req.Header.Set("Authorization", t.auth)
-		}
-		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
-		if err != nil {
-			return "", err
-		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode >= 300 {
-			return "", fmt.Errorf("http %d", resp.StatusCode)
-		}
-		return string(b), nil
 	}
-	if _, err := post(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"fakeagent","version":"0"}}}`); err != nil {
-		return "", err
-	}
-	post(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
-	call, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": map[string]any{"name": tool, "arguments": json.RawMessage(args)}})
-	body, err := post(string(call))
-	if err != nil {
-		return "", err
-	}
-	var rsp struct {
-		Result struct {
-			Content []struct {
-				Text string `json:"text"`
-			} `json:"content"`
-			IsError bool `json:"isError"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(body), &rsp); err != nil {
-		return "", err
-	}
-	var texts []string
-	for _, c := range rsp.Result.Content {
-		texts = append(texts, c.Text)
-	}
-	if rsp.Result.IsError {
-		return "", fmt.Errorf("%s", strings.Join(texts, "\n"))
-	}
-	return strings.Join(texts, "\n"), nil
+	return out
 }

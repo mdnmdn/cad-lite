@@ -57,6 +57,15 @@ Protocol authors use `NewRunner(in, out)`: `ReadFrame`, `WriteFrame` (with `$var
 - `internal/proc` tests re-exec the test binary as the child (`TestMain` keyed on `PROC_HELPER`).
 - The race detector makes a child test binary take about a second to exit; that is not a bug.
 
+## Real MCP calls from the fakes
+
+With `FAKEAGENT_MCP_TOOL=<tool>` (arguments in `FAKEAGENT_MCP_ARGS`, default `{}`) each fake makes a real MCP
+`initialize` + `tools/call` over HTTP, so a host can test its MCP server end to end: ACP `tool-turn` (server from
+`session/new` or `OPENCODE_CONFIG_CONTENT`), Claude `tool-turn` (tool `mcp__cad__<tool>`, server from the
+`--mcp-config` file, called once the permission is allowed) and Codex `mcp-call-turn` (server and token from the
+`-c mcp_servers` override and its token env var). `mcpcall.go` holds the shared client. go-draw's
+`ui/agent_e2e_test.go` builds the fake with `go build` from this module and runs all three through the agent panel.
+
 ## Live tests
 
 Gated by `AGENTMANAGER_LIVE=1`; they skip otherwise and need the real CLI and credentials.

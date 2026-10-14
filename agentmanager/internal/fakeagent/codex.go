@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +17,9 @@ import (
 //	tool-turn         command item, exec approval request, reply decision echoed as text, turn/completed
 //	mcp-turn          plan, mcpToolCall and fileChange items, a foreign-thread notification, an error
 //	                  notification and an unknown server request (the client must answer -32601)
+//	mcp-call-turn     mcpToolCall item for $FAKEAGENT_MCP_TOOL (arguments FAKEAGENT_MCP_ARGS) with a real
+//	                  MCP tools/call to the server named by the -c mcp_servers override, completed with
+//	                  its result (or error), then text and turn/completed
 //	hold-turn         one delta, then wait for turn/interrupt and end interrupted
 //	late-ack-turn     as hold-turn but the turn/start ack is delayed 300 ms
 //	cancel-ask-turn   an approval request is parked; waits for the cancel reply and turn/interrupt
@@ -166,6 +170,26 @@ func (f *fakeCodex) turn(m map[string]any) (int, bool) {
 		f.notify("item/completed", map[string]any{"turnId": id, "item": map[string]any{
 			"id": "m2", "type": "agentMessage", "text": "done"}})
 		f.completed(id, "failed")
+	case "mcp-call-turn":
+		tool, args := os.Getenv("FAKEAGENT_MCP_TOOL"), os.Getenv("FAKEAGENT_MCP_ARGS")
+		if args == "" {
+			args = "{}"
+		}
+		f.notify("item/started", map[string]any{"turnId": id, "item": map[string]any{
+			"id": "mc1", "type": "mcpToolCall", "server": "cad", "tool": tool,
+			"arguments": json.RawMessage(args), "status": "inProgress"}})
+		res, err := callMCPTool(firstTarget(codexTargets(os.Args)), tool, args)
+		item := map[string]any{"id": "mc1", "type": "mcpToolCall", "server": "cad", "tool": tool, "status": "completed",
+			"arguments": json.RawMessage(args)}
+		if err != nil {
+			item["status"] = "failed"
+			item["error"] = map[string]any{"message": err.Error()}
+		} else {
+			item["result"] = map[string]any{"content": []any{map[string]any{"type": "text", "text": res}}}
+		}
+		f.notify("item/completed", map[string]any{"turnId": id, "item": item})
+		f.notify("item/agentMessage/delta", map[string]any{"turnId": id, "itemId": "m1", "delta": "done"})
+		f.completed(id, "completed")
 	case "hold-turn", "late-ack-turn":
 		f.notify("item/agentMessage/delta", map[string]any{"turnId": id, "itemId": "m1", "delta": "working"})
 		return f.waitInterrupt(id)

@@ -53,7 +53,7 @@ Each class of fact is stated in one document. Everyone else links to it.
 | `features/` | One document per user-visible capability: contract on top, implementation below |
 | `tech/` | Cross-cutting models, rules, conventions and procedures |
 | `_meta/` | How this library works: [authoring](_meta/authoring.md), [librarian](_meta/librarian.md), the proposal ledger and the review log |
-| `inbox/` | Raw input awaiting filing. `inbox/completed/draft-specs-v0.1.md` is the founding specification, kept verbatim as a record |
+| `inbox/` | Raw input awaiting filing. `inbox/completed/` keeps implemented inputs verbatim as records: `draft-specs-v0.1.md` (the founding specification) and `agent-manager-port.md` (the agent manager plan) |
 | `backlog.md` | Open questions, known gaps and deferred items |
 
 ## Catalogue

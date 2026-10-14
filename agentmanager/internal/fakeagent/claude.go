@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,7 +15,10 @@ import (
 //	echo-turn            text "echo: <prompt>", result success
 //	partial-turn         stream_event deltas (thinking, text) followed by the complete assistant line
 //	tool-turn            tool_use of $FAKEAGENT_CLAUDE_TOOL (default mcp__cad__add_line), a can_use_tool
-//	                     control_request, then tool_result (error when denied), text, result
+//	                     control_request, then tool_result (error when denied), text, result. With
+//	                     FAKEAGENT_MCP_TOOL=<tool> (arguments FAKEAGENT_MCP_ARGS) the tool is
+//	                     mcp__cad__<tool> and, once allowed, a real MCP tools/call goes to the server
+//	                     named in the --mcp-config file; its text is the tool_result.
 //	interrupt-turn       first prompt streams a delta and waits for an interrupt control_request, then
 //	                     answers it and ends with error_during_execution; later prompts echo
 //	permission-interrupt as tool-turn, but waits for an interrupt after the permission answer
@@ -146,10 +150,18 @@ func (c *claudeFake) partialTurn(_ int, prompt string) int {
 
 func (c *claudeFake) toolTurn(prompt string, waitInterrupt bool) int {
 	tool := os.Getenv("FAKEAGENT_CLAUDE_TOOL")
+	mcpTool := os.Getenv("FAKEAGENT_MCP_TOOL")
 	if tool == "" {
 		tool = "mcp__cad__add_line"
+		if mcpTool != "" {
+			tool = "mcp__cad__" + mcpTool
+		}
 	}
 	input := map[string]any{"x1": 0, "y1": 0, "x2": 10, "y2": 10, "command": "ls"}
+	if a := os.Getenv("FAKEAGENT_MCP_ARGS"); mcpTool != "" && a != "" {
+		input = nil
+		_ = json.Unmarshal([]byte(a), &input)
+	}
 	c.send(assistant(c.msgID(), text("calling tool"),
 		map[string]any{"type": "tool_use", "id": "toolu_1", "name": tool, "input": input}))
 	c.send(map[string]any{
@@ -175,9 +187,18 @@ func (c *claudeFake) toolTurn(prompt string, waitInterrupt bool) int {
 	if waitInterrupt {
 		return c.waitInterrupt()
 	}
+	said, isErr := "tool said "+behavior, behavior != "allow"
+	if mcpTool != "" && behavior == "allow" {
+		args, _ := json.Marshal(input)
+		res, err := callMCPTool(firstTarget(claudeTargets(os.Args)), mcpTool, string(args))
+		if err != nil {
+			res, isErr = "mcp error: "+err.Error(), true
+		}
+		said = res
+	}
 	c.send(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": []any{
-		map[string]any{"type": "tool_result", "tool_use_id": "toolu_1", "is_error": behavior != "allow",
-			"content": []any{text("tool said " + behavior)}},
+		map[string]any{"type": "tool_result", "tool_use_id": "toolu_1", "is_error": isErr,
+			"content": []any{text(said)}},
 	}}})
 	c.send(assistant(c.msgID(), text("done: "+behavior)))
 	c.result("success", false, "done: "+behavior)
