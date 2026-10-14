@@ -30,7 +30,7 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
 - **A drawing opened from a DWG** has the `.dwg` path, which cannot be written (see below), so QSAVE
   asks for a path instead of failing, the Save button shows the save dialog, and SAVE, SAVEAS, the
   dialog and the `Save changes` question offer the same name with `.dxf` as the default.
-- **Open and Save buttons.** The leftmost toolbar group has Open (Ctrl+O) and Save (Ctrl+S); Save as
+- **Open and Save buttons.** The title bar has icon-only Open (Ctrl+O) and Save (Ctrl+S) buttons after the document chip; Save as
   is a right click on Save and Ctrl+Shift+S. Open shows the system open dialog and, when a file is
   chosen, runs OPEN with that path, so the `Save changes` question, the undo reset, the project path and
   the agent history switch happen as for a typed OPEN. Save with a file runs QSAVE; Save without one, and
@@ -52,7 +52,7 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   variable `DBMOD` is 1 while it is not zero). NEW, OPEN, CLOSE, QUIT and EXIT on a dirty drawing ask
   `Save changes to NAME? [Yes/No/Cancel] <Yes>` (`NAME` is the file name, or `Untitled`): Yes saves
   (asking for a path when there is none) and goes on, No goes on, Cancel stops. OPEN reads the file first, so
-  a bad path fails before the question. A failed save keeps the drawing. The status bar shows `*` while the
+  a bad path fails before the question. A failed save keeps the drawing. The title bar's document chip shows a dot before the name while the
   drawing is dirty. Layer table edits do not count, because they are not journalled. The window's own close
   button does not ask yet: the gpui platform has no close hook.
 - **QUIT** and **EXIT** end the application through the host (`Session.SetQuitHandler`); without a host they

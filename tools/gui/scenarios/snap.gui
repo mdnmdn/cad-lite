@@ -2,9 +2,9 @@
 app -demo
 type "l\n"
 click 250 300
-move 420 380
+move 400 340
 shot far
-move 538 424
+move 514 432
 shot snap
 expect-diff far snap
 key Escape

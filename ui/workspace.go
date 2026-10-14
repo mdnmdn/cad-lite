@@ -1,10 +1,8 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
-	"cad-lite/assets/icons"
 	"cad-lite/cmdsys"
 	"cad-lite/cmdsys/commands"
 	"cad-lite/doc"
@@ -35,7 +33,7 @@ type Workspace struct {
 	// pan, so the plain wheel always zooms as in AutoCAD. Ctrl+wheel zooms
 	// and Shift+wheel pans either way.
 	WheelZoom bool
-	// Brand is what leads the toolbar: the wordmark, the app icon or nothing.
+	// Brand is what leads the title bar: the icon with the wordmark, the icon alone or nothing.
 	Brand Brand
 	// tipTheme is the theme whose tooltip style the App currently has.
 	tipTheme string
@@ -45,10 +43,11 @@ type Workspace struct {
 	// drag in progress has put the pre-drag view on the ZOOM Previous stack.
 	zoom      SliderState
 	zoomSaved bool
+	// winH is the window height of the last frame, which sizes the default history region.
+	winH float32
+	// cmd is the command area's state: history height and recent commands.
+	cmd cmdAreaState
 }
-
-// historyLines is how many history lines show above the command line.
-const historyLines = 4
 
 // NewWorkspace returns a workspace editing d. files may be nil, which
 // disables OPEN and SAVE (as in a browser build).
@@ -66,7 +65,7 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 			ws.ToggleSettings(ws.win)
 		}
 	})
-	ws.input = themeField(gpui.NewTextInput(i18n.T("ui.cmdline.placeholder")))
+	ws.input = themeBareField(gpui.NewTextInput(i18n.T("ui.cmdline.placeholder")), fontUI+1, true)
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
 	ws.input.OnChange(func(text string, w *gpui.Window, _ *gpui.App) {
@@ -97,12 +96,15 @@ func (ws *Workspace) acceptsText() bool {
 
 func (ws *Workspace) submit(text string, w *gpui.Window) {
 	ws.input.SetText("")
+	n := ws.session.RunCount()
 	ws.session.Submit(text)
+	ws.noteIfRan(n)
 	ws.builder.InvalidateAll()
 	w.Refresh()
 }
 
 func (ws *Workspace) escape(w *gpui.Window) {
+	ws.cmd.open = false
 	ws.input.SetText("")
 	ws.session.Escape()
 	w.Refresh()
@@ -110,8 +112,18 @@ func (ws *Workspace) escape(w *gpui.Window) {
 
 func (ws *Workspace) run(name string, w *gpui.Window) {
 	ws.input.SetText("")
+	n := ws.session.RunCount()
 	ws.session.Run(name)
+	ws.noteIfRan(n)
 	w.Refresh()
+}
+
+// noteIfRan records the last started command as recent when the session started one since the
+// run count was n.
+func (ws *Workspace) noteIfRan(n int) {
+	if ws.session.RunCount() > n {
+		ws.noteCommand(ws.session.LastCommand())
+	}
 }
 
 // Actions bound by Bindings.
@@ -125,6 +137,7 @@ var (
 	actionOrtho     = gpui.NewAction("cad-toggle-ortho")
 	actionGrid      = gpui.NewAction("cad-toggle-grid")
 	actionSnapGrid  = gpui.NewAction("cad-toggle-snap-grid")
+	actionPolar     = gpui.NewAction("cad-toggle-polar")
 	actionZoomExtnt = gpui.NewAction("cad-zoom-extents")
 	actionAgent     = gpui.NewAction("cad-toggle-agent")
 )
@@ -146,6 +159,7 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("f7", actionGrid, "cad"),
 		gpui.NewKeyBinding("f8", actionOrtho, "cad"),
 		gpui.NewKeyBinding("f9", actionSnapGrid, "cad"),
+		gpui.NewKeyBinding("f10", actionPolar, "cad"),
 		gpui.NewKeyBinding("ctrl-e", actionZoomExtnt, "cad"),
 		gpui.NewKeyBinding("f2", actionAgent, "cad"),
 	}, settingsBindings()...)
@@ -158,9 +172,11 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		ws.tipTheme = t.Name
 		cx.SetTooltipStyle(tooltipStyle(t))
 	}
+	win := float32(w.Bounds().Size.W)
+	ws.winH = float32(w.Bounds().Size.H)
 	var agentPanel gpui.IntoElement = gpui.NewDiv()
 	if ws.agent != nil && ws.agent.visible {
-		agentPanel = ws.agent.render(w, cx)
+		agentPanel = ws.agent.render(w, cx, win)
 	}
 	cmdline := ws.input.Render(w, cx)
 	if fh := ws.input.FocusHandle(); fh != nil && w.Focus() == nil {
@@ -178,175 +194,42 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFile(w) }).
 		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFileAs(w) }).
 		OnAction(actionSnap, toggle(func() { s.SnapOn = !s.SnapOn })).
-		OnAction(actionOrtho, toggle(func() { s.Ortho = !s.Ortho })).
+		OnAction(actionOrtho, toggle(func() { s.SetOrtho(!s.Ortho) })).
+		OnAction(actionPolar, toggle(func() { s.SetPolar(!s.Polar()) })).
 		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).
 		OnAction(actionGrid, toggle(func() { s.SetGrid(!s.Grid()) })).
 		OnAction(actionSnapGrid, toggle(func() { s.SetSnapGrid(!s.SnapGrid()) })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
-		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) { ws.zoom.Move(e.Position, w) }).
-		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) { ws.zoom.End(w) }).
+		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
+			ws.zoom.Move(e.Position, w)
+			ws.dragHistory(float32(e.Position.Y), w)
+		}).
+		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
+			ws.zoom.End(w)
+			ws.cmd.drag = false
+		}).
 		Child(
-			ws.toolbar(),
+			ws.titleBar(),
+			hDivider(),
+			ws.ribbon(win),
+			hDivider(),
 			gpui.NewDiv().FlexRow().Flex1().MinH(0).Child(
-				ws.canvasElement(),
-				ws.sidePanel(),
+				gpui.NewDiv().FlexCol().Flex1().MinW(0).Child(
+					ws.canvasElement(),
+					hDivider(),
+					ws.commandArea(cmdline, w),
+				),
+				gpui.NewDiv().SizeW(1).Bg(uiBorder).FlexShrink(0),
+				ws.sidePanel(win),
 				agentPanel,
 			),
-			ws.commandArea(cmdline),
+			hDivider(),
 			ws.statusBar(),
 		))
 }
 
-// toolIconSize is the toolbar icon edge in logical pixels.
-const toolIconSize = 18
-
-// button is a toolbar command button: icon over label, with the command's
-// tooltip. label is the already translated caption; an empty one uses the
-// command's display name.
-func (ws *Workspace) button(id, label, command string, icon icons.Name) *gpui.Div {
-	active := ws.session.Active() == command
-	info := i18n.Command(command)
-	if label == "" {
-		label = info.Name
-	}
-	b := gpui.NewDiv().ID("tool-"+id).FlexCol().ItemsCenter().Gap(2).Px_(6).Py_(4).Rounded(4).Tooltip(info.Tip).
-		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.run(command, w) }).
-		Child(NewIcon(icon, toolIconSize, uiText), gpui.NewText(label).TextSize(10))
-	if active {
-		b.Bg(uiAccent)
-	}
-	return b
-}
-
-func separator() *gpui.Div { return gpui.NewDiv().SizeWH(1, 28).Bg(uiBorder).Mx(4) }
-
 // tb returns the translated toolbar caption for key.
 func tb(key string) string { return i18n.T("ui.toolbar." + key) }
-
-func (ws *Workspace) sidePanel() *gpui.Div {
-	d := ws.session.Drawing()
-	layers := gpui.NewDiv().FlexCol().Gap(2)
-	for _, l := range d.Layers() {
-		l := l
-		swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).Bg(gpuiColor(render.ACI(l.Color))).Tooltip(i18n.T("ui.layers.swatch_tip", l.Color))
-		name := gpui.NewText(l.Name).Flex1()
-		if l.Name == d.CurrentLayer {
-			name.FontWeight(700).TextColor(uiOn)
-		}
-		state := i18n.T("ui.layers.on")
-		stateCol := uiText
-		if l.Off {
-			state, stateCol = i18n.T("ui.layers.off"), uiMuted
-		}
-		if l.Frozen {
-			state, stateCol = i18n.T("ui.layers.frozen"), uiMuted
-		}
-		vis := gpui.NewDiv().ID("layer-vis-" + l.Name).Px_(6).Rounded(3).Bg(uiPanelAlt).Tooltip(i18n.T("ui.layers.visibility_tip")).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-				l.Off = !l.Off
-				w.Refresh()
-			}).
-			Child(gpui.NewText(state).TextColor(stateCol))
-		layers.Child(gpui.NewDiv().ID("layer-"+l.Name).FlexRow().ItemsCenter().Gap(8).Px_(6).Py_(4).Rounded(4).Tooltip(i18n.T("ui.layers.current_tip")).
-			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-				d.CurrentLayer = l.Name
-				w.Refresh()
-			}).
-			Child(swatch, name, vis))
-	}
-	props := gpui.NewDiv().FlexCol().Gap(4)
-	sel := ws.session.Selection()
-	if sel.Len() == 0 {
-		props.Child(gpui.NewText(i18n.T("ui.props.none")).TextColor(uiMuted))
-	} else {
-		counts := map[string]int{}
-		var order []string
-		for _, h := range sel.Handles() {
-			if e := d.Entity(h); e != nil {
-				if counts[e.Class()] == 0 {
-					order = append(order, e.Class())
-				}
-				counts[e.Class()]++
-			}
-		}
-		props.Child(gpui.NewText(i18n.Plural("ui.props.selected", sel.Len())).FontWeight(700))
-		for _, c := range order {
-			props.Child(gpui.NewText(fmt.Sprintf("%s × %d", c, counts[c])).TextColor(uiMuted))
-		}
-		if sel.Len() == 1 {
-			e := d.Entity(sel.Handles()[0])
-			props.Child(gpui.NewText(i18n.T("ui.props.layer", e.Common().Layer)).TextColor(uiMuted),
-				gpui.NewText(i18n.T("ui.props.handle", e.Handle().String())).TextColor(uiMuted))
-		}
-	}
-	heading := func(s string) *gpui.Text {
-		return gpui.NewText(s).FontWeight(700).TextSize(11).TextColor(uiMuted)
-	}
-	return gpui.NewDiv().FlexCol().SizeW(210).Gap(8).P(10).Bg(uiPanel).
-		Child(heading(i18n.T("ui.panel.layers")), layers, heading(i18n.T("ui.panel.properties")), props)
-}
-
-func (ws *Workspace) commandArea(cmdline gpui.IntoElement) *gpui.Div {
-	hist := ws.session.History()
-	lines := gpui.NewDiv().FlexCol().Px_(10).Pt(4)
-	for i := max(0, len(hist)-historyLines); i < len(hist); i++ {
-		lines.Child(gpui.NewText(hist[i]).TextColor(uiMuted))
-	}
-	for i := len(hist); i < historyLines; i++ {
-		lines.Child(gpui.NewText(" "))
-	}
-	return gpui.NewDiv().FlexCol().Bg(uiPanel).Child(
-		lines,
-		gpui.NewDiv().FlexRow().ItemsCenter().Gap(8).Px_(10).Py_(6).Child(
-			gpui.NewText(ws.session.Prompt()).FontWeight(700).FlexShrink(0),
-			gpui.NewDiv().Flex1().FlexCol().Child(cmdline),
-		),
-	)
-}
-
-func (ws *Workspace) statusBar() *gpui.Div {
-	s := ws.session
-	cur := s.Cursor()
-	coords := "—"
-	if ws.pointerOnCanvas() {
-		coords = fmt.Sprintf("%s, %s", cmdsys.FormatNumber(cur.X), cmdsys.FormatNumber(cur.Y))
-	}
-	flag := func(id, label, tip string, icon icons.Name, on bool, f func()) *gpui.Div {
-		c := uiMuted
-		if on {
-			c = uiOn
-		}
-		return gpui.NewDiv().ID("status-"+id).FlexRow().ItemsCenter().Gap(4).Px_(8).Py_(2).Rounded(3).Tooltip(tip).
-			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(); w.Refresh() }).
-			Child(NewIcon(icon, 14, c), gpui.NewText(label).FontWeight(700).TextColor(c))
-	}
-	// The right group wraps below the flags when the window is too narrow
-	// for both, rather than squeezing the summary.
-	right := gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).FlexShrink(0).MlAuto().Child(
-		ws.modifiedMark(),
-		ws.zoomControls(),
-		gpui.NewText(i18n.T("ui.status.summary", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted).FlexShrink(0),
-	)
-	return gpui.NewDiv().FlexRow().FlexWrap().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
-		gpui.NewDiv().SizeW(170).FlexShrink(0).Tooltip(i18n.T("ui.status.coords_tip")).Child(gpui.NewText(coords)),
-		flag("grid", i18n.T("ui.status.grid"), i18n.T("ui.status.grid_tip"), icons.ViewGrid, s.Grid(), func() { s.SetGrid(!s.Grid()) }),
-		flag("snap", i18n.T("ui.status.osnap"), i18n.T("ui.status.osnap_tip"), icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
-		flag("ortho", i18n.T("ui.status.ortho"), i18n.T("ui.status.ortho_tip"), icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
-		right,
-	)
-}
-
-// modifiedMark is the status bar's "unsaved changes" star: empty while the drawing is clean.
-func (ws *Workspace) modifiedMark() *gpui.Div {
-	d := gpui.NewDiv().ID("status-modified")
-	if ws.session.Dirty() {
-		d.Tooltip(i18n.T("ui.status.modified_tip")).Child(gpui.NewText("*").FontWeight(700).TextColor(uiOn))
-	}
-	return d
-}
 
 func gpuiColor(c render.Color) gpui.Rgba { return gpui.RgbaOf(c.R, c.G, c.B, c.A) }
 

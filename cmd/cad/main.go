@@ -122,6 +122,12 @@ func main() {
 		}
 	}
 	ws.Brand = brandFromEnv()
+	if *png != "" {
+		// CADLITE_THEME picks the theme of a -png render, which reads no settings file.
+		if t, ok := ui.ThemeByName(appenv.Get("THEME")); ok {
+			ui.ApplyTheme(t)
+		}
+	}
 	if *agent != "" || *agentCmd != "" {
 		h := agentmanager.Harness(*agent)
 		switch h {

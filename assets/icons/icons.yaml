@@ -114,6 +114,9 @@ categories:
     view-zoom-window:
       goal: zoom into a window the reader picks
       keywords: [zoom window, magnifier, window, search]
+    view-fit:
+      goal: four corner brackets framing the view, the drawing fills the window
+      keywords: [fit, frame, extents, maximize, corners, fullscreen]
     view-pan:
       goal: slide the view around without changing the drawing
       source: adopted:hand
@@ -202,3 +205,30 @@ categories:
       goal: open the settings panel
       source: custom
       keywords: [settings, preferences, options, gear, cog, theme]
+    app-add:
+      goal: add one more of something, a plus
+      keywords: [add, plus, new, create, zoom in]
+    app-remove:
+      goal: take one away or make less, a minus
+      keywords: [remove, minus, less, zoom out]
+    app-agent:
+      goal: talk to the AI agent, a speech bubble with two eyes
+      keywords: [agent, ai, chat, assistant, bubble, message]
+    app-warning:
+      goal: something needs attention, a triangle with an exclamation mark
+      keywords: [warning, alert, caution, attention, problem]
+    app-history:
+      goal: what was done earlier, a clock
+      keywords: [history, recent, clock, time, recall]
+    app-prompt:
+      goal: the command line prompt, a chevron over an underscore
+      keywords: [prompt, command line, terminal, console]
+    app-chevron-right:
+      goal: collapse or move on to the right, a single chevron
+      keywords: [chevron, arrow, collapse, next, right]
+    app-send:
+      goal: send what was typed, an arrow pointing right
+      keywords: [send, submit, arrow, go, enter]
+    app-key-enter:
+      goal: the Enter key, an arrow that turns back to the left
+      keywords: [enter, return, key, keycap, newline]

@@ -57,6 +57,8 @@ type Theme struct {
 	OK, Warn, Err gpui.Rgba
 	// Backdrop dims the window behind a modal panel.
 	Backdrop gpui.Rgba
+	// Primary fills the main call-to-action button (Send) and OnPrimary is the text on it.
+	Primary, OnPrimary gpui.Rgba
 }
 
 // Dark reports whether the canvas is dark, which decides how ACI 7 is drawn.
@@ -99,6 +101,8 @@ var (
 		Warn:      gpui.RgbaOf(235, 175, 60, 255),
 		Err:       gpui.RgbaOf(235, 90, 90, 255),
 		Backdrop:  gpui.RgbaOf(8, 10, 14, 150),
+		Primary:   gpui.RgbaOf(47, 123, 246, 255),
+		OnPrimary: gpui.RgbaOf(255, 255, 255, 255),
 	}
 	themeLight = Theme{
 		Name: "light", Label: "Light",
@@ -129,6 +133,8 @@ var (
 		Warn:      gpui.RgbaOf(176, 104, 0, 255),
 		Err:       gpui.RgbaOf(200, 48, 48, 255),
 		Backdrop:  gpui.RgbaOf(20, 26, 34, 110),
+		Primary:   gpui.RgbaOf(47, 123, 246, 255),
+		OnPrimary: gpui.RgbaOf(255, 255, 255, 255),
 	}
 	themeClassic = Theme{
 		Name: "classic", Label: "Classic",
@@ -159,6 +165,8 @@ var (
 		Warn:      gpui.RgbaOf(240, 190, 70, 255),
 		Err:       gpui.RgbaOf(245, 110, 110, 255),
 		Backdrop:  gpui.RgbaOf(0, 0, 0, 150),
+		Primary:   gpui.RgbaOf(50, 110, 215, 255),
+		OnPrimary: gpui.RgbaOf(255, 255, 255, 255),
 	}
 	themeHighContrast = Theme{
 		Name: "high-contrast", Label: "High contrast",
@@ -189,6 +197,8 @@ var (
 		Warn:      gpui.RgbaOf(255, 204, 0, 255),
 		Err:       gpui.RgbaOf(255, 96, 96, 255),
 		Backdrop:  gpui.RgbaOf(0, 0, 0, 190),
+		Primary:   gpui.RgbaOf(0, 90, 200, 255),
+		OnPrimary: gpui.RgbaOf(255, 255, 255, 255),
 	}
 
 	themes  = []Theme{themeDark, themeLight, themeClassic, themeHighContrast}
@@ -224,6 +234,7 @@ func ApplyTheme(t Theme) {
 	uiBg, uiPanel, uiPanelAlt, uiBorder = t.Bg, t.Panel, t.PanelAlt, t.Border
 	uiText, uiMuted, uiAccent, uiOn = t.Text, t.Muted, t.Accent, t.On
 	uiField, uiSelect, uiOK, uiWarn, uiErr, uiBackdrop = t.Field, t.Select, t.OK, t.Warn, t.Err, t.Backdrop
+	uiPrimary, uiOnPrimary = t.Primary, t.OnPrimary
 	restyleFields()
 }
 

@@ -43,7 +43,7 @@ therefore do not jitter: the narrowed values are always viewport-sized.
 
 | Kind | Draws |
 |---|---|
-| `ItemPolyline` | `Points` stroked as a polyline of width `Weight` (0 is a one-device-pixel hairline), optionally `Closed` |
+| `ItemPolyline` | `Points` stroked as a polyline of width `Weight` (`Builder.Lineweights`, the LWT toggle, widens it to the layer's lineweight) (0 is a one-device-pixel hairline), optionally `Closed` |
 | `ItemRect` | The axis-aligned box spanned by `Points[0]` and `Points[1]`, filled with `Color` and outlined in `Outline` |
 
 Points are model space and pre-tessellated; `Owner` names the entity an item draws, 0 for overlays.

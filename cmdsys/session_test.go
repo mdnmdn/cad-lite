@@ -32,3 +32,19 @@ func TestHistoryTotalSurvivesTrimming(t *testing.T) {
 		t.Fatalf("history len = %d, want %d", len(s.History()), cmdsys.HistoryLimit)
 	}
 }
+
+func TestRunCountAndLastCommandFollowStartedCommands(t *testing.T) {
+	v := render.DefaultView(800, 600)
+	s := cmdsys.NewSession(doc.New(), &v, commands.NewRegistry())
+	if s.RunCount() != 0 || s.LastCommand() != "" {
+		t.Fatalf("fresh session: %d %q", s.RunCount(), s.LastCommand())
+	}
+	s.Submit("line")
+	s.Escape()
+	s.Submit("line")
+	s.Escape()
+	s.Submit("nosuchcommand")
+	if s.RunCount() != 2 || s.LastCommand() != "LINE" {
+		t.Fatalf("after two LINE and an unknown word: %d %q", s.RunCount(), s.LastCommand())
+	}
+}

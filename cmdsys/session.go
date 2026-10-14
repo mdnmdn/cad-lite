@@ -32,6 +32,7 @@ type Session struct {
 	active  Command
 	prompt  *Prompt
 	last    string
+	runs    int
 	history []string
 	printed int
 
@@ -214,6 +215,13 @@ func (s *Session) Active() string {
 	return s.active.Name()
 }
 
+// LastCommand returns the name of the command most recently started, or "".
+func (s *Session) LastCommand() string { return s.last }
+
+// RunCount returns how many commands the session has started; the difference of two readings
+// says whether something ran in between, even the same command twice.
+func (s *Session) RunCount() int { return s.runs }
+
 // Prompt returns the current prompt text: the active command's prompt, or
 // "Command:" when idle.
 func (s *Session) Prompt() string {
@@ -260,6 +268,7 @@ func (s *Session) Run(name string) bool {
 	t := s.Translator()
 	s.print(t.T("session.command_echo", strings.ToUpper(t.CommandName(cmd.Name()))))
 	s.last = cmd.Name()
+	s.runs++
 	s.active = cmd
 	var p *Prompt
 	s.dispatching = true

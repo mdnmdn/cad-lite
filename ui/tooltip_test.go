@@ -41,67 +41,71 @@ func (r *tipRig) hover(x, y gpui.Pixels, wait time.Duration) {
 	}
 }
 
-// bubble reports whether the themed tooltip bubble is in the scene: a
-// tooltip-sized quad with the theme's border colour and a width no button has.
-func (r *tipRig) bubble() bool {
+// borders is the set of boxes in the scene drawn with the theme's border colour.
+func (r *tipRig) borders() map[gpui.Bounds]bool {
 	th := ui.CurrentTheme()
+	out := map[gpui.Bounds]bool{}
 	for _, q := range r.hw.Window().Scene().Quads {
-		if q.BorderColor == th.Border && q.Bounds.Size.W > 150 && q.Bounds.Size.H < 80 {
+		if q.BorderColor == th.Border {
+			out[q.Bounds] = true
+		}
+	}
+	return out
+}
+
+// bubbleSince reports whether a tooltip bubble (a new bordered box, more than 60 px wide) is in
+// the scene that base, taken with the pointer parked, did not hold.
+func (r *tipRig) bubbleSince(base map[gpui.Bounds]bool) bool {
+	for b := range r.borders() {
+		if !base[b] && b.Size.W > 60 {
 			return true
 		}
 	}
 	return false
 }
 
-// centre returns the centre of the toolbar button with the given id.
+// centre returns the centre of the element with the given id.
 func (r *tipRig) centre(id string) (gpui.Pixels, gpui.Pixels) {
-	b, ok := (&tbRig{t: r.t, hw: r.hw}).bounds(id)
+	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere(id)
 	if !ok {
 		r.t.Fatalf("%s not found", id)
 	}
 	return gpui.Pixels((b.x0 + b.x1) / 2), gpui.Pixels((b.y0 + b.y1) / 2)
 }
 
-func TestToolbarAndStatusTooltipsAppearAfterDelay(t *testing.T) {
+func TestControlTooltipsAppearAfterDelay(t *testing.T) {
 	r := openTip(t)
-	for _, c := range []struct {
-		name string
-		x, y gpui.Pixels
-	}{
-		{"line button", 96, 17},
-		{"mirror button", -1, -1},
-		{"settings button", -2, -2},
-		{"grid flag", 228, 786},
-		{"osnap flag", 300, 786},
-	} {
-		switch c.x {
-		case -1:
-			c.x, c.y = r.centre("tool-mirror")
-		case -2:
-			c.x, c.y = r.centre("tool-settings")
-		}
+	for _, id := range []string{"tool-line", "tool-mirror", "tool-dist", "tool-open", "tool-save", "tool-undo", "tool-agent", "tool-settings",
+		"doc-chip", "viewport-label", "canvas-zoom-in", "canvas-zoom-out", "canvas-zoom-fit", "layer-add", "cmd-recent", "cmd-handle",
+		"status-tab-model", "status-tab-layout1", "status-coords", "status-grid", "status-snapgrid", "status-ortho", "status-polar",
+		"status-snap", "status-lwt", "status-model", "status-units"} {
+		x, y := r.centre(id)
 		r.hover(5, 400, 600*time.Millisecond) // park the pointer on the canvas
-		r.hover(c.x, c.y, 300*time.Millisecond)
-		if r.bubble() {
-			t.Errorf("%s: tooltip before the delay", c.name)
+		base := r.borders()
+		r.hover(x, y, 300*time.Millisecond)
+		if r.bubbleSince(base) {
+			t.Errorf("%s: tooltip before the delay", id)
 		}
 		if err := r.p.Advance(300 * time.Millisecond); err != nil { // resting: no new move
 			t.Fatal(err)
 		}
-		if !r.bubble() {
-			t.Errorf("%s: no tooltip after 600 ms", c.name)
+		if !r.bubbleSince(base) {
+			t.Errorf("%s: no tooltip after 600 ms", id)
 		}
 	}
 }
 
 func TestTooltipHidesOnClick(t *testing.T) {
 	r := openTip(t)
-	r.hover(96, 17, 600*time.Millisecond)
-	if !r.bubble() {
+	x, y := r.centre("tool-line")
+	r.hover(5, 400, 600*time.Millisecond)
+	base := r.borders()
+	r.hover(x, y, 600*time.Millisecond)
+	if !r.bubbleSince(base) {
 		t.Fatal("no tooltip after 600 ms")
 	}
-	r.hw.Dispatch(gpui.MouseDownEvent{Position: gpui.Point{X: 96, Y: 17}, Button: gpui.MouseLeft, ClickCount: 1})
-	if r.bubble() {
+	r.hw.Dispatch(gpui.MouseDownEvent{Position: gpui.Point{X: x, Y: y}, Button: gpui.MouseLeft, ClickCount: 1})
+	if r.bubbleSince(base) {
 		t.Fatal("tooltip still shown after a click")
 	}
 }

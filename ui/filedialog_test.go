@@ -290,6 +290,8 @@ func TestSaveAfterDWGShowsTheDialogWithADXFName(t *testing.T) {
 	if h.ws.Session().FilePath() != src {
 		t.Fatalf("OPEN did not load the DWG: path %q", h.ws.Session().FilePath())
 	}
+	h.hw.Window().Refresh() // the document chip took the file's name, which moves the buttons after it
+	h.hw.Pixels()
 	h.clickID("tool-save")
 	h.answered(fd)
 	if fd.saves != 1 || fd.defaultName != "sample_AC1015.dxf" {

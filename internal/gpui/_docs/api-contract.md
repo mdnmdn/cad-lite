@@ -1971,7 +1971,10 @@ func DefaultFontPath() string
 const NoSystemFontsEnv = "GPUI_NO_SYSTEM_FONTS"
 // Face resolves family by name against the system font directories (file-name
 // match, regular and bold files, cached; generic names "monospace", "serif",
-// "sans-serif"); unknown or "" families use the default font.
+// "sans-serif"); unknown or "" families use the default font, except the
+// generic "monospace" and "ui-monospace", which resolve to the bundled Go Mono
+// and Go Mono Bold (golang.org/x/image/font/gofont) when no system monospace
+// font is found or system fonts are disabled.
 func (m *FontManager) Face(family string, size float32, weight int) (*Font, error)
 // Fallback returns a face (same size and weight) from a system fallback font
 // that has a glyph for r, or nil when none does.

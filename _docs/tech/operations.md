@@ -83,6 +83,8 @@ A render in Italian takes the language from the environment (`-png` does not rea
 LANG=it_IT.UTF-8 go run ./cmd/cad -png _tmp/it.png
 ```
 
+`CADLITE_THEME=dark|light|classic|high-contrast` picks the theme of a `-png` render the same way.
+
 A render that shows an active command with its snap marker:
 
 ```

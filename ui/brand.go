@@ -8,19 +8,20 @@ import (
 	"cad-lite/internal/gpui"
 )
 
-// Brand selects what stands at the left end of the toolbar's top row.
+// Brand selects what stands at the left end of the title bar.
 type Brand int
 
 const (
-	// BrandText shows the "Cad-lite" wordmark; the zero value, used on Linux and the web.
+	// BrandText shows the application icon and the "Cad-lite" wordmark; the zero value, used on
+	// Linux and the web.
 	BrandText Brand = iota
-	// BrandIcon shows the application icon in place of the wordmark (macOS).
+	// BrandIcon shows the application icon alone, in place of the wordmark (macOS).
 	BrandIcon
 	// BrandNone shows nothing and leaves no gap (Windows, whose window frame carries icon and title).
 	BrandNone
 )
 
-// brandIconSize is the logo edge in logical pixels; it fits the 40px toolbar row, and the 32 and
+// brandIconSize is the logo edge in logical pixels; it fits the title bar, and the 32 and
 // 64 px window icons are drawn 1:1 at UI scale 1 and 2.
 const brandIconSize = 32
 
@@ -49,15 +50,17 @@ func ParseBrand(s string) (b Brand, ok bool) {
 	return BrandText, false
 }
 
-// brand returns the toolbar's leading element, or nil for BrandNone.
+// brand returns the title bar's leading element, or nil for BrandNone.
 func (ws *Workspace) brand() gpui.IntoElement {
 	switch ws.Brand {
 	case BrandNone:
 		return nil
 	case BrandIcon:
-		return gpui.NewDiv().Pr(10).Child(newBrandIcon(brandIconSize))
+		return newBrandIcon(brandIconSize)
 	}
-	return gpui.NewText("Cad-lite").FontWeight(700).TextColor(uiOn).Pr(10)
+	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(10).FlexShrink(0).Child(
+		newBrandIcon(brandIconSize),
+		gpui.NewText("Cad-lite").FontWeight(700).TextSize(fontTitle+1).TextColor(uiText))
 }
 
 // brandIcon paints the full-colour application icon. gpui has no colour image primitive, so the

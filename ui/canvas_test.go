@@ -136,7 +136,7 @@ func TestDoubleMiddleClickZoomsExtents(t *testing.T) {
 	v := h.ws.View()
 	p := gpui.Point{X: 300, Y: 250}
 	h.wheel(gpui.ScrollWheelEvent{Position: p, DeltaY: -notch * 8})
-	h.wheel(gpui.ScrollWheelEvent{DeltaX: 400, Precise: true})
+	h.wheel(gpui.ScrollWheelEvent{DeltaX: 3000, Precise: true})
 	box := h.ws.Session().Drawing().Extents()
 	vis := v.Visible()
 	if vis.Min.X <= box.Min.X && vis.Max.X >= box.Max.X && vis.Min.Y <= box.Min.Y && vis.Max.Y >= box.Max.Y {

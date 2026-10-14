@@ -7,7 +7,7 @@ summary: The command model, the session state machine, typed-input parsing, the 
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
+code_anchors: [cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -203,14 +203,18 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 ```
 pointer (window px) → ui: canvas-local px → View.ToModel → model point
   → Session.Hover: pending typed override (override.go), else running object snap (if on),
-                   else the snap grid (SNAPMODE), then ortho (if on and the prompt has a Base)   → Session.Cursor
+                   else the snap grid (SNAPMODE), then ortho, or polar tracking, (if on and the prompt has a Base)   → Session.Cursor
   → Session.Click: point prompt → the cursor as a point
                    distance / angle prompt with a Base → measured from the Base
                    point prompt answers carry Input.Shift when Shift is held
                    selection prompt or idle → pick (Shift removes; plain click removes in Remove mode)
 ```
 
-Object snap wins over ortho. Typed coordinates are never snapped or constrained.
+Object snap wins over ortho and polar tracking. Typed coordinates are never snapped or constrained. Polar
+tracking (`polar.go`, `Session.Polar`, `SetPolar`) locks the point onto the ray at the nearest multiple of `POLARANG`
+within 5 degrees; ortho and polar tracking exclude each other (`SetOrtho` and `SetPolar` turn the other off). `polar.go`
+also registers `POLARANG` (live, degrees, default 45), `AUTOSNAP` (live for bit 8, polar tracking; default 55, so off) and `LWDISPLAY`
+(live, the lineweight display flag the status bar's LWT toggle sets).
 
 ## Object snaps
 

@@ -7,7 +7,7 @@ summary: Every built-in command with its prompts and aliases, how selection, obj
 read_when: you are adding or changing a command, an alias, or what a click does while a command runs
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/array.go, cmdsys/commands/oops.go, cmdsys/commands/draw.go, cmdsys/commands/pline.go, cmdsys/commands/circle.go, cmdsys/commands/arc.go, cmdsys/commands/arcgeom.go, cmdsys/commands/rect.go, cmdsys/commands/polygon.go, geom/tangent.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/matchprop.go, cmdsys/commands/props.go, cmdsys/commands/purge.go, render/viewstack.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/commands/edges.go, geom/extend_helpers.go, cmdsys/commands/select.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/cursor.go, cmdsys/commands/aids.go, cmdsys/commands/construct_corner.go]
+code_anchors: [cmdsys/polar.go, cmdsys/commands/array.go, cmdsys/commands/oops.go, cmdsys/commands/draw.go, cmdsys/commands/pline.go, cmdsys/commands/circle.go, cmdsys/commands/arc.go, cmdsys/commands/arcgeom.go, cmdsys/commands/rect.go, cmdsys/commands/polygon.go, geom/tangent.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/matchprop.go, cmdsys/commands/props.go, cmdsys/commands/purge.go, render/viewstack.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/commands/edges.go, geom/extend_helpers.go, cmdsys/commands/select.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/cursor.go, cmdsys/commands/aids.go, cmdsys/commands/construct_corner.go]
 depends_on: [tech-command-system, tech-document-model]
 review_cycle: monthly
 ---
@@ -129,6 +129,12 @@ picks or drags boxes and presses Enter.
   snapping the cursor to the `SNAPUNIT` grid (F9), applied after object snaps and before ortho.
 - With ortho on, rubber-band points are constrained horizontal or vertical from the base point; a snap
   overrides ortho; typed coordinates are never changed.
+- **Polar tracking** (F10, the POLAR toggle; on when `AUTOSNAP` has bit 8, off by default): the rubber-band point
+  locks onto the ray through the base point at the nearest multiple of `POLARANG` (degrees from the X axis, 45 by
+  default) when its own angle is within 5 degrees of it; the point keeps its distance along the ray. Ortho and polar
+  tracking exclude each other: turning one on turns the other off. A snap overrides polar tracking like ortho. The
+  angle does not follow `ANGBASE` or `ANGDIR`.
+- `LWDISPLAY` (the LWT toggle) draws each layer at its lineweight; it starts off.
 
 ### Undo
 
@@ -141,7 +147,7 @@ changes (every committed command, undo and redo counts).
 
 - Commands registered by `commands.Register`; aliases in `commands.Aliases` (`acad.pgp` format).
 - Document: `Txn.Add`, `Txn.Modify`, `Txn.Erase`, `Drawing.Undo`, `Drawing.Redo`, the layer table.
-- Session state: the selection, `SnapOn`, `Snaps`, `Ortho`, `Aperture`, `Grid()`, `SnapGrid()`.
+- Session state: the selection, `SnapOn`, `Snaps`, `Ortho`, `Polar()`, `Aperture`, `Grid()`, `SnapGrid()`, `LineweightDisplay()`.
 
 ## Implementation
 
@@ -180,4 +186,4 @@ snap like any point click.
 - MATCHPROP; associative arrays and ARRAYPATH.
 - FILLET and CHAMFER on arcs, circles and mixed line and arc pairs (the polyline option and the two-line case exist); `OFFSETGAPTYPE`; Shift-pick for the corner (the session does not pass the modifier yet).
 - Grip editing and a properties palette.
-- Polar tracking, object snap tracking, the Extension and Apparent snaps, and PER/TAN deferred at a first point.
+- Object snap tracking, polar additional angles and a tracking line drawn on the canvas, the Extension and Apparent snaps, and PER/TAN deferred at a first point.

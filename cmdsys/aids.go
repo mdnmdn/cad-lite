@@ -17,6 +17,11 @@ type aidState struct {
 	grid, snapGrid     bool
 	gridUnit, snapUnit geom.Vec2
 	ov                 overrideState
+	// polar, polarAng, autosnap and lwDisplay are polar.go's: polar tracking, its increment in
+	// degrees, the AUTOSNAP bits and the LWT display flag.
+	polar, lwDisplay bool
+	polarAng         float64
+	autosnap         int
 }
 
 func init() { RegisterVarGroup(aidVars) }

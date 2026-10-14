@@ -1,6 +1,6 @@
-# Toolbar Circle button, then centre and a point on the circle.
+# Ribbon Circle button, then centre and a point on the circle.
 app -demo
-click 275 22
+click 165 95
 click 300 300
 click 340 300
 shot circle

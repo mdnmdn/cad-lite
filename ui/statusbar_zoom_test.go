@@ -15,7 +15,7 @@ func openZoom(t *testing.T) (*Workspace, *gpui.HeadlessWindow) {
 	p := gpui.NewHeadlessPlatform()
 	var hw *gpui.HeadlessWindow
 	if err := p.Run(func(cx *gpui.App) {
-		if err := cx.OpenWindow(gpui.WindowOptions{Width: 1200, Height: 700}, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
+		if err := cx.OpenWindow(gpui.WindowOptions{Width: 1300, Height: 800}, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
 			t.Fatal(err)
 		}
 		hw = p.Windows()[0]

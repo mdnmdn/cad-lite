@@ -70,7 +70,9 @@ func (m *FontManager) Fallback(r rune, size float32, weight int) *Font    // fir
 - `Face` looks `family` up by file name in the system font directories; an
   empty, generic (`sans-serif`, `system-ui`) or unknown family resolves to the
   default font; `monospace`, `ui-monospace`, `serif` and `cursive` map to
-  ordered candidate lists. Weight 600 and above uses a real bold file when one
+  ordered candidate lists; when no candidate is installed (or system fonts are
+  disabled) `monospace` and `ui-monospace` resolve to the bundled Go Mono and
+  Go Mono Bold. Weight 600 and above uses a real bold file when one
   is found, otherwise the regular outlines are emboldened synthetically.
   Repeated calls with the same arguments return the identical pointer.
 - `Fallback` loads fallback fonts lazily; colour emoji fonts are not

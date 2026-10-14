@@ -23,7 +23,7 @@ behaviour and the default agent and where agents are found. Changes show at once
 
 ## Behaviour
 
-- **Opening.** The gear `Settings` button at the right end of the toolbar, **Ctrl+,** (**Cmd+,** on
+- **Opening.** The gear `Settings` button at the right end of the title bar, **Ctrl+,** (**Cmd+,** on
   macOS) and the `OPTIONS` command (alias `OP`) open and close it. The panel is a card centred over a dimmed backdrop;
   **Escape**, the `Close` button and a click on the backdrop close it. While it is open the keyboard
   belongs to it and nothing under the backdrop receives pointer input.

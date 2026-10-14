@@ -22,7 +22,7 @@ func open(t *testing.T) *harness {
 	var hw *gpui.HeadlessWindow
 	if err := p.Run(func(cx *gpui.App) {
 		cx.Keymap().AddBindings(ui.Bindings()...)
-		if err := cx.OpenWindow(gpui.WindowOptions{Width: 900, Height: 560}, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
+		if err := cx.OpenWindow(gpui.WindowOptions{Width: 1280, Height: 800}, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
 			t.Fatal(err)
 		}
 		hw = p.Windows()[0]

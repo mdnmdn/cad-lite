@@ -23,9 +23,9 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 ## Behaviour
 
 - **On demand.** Nothing agent related runs or exists until the user asks: no panel object, no MCP
-  server, no process, no timer and no files. Three things ask: the `Agent` button at the right end of
-  the toolbar, **F2**, and the `AI` command (alias `AGENT`). The first two show and hide the panel, which
-  docks to the right of the layers panel. `AI` prompts `Ask the agent`, which takes free text (Space
+  server, no process, no timer and no files. Three things ask: the `Agent` icon button at the right end of
+  the title bar, **F2**, and the `AI` command (alias `AGENT`). The first two show and hide the panel, which
+  docks to the right of the layers panel and runs from under the ribbon to the status bar. `AI` prompts `Ask the agent`, which takes free text (Space
   does not submit it): text opens the panel and sends it to the active tab, starting a session if the
   tab has none; an empty answer toggles the panel. A prompt sent while the tab's agent works is refused
   with a note. Hiding the panel leaves running sessions alive; a dot on the `Agent` button shows that
