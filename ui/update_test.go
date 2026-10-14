@@ -43,7 +43,7 @@ func newUpdRig(t *testing.T, tag string) *updRig {
 	r := &updRig{archive: buf.Bytes()}
 	name := "cad-lite-" + strings.TrimPrefix(tag, "v") + "-linux-amd64.tar.gz"
 	mux := http.NewServeMux()
-	mux.HandleFunc("/repos/mdnmdn/go-draw/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/repos/mdnmdn/cad-lite/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
 		r.hits.Add(1)
 		json.NewEncoder(w).Encode(map[string]any{"tag_name": tag, "html_url": r.srv.URL + "/page",
 			"body": "## What's new\n- **Faster** zoom\n- Fixed `LINE`\n",

@@ -106,7 +106,7 @@ type fakeGitHub struct {
 func newFakeGitHub(t *testing.T, tag string, assets map[string][]byte) *fakeGitHub {
 	f := &fakeGitHub{tag: tag, assets: assets}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/repos/mdnmdn/go-draw/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/repos/mdnmdn/cad-lite/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		f.hits.Add(1)
 		if r.Header.Get("User-Agent") == "" {
 			http.Error(w, "no UA", 403)

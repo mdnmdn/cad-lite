@@ -30,10 +30,8 @@ import (
 const (
 	// DefaultBaseURL is the GitHub REST API root.
 	DefaultBaseURL = "https://api.github.com"
-	// DefaultRepo is the repository releases are read from. It is still the
-	// repository's name from before the rename to Cad-lite: change it when the
-	// GitHub repository is renamed.
-	DefaultRepo = "mdnmdn/go-draw"
+	// DefaultRepo is the repository releases are read from.
+	DefaultRepo = "mdnmdn/cad-lite"
 	// EnvDisable names the environment variable (read through appenv, so the
 	// legacy GODRAW_NO_UPDATE works too) that turns updates off when it is "1".
 	EnvDisable = "NO_UPDATE"

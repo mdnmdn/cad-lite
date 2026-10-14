@@ -16,8 +16,8 @@ review_cycle: monthly
 
 ## Purpose
 
-Cad-lite keeps itself current from the GitHub releases of `mdnmdn/go-draw` (the repository keeps its
-old name; `updater.DefaultRepo` is the one place to change when it is renamed), on a single stream (the
+Cad-lite keeps itself current from the GitHub releases of `mdnmdn/cad-lite` (`updater.DefaultRepo`; GitHub
+redirects the old `mdnmdn/go-draw` name, so builds released before the rename still find them), on a single stream (the
 latest published release; there are no channels). It looks for a new release in the background and
 on demand. When one exists the user presses **Update** once, and the download, the integrity check
 and the installation follow without further action; a dialog then asks before the restart.
@@ -70,7 +70,7 @@ Package `updater`: `Client` (`NewClient`, `Check`, `CheckForce`, `Download`, `Up
 ## Implementation
 
 `updater` is stdlib only and never imports the UI. `Client.Check` reads
-`/repos/mdnmdn/go-draw/releases/latest` (base URL, repository, platform and install path are fields,
+`/repos/mdnmdn/cad-lite/releases/latest` (base URL, repository, platform and install path are fields,
 which is how the tests drive it) and compares versions with `ParseVersion` and `Version.Compare`.
 `Client.Update` calls `Download` (checksum first, then the archive into a temporary folder, hashing
 while it streams), `Install` (extract into a staging folder beside the target, then `swap`) and
