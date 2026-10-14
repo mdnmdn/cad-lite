@@ -1,0 +1,695 @@
+# Catalogo italiano di go-draw. Stesse chiavi di en.toml, stessi segnaposto.
+# Terminologia: AutoCAD italiano ("Specificare primo punto", "Selezionare oggetti", ...).
+# Le voci contrassegnate "(verify)" in i18n/MIGRATION.md vanno riviste da un madrelingua CAD.
+
+[common]
+yes = "Sì"
+no = "No"
+
+[session]
+command_prompt = "Comando:"
+command_echo = "Comando: %s"
+unknown_command = "Comando \"%s\" sconosciuto. Premere F1 per la guida."
+agent_forbidden = "%s non è disponibile per gli agenti."
+cancel = "*Annulla*"
+internal_error = "Errore: %s non riuscito: %v."
+fallback_command_name = "comando"
+
+[input]
+or = "o"
+
+[input.err]
+invalid_point = "Punto non valido."
+invalid_value = "Valore non valido."
+no_base = "Nessun punto base per l'input relativo."
+invalid_input = "Input non valido."
+
+[snap]
+endpoint = "Punto finale"
+midpoint = "Punto medio"
+center = "Centro"
+quadrant = "Quadrante"
+intersection = "Intersezione"
+nearest = "Vicino"
+generic = "Snap"
+
+[kw]
+close = "Chiudi"
+undo = "Annulla"
+yes = "Sì|Si"
+no = "No"
+# (verify)
+through = "Passaggio"
+exit = "Esci"
+radius = "Raggio"
+distance = "Distanza"
+diameter = "Diametro"
+extents = "Estensioni"
+window = "Finestra"
+object = "Oggetto"
+angle = "Angolo"
+area = "ARea"
+# (verify)
+cutting_edges = "Bordi di Taglio"
+first_point = "Primo punto"
+# (verify)
+multiple_points = "Più punti"
+
+[cmd.line.prompt]
+first_point = "Specificare primo punto"
+next_point = "Specificare punto successivo"
+
+[cmd.pline.prompt]
+start_point = "Specificare punto iniziale"
+next_point = "Specificare punto successivo"
+
+[cmd.circle.prompt]
+center = "Specificare punto centrale del cerchio"
+diameter = "Specificare diametro del cerchio"
+radius = "Specificare raggio del cerchio"
+
+[cmd.common.msg]
+positive = "Il valore deve essere positivo e diverso da zero."
+found_one = "%d trovato"
+found_other = "%d trovati"
+no_object_found = "Nessun oggetto trovato."
+no_object_at_point = "Nessun oggetto trovato in quel punto."
+
+[cmd.arc.prompt]
+start_point = "Specificare punto iniziale dell'arco"
+second_point = "Specificare secondo punto dell'arco"
+end_point = "Specificare punto finale dell'arco"
+
+[cmd.arc.msg]
+collinear = "I punti sono allineati; nessun arco disegnato."
+
+[cmd.rectang.prompt]
+first_corner = "Specificare primo angolo"
+other_corner = "Specificare angolo opposto"
+
+[cmd.common.prompt]
+select_objects = "Selezionare oggetti"
+select_object = "Selezionare oggetto"
+
+[cmd.modify.prompt]
+base_point = "Specificare punto base"
+second_point = "Specificare secondo punto"
+scale_factor = "Specificare fattore di scala"
+rotation_angle = "Specificare angolo di rotazione"
+
+[cmd.undo.msg]
+everything_undone = "Tutto è stato annullato."
+
+[cmd.redo.msg]
+nothing_to_redo = "Nessuna operazione da ripetere."
+
+[cmd.zoom.prompt]
+corner = "Specificare angolo della finestra"
+first_corner = "Specificare primo angolo"
+opposite_corner = "Specificare angolo opposto"
+
+[cmd.layer.prompt]
+name = "Nome del layer da rendere corrente, o nome=colore <%s>"
+
+[cmd.layer.msg]
+bad_color = "Il colore deve essere un indice colore AutoCAD da 1 a 255."
+created = "Layer %q creato."
+
+[cmd.dist.prompt]
+first_point = "Specificare primo punto"
+next_point = "Specificare punto successivo"
+second_point = "Specificare secondo punto"
+
+[cmd.dist.msg]
+total = "Distanza = %s"
+result = "Distanza = %s,  Angolo = %s°,  Delta X = %s,  Delta Y = %s"
+
+[cmd.id.prompt]
+point = "Specificare punto"
+
+[cmd.id.msg]
+result = "X = %s     Y = %s"
+
+[cmd.list.msg]
+header = "%s  Layer: %q  Handle = %s"
+line = "    da punto %s  a punto %s  Lunghezza = %s"
+circle = "    centro %s  raggio %s"
+arc = "    centro %s  raggio %s  angolo iniziale %s°  angolo finale %s°"
+polyline = "    %d vertici  chiusa: %s  lunghezza %s"
+
+[cmd.area.prompt]
+first_corner = "Specificare primo angolo"
+next_corner = "Specificare angolo successivo o premere INVIO per il totale"
+
+[cmd.area.msg]
+result = "Area = %s, Perimetro = %s"
+result_object = "Area = %s, %s = %s"
+no_area = "L'oggetto non ha area."
+
+[cmd.area.label]
+circumference = "Circonferenza"
+perimeter = "Perimetro"
+
+[cmd.radius.prompt]
+select = "Selezionare arco o cerchio"
+
+[cmd.radius.msg]
+select_arc_or_circle = "Selezionare un arco o un cerchio."
+result = "Raggio = %s, Diametro = %s"
+
+[cmd.angle.prompt]
+select = "Selezionare arco, cerchio, linea o <specificare vertice>"
+vertex = "Specificare vertice dell'angolo"
+first_endpoint = "Specificare primo punto finale dell'angolo"
+second_endpoint = "Specificare secondo punto finale dell'angolo"
+second_line = "Selezionare seconda linea"
+
+[cmd.angle.msg]
+select_object = "Selezionare un arco, un cerchio o una linea."
+select_line = "Selezionare una linea."
+result = "Angolo = %s°"
+
+[cmd.measuregeom.prompt]
+option = "Immettere un'opzione"
+
+[cmd.mirror.prompt]
+first_point = "Specificare primo punto della linea di simmetria"
+second_point = "Specificare secondo punto della linea di simmetria"
+erase_source = "Cancellare gli oggetti di origine"
+
+[cmd.mirror.msg]
+points_differ = "I due punti della linea di simmetria devono essere diversi."
+
+[cmd.offset.prompt]
+distance = "Specificare distanza di offset"
+second_point = "Specificare secondo punto"
+select = "Selezionare oggetto per l'offset"
+side = "Specificare punto sul lato dell'offset"
+through = "Specificare punto di passaggio"
+
+[cmd.offset.msg]
+positive_distance = "Richiede una distanza positiva e diversa da zero."
+nothing_found = "Nessun oggetto in quel punto."
+cannot_offset = "Impossibile eseguire l'offset di questo oggetto."
+degenerate = "L'offset avrebbe raggio nullo o negativo; nessun oggetto creato."
+through_on_object = "Il punto di passaggio giace sull'oggetto; nessun oggetto creato."
+
+[cmd.corner.prompt]
+select_first_object = "Selezionare primo oggetto"
+select_first_line = "Selezionare prima linea"
+select_second_object = "Selezionare secondo oggetto"
+select_second_line = "Selezionare seconda linea"
+fillet_radius = "Specificare raggio di raccordo"
+chamfer_d1 = "Specificare prima distanza di smusso"
+chamfer_d2 = "Specificare seconda distanza di smusso"
+
+[cmd.corner.msg]
+# (verify)
+chamfer_settings = "(modalità TAGLIA) Smusso corrente Dist1 = %s, Dist2 = %s"
+# (verify)
+fillet_settings = "Impostazioni correnti: Modalità = TAGLIA, Raggio = %s"
+non_negative = "Richiede una distanza non negativa."
+nothing_found = "Nessun oggetto in quel punto."
+supports_two_lines = "%s supporta solo due linee."
+select_different = "Selezionare una linea diversa."
+parallel = "Le linee sono parallele."
+chamfer_too_large = "Le distanze di smusso sono troppo grandi per le linee."
+radius_too_large = "Il raggio è troppo grande per le linee."
+
+[cmd.trim.prompt]
+select_object = "Selezionare oggetto da tagliare"
+select_edges = "Selezionare bordi di taglio <seleziona tutto>"
+
+[cmd.trim.msg]
+cannot_trim = "Impossibile tagliare questo oggetto."
+no_intersection = "L'oggetto non interseca un bordo."
+
+[cmd.extend.prompt]
+select_object = "Selezionare oggetto da estendere"
+
+[cmd.extend.msg]
+closed_polyline = "Impossibile estendere una polilinea chiusa."
+cannot_extend = "Impossibile estendere questo oggetto."
+no_boundary = "Nessun bordo limite nel prolungamento di quell'estremità."
+
+[cmd.break.prompt]
+second_point = "Specificare secondo punto di interruzione"
+first_point = "Specificare primo punto di interruzione"
+
+[cmd.break.msg]
+cannot_break = "Impossibile spezzare questo oggetto."
+circle_one_point = "Impossibile spezzare un cerchio in un solo punto."
+
+[cmd.join.prompt]
+select_source = "Selezionare oggetto di origine o più oggetti da unire insieme"
+select_others = "Selezionare oggetti da unire all'origine"
+
+[cmd.join.msg]
+cannot_join_source = "Impossibile unire l'oggetto di origine."
+skipped_one = "%d oggetto non può essere unito."
+skipped_other = "%d oggetti non possono essere uniti."
+joined_one = "%d oggetto unito."
+joined_other = "%d oggetti uniti."
+none_joined = "0 oggetti uniti."
+
+[cmd.explode.prompt]
+select = "Selezionare oggetti da esplodere"
+
+[cmd.explode.msg]
+refused_one = "%d oggetto non può essere esploso."
+refused_other = "%d oggetti non possono essere esplosi."
+exploded_one = "%d oggetto esploso."
+exploded_other = "%d oggetti esplosi."
+
+[cmd.file.msg]
+unavailable = "I comandi file non sono disponibili su questa piattaforma."
+save_failed = "Salvataggio non riuscito: %v"
+saved = "Salvato %s (%d oggetti)."
+open_failed = "Apertura non riuscita: %v"
+opened = "Aperto %s (%d oggetti)."
+more_warnings = "... e altri %d avvisi."
+warning = "Avviso: %s"
+
+[cmd.file.prompt]
+open_path = "Immettere il percorso del disegno da aprire"
+save_path = "Immettere il percorso in cui salvare il disegno"
+
+[cmd.ai.msg]
+unavailable = "L'agente IA non è disponibile su questa piattaforma."
+
+[cmd.ai.prompt]
+ask = "Chiedere all'agente"
+
+[dxf.warn]
+kept_unknown = "mantenute %d entità %s come oggetti sconosciuti (non visualizzate né modificabili)"
+handle_renumbered = "L'handle %[2]s di %[1]s è già in uso; rinumerato in %[3]s"
+not_written_r12 = "%s %s non scritto (la classe non esiste in R12; serve il writer più recente, backlog G2)"
+not_written_unsupported = "%s %s non scritto (non supportato dal writer R12)"
+block_not_written = "%s nel blocco %s non scritto (la classe non esiste in R12; serve il writer più recente, backlog G2)"
+
+[dxf.err]
+no_value = "dxf: riga %d: il codice di gruppo %q non ha valore"
+bad_group_code = "dxf: riga %d: codice di gruppo %q non valido (il DXF binario non è supportato)"
+no_endsec = "dxf: la sezione %q non ha ENDSEC (file troncato?)"
+
+[fileio.err]
+no_reader = "nessun lettore per i file %q"
+no_writer = "nessun writer per i file %q"
+
+[settings.warn]
+wrong_type = "%s deve essere %s, trovato %v; uso il valore predefinito"
+theme_empty = "il tema è vuoto; uso %q"
+ui_scale = "ui_scale %v è fuori intervallo o non a passo; uso %v"
+language = "la lingua %q non è tra %v; uso %q"
+wheel = "wheel %q non è tra %v; uso %q"
+out_of_range = "%s %d è fuori intervallo; uso %d"
+
+[ui.cmdline]
+placeholder = "Digitare un comando"
+
+[ui.toolbar]
+line = "Linea"
+pline = "Polilinea"
+circle = "Cerchio"
+arc = "Arco"
+# (verify)
+rect = "Rett."
+move = "Sposta"
+copy = "Copia"
+rotate = "Ruota"
+scale = "Scala"
+erase = "Cancella"
+# (verify)
+dist = "Dist."
+area = "Area"
+undo = "Annulla"
+# (verify)
+redo = "Ripeti"
+zoom = "Zoom"
+settings = "Opzioni"
+settings_tip = "Opzioni — tema, scala dell'interfaccia, ausili di disegno, lingua (Ctrl+, / OPZIONI)"
+agent = "Agente"
+agent_tip = "Agente IA — apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza (F2 / AGENTE)"
+
+[ui.panel]
+layers = "LAYER"
+properties = "PROPRIETÀ"
+
+[ui.layers]
+# (verify)
+on = "on"
+# (verify)
+off = "off"
+visibility_tip = "Visibilità layer — fare clic per mostrare o nascondere il layer"
+current_tip = "Imposta corrente — i nuovi oggetti vengono disegnati su questo layer (LAYER / LA)"
+swatch_tip = "Colore del layer (ACI %d)"
+
+[ui.props]
+none = "Nessuna selezione"
+selected_one = "%d selezionato"
+selected_other = "%d selezionati"
+layer = "Layer: %s"
+handle = "Handle: %s"
+
+[ui.status]
+coords_tip = "Posizione del cursore — unità del modello"
+grid = "GRIGLIA"
+grid_tip = "Griglia — mostra o nasconde la griglia di disegno (F7)"
+# (verify)
+osnap = "SNAP OGG."
+osnap_tip = "Snap ad oggetto — aggancia il puntatore a punti finali, medi, centri, quadranti e intersezioni (F3)"
+ortho = "ORTO"
+ortho_tip = "Orto — vincola il movimento alle direzioni orizzontale e verticale (F8)"
+summary = "Layer %s   ·   %d oggetti   ·   1 px = %s unità"
+
+[ui.agent]
+title = "AGENTE"
+new_tab = "+"
+new_tab_tip = "Nuova conversazione — apre un'altra scheda"
+close_tab_tip = "Chiude questa scheda di conversazione"
+history = "Cronologia"
+history_tip = "Cronologia — riapre una conversazione precedente di questo progetto"
+history_empty = "Nessuna conversazione precedente in questo progetto"
+history_untitled = "(vuota)"
+history_open = "aperta"
+pick_tip = "Agente — sceglie quale CLI esegue questa conversazione"
+no_cli = "Nessuna CLI di agente nel PATH (opencode, claude, codex)"
+start = "Avvia"
+start_tip = "Avvia — lancia l'agente selezionato"
+stop = "Ferma"
+stop_tip = "Ferma — termina il processo dell'agente"
+empty_hint = "Descrivi un disegno e l'agente lo realizzerà con gli stessi comandi che usi tu."
+send = "Invia"
+send_tip = "Invia — invia il messaggio all'agente (Invio)"
+cancel = "Annulla"
+cancel_tip = "Annulla — interrompe il turno corrente dell'agente"
+input_placeholder = "Chiedi all'agente"
+you = "Tu"
+thinking = "Ragionamento"
+tool_default = "uno strumento"
+permission = "Autorizzazione richiesta"
+answered = "risposto"
+plan = "Piano"
+tab_new = "Nuova"
+
+[ui.agent.status]
+starting = "avvio di %s..."
+working = "in elaborazione..."
+ready = "pronto"
+stopped = "fermato"
+
+[ui.agent.time]
+just_now = "adesso"
+minutes_ago = "%d min fa"
+hours_ago = "%d h fa"
+days_ago = "%d g fa"
+date_layout = "2/1/2006"
+
+[ui.agent.warn]
+no_agent = "Nessun agente disponibile: installare opencode, claude o codex, oppure passare -agent-cmd."
+busy = "L'agente sta ancora lavorando; attendere o annullare prima di chiedere di nuovo."
+history_unavailable = "cronologia dell'agente non disponibile: %v"
+cannot_list = "impossibile elencare le sessioni dell'agente: %v"
+cannot_load = "impossibile caricare quella sessione dell'agente: %v"
+not_saved = "la cronologia dell'agente non viene salvata: %v"
+write_failed = "scrittura della cronologia dell'agente non riuscita: %v"
+
+[ui.agent.err]
+mcp = "impossibile avviare il server MCP: %v"
+start = "impossibile avviare %s: %v"
+
+[ui.settings]
+title = "Opzioni"
+close = "Chiudi  Esc"
+close_tip = "Chiudi — chiude il pannello delle opzioni (Esc)"
+section_appearance = "ASPETTO"
+theme_tip = "Tema — applica il tema %s"
+ui_scale = "Scala interfaccia"
+ui_scale_value = "%d%%"
+ui_scale_tip = "Scala interfaccia — ingrandisce o riduce l'intera interfaccia, testo compreso (da 75 a 200 per cento)"
+ui_scale_down_tip = "Più piccola — riduce la scala dell'interfaccia del 5%"
+ui_scale_up_tip = "Più grande — aumenta la scala dell'interfaccia del 5%"
+ui_scale_reset_tip = "Ripristina — torna al 100%"
+section_drawing = "DISEGNO"
+drawing_hint = "Con cosa inizia un disegno e cosa vale da subito."
+grid = "Griglia (F7)"
+grid_tip = "Griglia — se la griglia è attiva all'avvio (F7 la attiva o disattiva subito)"
+osnap = "Snap ad oggetto (F3)"
+osnap_tip = "Snap ad oggetto — se lo snap ad oggetto è attivo all'avvio (F3 lo attiva o disattiva subito)"
+ortho = "Orto (F8)"
+ortho_tip = "Orto — se l'orto è attivo all'avvio (F8 lo attiva o disattiva subito)"
+wheel = "Rotellina del mouse"
+wheel_tip = "Rotellina del mouse — cosa fa la rotellina sul disegno"
+wheel_auto = "Auto"
+wheel_zoom = "Zoom"
+# (verify)
+wheel_pan = "Pan"
+wheel_hint_auto = "Auto: la rotellina esegue lo zoom, Maiusc esegue il pan."
+wheel_hint_zoom = "Zoom: la rotellina esegue lo zoom, Maiusc esegue il pan."
+wheel_hint_pan = "Pan: la rotellina esegue il pan, Ctrl o Cmd esegue lo zoom."
+section_language = "LINGUA"
+language = "Lingua"
+language_tip = "Lingua — lingua di menu, richieste e messaggi; i nomi dei comandi inglesi restano validi"
+language_auto = "Automatica"
+language_en = "English"
+language_it = "Italiano"
+language_hint = "Automatica segue la lingua del sistema (LC_ALL, LC_MESSAGES, LANG)."
+section_agent = "AGENTE"
+default_harness = "Agente predefinito"
+default_harness_tip = "Agente predefinito — la CLI dell'agente selezionata per prima nel pannello"
+harness_auto = "Auto"
+agent_auto_hint = "Auto sceglie il primo agente installato nel PATH."
+in_memory = "Tenute in memoria: qui non c'è una cartella di configurazione."
+saved_to = "Salvate in %s"
+reset = "Ripristina predefiniti"
+reset_tip = "Ripristina — riporta ogni opzione al valore predefinito; la dimensione della finestra resta invariata"
+
+[ui.settings.theme]
+dark = "Scuro"
+light = "Chiaro"
+classic = "Classico"
+high_contrast = "Alto contrasto"
+
+[cmd.line]
+name = "Linea"
+desc = "Disegna segmenti di retta tra i punti indicati"
+tip = "Linea — disegna segmenti di retta tra i punti indicati (LINEA / L)"
+aliases = ["LINEA"]
+
+[cmd.pline]
+name = "Polilinea"
+desc = "Disegna una catena di segmenti connessi come un unico oggetto"
+tip = "Polilinea — disegna una catena di segmenti connessi come un unico oggetto (POLILINEA / PL)"
+aliases = ["POLILINEA"]
+
+[cmd.circle]
+name = "Cerchio"
+desc = "Disegna un cerchio dal centro e dal raggio o diametro"
+tip = "Cerchio — disegna un cerchio dal centro e dal raggio o diametro (CERCHIO / C)"
+aliases = ["CERCHIO"]
+
+[cmd.arc]
+name = "Arco"
+desc = "Disegna un arco passante per tre punti"
+tip = "Arco — disegna un arco passante per tre punti (ARCO / A)"
+aliases = ["ARCO"]
+
+[cmd.rectang]
+name = "Rettangolo"
+desc = "Disegna un rettangolo da due angoli opposti"
+tip = "Rettangolo — disegna un rettangolo da due angoli opposti (RETTANGOLO / REC)"
+# (verify)
+aliases = ["RETTANGOLO", "RETTANG"]
+
+[cmd.erase]
+name = "Cancella"
+desc = "Rimuove dal disegno gli oggetti selezionati"
+tip = "Cancella — rimuove dal disegno gli oggetti selezionati (CANCELLA / E)"
+aliases = ["CANCELLA"]
+
+[cmd.move]
+name = "Sposta"
+desc = "Sposta gli oggetti selezionati senza modificarli"
+tip = "Sposta — sposta gli oggetti selezionati senza modificarli (SPOSTA / M)"
+aliases = ["SPOSTA"]
+
+[cmd.copy]
+name = "Copia"
+desc = "Duplica gli oggetti selezionati lasciando gli originali al loro posto"
+tip = "Copia — duplica gli oggetti selezionati lasciando gli originali al loro posto (COPIA / CO)"
+aliases = ["COPIA"]
+
+[cmd.rotate]
+name = "Ruota"
+desc = "Ruota gli oggetti selezionati attorno a un punto base"
+tip = "Ruota — ruota gli oggetti selezionati attorno a un punto base (RUOTA / RO)"
+aliases = ["RUOTA"]
+
+[cmd.scale]
+name = "Scala"
+desc = "Ingrandisce o riduce gli oggetti selezionati rispetto a un punto base"
+tip = "Scala — ingrandisce o riduce gli oggetti selezionati rispetto a un punto base (SCALA / SC)"
+aliases = ["SCALA"]
+
+[cmd.undo]
+name = "Annulla"
+desc = "Annulla l'ultima modifica"
+tip = "Annulla — annulla l'ultima modifica (Ctrl+Z / ANNULLA)"
+aliases = ["ANNULLA"]
+
+[cmd.redo]
+# (verify)
+name = "Ripeti"
+desc = "Ripristina la modifica appena annullata"
+tip = "Ripeti — ripristina la modifica appena annullata (Ctrl+Y / RIPETI)"
+# (verify)
+aliases = ["RIPETI", "RIPRISTINA"]
+
+[cmd.zoom]
+name = "Zoom"
+desc = "Adatta la vista al disegno o a una finestra indicata"
+tip = "Zoom — adatta la vista al disegno o a una finestra indicata (ZOOM / Z)"
+aliases = []
+
+[cmd.layer]
+name = "Layer"
+desc = "Imposta un layer come corrente, o lo crea come nome=colore"
+tip = "Layer — imposta un layer come corrente, o lo crea come nome=colore (LAYER / LA)"
+# (verify)
+aliases = ["LIVELLO"]
+
+[cmd.dist]
+# (verify)
+name = "Distanza"
+desc = "Misura la distanza e l'angolo tra due punti"
+tip = "Distanza — misura la distanza e l'angolo tra due punti (DISTANZA / DI)"
+aliases = ["DISTANZA"]
+
+[cmd.area]
+name = "Area"
+desc = "Misura l'area e il perimetro di punti o di un oggetto"
+tip = "Area — misura l'area e il perimetro di punti o di un oggetto (AREA / AA)"
+aliases = []
+
+[cmd.measuregeom]
+# (verify)
+name = "Misura geometria"
+desc = "Misura distanza, raggio, angolo o area"
+tip = "Misura geometria — misura distanza, raggio, angolo o area (MISURAGEOM / MEA)"
+# (verify)
+aliases = ["MISURAGEOM"]
+
+[cmd.id]
+# (verify)
+name = "ID punto"
+desc = "Riporta le coordinate di un punto indicato"
+tip = "ID punto — riporta le coordinate di un punto indicato (ID)"
+aliases = []
+
+[cmd.list]
+# (verify)
+name = "Elenca"
+desc = "Elenca le proprietà degli oggetti selezionati"
+tip = "Elenca — elenca le proprietà degli oggetti selezionati (ELENCA / LI)"
+# (verify)
+aliases = ["ELENCA"]
+
+[cmd.new]
+name = "Nuovo"
+desc = "Inizia un nuovo disegno vuoto"
+tip = "Nuovo — inizia un nuovo disegno vuoto (NUOVO)"
+# (verify)
+aliases = ["NUOVO"]
+
+[cmd.open]
+name = "Apri"
+desc = "Apre un disegno da file"
+tip = "Apri — apre un disegno da file (APRI)"
+# (verify)
+aliases = ["APRI"]
+
+[cmd.save]
+name = "Salva"
+desc = "Salva il disegno in un file"
+tip = "Salva — salva il disegno in un file (SALVA)"
+# (verify)
+aliases = ["SALVA"]
+
+[cmd.mirror]
+name = "Specchio"
+desc = "Crea una copia speculare degli oggetti selezionati rispetto a una linea"
+tip = "Specchio — crea una copia speculare degli oggetti selezionati rispetto a una linea (SPECCHIO / MI)"
+# (verify)
+aliases = ["SPECCHIO"]
+
+[cmd.offset]
+name = "Offset"
+desc = "Crea una copia parallela di un oggetto a una distanza o passante per un punto"
+tip = "Offset — crea una copia parallela di un oggetto a una distanza o passante per un punto (OFFSET / O)"
+aliases = []
+
+[cmd.fillet]
+name = "Raccordo"
+desc = "Raccorda lo spigolo tra due oggetti con un raggio"
+tip = "Raccordo — raccorda lo spigolo tra due oggetti con un raggio (RACCORDO / F)"
+aliases = ["RACCORDO"]
+
+[cmd.chamfer]
+name = "Smusso"
+desc = "Smussa lo spigolo tra due linee con due distanze"
+tip = "Smusso — smussa lo spigolo tra due linee con due distanze (SMUSSO / CHA)"
+# (verify)
+aliases = ["SMUSSO", "CIMATURA", "SMUSSA"]
+
+[cmd.trim]
+name = "Taglia"
+desc = "Taglia gli oggetti in corrispondenza dei bordi di taglio indicati"
+tip = "Taglia — taglia gli oggetti in corrispondenza dei bordi di taglio indicati (TAGLIA / TR)"
+# (verify)
+aliases = ["TAGLIA"]
+
+[cmd.extend]
+name = "Estendi"
+desc = "Estende gli oggetti fino ai bordi limite"
+tip = "Estendi — estende gli oggetti fino ai bordi limite (ESTENDI / EX)"
+# (verify)
+aliases = ["ESTENDI"]
+
+[cmd.break]
+name = "Spezza"
+desc = "Spezza un oggetto tra due punti"
+tip = "Spezza — spezza un oggetto tra due punti (SPEZZA / BR)"
+# (verify)
+aliases = ["SPEZZA"]
+
+[cmd.join]
+name = "Unisci"
+desc = "Unisce in un solo oggetto gli oggetti che si toccano estremità con estremità"
+tip = "Unisci — unisce in un solo oggetto gli oggetti che si toccano estremità con estremità (UNISCI / J)"
+# (verify)
+aliases = ["UNISCI"]
+
+[cmd.explode]
+name = "Esplodi"
+desc = "Scompone un oggetto composto nelle sue parti"
+tip = "Esplodi — scompone un oggetto composto nelle sue parti (ESPLODI / X)"
+# (verify)
+aliases = ["ESPLODI"]
+
+[cmd.ai]
+# (verify)
+name = "Agente IA"
+desc = "Interroga l'agente IA, o mostra e nasconde il pannello dell'agente"
+tip = "Agente IA — interroga l'agente IA, o mostra e nasconde il pannello dell'agente (F2 / AI)"
+# (verify)
+aliases = ["AGENTE", "IA"]
+
+[cmd.options]
+name = "Opzioni"
+desc = "Apre il pannello delle opzioni"
+tip = "Opzioni — apre il pannello delle opzioni (Ctrl+, / OPZIONI)"
+# (verify)
+aliases = ["OPZIONI"]
+
+[cmd.options.msg]
+unavailable = "Le opzioni non sono disponibili."

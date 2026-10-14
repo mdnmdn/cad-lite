@@ -1,0 +1,665 @@
+# go-draw English catalog (source language).
+#
+# Key = table path + leaf name. Values use fmt verbs (%s, %d, %q, %v); %[2]s reorders arguments.
+# A string used WITHOUT arguments is returned as written, so a literal percent sign is a single %;
+# a string used WITH arguments needs %%. Keys ending in _one/_other are plural forms (i18n.Plural).
+# Keyword values (table [kw]) mark the shortcut letters in capitals; "a|b" adds synonyms.
+# cmd.<name>.aliases are extra typed names for the command (arrays).
+# it.toml must define exactly the same keys with the same placeholders: go run ./i18n/cmd/i18ncheck
+
+[common]
+yes = "Yes"
+no = "No"
+
+[session]
+command_prompt = "Command:"
+command_echo = "Command: %s"
+unknown_command = "Unknown command \"%s\". Press F1 for help."
+agent_forbidden = "%s is not available to agents."
+cancel = "*Cancel*"
+internal_error = "Error: %s failed: %v."
+fallback_command_name = "command"
+
+[input]
+or = "or"
+
+[input.err]
+invalid_point = "Invalid point."
+invalid_value = "Invalid value."
+no_base = "No base point for relative input."
+invalid_input = "Invalid input."
+
+[snap]
+endpoint = "Endpoint"
+midpoint = "Midpoint"
+center = "Center"
+quadrant = "Quadrant"
+intersection = "Intersection"
+nearest = "Nearest"
+generic = "Snap"
+
+[kw]
+close = "Close"
+undo = "Undo"
+yes = "Yes"
+no = "No"
+through = "Through"
+exit = "Exit"
+radius = "Radius"
+distance = "Distance"
+diameter = "Diameter"
+extents = "Extents"
+window = "Window"
+object = "Object"
+angle = "Angle"
+area = "ARea"
+cutting_edges = "cuTting edges"
+first_point = "First point"
+multiple_points = "Multiple points"
+
+[cmd.line.prompt]
+first_point = "Specify first point"
+next_point = "Specify next point"
+
+[cmd.pline.prompt]
+start_point = "Specify start point"
+next_point = "Specify next point"
+
+[cmd.circle.prompt]
+center = "Specify center point for circle"
+diameter = "Specify diameter of circle"
+radius = "Specify radius of circle"
+
+[cmd.common.msg]
+positive = "Value must be positive and nonzero."
+found_one = "%d found"
+found_other = "%d found"
+no_object_found = "No object found."
+no_object_at_point = "No object found at that point."
+
+[cmd.arc.prompt]
+start_point = "Specify start point of arc"
+second_point = "Specify second point of arc"
+end_point = "Specify end point of arc"
+
+[cmd.arc.msg]
+collinear = "The points are collinear; no arc was drawn."
+
+[cmd.rectang.prompt]
+first_corner = "Specify first corner point"
+other_corner = "Specify other corner point"
+
+[cmd.common.prompt]
+select_objects = "Select objects"
+select_object = "Select object"
+
+[cmd.modify.prompt]
+base_point = "Specify base point"
+second_point = "Specify second point"
+scale_factor = "Specify scale factor"
+rotation_angle = "Specify rotation angle"
+
+[cmd.undo.msg]
+everything_undone = "Everything has been undone."
+
+[cmd.redo.msg]
+nothing_to_redo = "Nothing to redo."
+
+[cmd.zoom.prompt]
+corner = "Specify corner of window"
+first_corner = "Specify first corner"
+opposite_corner = "Specify opposite corner"
+
+[cmd.layer.prompt]
+name = "Layer name to make current, or name=color <%s>"
+
+[cmd.layer.msg]
+bad_color = "Color must be an AutoCAD Color Index from 1 to 255."
+created = "Layer %q created."
+
+[cmd.dist.prompt]
+first_point = "Specify first point"
+next_point = "Specify next point"
+second_point = "Specify second point"
+
+[cmd.dist.msg]
+total = "Distance = %s"
+result = "Distance = %s,  Angle = %s°,  Delta X = %s,  Delta Y = %s"
+
+[cmd.id.prompt]
+point = "Specify point"
+
+[cmd.id.msg]
+result = "X = %s     Y = %s"
+
+[cmd.list.msg]
+header = "%s  Layer: %q  Handle = %s"
+line = "    from point %s  to point %s  Length = %s"
+circle = "    center point %s  radius %s"
+arc = "    center point %s  radius %s  start angle %s°  end angle %s°"
+polyline = "    %d vertices  closed: %s  length %s"
+
+[cmd.area.prompt]
+first_corner = "Specify first corner point"
+next_corner = "Specify next corner point or press ENTER for total"
+
+[cmd.area.msg]
+result = "Area = %s, Perimeter = %s"
+result_object = "Area = %s, %s = %s"
+no_area = "Object has no area."
+
+[cmd.area.label]
+circumference = "Circumference"
+perimeter = "Perimeter"
+
+[cmd.radius.prompt]
+select = "Select arc or circle"
+
+[cmd.radius.msg]
+select_arc_or_circle = "Select an arc or a circle."
+result = "Radius = %s, Diameter = %s"
+
+[cmd.angle.prompt]
+select = "Select arc, circle, line or <specify vertex>"
+vertex = "Specify angle vertex"
+first_endpoint = "Specify first angle endpoint"
+second_endpoint = "Specify second angle endpoint"
+second_line = "Select second line"
+
+[cmd.angle.msg]
+select_object = "Select an arc, a circle or a line."
+select_line = "Select a line."
+result = "Angle = %s°"
+
+[cmd.measuregeom.prompt]
+option = "Enter an option"
+
+[cmd.mirror.prompt]
+first_point = "Specify first point of mirror line"
+second_point = "Specify second point of mirror line"
+erase_source = "Erase source objects"
+
+[cmd.mirror.msg]
+points_differ = "The two points of the mirror line must differ."
+
+[cmd.offset.prompt]
+distance = "Specify offset distance"
+second_point = "Specify second point"
+select = "Select object to offset"
+side = "Specify point on side to offset"
+through = "Specify through point"
+
+[cmd.offset.msg]
+positive_distance = "Requires a positive, nonzero distance."
+nothing_found = "Nothing found at that point."
+cannot_offset = "Cannot offset this object."
+degenerate = "The offset would have a zero or negative radius; nothing was created."
+through_on_object = "The through point lies on the object; nothing was created."
+
+[cmd.corner.prompt]
+select_first_object = "Select first object"
+select_first_line = "Select first line"
+select_second_object = "Select second object"
+select_second_line = "Select second line"
+fillet_radius = "Specify fillet radius"
+chamfer_d1 = "Specify first chamfer distance"
+chamfer_d2 = "Specify second chamfer distance"
+
+[cmd.corner.msg]
+chamfer_settings = "(TRIM mode) Current chamfer Dist1 = %s, Dist2 = %s"
+fillet_settings = "Current settings: Mode = TRIM, Radius = %s"
+non_negative = "Requires a non-negative distance."
+nothing_found = "Nothing found at that point."
+supports_two_lines = "%s supports two lines."
+select_different = "Select a different line."
+parallel = "Lines are parallel."
+chamfer_too_large = "Chamfer distances are too large for the lines."
+radius_too_large = "Radius is too large for the lines."
+
+[cmd.trim.prompt]
+select_object = "Select object to trim"
+select_edges = "Select cutting edges <select all>"
+
+[cmd.trim.msg]
+cannot_trim = "Cannot trim this object."
+no_intersection = "Object does not intersect an edge."
+
+[cmd.extend.prompt]
+select_object = "Select object to extend"
+
+[cmd.extend.msg]
+closed_polyline = "Cannot extend a closed polyline."
+cannot_extend = "Cannot extend this object."
+no_boundary = "No boundary edge in the extension of that end."
+
+[cmd.break.prompt]
+second_point = "Specify second break point"
+first_point = "Specify first break point"
+
+[cmd.break.msg]
+cannot_break = "Cannot break this object."
+circle_one_point = "Cannot break a circle at a single point."
+
+[cmd.join.prompt]
+select_source = "Select source object or multiple objects to join at once"
+select_others = "Select objects to join to source"
+
+[cmd.join.msg]
+cannot_join_source = "Cannot join the source object."
+skipped_one = "%d object cannot be joined."
+skipped_other = "%d objects cannot be joined."
+joined_one = "%d object joined."
+joined_other = "%d objects joined."
+none_joined = "0 objects joined."
+
+[cmd.explode.prompt]
+select = "Select objects to explode"
+
+[cmd.explode.msg]
+refused_one = "%d object cannot be exploded."
+refused_other = "%d objects cannot be exploded."
+exploded_one = "%d object exploded."
+exploded_other = "%d objects exploded."
+
+[cmd.file.msg]
+unavailable = "File commands are not available on this platform."
+save_failed = "Save failed: %v"
+saved = "Saved %s (%d entities)."
+open_failed = "Open failed: %v"
+opened = "Opened %s (%d entities)."
+more_warnings = "... and %d more warnings."
+warning = "Warning: %s"
+
+[cmd.file.prompt]
+open_path = "Enter path of drawing to open"
+save_path = "Enter path of drawing to save"
+
+[cmd.ai.msg]
+unavailable = "The AI agent is not available on this platform."
+
+[cmd.ai.prompt]
+ask = "Ask the agent"
+
+[dxf.warn]
+kept_unknown = "kept %d %s entities as unknown objects (not displayed or editable)"
+handle_renumbered = "%s handle %s is already used; renumbered to %s"
+not_written_r12 = "%s %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)"
+not_written_unsupported = "%s %s not written (not supported by the R12 writer)"
+block_not_written = "%s in block %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)"
+
+[dxf.err]
+no_value = "dxf: line %d: group code %q has no value"
+bad_group_code = "dxf: line %d: bad group code %q (binary DXF is not supported)"
+no_endsec = "dxf: section %q has no ENDSEC (truncated file?)"
+
+[fileio.err]
+no_reader = "no reader for %q files"
+no_writer = "no writer for %q files"
+
+[settings.warn]
+wrong_type = "%s must be %s, got %v; using the default"
+theme_empty = "theme is empty; using %q"
+ui_scale = "ui_scale %v is out of range or off-step; using %v"
+language = "language %q is not one of %v; using %q"
+wheel = "wheel %q is not one of %v; using %q"
+out_of_range = "%s %d is out of range; using %d"
+
+[ui.cmdline]
+placeholder = "Type a command"
+
+[ui.toolbar]
+line = "Line"
+pline = "Polyline"
+circle = "Circle"
+arc = "Arc"
+rect = "Rect"
+move = "Move"
+copy = "Copy"
+rotate = "Rotate"
+scale = "Scale"
+erase = "Erase"
+dist = "Dist"
+area = "Area"
+undo = "Undo"
+redo = "Redo"
+zoom = "Zoom"
+settings = "Settings"
+settings_tip = "Settings — theme, UI scale, drawing aids, language (Ctrl+, / OPTIONS)"
+agent = "Agent"
+agent_tip = "AI agent — opens the agent panel: describe a drawing in words and the agent draws it (F2 / AI)"
+
+[ui.panel]
+layers = "LAYERS"
+properties = "PROPERTIES"
+
+[ui.layers]
+on = "on"
+off = "off"
+visibility_tip = "Layer visibility — click to show or hide this layer"
+current_tip = "Make current — new objects are drawn on this layer (LAYER / LA)"
+swatch_tip = "Layer colour (ACI %d)"
+
+[ui.props]
+none = "No selection"
+selected_one = "%d selected"
+selected_other = "%d selected"
+layer = "Layer: %s"
+handle = "Handle: %s"
+
+[ui.status]
+coords_tip = "Cursor position — model units"
+grid = "GRID"
+grid_tip = "Grid — shows or hides the drawing grid (F7)"
+osnap = "OSNAP"
+osnap_tip = "Object snap — locks the pointer onto endpoints, midpoints, centres, quadrants and intersections (F3)"
+ortho = "ORTHO"
+ortho_tip = "Ortho — constrains movement to horizontal and vertical (F8)"
+summary = "Layer %s   ·   %d entities   ·   1 px = %s units"
+
+[ui.agent]
+title = "AGENT"
+new_tab = "+"
+new_tab_tip = "New conversation — opens another tab"
+close_tab_tip = "Close this conversation tab"
+history = "History"
+history_tip = "History — reopen an earlier conversation of this project"
+history_empty = "No earlier conversations in this project"
+history_untitled = "(empty)"
+history_open = "open"
+pick_tip = "Agent — chooses which agent CLI runs this conversation"
+no_cli = "No agent CLI on PATH (opencode, claude, codex)"
+start = "Start"
+start_tip = "Start — launches the selected agent"
+stop = "Stop"
+stop_tip = "Stop — ends the agent process"
+empty_hint = "Describe a drawing and the agent will draw it with the same commands you use."
+send = "Send"
+send_tip = "Send — sends your message to the agent (Enter)"
+cancel = "Cancel"
+cancel_tip = "Cancel — interrupts the agent's current turn"
+input_placeholder = "Ask the agent"
+you = "You"
+thinking = "Thinking"
+tool_default = "a tool"
+permission = "Permission requested"
+answered = "answered"
+plan = "Plan"
+tab_new = "New"
+
+[ui.agent.status]
+starting = "starting %s..."
+working = "working..."
+ready = "ready"
+stopped = "stopped"
+
+[ui.agent.time]
+just_now = "just now"
+minutes_ago = "%d min ago"
+hours_ago = "%d h ago"
+days_ago = "%d d ago"
+date_layout = "2 Jan 2006"
+
+[ui.agent.warn]
+no_agent = "No agent is available: install opencode, claude or codex, or pass -agent-cmd."
+busy = "The agent is still working; wait or cancel before asking again."
+history_unavailable = "agent history unavailable: %v"
+cannot_list = "cannot list agent sessions: %v"
+cannot_load = "cannot load that agent session: %v"
+not_saved = "agent history is not saved: %v"
+write_failed = "agent history write failed: %v"
+
+[ui.agent.err]
+mcp = "cannot start the MCP server: %v"
+start = "cannot start %s: %v"
+
+[ui.settings]
+title = "Settings"
+close = "Close  Esc"
+close_tip = "Close — closes the settings panel (Esc)"
+section_appearance = "APPEARANCE"
+theme_tip = "Theme — applies the %s theme"
+ui_scale = "UI scale"
+ui_scale_value = "%d%%"
+ui_scale_tip = "UI scale — enlarges or reduces the whole interface, text included (75 to 200 percent)"
+ui_scale_down_tip = "Smaller — reduces the UI scale by 5%"
+ui_scale_up_tip = "Larger — increases the UI scale by 5%"
+ui_scale_reset_tip = "Reset — back to 100%"
+section_drawing = "DRAWING"
+drawing_hint = "What a drawing starts with, and what applies right now."
+grid = "Grid (F7)"
+grid_tip = "Grid — whether the grid starts on (F7 toggles it now)"
+osnap = "Object snap (F3)"
+osnap_tip = "Object snap — whether object snap starts on (F3 toggles it now)"
+ortho = "Ortho (F8)"
+ortho_tip = "Ortho — whether ortho starts on (F8 toggles it now)"
+wheel = "Mouse wheel"
+wheel_tip = "Mouse wheel — what the wheel does over the drawing"
+wheel_auto = "Auto"
+wheel_zoom = "Zoom"
+wheel_pan = "Pan"
+wheel_hint_auto = "Auto: the wheel zooms, Shift pans."
+wheel_hint_zoom = "Zoom: the wheel zooms, Shift pans."
+wheel_hint_pan = "Pan: the wheel pans, Ctrl or Cmd zooms."
+section_language = "LANGUAGE"
+language = "Language"
+language_tip = "Language — language of menus, prompts and messages; command names stay valid in English"
+language_auto = "Automatic"
+language_en = "English"
+language_it = "Italiano"
+language_hint = "Automatic follows the system language (LC_ALL, LC_MESSAGES, LANG)."
+section_agent = "AGENT"
+default_harness = "Default harness"
+default_harness_tip = "Default agent — the agent CLI the panel selects first"
+harness_auto = "Auto"
+agent_auto_hint = "Auto picks the first agent installed on PATH."
+in_memory = "Kept in memory: no config folder here."
+saved_to = "Saved to %s"
+reset = "Reset to defaults"
+reset_tip = "Reset — restores every setting to its default; the window size is kept"
+
+[ui.settings.theme]
+dark = "Dark"
+light = "Light"
+classic = "Classic"
+high_contrast = "High contrast"
+
+[cmd.line]
+name = "Line"
+desc = "Draws straight segments between the points you pick"
+tip = "Line — draws straight segments between the points you pick (LINE / L)"
+aliases = ["L"]
+
+[cmd.pline]
+name = "Polyline"
+desc = "Draws a connected chain of line and arc segments as one object"
+tip = "Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"
+aliases = ["PL"]
+
+[cmd.circle]
+name = "Circle"
+desc = "Draws a circle from its centre and radius or diameter"
+tip = "Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"
+aliases = ["C"]
+
+[cmd.arc]
+name = "Arc"
+desc = "Draws an arc through three points"
+tip = "Arc — draws an arc through three points (ARC / A)"
+aliases = ["A"]
+
+[cmd.rectang]
+name = "Rectangle"
+desc = "Draws a rectangle from two opposite corners"
+tip = "Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"
+aliases = ["REC"]
+
+[cmd.erase]
+name = "Erase"
+desc = "Removes the selected objects from the drawing"
+tip = "Erase — removes the selected objects from the drawing (ERASE / E)"
+aliases = ["E"]
+
+[cmd.move]
+name = "Move"
+desc = "Moves the selected objects without changing them"
+tip = "Move — moves the selected objects without changing them (MOVE / M)"
+aliases = ["M"]
+
+[cmd.copy]
+name = "Copy"
+desc = "Duplicates the selected objects, leaving the originals in place"
+tip = "Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"
+aliases = ["CO", "CP"]
+
+[cmd.rotate]
+name = "Rotate"
+desc = "Turns the selected objects around a base point"
+tip = "Rotate — turns the selected objects around a base point (ROTATE / RO)"
+aliases = ["RO"]
+
+[cmd.scale]
+name = "Scale"
+desc = "Makes the selected objects bigger or smaller about a base point"
+tip = "Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"
+aliases = ["SC"]
+
+[cmd.undo]
+name = "Undo"
+desc = "Takes back the last change"
+tip = "Undo — takes back the last change (Ctrl+Z / U)"
+aliases = ["U"]
+
+[cmd.redo]
+name = "Redo"
+desc = "Brings back the change that was just taken back"
+tip = "Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"
+aliases = []
+
+[cmd.zoom]
+name = "Zoom"
+desc = "Fits the view to the drawing or to a window you pick"
+tip = "Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"
+aliases = ["Z"]
+
+[cmd.layer]
+name = "Layer"
+desc = "Makes a layer current, or creates it as name=color"
+tip = "Layer — makes a layer current, or creates it as name=color (LAYER / LA)"
+aliases = ["LA"]
+
+[cmd.dist]
+name = "Distance"
+desc = "Measures the distance and angle between two points"
+tip = "Distance — measures the distance and angle between two points (DIST / DI)"
+aliases = ["DI"]
+
+[cmd.area]
+name = "Area"
+desc = "Measures the area and perimeter of points or of an object"
+tip = "Area — measures the area and perimeter of points or of an object (AREA / AA)"
+aliases = ["AA"]
+
+[cmd.measuregeom]
+name = "Measure geometry"
+desc = "Measures distance, radius, angle or area"
+tip = "Measure geometry — measures distance, radius, angle or area (MEASUREGEOM / MEA)"
+aliases = ["MEA"]
+
+[cmd.id]
+name = "ID point"
+desc = "Reports the coordinates of a picked point"
+tip = "ID point — reports the coordinates of a picked point (ID)"
+aliases = []
+
+[cmd.list]
+name = "List"
+desc = "Lists the properties of the selected objects"
+tip = "List — lists the properties of the selected objects (LIST / LI)"
+aliases = ["LI"]
+
+[cmd.new]
+name = "New"
+desc = "Starts a new, empty drawing"
+tip = "New — starts a new, empty drawing (NEW)"
+aliases = []
+
+[cmd.open]
+name = "Open"
+desc = "Opens a drawing from a file"
+tip = "Open — opens a drawing from a file (OPEN)"
+aliases = []
+
+[cmd.save]
+name = "Save"
+desc = "Saves the drawing to a file"
+tip = "Save — saves the drawing to a file (SAVE)"
+aliases = []
+
+[cmd.mirror]
+name = "Mirror"
+desc = "Creates a mirrored copy of the selected objects about a line"
+tip = "Mirror — creates a mirrored copy of the selected objects about a line (MIRROR / MI)"
+aliases = ["MI"]
+
+[cmd.offset]
+name = "Offset"
+desc = "Creates a parallel copy of an object at a distance or through a point"
+tip = "Offset — creates a parallel copy of an object at a distance or through a point (OFFSET / O)"
+aliases = ["O"]
+
+[cmd.fillet]
+name = "Fillet"
+desc = "Rounds the corner between two objects with a radius"
+tip = "Fillet — rounds the corner between two objects with a radius (FILLET / F)"
+aliases = ["F"]
+
+[cmd.chamfer]
+name = "Chamfer"
+desc = "Bevels the corner between two lines with two distances"
+tip = "Chamfer — bevels the corner between two lines with two distances (CHAMFER / CHA)"
+aliases = ["CHA"]
+
+[cmd.trim]
+name = "Trim"
+desc = "Trims objects at the cutting edges you pick"
+tip = "Trim — trims objects at the cutting edges you pick (TRIM / TR)"
+aliases = ["TR"]
+
+[cmd.extend]
+name = "Extend"
+desc = "Extends objects up to the boundary edges"
+tip = "Extend — extends objects up to the boundary edges (EXTEND / EX)"
+aliases = ["EX"]
+
+[cmd.break]
+name = "Break"
+desc = "Breaks an object between two points"
+tip = "Break — breaks an object between two points (BREAK / BR)"
+aliases = ["BR"]
+
+[cmd.join]
+name = "Join"
+desc = "Joins objects that touch end to end into one"
+tip = "Join — joins objects that touch end to end into one (JOIN / J)"
+aliases = ["J"]
+
+[cmd.explode]
+name = "Explode"
+desc = "Breaks a compound object into its parts"
+tip = "Explode — breaks a compound object into its parts (EXPLODE / X)"
+aliases = ["X"]
+
+[cmd.ai]
+name = "AI agent"
+desc = "Asks the AI agent, or shows and hides the agent panel"
+tip = "AI agent — asks the AI agent, or shows and hides the agent panel (F2 / AI)"
+aliases = ["AGENT"]
+
+[cmd.options]
+name = "Options"
+desc = "Opens the settings panel"
+tip = "Options — opens the settings panel (Ctrl+, / OPTIONS)"
+aliases = ["OP"]
+
+[cmd.options.msg]
+unavailable = "Settings are not available."
