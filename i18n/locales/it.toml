@@ -953,6 +953,20 @@ make_default = "Rendi predefinito per %s"
 make_default_tip = "Predefinito — le nuove conversazioni %s partono con questo modello (salvato nelle impostazioni)"
 restarts = "Il modello %s vale dal prossimo messaggio; la sessione dell'agente riparte e riprende questa conversazione."
 failed = "impossibile passare al modello %s: %v"
+free = "gratis"
+free_tip = "Gratis — un modello che opencode offre senza costi (OpenCode Zen)"
+
+[ui.agent.image]
+pasted = "immagine incollata"
+chip_tip = "Immagine — parte con il prossimo messaggio"
+remove_tip = "Rimuovi — toglie questa immagine dal messaggio"
+no_vision = "%s non legge le immagini; l'immagine non è stata allegata."
+no_vision_send = "%s non legge le immagini: rimuovile o scegli un altro modello."
+not_accepted = "l'agente non accetta immagini"
+unsupported = "%s: non è un'immagine che l'agente sa leggere (PNG, JPEG, GIF o WebP)."
+too_large = "%s è troppo grande: supera %d MB anche ridotta."
+unreadable = "impossibile leggere %s: %v"
+too_many = "Al massimo %d immagini per messaggio."
 
 [ui.agent.install]
 offer_title = "Installa OpenCode"

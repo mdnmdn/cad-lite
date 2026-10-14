@@ -16,8 +16,11 @@ func TestModelsListedAndSwitched(t *testing.T) {
 	s := e.open(t)
 	next(t, s)
 	mc, ok := next(t, s).(agentmanager.ModelsChanged)
-	if !ok || mc.Current != "fake-model" || len(mc.Available) != 2 || mc.Available[1] != (agentmanager.ModelInfo{ID: "fake-mini", Name: "Fake Mini"}) {
+	if !ok || mc.Current != "fake-model" || len(mc.Available) != 3 || mc.Available[1] != (agentmanager.ModelInfo{ID: "fake-mini", Name: "Fake Mini", Vision: agentmanager.VisionNo}) {
 		t.Fatalf("%+v", mc)
+	}
+	if mc.Available[0].Vision != agentmanager.VisionYes || mc.Available[2].Vision != agentmanager.VisionUnknown {
+		t.Fatalf("vision from inputModalities: %+v", mc.Available)
 	}
 	ms := s.(agentmanager.ModelSetter)
 	if err := ms.SetModel(context.Background(), "fake-mini"); err != nil {

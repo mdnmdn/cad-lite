@@ -1,6 +1,7 @@
 package gpui
 
 import (
+	"image"
 	"math"
 	"reflect"
 	"slices"
@@ -195,7 +196,9 @@ type keyNode struct {
 	FocusID    FocusID
 	OnKeyDown  func(*KeyDownEvent, *Window, *App)
 	OnKeyUp    func(*KeyUpEvent, *Window, *App)
-	OnAction   map[ActionKey]func(Action, *Window, *App)
+	// OnImagePaste receives pasted images along the focus path.
+	OnImagePaste func(*ImagePasteEvent, *Window, *App)
+	OnAction     map[ActionKey]func(Action, *Window, *App)
 	// tabIndex and tabStop place the node in Tab traversal.
 	tabIndex int
 	tabStop  bool
@@ -463,6 +466,15 @@ func (w *Window) PaintGlyph(g GlyphSprite) {
 		g.Color = g.Color.Opacity(w.opacity)
 	}
 	w.nextFrame.scene.InsertSprite(g)
+}
+
+// PaintImage draws img scaled into b (window space, logical pixels), clipped
+// to the current content mask, with the current opacity. nil draws nothing.
+func (w *Window) PaintImage(b Bounds, img *image.NRGBA) {
+	if img == nil || img.Rect.Empty() {
+		return
+	}
+	w.PaintGlyph(GlyphSprite{Bounds: b, Image: img, Color: Rgba{R: 255, G: 255, B: 255, A: 255}})
 }
 
 // PushLayer records a z-order boundary in the scene being built.
@@ -1318,6 +1330,8 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		w.dispatchKeyDown(e, cx)
 	case KeyUpEvent:
 		w.dispatchKeyUp(e, cx)
+	case ImagePasteEvent:
+		w.dispatchImagePaste(e, cx)
 	case ModifiersChangedEvent:
 		// The POC has no modifier-state listeners.
 	}
@@ -1691,6 +1705,19 @@ func (w *Window) dispatchBinding(ks Keystroke, path []keyNode, cx *App) bool {
 		}
 	}
 	return handled
+}
+
+// dispatchImagePaste runs OnImagePaste along the focus path, innermost first,
+// until a handler calls StopPropagation.
+func (w *Window) dispatchImagePaste(e ImagePasteEvent, cx *App) {
+	ev := e
+	path := w.keyPath()
+	w.propagateEvent = true
+	for i := len(path) - 1; i >= 0 && w.propagateEvent; i-- {
+		if path[i].OnImagePaste != nil {
+			path[i].OnImagePaste(&ev, w, cx)
+		}
+	}
 }
 
 // dispatchKeyUp runs OnKeyUp over the focus path, target first.

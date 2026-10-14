@@ -40,8 +40,25 @@ type TurnEnd struct {
 type Log struct{ Level, Message string }
 
 // ModelInfo is one model an agent offers. ID is what Config.Model and ModelSetter.SetModel take;
-// Name is a human-readable label ("" when the agent gives none).
-type ModelInfo struct{ ID, Name string }
+// Name is a human-readable label ("" when the agent gives none); Vision says whether the model
+// reads images in a prompt.
+type ModelInfo struct {
+	ID, Name string
+	Vision   Vision
+}
+
+// Vision says whether a model accepts images in a prompt.
+type Vision string
+
+// Vision values.
+const (
+	// VisionUnknown means the agent did not say.
+	VisionUnknown Vision = ""
+	// VisionYes means the model reads images.
+	VisionYes Vision = "yes"
+	// VisionNo means the model takes text only.
+	VisionNo Vision = "no"
+)
 
 // ModelsChanged reports the models the agent offers and the one in effect. Available is nil when
 // the list is unchanged or unknown; Current is "" when the agent did not say (its default).

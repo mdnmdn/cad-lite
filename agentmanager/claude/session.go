@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,7 +117,7 @@ func (s *session) requestModels() {
 		var avail []agentmanager.ModelInfo
 		for _, m := range res.Models {
 			if m.Value != "" {
-				avail = append(avail, agentmanager.ModelInfo{ID: m.Value, Name: m.DisplayName})
+				avail = append(avail, agentmanager.ModelInfo{ID: m.Value, Name: m.DisplayName, Vision: agentmanager.VisionYes})
 			}
 		}
 		if len(avail) > 0 {
@@ -218,7 +219,17 @@ func (s *session) Events() <-chan agentmanager.Event { return s.q.Events() }
 
 func (s *session) gone() bool { return s.closing || s.dead }
 
+// Prompt implements agentmanager.Session.
 func (s *session) Prompt(ctx context.Context, text string) error {
+	return s.PromptImages(ctx, text, nil)
+}
+
+// AcceptsImages implements agentmanager.ImagePrompter; every current Claude model reads images.
+func (s *session) AcceptsImages() bool { return true }
+
+// PromptImages implements agentmanager.ImagePrompter; each image is a base64 image content block
+// after the text block of the user line.
+func (s *session) PromptImages(ctx context.Context, text string, images []agentmanager.Image) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -234,11 +245,16 @@ func (s *session) Prompt(ctx context.Context, text string) error {
 	s.turn = true
 	s.interrupted = false
 	s.mu.Unlock()
+	content := []any{map[string]any{"type": "text", "text": text}}
+	for _, im := range images {
+		content = append(content, map[string]any{"type": "image", "source": map[string]any{
+			"type": "base64", "media_type": im.MIME, "data": base64.StdEncoding.EncodeToString(im.Data)}})
+	}
 	err := s.conn.SendRaw(map[string]any{
 		"type": "user",
 		"message": map[string]any{
 			"role":    "user",
-			"content": []any{map[string]any{"type": "text", "text": text}},
+			"content": content,
 		},
 	})
 	if err != nil {

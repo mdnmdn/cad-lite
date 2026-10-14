@@ -7,7 +7,7 @@ summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_model.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -180,6 +180,18 @@ what the agent offers as `ModelsChanged` and implements `agentmanager.ModelSette
 `SetModel` on a goroutine (it blocks on the agent's answer, up to 15 s) and folds the result back on the
 timer like a session start. A session without a setter, or a change back to the default, is closed and
 restarted with `ResumeID` on the next prompt. Wire details per harness are in `agentmanager/_docs/protocols.md`.
+On opencode a tab nobody picked a model for starts on a free one (`ui/agent_model.go`, `commitSuggestion`,
+decision D33).
+
+## Images
+
+A prompt's images go through `agentmanager.ImagePrompter.PromptImages`, which all three backends implement
+(ACP image content blocks, Claude base64 image blocks, Codex `image` items with a data URL). The panel
+decides whether to allow them from `ImagePrompter.AcceptsImages` of the live session and
+`ModelInfo.Vision` of the tab's model (`ui/agent_image.go`, `visionOf`): no when either says so, yes for
+Claude, otherwise unknown, which allows them. The UI goroutine decodes, scales and encodes the image when it
+is attached (up to 2048 px and 5 MB), so a large file costs one stall of the panel then. The record keeps a
+preview, not the image (`store.Record.AddUserWith`, D33). Not run live with an image on any harness.
 
 `Env.Changed` runs inside `Do` after every mutating tool (`AgentPanel.agentChanged`) and refreshes the
 window, so the canvas shows the agent's edits between frames. It does not clear the render cache: entity

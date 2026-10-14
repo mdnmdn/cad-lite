@@ -1,5 +1,7 @@
 package gpui
 
+import "image"
+
 // ContentMask is the clip applied to a primitive before it is drawn: a rect,
 // optionally with rounded corners. The zero value is an empty rect, which
 // clips the primitive away entirely; use InfiniteContentMask to express "no
@@ -125,6 +127,10 @@ type GlyphSprite struct {
 	Mask *GlyphMask
 	// Color tints the mask; the mask supplies coverage, the color the tint.
 	Color Rgba
+	// Image, when set, is a colour picture drawn instead of Mask: its pixels
+	// are scaled into Bounds (bilinear, 1:1 when the sizes match) and Color's
+	// alpha multiplies them, so opaque white draws the image as is.
+	Image *image.NRGBA
 }
 
 // GlyphMask is a grayscale alpha mask: 1 byte of coverage per pixel,

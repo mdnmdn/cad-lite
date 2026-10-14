@@ -71,6 +71,7 @@ Each setter holds one handler; a second call replaces the first.
 | `OnScrollWheel(f)` | `func(*ScrollWheelEvent, *Window, *App)` |
 | `OnPinch(f)` | `func(*PinchEvent, *Window, *App)` |
 | `OnFileDrop(f)` | `func(*FileDropEvent, *Window, *App)` |
+| `OnImagePaste(f)` | `func(*ImagePasteEvent, *Window, *App)`; runs along the focus path, like `OnKeyDown` |
 | `OnHoverStart(f)` | `func(*Window, *App)` |
 | `OnHoverEnd(f)` | `func(*Window, *App)` |
 | `OnKeyDown(f)` | `func(*KeyDownEvent, *Window, *App)` |
@@ -291,4 +292,4 @@ layout (see [testing](../guides/testing.md)).
 
 `Quad`, `Shadow`, `GlyphSprite`, `Underline` and `ContentMask` are described
 in [platform.md](platform.md#scene-and-rasterizer); emit them with
-`Window.PaintQuad`, `PaintShadow`, `PaintGlyph`, `PaintUnderline`, `PaintStroke`.
+`Window.PaintQuad`, `PaintShadow`, `PaintGlyph`, `PaintImage`, `PaintUnderline`, `PaintStroke`.

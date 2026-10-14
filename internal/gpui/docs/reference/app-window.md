@@ -196,6 +196,7 @@ finishes ([architecture](../architecture.md#element-state)).
 | `InsertHitbox(b Bounds) int` | Register a hit-testable region (clipped to enclosing clips); returns its index. |
 | `HandleInput(h PlatformInputHandler)` | Register a text-input handler for this frame (called by focused text elements in prepaint). |
 | `PaintQuad(q Quad)` / `PaintShadow(s Shadow)` / `PaintGlyph(g GlyphSprite)` / `PaintUnderline(u Underline)` / `PaintStroke(s Stroke)` | Insert a primitive; an unset `ContentMask` is filled with the current one and the element opacity is applied. |
+| `PaintImage(b Bounds, img *image.NRGBA)` | Draw a colour image scaled into `b` (a `GlyphSprite` with `Image` set), clipped and with the current opacity; `nil` draws nothing. |
 | `PushClip(b Bounds)` / `PushContentMask(m ContentMask)` / `PopClip()` | Push/pop a clip (intersected with the current one). |
 | `CurrentClip() Bounds` / `CurrentContentMask() ContentMask` | Innermost clip; "infinite" when none. |
 | `PushLayer()` | Z-order boundary: everything painted afterwards is above everything before. |

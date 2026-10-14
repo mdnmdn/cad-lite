@@ -13,7 +13,8 @@ import (
 // Explicit scenario steps run through the shared Runner. Builtins answer the handshake themselves
 // (initialize, thread/start or thread/resume) and then serve turn/start requests:
 //
-//	echo-turn         reasoning and text deltas, completed items (no duplicated text), turn/completed
+//	echo-turn         reasoning and text deltas, completed items (no duplicated text), turn/completed;
+//	                  image input items add a " [image <mime> <n> bytes]" delta per image
 //	tool-turn         command item, exec approval request, reply decision echoed as text, turn/completed
 //	mcp-turn          plan, mcpToolCall and fileChange items, a foreign-thread notification, an error
 //	                  notification and an unknown server request (the client must answer -32601)
@@ -86,8 +87,10 @@ func (f *fakeCodex) serve() int {
 				continue
 			}
 			f.result(m["id"], map[string]any{"data": []any{
-				map[string]any{"id": "fake-model", "model": "fake-model", "displayName": "Fake Model", "isDefault": true},
-				map[string]any{"id": "fake-mini", "model": "fake-mini", "displayName": "Fake Mini"}}, "nextCursor": nil})
+				map[string]any{"id": "fake-model", "model": "fake-model", "displayName": "Fake Model", "isDefault": true,
+					"inputModalities": []any{"text", "image"}},
+				map[string]any{"id": "fake-mini", "model": "fake-mini", "displayName": "Fake Mini", "inputModalities": []any{"text"}},
+				map[string]any{"id": "fake-old", "model": "fake-old", "displayName": "Fake Old"}}, "nextCursor": nil})
 		case "turn/start":
 			if code, done := f.turn(m); done {
 				return code
@@ -215,12 +218,31 @@ func (f *fakeCodex) turn(m map[string]any) (int, bool) {
 		f.notify("item/reasoning/summaryTextDelta", map[string]any{"turnId": id, "itemId": "r1", "delta": "thinking"})
 		f.notify("item/agentMessage/delta", map[string]any{"turnId": id, "itemId": "m1", "delta": "Hello"})
 		f.notify("item/agentMessage/delta", map[string]any{"turnId": id, "itemId": "m1", "delta": " world"})
-		f.notify("item/completed", map[string]any{"turnId": id, "item": map[string]any{"id": "m1", "type": "agentMessage", "text": "Hello world"}})
+		final := "Hello world"
+		if notes := codexImageNotes(m); notes != "" {
+			f.notify("item/agentMessage/delta", map[string]any{"turnId": id, "itemId": "m1", "delta": notes})
+			final += notes
+		}
+		f.notify("item/completed", map[string]any{"turnId": id, "item": map[string]any{"id": "m1", "type": "agentMessage", "text": final}})
 		f.notify("item/completed", map[string]any{"turnId": id, "item": map[string]any{
 			"id": "r2", "type": "reasoning", "summary": []any{"plan it"}}})
 		f.completed(id, "completed")
 	}
 	return 0, false
+}
+
+// codexImageNotes describes the image input items of a turn/start request (see dataURLNote).
+func codexImageNotes(m map[string]any) string {
+	p, _ := m["params"].(map[string]any)
+	items, _ := p["input"].([]any)
+	notes := ""
+	for _, it := range items {
+		if im, ok := it.(map[string]any); ok && im["type"] == "image" {
+			url, _ := im["url"].(string)
+			notes += dataURLNote(url)
+		}
+	}
+	return notes
 }
 
 // waitReply reads frames until the response to the server request id arrives.

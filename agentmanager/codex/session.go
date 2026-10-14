@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -107,6 +108,15 @@ func (s *session) Events() <-chan agentmanager.Event { return s.q.Events() }
 // Prompt implements agentmanager.Session. The turn runs asynchronously; a failed turn/start is
 // reported as TurnEnd{Failed}.
 func (s *session) Prompt(ctx context.Context, text string) error {
+	return s.PromptImages(ctx, text, nil)
+}
+
+// AcceptsImages implements agentmanager.ImagePrompter; turn/start takes image input items.
+func (s *session) AcceptsImages() bool { return true }
+
+// PromptImages implements agentmanager.ImagePrompter; each image is an input item
+// {"type":"image","url":"data:<mime>;base64,..."} after the text item.
+func (s *session) PromptImages(_ context.Context, text string, images []agentmanager.Image) error {
 	s.mu.Lock()
 	switch {
 	case s.closed:
@@ -120,9 +130,13 @@ func (s *session) Prompt(ctx context.Context, text string) error {
 	thread, model := s.threadID, s.model
 	s.mu.Unlock()
 
+	input := []any{map[string]any{"type": "text", "text": text, "text_elements": []any{}}}
+	for _, im := range images {
+		input = append(input, map[string]any{"type": "image", "url": "data:" + im.MIME + ";base64," + base64.StdEncoding.EncodeToString(im.Data)})
+	}
 	params := map[string]any{
 		"threadId": thread,
-		"input":    []any{map[string]any{"type": "text", "text": text, "text_elements": []any{}}},
+		"input":    input,
 	}
 	if model != "" {
 		params["model"] = model
@@ -228,6 +242,19 @@ func (s *session) SetModel(_ context.Context, model string) error {
 	return nil
 }
 
+// modalityVision maps a model's inputModalities to Vision: nil is unknown.
+func modalityVision(mods []string) agentmanager.Vision {
+	if mods == nil {
+		return agentmanager.VisionUnknown
+	}
+	for _, m := range mods {
+		if m == "image" {
+			return agentmanager.VisionYes
+		}
+	}
+	return agentmanager.VisionNo
+}
+
 // listModels asks the app-server for its models (model/list, first page) and reports them; an
 // error, such as an older app-server without the method, is ignored.
 func (s *session) listModels(current string) {
@@ -241,6 +268,8 @@ func (s *session) listModels(current string) {
 				ID          string `json:"id"`
 				Model       string `json:"model"`
 				DisplayName string `json:"displayName"`
+				// InputModalities is absent on app-servers that predate it.
+				InputModalities []string `json:"inputModalities"`
 			} `json:"data"`
 		}
 		if json.Unmarshal(res, &r) != nil {
@@ -253,7 +282,7 @@ func (s *session) listModels(current string) {
 				id = m.ID
 			}
 			if id != "" {
-				avail = append(avail, agentmanager.ModelInfo{ID: id, Name: m.DisplayName})
+				avail = append(avail, agentmanager.ModelInfo{ID: id, Name: m.DisplayName, Vision: modalityVision(m.InputModalities)})
 			}
 		}
 		if len(avail) > 0 {

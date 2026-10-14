@@ -12,7 +12,8 @@ import (
 // Builtins (Scenario.Builtin); each serves prompts until stdin closes, emitting system/init before
 // the first answer (session id fake-session-1, or the --resume argument):
 //
-//	echo-turn            text "echo: <prompt>", result success
+//	echo-turn            text "echo: <prompt>", result success; each image block of the user line
+//	                     adds " [image <mime> <n> bytes]" to <prompt>
 //	partial-turn         stream_event deltas (thinking, text) followed by the complete assistant line
 //	tool-turn            tool_use of $FAKEAGENT_CLAUDE_TOOL (default mcp__cad__add_line), a can_use_tool
 //	                     control_request, then tool_result (error when denied), text, result. With
@@ -132,16 +133,29 @@ func (c *claudeFake) control(f map[string]any) {
 
 func (c *claudeFake) send(v map[string]any) { _ = c.r.WriteFrame(v) }
 
+// promptText is the first text block of a user line followed by one imageNote per base64 image block.
 func promptText(f map[string]any) string {
 	msg, _ := f["message"].(map[string]any)
 	parts, _ := msg["content"].([]any)
+	text, notes := "", ""
 	for _, p := range parts {
-		if m, ok := p.(map[string]any); ok && m["type"] == "text" {
-			s, _ := m["text"].(string)
-			return s
+		m, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch m["type"] {
+		case "text":
+			if text == "" {
+				text, _ = m["text"].(string)
+			}
+		case "image":
+			src, _ := m["source"].(map[string]any)
+			mime, _ := src["media_type"].(string)
+			data, _ := src["data"].(string)
+			notes += imageNote(mime, data)
 		}
 	}
-	return ""
+	return text + notes
 }
 
 func (c *claudeFake) msgID() string {

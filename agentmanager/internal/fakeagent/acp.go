@@ -15,7 +15,8 @@ import (
 //
 //	echo-turn   every prompt is dispatched on its text: "tool..." runs the tool flow, "hang..." waits
 //	            for session/cancel, "crash" exits 3 after writing "boom" to stderr, "fail" answers a
-//	            JSON-RPC error, "big" streams a 1 MiB chunk, anything else is echoed back
+//	            JSON-RPC error, "big" streams a 1 MiB chunk, anything else is echoed back, followed by
+//	            " [image <mime> <n> bytes]" per image block
 //	tool-turn   every prompt runs the tool flow: tool_call, session/request_permission, then (when
 //	            the permission is granted) an optional MCP tools/call over HTTP, tool_call_update
 //	            and end_turn. The MCP call is made when FAKEAGENT_MCP_TOOL names a tool (arguments
@@ -25,7 +26,8 @@ import (
 // Options: nohttp (no MCP capability), badversion (protocolVersion 2), authdefault (advertise
 // _meta.defaultAuthMethodId and require authenticate), authreq (session/new fails -32000),
 // noload (loadSession false), probe (send an unknown request terminal/create during the first turn),
-// models (session/new and session/load list two models in the model config option and in models).
+// models (session/new and session/load list two models in the model config option and in models),
+// noimage (promptCapabilities.image false).
 func RunACP(sc *Scenario, in io.Reader, out io.Writer) int {
 	r := NewRunner(in, out)
 	if sc.Builtin == "" {
@@ -87,7 +89,7 @@ func (a *acpFake) run() int {
 			res := map[string]any{"protocolVersion": ver,
 				"agentCapabilities": map[string]any{
 					"loadSession":        !a.opts["noload"],
-					"promptCapabilities": map[string]any{"image": true, "audio": false, "embeddedContext": true},
+					"promptCapabilities": map[string]any{"image": !a.opts["noimage"], "audio": false, "embeddedContext": true},
 					"mcpCapabilities":    map[string]any{"http": !a.opts["nohttp"], "sse": !a.opts["nohttp"]},
 				},
 				"authMethods": []any{map[string]any{"id": "default", "name": "Login"}}}
@@ -186,9 +188,26 @@ func (a *acpFake) turn(id any, params map[string]any) int {
 		a.chunk("agent_thought_chunk", "thinking")
 		a.chunk("agent_message_chunk", "echo: ")
 		a.chunk("agent_message_chunk", text)
+		if notes := acpImageNotes(params); notes != "" {
+			a.chunk("agent_message_chunk", notes)
+		}
 		end("end_turn")
 	}
 	return -1
+}
+
+// acpImageNotes describes the prompt's image blocks (see imageNote), "" when there are none.
+func acpImageNotes(params map[string]any) string {
+	list, _ := params["prompt"].([]any)
+	var b strings.Builder
+	for _, it := range list {
+		if m, ok := it.(map[string]any); ok && m["type"] == "image" {
+			mime, _ := m["mimeType"].(string)
+			data, _ := m["data"].(string)
+			b.WriteString(imageNote(mime, data))
+		}
+	}
+	return b.String()
 }
 
 // waitCancel reads frames until session/cancel (true) or, when match is non-nil, until match

@@ -949,6 +949,20 @@ make_default = "Make default for %s"
 make_default_tip = "Default — new %s conversations start on this model (saved in the settings)"
 restarts = "Model %s applies from the next prompt; the agent session restarts and resumes this conversation."
 failed = "cannot switch to model %s: %v"
+free = "free"
+free_tip = "Free — a model opencode offers at no cost (OpenCode Zen)"
+
+[ui.agent.image]
+pasted = "pasted image"
+chip_tip = "Image — goes with your next message"
+remove_tip = "Remove — takes this image off the message"
+no_vision = "%s does not read images; the image was not attached."
+no_vision_send = "%s does not read images: remove them or pick another model."
+not_accepted = "the agent does not accept images"
+unsupported = "%s: not an image the agent can read (PNG, JPEG, GIF or WebP)."
+too_large = "%s is too large: over %d MB even scaled down."
+unreadable = "cannot read %s: %v"
+too_many = "At most %d images per message."
 
 [ui.agent.install]
 offer_title = "Install OpenCode"

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +29,60 @@ type tabModel struct {
 	setting, pending, restart bool
 	// prev is the choice a switch in flight replaces, restored when the agent refuses.
 	prev string
+	// picked is set once the user chose a model (Default included) or the tab came from the store;
+	// until then an opencode tab is offered a free model (suggestedModel).
+	picked bool
+}
+
+// opencodeSuggested is the free opencode model a fresh opencode tab starts on when the agent has
+// not listed its models yet. opencode names models "<provider>/<model>"; big-pickle is served free
+// by its own "opencode" provider (OpenCode Zen).
+const opencodeSuggested = "opencode/big-pickle"
+
+// freeModel reports whether id is one of opencode's free models: big-pickle or an id ending in
+// "-free", with or without the provider prefix.
+func freeModel(id string) bool {
+	base := id
+	if i := strings.LastIndexByte(id, '/'); i >= 0 {
+		base = id[i+1:]
+	}
+	return base == "big-pickle" || strings.HasSuffix(base, "-free")
+}
+
+// orderModels lists models for the menu: on opencode the free ones first (big-pickle before the
+// others, otherwise in the agent's order), then the rest; other harnesses keep the agent's order.
+func orderModels(h agentmanager.Harness, ms []agentmanager.ModelInfo) []agentmanager.ModelInfo {
+	if h != agentmanager.OpenCode {
+		return ms
+	}
+	rank := func(m agentmanager.ModelInfo) int {
+		switch {
+		case !freeModel(m.ID):
+			return 2
+		case strings.HasSuffix(m.ID, "big-pickle"):
+			return 0
+		}
+		return 1
+	}
+	out := slices.Clone(ms)
+	slices.SortStableFunc(out, func(a, b agentmanager.ModelInfo) int { return rank(a) - rank(b) })
+	return out
+}
+
+// suggestedModel is the free model offered to tab t on harness h before the user picked one: on
+// opencode big-pickle, else the first free model the agent listed, else (no list yet)
+// opencodeSuggested; "" on other harnesses or when the list has no free model.
+func suggestedModel(h agentmanager.Harness, m *tabModel) string {
+	if h != agentmanager.OpenCode {
+		return ""
+	}
+	if len(m.offered) == 0 {
+		return opencodeSuggested
+	}
+	if l := orderModels(h, m.offered); freeModel(l[0].ID) {
+		return l[0].ID
+	}
+	return ""
 }
 
 // observe folds what an agent event says about models into m.
@@ -71,23 +126,53 @@ func (p *AgentPanel) defaultModel(h agentmanager.Harness) string {
 	return p.ws.prefs().cur.AgentModels[string(h)]
 }
 
-// modelFor is the model tab t starts with on harness h: its own choice, else the default.
+// modelFor is the model tab t starts with on harness h: its own choice, else the default, else
+// (an opencode tab the user has not picked for, with no stored conversation) a free model.
 func (p *AgentPanel) modelFor(t *agentTab, h agentmanager.Harness) string {
 	if t.mdl.chosen != "" {
 		return t.mdl.chosen
 	}
-	return p.defaultModel(h)
+	if d := p.defaultModel(h); d != "" {
+		return d
+	}
+	return p.suggestion(t, h)
 }
 
-// modelLabel is what the panel shows as tab t's model.
+// suggestion is the free model tab t is offered on harness h, "" once the user picked a model, the
+// tab has a stored conversation or the settings name a default.
+func (p *AgentPanel) suggestion(t *agentTab, h agentmanager.Harness) string {
+	if t.mdl.picked || t.rec != nil || t.mdl.chosen != "" || p.defaultModel(h) != "" {
+		return ""
+	}
+	return suggestedModel(h, &t.mdl)
+}
+
+// commitSuggestion turns the free model tab t is offered into its choice, so the conversation is
+// stored on it and keeps it when restored.
+func (p *AgentPanel) commitSuggestion(t *agentTab) {
+	if s := p.suggestion(t, p.harnessOf(t)); s != "" {
+		t.mdl.chosen = s
+	}
+	t.mdl.picked = true
+}
+
+// modelLabel is what the panel shows as tab t's model: the model's name, else its id without the
+// "<provider>/" prefix opencode ids carry.
 func (p *AgentPanel) modelLabel(t *agentTab) string {
-	if m := p.modelFor(t, p.harnessOf(t)); m != "" {
-		return t.mdl.name(m)
+	id := p.modelFor(t, p.harnessOf(t))
+	if id == "" {
+		id = t.mdl.current
 	}
-	if t.mdl.current != "" {
-		return t.mdl.name(t.mdl.current)
+	if id == "" {
+		return i18n.T("ui.agent.model.default")
 	}
-	return i18n.T("ui.agent.model.default")
+	if n := t.mdl.name(id); n != id {
+		return n
+	}
+	if i := strings.LastIndexByte(id, '/'); i >= 0 && i < len(id)-1 {
+		return id[i+1:]
+	}
+	return id
 }
 
 // Models returns the models the active tab's agent reported, for the model menu and tests.
@@ -109,6 +194,7 @@ func (p *AgentPanel) SetModel(model string, w *gpui.Window) {
 	if p.modelInput != nil {
 		p.modelInput.SetText("")
 	}
+	t.mdl.picked = true
 	if model == t.mdl.chosen {
 		w.Refresh()
 		return
@@ -219,8 +305,9 @@ func (p *AgentPanel) modelChip() *gpui.Div {
 	return chip
 }
 
-// modelRow is one choice of the model menu; on marks the active tab's choice.
-func (p *AgentPanel) modelRow(id, label, detail string, on bool, f func(*gpui.Window)) *gpui.Div {
+// modelRow is one choice of the model menu; on marks the active tab's choice and free adds a
+// "free" badge.
+func (p *AgentPanel) modelRow(id, label, detail string, on, free bool, f func(*gpui.Window)) *gpui.Div {
 	mark := gpui.NewText("").TextSize(12)
 	if on {
 		mark = gpui.NewText("*").TextSize(12).TextColor(uiOK)
@@ -229,6 +316,11 @@ func (p *AgentPanel) modelRow(id, label, detail string, on bool, f func(*gpui.Wi
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiBorder) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(w) }).
 		Child(gpui.NewDiv().SizeW(10).FlexShrink(0).Child(mark), gpui.NewText(clip(label, 30)).TextSize(12).Flex1().MinW(0))
+	if free {
+		row.Child(gpui.NewDiv().ID(id + "-free").Px_(5).Rounded(6).Bg(mix(uiPanelAlt, uiOK, 0.25)).FlexShrink(0).
+			Tooltip(i18n.T("ui.agent.model.free_tip")).
+			Child(gpui.NewText(i18n.T("ui.agent.model.free")).TextSize(10).TextColor(uiOK)))
+	}
 	if detail != "" {
 		row.Child(gpui.NewText(clip(detail, 24)).TextSize(10).TextColor(uiMuted).FlexShrink(0))
 	}
@@ -255,27 +347,38 @@ func (p *AgentPanel) modelMenuView(w *gpui.Window, cx *gpui.App) *gpui.Div {
 	if d := p.defaultModel(h); d != "" {
 		def = i18n.T("ui.agent.model.default_named", t.mdl.name(d))
 	}
-	menu.Child(p.modelRow("agent-model-default", upperFirst(def), "", t.mdl.chosen == "", func(w *gpui.Window) { p.SetModel("", w) }))
-	listed := t.mdl.chosen == ""
-	for _, m := range t.mdl.offered {
+	menu.Child(p.modelRow("agent-model-default", upperFirst(def), "", t.mdl.chosen == "" && p.suggestion(t, h) == "", false,
+		func(w *gpui.Window) { p.SetModel("", w) }))
+	// eff is the model the tab runs on: its choice, or the free model it is offered.
+	eff := t.mdl.chosen
+	if eff == "" {
+		eff = p.suggestion(t, h)
+	}
+	listed := eff == ""
+	offered := orderModels(h, t.mdl.offered)
+	if len(offered) == 0 && h == agentmanager.OpenCode {
+		offered = []agentmanager.ModelInfo{{ID: opencodeSuggested}}
+	}
+	for _, m := range offered {
 		m := m
 		detail := ""
 		if m.Name != "" && m.Name != m.ID {
 			detail = m.ID
 		}
-		listed = listed || m.ID == t.mdl.chosen
-		menu.Child(p.modelRow("agent-model-"+m.ID, t.mdl.name(m.ID), detail, m.ID == t.mdl.chosen, func(w *gpui.Window) { p.SetModel(m.ID, w) }))
+		listed = listed || m.ID == eff
+		menu.Child(p.modelRow("agent-model-"+m.ID, t.mdl.name(m.ID), detail, m.ID == eff, h == agentmanager.OpenCode && freeModel(m.ID),
+			func(w *gpui.Window) { p.SetModel(m.ID, w) }))
 	}
 	if !listed {
-		menu.Child(p.modelRow("agent-model-chosen", t.mdl.chosen, "", true, func(w *gpui.Window) { p.SetModel(t.mdl.chosen, w) }))
+		menu.Child(p.modelRow("agent-model-chosen", eff, "", true, freeModel(eff), func(w *gpui.Window) { p.SetModel(eff, w) }))
 	}
 	if len(t.mdl.offered) == 0 {
 		menu.Child(gpui.NewText(i18n.T("ui.agent.model.none_listed")).TextSize(11).TextColor(uiMuted).Px_(6).Py_(2))
 	}
 	menu.Child(gpui.NewDiv().ID("agent-model-field").FlexCol().SizeH(26).Mx(4).Px_(6).Rounded(4).Bg(uiField).Border(1, uiBorder).
 		Child(p.modelInput.Render(w, cx)))
-	if h != "" && t.mdl.chosen != p.defaultModel(h) {
-		chosen := t.mdl.chosen
+	if h != "" && eff != p.defaultModel(h) {
+		chosen := eff
 		menu.Child(gpui.NewDiv().FlexRow().Px_(2).Pt(4).Child(
 			p.button("agent-model-make-default", i18n.T("ui.agent.model.make_default", string(h)),
 				i18n.T("ui.agent.model.make_default_tip", string(h)), false,

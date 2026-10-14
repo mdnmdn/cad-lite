@@ -83,11 +83,11 @@ func (r *agentRig) pos(id string) gpui.Point {
 // inputPos is a point on the composer's input line.
 func (r *agentRig) inputPos() gpui.Point {
 	r.t.Helper()
-	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere("agent-composer")
+	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere("agent-input")
 	if !ok {
-		r.t.Fatal("agent composer not on screen")
+		r.t.Fatal("agent prompt field not on screen")
 	}
-	return gpui.Point{X: gpui.Pixels((b.x0 + b.x1) / 2), Y: gpui.Pixels(b.y0 + 24)}
+	return gpui.Point{X: gpui.Pixels((b.x0 + b.x1) / 2), Y: gpui.Pixels(b.y0 + 12)}
 }
 
 func openAgent(t *testing.T) *agentRig {

@@ -9,8 +9,11 @@ import (
 
 // clipResult is a finished clipboard operation, applied on the main loop.
 type clipResult struct {
-	op      string
-	text    string
+	op   string
+	text string
+	// image and mime are a pasted image, read when the clipboard had no text.
+	image   []byte
+	mime    string
 	err     error
 	handler gpui.PlatformInputHandler
 	rng     gpui.IntRange
@@ -20,6 +23,8 @@ type clipResult struct {
 // hands their results back through a channel drained by Update.
 type clipWorker struct {
 	results chan clipResult
+	// readImage, when set, is tried by a paste whose text read failed or was empty.
+	readImage func() ([]byte, string, error)
 }
 
 func newClipWorker() *clipWorker { return &clipWorker{results: make(chan clipResult, 16)} }
@@ -47,8 +52,14 @@ func startClipboard(cw *clipWorker, op string, h gpui.PlatformInputHandler,
 	read func() (string, error), write func(string) error) bool {
 	switch op {
 	case "paste":
+		readImage := cw.readImage
 		cw.run(func() clipResult {
 			text, err := read()
+			if (err != nil || text == "") && readImage != nil {
+				if img, mime, ierr := readImage(); ierr == nil && len(img) > 0 {
+					return clipResult{op: op, image: img, mime: mime}
+				}
+			}
 			return clipResult{op: op, text: text, err: err}
 		})
 		return true
@@ -84,6 +95,10 @@ func applyClipboard(r clipResult, current gpui.PlatformInputHandler, dispatch fu
 	}
 	switch r.op {
 	case "paste":
+		if len(r.image) > 0 {
+			dispatch(gpui.ImagePasteEvent{Data: r.image, MIME: r.mime})
+			return
+		}
 		text := printableText(r.text)
 		if text == "" {
 			return

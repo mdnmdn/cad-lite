@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -128,8 +129,20 @@ func (s *session) Events() <-chan agentmanager.Event { return s.q.Events() }
 
 // Prompt implements agentmanager.Session.
 func (s *session) Prompt(ctx context.Context, text string) error {
+	return s.PromptImages(ctx, text, nil)
+}
+
+// AcceptsImages implements agentmanager.ImagePrompter: the agent's promptCapabilities.image.
+func (s *session) AcceptsImages() bool { return s.caps.image }
+
+// PromptImages implements agentmanager.ImagePrompter; each image is an ACP image content block
+// after the text block.
+func (s *session) PromptImages(ctx context.Context, text string, images []agentmanager.Image) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if len(images) > 0 && !s.caps.image {
+		return agentmanager.ErrNoImages
 	}
 	s.mu.Lock()
 	if s.closed {
@@ -147,7 +160,11 @@ func (s *session) Prompt(ctx context.Context, text string) error {
 	}
 	s.sysDone = true
 	s.mu.Unlock()
-	params := map[string]any{"sessionId": id, "prompt": []map[string]any{{"type": "text", "text": text}}}
+	blocks := []map[string]any{{"type": "text", "text": text}}
+	for _, im := range images {
+		blocks = append(blocks, map[string]any{"type": "image", "mimeType": im.MIME, "data": base64.StdEncoding.EncodeToString(im.Data)})
+	}
+	params := map[string]any{"sessionId": id, "prompt": blocks}
 	if _, err := s.conn.CallAsync("session/prompt", params, s.turnDone); err != nil {
 		s.mu.Lock()
 		s.turn = false

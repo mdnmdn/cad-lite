@@ -108,7 +108,7 @@ func TestModelsListedAndSwitched(t *testing.T) {
 		c.Env = append(c.Env, "FAKEAGENT_MODELS=1")
 	})
 	mc := expect[agentmanager.ModelsChanged](h)
-	if mc.Current != "opus" || len(mc.Available) != 2 || mc.Available[1] != (agentmanager.ModelInfo{ID: "fake-fast", Name: "Fake Fast"}) {
+	if mc.Current != "opus" || len(mc.Available) != 2 || mc.Available[1] != (agentmanager.ModelInfo{ID: "fake-fast", Name: "Fake Fast", Vision: agentmanager.VisionYes}) {
 		t.Fatalf("%+v", mc)
 	}
 	if first := h.allLines()[0]; !strings.Contains(first, `"type":"control_request"`) || !strings.Contains(first, `"subtype":"initialize"`) {

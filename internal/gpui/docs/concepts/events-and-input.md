@@ -6,7 +6,7 @@ Source: `events.go`, `window.go` (dispatch), `keymap.go`,
 
 The platform turns OS input into `PlatformInput` values (`MouseDownEvent`,
 `MouseUpEvent`, `MouseMoveEvent`, `ClickEvent`, `ScrollWheelEvent`, `PinchEvent`,
-`FileDropEvent`, `KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
+`FileDropEvent`, `ImagePasteEvent`, `KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
 `Window.DispatchEvent(input, app)`, which runs inside `App.Update` itself, so
 effects queued by handlers flush once after dispatch. Dispatch reads the
 **rendered frame** - the hitboxes and key nodes recorded during the last
@@ -185,6 +185,14 @@ Finder or dropped on the Dock icon) goes to the app instead: register
 `App.OpenPaths(paths)`. Requests made before a handler is set are kept and
 delivered when it is, so a launch-by-document is not lost. Tests inject both
 directly: `HeadlessWindow.Dispatch(FileDropEvent{...})` and `App.OpenPaths`.
+
+### Pasted images
+
+`ImagePasteEvent{Data, MIME}` is an image pasted with the paste shortcut while
+the clipboard holds no text. It has no position: `OnImagePaste` listeners run
+along the focus path (the focused element, then its ancestors), innermost
+first, until `Window.StopPropagation()`, as key events do. Tests dispatch it
+with `HeadlessWindow.Dispatch`.
 
 ### Scrollbar input
 
@@ -484,7 +492,10 @@ elsewhere - on a worker goroutine, applying results on the next `Update`:
 paste is delivered as character input (newlines/tabs become spaces, control
 characters dropped); copy needs a focused handler with a non-empty selection;
 cut also deletes the text, but only if the write succeeded and the selection
-is unchanged. These shortcuts are handled by the platform and are not
+is unchanged. A paste that finds no text reads the clipboard image
+(`ClipboardReadImage`: `osascript` on macOS, PowerShell on Windows,
+`wl-paste`/`xclip` on Linux, up to 3 s) and dispatches an `ImagePasteEvent`
+when there is one. These shortcuts are handled by the platform and are not
 dispatched as key events.
 
 See also: [reference/events.md](../reference/events.md) (event fields, keymap and focus API), [cookbook](../guides/cookbook.md#keyboard-shortcuts-with-key-contexts) recipes for shortcuts and tab navigation, [testing](../guides/testing.md#dispatching-input) for synthetic input, and troubleshooting for [key bindings](../guides/troubleshooting.md#key-binding-not-firing) and [focus](../guides/troubleshooting.md#focus-not-moving).

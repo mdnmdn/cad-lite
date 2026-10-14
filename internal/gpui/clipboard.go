@@ -3,10 +3,13 @@ package gpui
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -114,6 +117,77 @@ func ClipboardAvailable() bool {
 // tool that succeeds within the timeout. It blocks; UI code should call it
 // off the main loop.
 func ClipboardRead() (string, error) { return readWith(systemClipTools(), clipTimeout) }
+
+// clipImageTimeout bounds one image read: osascript and PowerShell start
+// slowly, and the answer may be megabytes.
+const clipImageTimeout = 3 * time.Second
+
+// ErrNoClipboardImage is returned by ClipboardReadImage when the clipboard
+// holds no image (or no tool could read one).
+var ErrNoClipboardImage = errors.New("gpui: no image on the clipboard")
+
+// imageTool is one way to read the clipboard image; decode turns its stdout
+// into PNG bytes.
+type imageTool struct {
+	argv   []string
+	decode func([]byte) ([]byte, error)
+}
+
+func clipboardImageTools(goos string, getenv func(string) string) []imageTool {
+	raw := func(b []byte) ([]byte, error) { return b, nil }
+	switch goos {
+	case "darwin":
+		return []imageTool{{[]string{"osascript", "-e", "the clipboard as «class PNGf»"}, decodeAppleScriptData}}
+	case "windows":
+		return []imageTool{{[]string{"powershell", "-NoProfile", "-NonInteractive", "-STA", "-Command",
+			"Add-Type -AssemblyName System.Windows.Forms; $i=[System.Windows.Forms.Clipboard]::GetImage(); " +
+				"if ($i) { $m=New-Object System.IO.MemoryStream; $i.Save($m,[System.Drawing.Imaging.ImageFormat]::Png); " +
+				"[Console]::Out.Write([Convert]::ToBase64String($m.ToArray())) }"},
+			func(b []byte) ([]byte, error) { return base64.StdEncoding.DecodeString(strings.TrimSpace(string(b))) }}}
+	default:
+		var ts []imageTool
+		if getenv("WAYLAND_DISPLAY") != "" {
+			ts = append(ts, imageTool{[]string{"wl-paste", "--no-newline", "--type", "image/png"}, raw})
+		}
+		return append(ts, imageTool{[]string{"xclip", "-selection", "clipboard", "-t", "image/png", "-o"}, raw})
+	}
+}
+
+// decodeAppleScriptData decodes osascript's «data PNGf89504E47…» answer.
+func decodeAppleScriptData(b []byte) ([]byte, error) {
+	s := strings.TrimSpace(string(b))
+	s = strings.TrimPrefix(s, "«data PNGf")
+	s = strings.TrimSuffix(s, "»")
+	return hex.DecodeString(s)
+}
+
+var pngSignature = []byte("\x89PNG\r\n\x1a\n")
+
+// readImageWith tries each installed tool in order; an answer that is not a
+// PNG counts as no image.
+func readImageWith(tools []imageTool, timeout time.Duration) ([]byte, string, error) {
+	for _, t := range tools {
+		if _, lerr := exec.LookPath(t.argv[0]); lerr != nil {
+			continue
+		}
+		out, err := runClip(t.argv, nil, true, timeout)
+		if err != nil || len(out) == 0 {
+			continue
+		}
+		png, err := t.decode(out)
+		if err == nil && bytes.HasPrefix(png, pngSignature) {
+			return png, "image/png", nil
+		}
+	}
+	return nil, "", ErrNoClipboardImage
+}
+
+// ClipboardReadImage returns the image on the system clipboard as PNG bytes
+// and its MIME type ("image/png"), or ErrNoClipboardImage when it holds none.
+// It blocks (up to a few seconds); UI code should call it off the main loop.
+func ClipboardReadImage() ([]byte, string, error) {
+	return readImageWith(clipboardImageTools(runtime.GOOS, os.Getenv), clipImageTimeout)
+}
 
 // ClipboardWrite replaces the system clipboard text with s, passing it on
 // stdin to the first OS clipboard tool that succeeds within the timeout. It

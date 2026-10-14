@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"strings"
 	"time"
 	"unicode"
@@ -124,8 +125,11 @@ func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 		foot.Child(p.button("agent-cancel", i18n.T("ui.agent.cancel"), i18n.T("ui.agent.cancel_tip"), false, p.Cancel))
 	}
 	foot.Child(send)
-	return gpui.NewDiv().ID("agent-composer").FlexCol().Gap(8).P(12).Rounded(10).Border(1, uiBorder).Bg(uiField).
-		Child(gpui.NewDiv().MinH(36).FlexCol().Child(input), foot)
+	box := gpui.NewDiv().ID("agent-composer").FlexCol().Gap(8).P(12).Rounded(10).Border(1, uiBorder).Bg(uiField)
+	if len(t.images) > 0 {
+		box.Child(p.imageChips())
+	}
+	return box.Child(gpui.NewDiv().ID("agent-input").MinH(36).FlexCol().Child(input), foot)
 }
 
 func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.Div {
@@ -236,7 +240,8 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		t.scroll.ScrollToBottom()
 	}
 
-	return gpui.NewDiv().ID("agent-panel").FlexCol().FlexShrink(0).SizeW(width).MinW(0).Bg(uiPanel).Child(
+	return gpui.NewDiv().ID("agent-panel").FlexCol().FlexShrink(0).SizeW(width).MinW(0).Bg(uiPanel).
+		OnFileDrop(p.onFileDrop).OnImagePaste(p.onImagePaste).Child(
 		top,
 		hDivider(),
 		list,
@@ -307,8 +312,18 @@ func (p *AgentPanel) card() *gpui.Div {
 func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 	switch b := b.(type) {
 	case transcript.UserMsg:
-		return gpui.NewDiv().FlexCol().Gap(2).P(8).Rounded(6).Bg(uiAccent).
-			Child(gpui.NewText(i18n.T("ui.agent.you")).FontWeight(700).TextSize(11), gpui.NewText(b.Text))
+		d := gpui.NewDiv().FlexCol().Gap(2).P(8).Rounded(6).Bg(uiAccent).
+			Child(gpui.NewText(i18n.T("ui.agent.you")).FontWeight(700).TextSize(11))
+		if b.Text != "" {
+			d.Child(gpui.NewText(b.Text))
+		}
+		if len(b.Attachments) > 0 {
+			if p.thumbs == nil {
+				p.thumbs = map[string]*image.NRGBA{}
+			}
+			d.Child(attachmentRow(b.Attachments, p.thumbs))
+		}
+		return d
 	case transcript.AgentMsg:
 		return gpui.NewText(b.Text)
 	case transcript.Thought:

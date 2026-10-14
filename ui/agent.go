@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"errors"
+	"image"
 	"slices"
 	"strings"
 	"sync"
@@ -59,6 +61,8 @@ type agentTab struct {
 	shownVersion uint64
 	scroll       *gpui.ScrollHandle
 	queued       string
+	// images wait in the composer for the next prompt; queuedImages go with queued.
+	images, queuedImages []*agentImage
 	// attention is set when a background tab got a permission ask or finished a turn.
 	attention bool
 
@@ -143,6 +147,8 @@ type AgentPanel struct {
 	// modelInput is the model menu's free-text field; modelMenu shows the menu.
 	modelInput *gpui.TextInput
 	modelMenu  bool
+	// thumbs caches decoded transcript previews by their stored PNG bytes.
+	thumbs map[string]*image.NRGBA
 	// deferred is a prompt from the AI command that waits for the first frame.
 	deferred string
 
@@ -452,6 +458,7 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 	t.gen++
 	gen := t.gen
 	t.mu.Unlock()
+	p.commitSuggestion(t)
 	cfg := agentmanager.Config{
 		Harness:      h,
 		Cwd:          set.doc.projectDir(),
@@ -535,7 +542,7 @@ func (p *AgentPanel) stopTab(t *agentTab, wait bool) {
 	sess := t.sess
 	t.sess = nil
 	t.state = agentIdle
-	t.queued = ""
+	t.queued, t.queuedImages = "", nil
 	t.mdl.setting, t.mdl.restart, t.mdl.pending = false, false, false
 	var srv *mcp.Server
 	if s := p.setOf(t); s != nil && !s.live() {
@@ -572,14 +579,23 @@ func (p *AgentPanel) anyLive() bool {
 // Send submits a prompt on the active tab. Without a session it starts one
 // first (resuming the tab's stored agent session) and sends the prompt once
 // the agent is connected.
+//
+// The images waiting in the composer go with it; when the tab's model does not read images the
+// prompt is refused with a note and text and images stay.
 func (p *AgentPanel) Send(text string, w *gpui.Window) {
 	p.ensureLoaded()
 	text = strings.TrimSpace(text)
 	t := p.cur
-	if text == "" || t.tr.Running() {
+	imgs := t.images
+	if (text == "" && len(imgs) == 0) || t.tr.Running() {
 		return
 	}
 	p.win = w
+	if len(imgs) > 0 && p.visionOf(t) == agentmanager.VisionNo {
+		p.note(t, i18n.T("ui.agent.image.no_vision_send", p.modelLabel(t)))
+		w.Refresh()
+		return
+	}
 	switch t.state {
 	case agentIdle:
 		if p.harnessOf(t) == "" {
@@ -587,26 +603,45 @@ func (p *AgentPanel) Send(text string, w *gpui.Window) {
 			w.Refresh()
 			return
 		}
-		t.queued = text
-		p.input.SetText("")
-		p.userMessage(t, text)
+		t.queued, t.queuedImages = text, imgs
+		p.sent(t, text, imgs)
 		p.startTab(t, w)
 	case agentStarting:
-		t.queued = text
-		p.input.SetText("")
-		p.userMessage(t, text)
+		t.queued, t.queuedImages = text, imgs
+		p.sent(t, text, imgs)
 	case agentReady:
-		p.input.SetText("")
-		p.userMessage(t, text)
-		p.prompt(t, text)
+		p.sent(t, text, imgs)
+		p.prompt(t, text, imgs)
 	}
 	w.Refresh()
 }
 
-func (p *AgentPanel) prompt(t *agentTab, text string) {
+// sent clears the composer and records the user message with its images.
+func (p *AgentPanel) sent(t *agentTab, text string, imgs []*agentImage) {
+	p.input.SetText("")
+	t.images = nil
+	p.userMessage(t, text, imgs)
+}
+
+func (p *AgentPanel) prompt(t *agentTab, text string, imgs []*agentImage) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := t.sess.Prompt(ctx, text); err != nil {
+	var err error
+	if len(imgs) == 0 {
+		err = t.sess.Prompt(ctx, text)
+	} else if ip, ok := t.sess.(agentmanager.ImagePrompter); ok {
+		send := make([]agentmanager.Image, len(imgs))
+		for i, im := range imgs {
+			send[i] = im.img
+		}
+		err = ip.PromptImages(ctx, text, send)
+	} else {
+		err = agentmanager.ErrNoImages
+	}
+	if errors.Is(err, agentmanager.ErrNoImages) {
+		err = errors.New(i18n.T("ui.agent.image.not_accepted"))
+	}
+	if err != nil {
 		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopFailed, Err: err.Error()})
 	}
 }
@@ -704,7 +739,7 @@ func (p *AgentPanel) started(t *agentTab, res *agentStart) {
 	t.cancelOpen = nil
 	if res.err != nil {
 		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopFailed, Err: i18n.T("ui.agent.err.start", string(t.harness), res.err)})
-		t.queued = ""
+		t.queued, t.queuedImages = "", nil
 		p.stopTab(t, false)
 		return
 	}
@@ -714,9 +749,9 @@ func (p *AgentPanel) started(t *agentTab, res *agentStart) {
 		t.mdl.pending = false
 		p.applyModel(t)
 	}
-	if q := t.queued; q != "" {
-		t.queued = ""
-		p.prompt(t, q)
+	if q, qi := t.queued, t.queuedImages; q != "" || len(qi) > 0 {
+		t.queued, t.queuedImages = "", nil
+		p.prompt(t, q, qi)
 	}
 }
 

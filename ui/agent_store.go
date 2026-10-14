@@ -418,6 +418,7 @@ func (p *AgentPanel) prepareRecord(t *agentTab) {
 	if h.st == nil || t.rec != nil {
 		return
 	}
+	p.commitSuggestion(t)
 	rec, err := h.st.Create(p.harnessOf(t))
 	if err != nil {
 		p.warnOnce(t, i18n.T("ui.agent.warn.not_saved", err))
@@ -462,11 +463,15 @@ func (p *AgentPanel) apply(t *agentTab, ev agentmanager.Event) {
 }
 
 // userMessage adds and stores a message the user sent to tab t.
-func (p *AgentPanel) userMessage(t *agentTab, text string) {
+func (p *AgentPanel) userMessage(t *agentTab, text string, imgs []*agentImage) {
 	p.prepareRecord(t)
-	t.tr.AddUser(text)
+	var att []transcript.Attachment
+	for _, im := range imgs {
+		att = append(att, im.attachment())
+	}
+	t.tr.AddUserWith(text, att)
 	if t.rec != nil {
-		p.check(t.rec.AddUser(text))
+		p.check(t.rec.AddUserWith(text, att))
 	}
 }
 

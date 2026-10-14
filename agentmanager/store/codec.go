@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"agentmanager"
+	"agentmanager/transcript"
 )
 
 // Line kinds that are not agent events.
@@ -19,8 +20,11 @@ const (
 	kindDrawing   = "drawing"
 )
 
-// User is a stored user message.
-type User struct{ Text string }
+// User is a stored user message with the images sent with it (their previews, not the files).
+type User struct {
+	Text        string
+	Attachments []transcript.Attachment `json:",omitempty"`
+}
 
 // Resolved records that a permission ask was answered.
 type Resolved struct{ RequestID string }

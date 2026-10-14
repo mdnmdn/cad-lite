@@ -84,7 +84,7 @@ func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	if onLaunch != nil {
 		onLaunch(app)
 	}
-	g := &game{p: p, app: app, clip: newClipWorker(), wheel: wheelClassifier{pixels: runtime.GOOS == "js"}, pinch: newPinchQueue(), opens: newOpenQueue()}
+	g := &game{p: p, app: app, clip: &clipWorker{results: make(chan clipResult, 16), readImage: gpui.ClipboardReadImage}, wheel: wheelClassifier{pixels: runtime.GOOS == "js"}, pinch: newPinchQueue(), opens: newOpenQueue()}
 	if err := installOpenFilesHandler(g.opens); err != nil && !errors.Is(err, errOpenFilesUnsupported) {
 		log.Printf("gpui: opening files from the OS unavailable: %v", err)
 	}

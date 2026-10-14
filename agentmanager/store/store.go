@@ -387,8 +387,12 @@ func (r *Record) Append(ev agentmanager.Event) error {
 }
 
 // AddUser stores a user message.
-func (r *Record) AddUser(text string) error {
-	return r.item(kindUser, User{Text: text}, User{Text: text})
+func (r *Record) AddUser(text string) error { return r.AddUserWith(text, nil) }
+
+// AddUserWith stores a user message and the attachments sent with it.
+func (r *Record) AddUserWith(text string, a []transcript.Attachment) error {
+	u := User{Text: text, Attachments: a}
+	return r.item(kindUser, u, u)
 }
 
 // ResolvePermission stores that a permission ask was answered.
@@ -472,7 +476,7 @@ func (r *Record) Replay(t *transcript.T) {
 	for _, it := range r.Items() {
 		switch v := it.(type) {
 		case User:
-			t.AddUser(v.Text)
+			t.AddUserWith(v.Text, v.Attachments)
 		case Resolved:
 			t.ResolvePermission(v.RequestID)
 		case agentmanager.Event:

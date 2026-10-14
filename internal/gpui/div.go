@@ -25,6 +25,7 @@ type Div struct {
 	onScrollWheel func(*ScrollWheelEvent, *Window, *App)
 	onPinch       func(*PinchEvent, *Window, *App)
 	onFileDrop    func(*FileDropEvent, *Window, *App)
+	onImagePaste  func(*ImagePasteEvent, *Window, *App)
 	onKeyDown     func(*KeyDownEvent, *Window, *App)
 	onKeyUp       func(*KeyUpEvent, *Window, *App)
 	onHoverStart  func(*Window, *App)
@@ -143,6 +144,14 @@ func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div {
 // first); Window.StopPropagation halts the traversal.
 func (d *Div) OnFileDrop(f func(*FileDropEvent, *Window, *App)) *Div {
 	d.onFileDrop = f
+	return d
+}
+
+// OnImagePaste registers a listener for images pasted from the clipboard. It
+// runs along the focus path like OnKeyDown (innermost first);
+// Window.StopPropagation halts the traversal.
+func (d *Div) OnImagePaste(f func(*ImagePasteEvent, *Window, *App)) *Div {
+	d.onImagePaste = f
 	return d
 }
 
@@ -640,13 +649,14 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 		}
 	}
 
-	if d.onKeyDown != nil || d.onKeyUp != nil || len(d.onAction) > 0 || focusID != 0 || d.keyContext != "" {
+	if d.onKeyDown != nil || d.onKeyUp != nil || d.onImagePaste != nil || len(d.onAction) > 0 || focusID != 0 || d.keyContext != "" {
 		kn := keyNode{
-			KeyContext: d.keyContext,
-			FocusID:    focusID,
-			OnKeyDown:  d.onKeyDown,
-			OnKeyUp:    d.onKeyUp,
-			OnAction:   d.onAction,
+			KeyContext:   d.keyContext,
+			FocusID:      focusID,
+			OnKeyDown:    d.onKeyDown,
+			OnKeyUp:      d.onKeyUp,
+			OnImagePaste: d.onImagePaste,
+			OnAction:     d.onAction,
 		}
 		if focusID != 0 {
 			kn.tabIndex, kn.tabStop = fh.TabIndex(), fh.TabStop()

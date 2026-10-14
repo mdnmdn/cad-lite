@@ -680,6 +680,7 @@ type Div struct {
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
     onPinch      func(*PinchEvent, *Window, *App)
     onFileDrop   func(*FileDropEvent, *Window, *App)
+    onImagePaste func(*ImagePasteEvent, *Window, *App)
     onKeyDown    func(*KeyDownEvent, *Window, *App)
     onKeyUp      func(*KeyUpEvent, *Window, *App)
     onHoverStart func(*Window, *App)
@@ -702,6 +703,7 @@ func (d *Div) OnClick(f func(*ClickEvent, *Window, *App)) *Div
 func (d *Div) OnScrollWheel(f func(*ScrollWheelEvent, *Window, *App)) *Div
 func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div
 func (d *Div) OnFileDrop(f func(*FileDropEvent, *Window, *App)) *Div
+func (d *Div) OnImagePaste(f func(*ImagePasteEvent, *Window, *App)) *Div // focus path, like OnKeyDown
 func (d *Div) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *Div
 func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div
@@ -846,6 +848,11 @@ never scrolls containers.
 File drop semantics: `OnFileDrop` listeners run along the hit path at the drop
 position, innermost first, until one calls `Window.StopPropagation()`, as
 pinch does. A drop no listener takes is ignored.
+
+Image paste semantics: `OnImagePaste` listeners run along the focus path (the
+focused element and its ancestors, as key events), innermost first, until one
+calls `Window.StopPropagation()`; with nothing focused the path is the root
+key node, as for keys. A paste no listener takes is ignored.
 
 Scroll semantics: `OnScrollWheel` listeners run first (bubble, innermost
 first); if one calls `Window.StopPropagation()` no container scrolls. Then
@@ -1019,6 +1026,10 @@ type GlyphSprite struct {
     ContentMask ContentMask
     Mask        *GlyphMask  // grayscale alpha mask
     Color       Rgba
+    // Image, when set, is a colour picture drawn instead of Mask: its pixels
+    // are scaled into Bounds (bilinear, 1:1 when the sizes match) and Color's
+    // alpha multiplies them (opaque white draws the image as is).
+    Image       *image.NRGBA
 }
 
 type GlyphMask struct {
@@ -1113,7 +1124,9 @@ mask; borders are drawn as four strips (or as a rounded-rect stroke). Text is
 drawn by alpha-blending the `GlyphMask` into `GlyphSprite.Bounds` with
 bilinear sampling; when the device-space bounds size equals the mask size
 (masks rasterized at the window scale) the mask is blitted 1:1, snapped to
-whole device pixels, so text stays crisp on HiDPI.
+whole device pixels, so text stays crisp on HiDPI. A sprite with `Image` is
+drawn the same way from the image's premultiplied colours instead of a tinted
+mask.
 
 `raster.go` may import `image`, `image/draw`, `image/color`, `math`, but **not**
 `golang.org/x/*` or ebiten.
@@ -1211,6 +1224,13 @@ type FileDropEvent struct {
     Position Point
     Paths []string
     Modifiers Modifiers
+}
+// ImagePasteEvent is an image the user pasted (the paste shortcut while the
+// clipboard holds no text but an image). Data is the encoded file and MIME its
+// type (image/png in practice). It goes to the focused element like a key.
+type ImagePasteEvent struct {
+    Data []byte
+    MIME string
 }
 type ClickEvent struct {
     Up *MouseUpEvent
@@ -1698,6 +1718,9 @@ func (w *Window) InsertHitbox(b Bounds) int
 func (w *Window) PaintQuad(q Quad)
 func (w *Window) PaintUnderline(u Underline)
 func (w *Window) PaintGlyph(g GlyphSprite)
+// PaintImage draws img scaled into b (window space, logical pixels), clipped
+// to the current content mask, with the current opacity. nil draws nothing.
+func (w *Window) PaintImage(b Bounds, img *image.NRGBA)
 func (w *Window) PaintShadow(s Shadow)
 func (w *Window) PaintStroke(s Stroke)    // unset ContentMask = current clip; opacity applied
 // FocusNext / FocusPrev move focus along the rendered frame's tab stops,
@@ -1793,6 +1816,7 @@ type keyNode struct {
     focusID    FocusID
     onKeyDown  func(*KeyDownEvent, *Window, *App)
     onKeyUp    func(*KeyUpEvent, *Window, *App)
+    onImagePaste func(*ImagePasteEvent, *Window, *App)
     onAction   map[ActionKey]func(Action, *Window, *App)
 }
 func (f *Frame) SceneRef() *Scene
@@ -2099,7 +2123,21 @@ func ClipboardRead() (string, error)
 func ClipboardWrite(s string) error
 // ClipboardAvailable reports whether an OS clipboard tool was found.
 func ClipboardAvailable() bool
+// ClipboardReadImage returns the image on the system clipboard as PNG bytes
+// and its MIME type ("image/png"), or ErrNoClipboardImage when it holds none.
+// It blocks (up to ~3s); UI code calls it off the main loop.
+func ClipboardReadImage() (data []byte, mime string, err error)
+var ErrNoClipboardImage error
 ```
+
+Image read tools, each tried in turn like the text ones:
+- darwin: `osascript -e 'the clipboard as «class PNGf»'`, whose `«data PNGf<hex>»`
+  answer is decoded.
+- windows: PowerShell `System.Windows.Forms.Clipboard.GetImage()` saved as
+  PNG and written to stdout as base64.
+- linux: `wl-paste --no-newline --type image/png` (only with `WAYLAND_DISPLAY`),
+  then `xclip -selection clipboard -t image/png -o`; `xsel` has no images.
+- The answer must start with the PNG signature, else it counts as no image.
 
 - darwin: `pbpaste` / `pbcopy`
 - windows: `powershell -NoProfile -Command Get-Clipboard` /
@@ -2252,7 +2290,9 @@ Input mapping in `Update`:
   ctrl-c/v/x elsewhere. The OS tools run on a goroutine; results are posted
   back over a channel and applied in a later `Update` (paste → character
   input; cut deletes the selection only if it is unchanged and the write
-  succeeded).
+  succeeded). A paste whose text read fails or is empty tries
+  `gpui.ClipboardReadImage` on the same goroutine and, when an image comes
+  back, dispatches an `ImagePasteEvent`.
 
 ## 18. `examples/todo/`
 

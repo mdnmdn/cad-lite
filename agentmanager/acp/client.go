@@ -44,12 +44,17 @@ type capabilities struct {
 	loadSession bool
 	mcpHTTP     bool
 	mcpSSE      bool
+	// image is promptCapabilities.image: the agent takes image content blocks.
+	image bool
 }
 
 type initResult struct {
 	ProtocolVersion   int `json:"protocolVersion"`
 	AgentCapabilities struct {
-		LoadSession     bool `json:"loadSession"`
+		LoadSession        bool `json:"loadSession"`
+		PromptCapabilities struct {
+			Image bool `json:"image"`
+		} `json:"promptCapabilities"`
 		McpCapabilities struct {
 			HTTP bool `json:"http"`
 			SSE  bool `json:"sse"`
@@ -165,7 +170,8 @@ func (o opener) start(ctx context.Context, cfg agentmanager.Config, extraEnv []s
 		s.abort()
 		return nil, nil, fmt.Errorf("acp: agent speaks protocol version %d, want 1", ir.ProtocolVersion)
 	}
-	s.caps = capabilities{ir.AgentCapabilities.LoadSession, ir.AgentCapabilities.McpCapabilities.HTTP, ir.AgentCapabilities.McpCapabilities.SSE}
+	s.caps = capabilities{ir.AgentCapabilities.LoadSession, ir.AgentCapabilities.McpCapabilities.HTTP, ir.AgentCapabilities.McpCapabilities.SSE,
+		ir.AgentCapabilities.PromptCapabilities.Image}
 	var ids []string
 	for _, m := range ir.AuthMethods {
 		ids = append(ids, m.ID)
