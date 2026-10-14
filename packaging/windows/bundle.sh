@@ -34,7 +34,13 @@ for arch in $ARCHS; do
   (cd "$root" && GOOS=windows GOARCH="$arch" CGO_ENABLED=0 \
     go build -trimpath -ldflags "-H=windowsgui -s -w $LDFLAGS_VERSION" -o "$dir/cad-lite.exe" ./cmd/cad)
   rm -f "$root/cmd/cad/rsrc_windows_$arch.syso"
-  (cd "$OUT" && if command -v zip >/dev/null; then zip -qr "cad-lite-$VERSION-windows-$arch.zip" "cad-lite-windows-$arch"
+  # Compress-Archive (Windows PowerShell 5) writes backslashes into entry names, so it is the last
+  # resort; the GitHub Windows runner has 7-Zip but no zip.
+  sevenzip="$(command -v 7z || true)"
+  if [ -z "$sevenzip" ] && [ -x "/c/Program Files/7-Zip/7z.exe" ]; then sevenzip="/c/Program Files/7-Zip/7z.exe"; fi
+  (cd "$OUT" && rm -f "cad-lite-$VERSION-windows-$arch.zip" &&
+   if command -v zip >/dev/null; then zip -qr "cad-lite-$VERSION-windows-$arch.zip" "cad-lite-windows-$arch"
+   elif [ -n "$sevenzip" ]; then "$sevenzip" a -tzip -bd -bso0 "cad-lite-$VERSION-windows-$arch.zip" "cad-lite-windows-$arch"
    else powershell -NoProfile -Command "Compress-Archive -Force cad-lite-windows-$arch cad-lite-$VERSION-windows-$arch.zip"; fi)
   echo "$dir/cad-lite.exe (version $VERSION)"
 done
