@@ -105,6 +105,8 @@ var tables = map[string]map[string]bool{
 	"agent":      {"default": true},
 	"update":     {"auto_check": true, "last_check": true},
 	"window":     {"width": true, "height": true},
+	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
+		"side_collapsed": true, "layers_collapsed": true, "properties_collapsed": true, "history_collapsed": true, "ribbon_collapsed": true},
 }
 
 // Parse decodes TOML text into Settings: absent keys keep their defaults,
@@ -198,6 +200,41 @@ func Parse(data []byte) (Settings, []string, error) {
 				} else {
 					bad(full, "a date and time", v)
 				}
+			case "layout.side_width", "layout.agent_width", "layout.layers_height", "layout.history_height":
+				x, ok := v.(int64)
+				if !ok {
+					bad(full, "an integer", v)
+					break
+				}
+				x = min(max(x, 0), math.MaxInt32)
+				switch k {
+				case "side_width":
+					s.Layout.SideWidth = int(x)
+				case "agent_width":
+					s.Layout.AgentWidth = int(x)
+				case "layers_height":
+					s.Layout.LayersHeight = int(x)
+				default:
+					s.Layout.HistoryHeight = int(x)
+				}
+			case "layout.side_collapsed", "layout.layers_collapsed", "layout.properties_collapsed", "layout.history_collapsed", "layout.ribbon_collapsed":
+				x, ok := v.(bool)
+				if !ok {
+					bad(full, "a boolean", v)
+					break
+				}
+				switch k {
+				case "side_collapsed":
+					s.Layout.SideCollapsed = x
+				case "layers_collapsed":
+					s.Layout.LayersCollapsed = x
+				case "properties_collapsed":
+					s.Layout.PropsCollapsed = x
+				case "history_collapsed":
+					s.Layout.HistoryCollapsed = x
+				default:
+					s.Layout.RibbonCollapsed = x
+				}
 			case "window.width", "window.height":
 				x, ok := v.(int64)
 				if !ok {
@@ -274,6 +311,17 @@ func Marshal(s Settings) []byte {
 	section("window", "last window size in logical pixels; 0 means unset.",
 		"width = "+strconv.Itoa(s.Window.Width),
 		"height = "+strconv.Itoa(s.Window.Height))
+	l := s.Layout
+	section("layout", "panel sizes in logical pixels (0: automatic) and which panels are collapsed; collapsing keeps the size.",
+		"side_width = "+strconv.Itoa(l.SideWidth),
+		"agent_width = "+strconv.Itoa(l.AgentWidth),
+		"layers_height = "+strconv.Itoa(l.LayersHeight),
+		"history_height = "+strconv.Itoa(l.HistoryHeight),
+		"side_collapsed = "+strconv.FormatBool(l.SideCollapsed),
+		"layers_collapsed = "+strconv.FormatBool(l.LayersCollapsed),
+		"properties_collapsed = "+strconv.FormatBool(l.PropsCollapsed),
+		"history_collapsed = "+strconv.FormatBool(l.HistoryCollapsed),
+		"ribbon_collapsed = "+strconv.FormatBool(l.RibbonCollapsed))
 	return append(bytes.TrimRight(b.Bytes(), "\n"), '\n')
 }
 

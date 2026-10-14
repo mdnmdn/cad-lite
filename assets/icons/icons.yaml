@@ -226,6 +226,15 @@ categories:
     app-chevron-right:
       goal: collapse or move on to the right, a single chevron
       keywords: [chevron, arrow, collapse, next, right]
+    app-chevron-down:
+      goal: an open section that can fold away, or collapse downwards, a single chevron
+      keywords: [chevron, arrow, collapse, expand, down, disclosure]
+    app-chevron-up:
+      goal: collapse upwards, or a folded section that can open downwards, a single chevron
+      keywords: [chevron, arrow, collapse, expand, up]
+    app-chevron-left:
+      goal: bring a folded panel back from the right, a single chevron
+      keywords: [chevron, arrow, expand, previous, left]
     app-send:
       goal: send what was typed, an arrow pointing right
       keywords: [send, submit, arrow, go, enter]

@@ -134,6 +134,7 @@ func (ws *Workspace) applySettings(s settings.Settings, w *gpui.Window) {
 	ws.applyDrawingDefaults()
 	p.fireLanguage()
 	ws.refreshPlaceholders()
+	ws.applyLayout(s.Layout)
 	if h := s.DefaultAgent; h != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(h), "")
 	}
@@ -257,6 +258,7 @@ func (ws *Workspace) SaveSettings() error {
 	if p.path == "" {
 		return nil
 	}
+	p.cur.Layout = ws.layoutSettings()
 	s := p.cur.Clone()
 	if w := ws.win; w != nil {
 		b, f := w.Bounds(), w.UIScale()

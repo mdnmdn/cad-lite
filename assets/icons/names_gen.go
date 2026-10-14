@@ -9,8 +9,17 @@ const (
 	// AppAgent: talk to the AI agent, a speech bubble with two eyes
 	AppAgent Name = "app-agent"
 
+	// AppChevronDown: an open section that can fold away, or collapse downwards, a single chevron
+	AppChevronDown Name = "app-chevron-down"
+
+	// AppChevronLeft: bring a folded panel back from the right, a single chevron
+	AppChevronLeft Name = "app-chevron-left"
+
 	// AppChevronRight: collapse or move on to the right, a single chevron
 	AppChevronRight Name = "app-chevron-right"
+
+	// AppChevronUp: collapse upwards, or a folded section that can open downwards, a single chevron
+	AppChevronUp Name = "app-chevron-up"
 
 	// AppHistory: what was done earlier, a clock
 	AppHistory Name = "app-history"
@@ -191,7 +200,10 @@ const (
 var All = []Name{
 	AppAdd,
 	AppAgent,
+	AppChevronDown,
+	AppChevronLeft,
 	AppChevronRight,
+	AppChevronUp,
 	AppHistory,
 	AppKeyEnter,
 	AppPrompt,

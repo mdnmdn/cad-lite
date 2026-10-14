@@ -14,7 +14,7 @@ import (
 	"cad-lite/internal/gpui"
 )
 
-// agentPanelWidth is the docked panel's width for a window of the given width: a quarter of it,
+// agentPanelWidth is the docked panel's default width for a window of the given width: a quarter of it,
 // between 300 and 510 px.
 func agentPanelWidth(window float32) float32 { return min(510, max(300, window/4)) }
 
@@ -123,7 +123,7 @@ func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 		Child(gpui.NewDiv().SizeH(36).FlexCol().Child(input), foot)
 }
 
-func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, window float32) *gpui.Div {
+func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.Div {
 	p.win = w
 	p.probe()
 	if q := p.deferred; q != "" {
@@ -223,15 +223,13 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, window float32) *gpui.
 		t.scroll.ScrollToBottom()
 	}
 
-	return gpui.NewDiv().ID("agent-panel").FlexRow().FlexShrink(0).SizeW(agentPanelWidth(window)+1).Child(
-		gpui.NewDiv().SizeW(1).Bg(uiBorder).FlexShrink(0),
-		gpui.NewDiv().FlexCol().Flex1().MinW(0).Bg(uiPanel).Child(
-			top,
-			hDivider(),
-			list,
-			hDivider(),
-			gpui.NewDiv().FlexCol().P(12).Child(p.composer(input)),
-		))
+	return gpui.NewDiv().ID("agent-panel").FlexCol().FlexShrink(0).SizeW(width).MinW(0).Bg(uiPanel).Child(
+		top,
+		hDivider(),
+		list,
+		hDivider(),
+		gpui.NewDiv().FlexCol().P(12).Child(p.composer(input)),
+	)
 }
 
 // historyMenu lists the project's stored conversations, newest first.

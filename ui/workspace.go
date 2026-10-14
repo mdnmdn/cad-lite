@@ -45,8 +45,12 @@ type Workspace struct {
 	zoomSaved bool
 	// winH is the window height of the last frame, which sizes the default history region.
 	winH float32
+	// winW is the window width of the last frame, which sizes the columns.
+	winW float32
 	// cmd is the command area's state: history height and recent commands.
 	cmd cmdAreaState
+	// lay is the panel layout: sizes, collapsed panels and the splitter drag in progress.
+	lay layoutState
 }
 
 // NewWorkspace returns a workspace editing d. files may be nil, which
@@ -54,6 +58,7 @@ type Workspace struct {
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	v := render.DefaultView(800, 600)
 	ws := &Workspace{view: &v, files: files, fitPending: d.Len() > 0}
+	ws.lay.col = gpui.NewScrollHandle()
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
@@ -174,10 +179,8 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	}
 	win := float32(w.Bounds().Size.W)
 	ws.winH = float32(w.Bounds().Size.H)
-	var agentPanel gpui.IntoElement = gpui.NewDiv()
-	if ws.agent != nil && ws.agent.visible {
-		agentPanel = ws.agent.render(w, cx, win)
-	}
+	ws.winW = win
+	sideW, agentW := ws.widths(win)
 	cmdline := ws.input.Render(w, cx)
 	if fh := ws.input.FocusHandle(); fh != nil && w.Focus() == nil {
 		w.RequestFocus(fh)
@@ -202,30 +205,43 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
 			ws.zoom.Move(e.Position, w)
-			ws.dragHistory(float32(e.Position.Y), w)
+			ws.dragMove(e.Position, w)
 		}).
 		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
 			ws.zoom.End(w)
-			ws.cmd.drag = false
+			ws.endDrag(w)
 		}).
-		Child(
-			ws.titleBar(),
+		Child(ws.chrome(win, sideW, agentW, cmdline, w, cx)...).
+		Child(ws.statusBar()))
+}
+
+// chrome returns the window's rows above the status bar: the title bar, the ribbon unless it is
+// collapsed, and the body, each followed by a divider.
+func (ws *Workspace) chrome(win, sideW, agentW float32, cmdline gpui.IntoElement, w *gpui.Window, cx *gpui.App) []gpui.IntoElement {
+	rows := []gpui.IntoElement{ws.titleBar(), hDivider()}
+	if !ws.lay.ribbonOff {
+		rows = append(rows, ws.ribbon(win), hDivider())
+	}
+	body := gpui.NewDiv().FlexRow().Flex1().MinH(0).Child(
+		gpui.NewDiv().FlexCol().Flex1().MinW(0).Child(
+			ws.canvasElement(),
 			hDivider(),
-			ws.ribbon(win),
-			hDivider(),
-			gpui.NewDiv().FlexRow().Flex1().MinH(0).Child(
-				gpui.NewDiv().FlexCol().Flex1().MinW(0).Child(
-					ws.canvasElement(),
-					hDivider(),
-					ws.commandArea(cmdline, w),
-				),
-				gpui.NewDiv().SizeW(1).Bg(uiBorder).FlexShrink(0),
-				ws.sidePanel(win),
-				agentPanel,
-			),
-			hDivider(),
-			ws.statusBar(),
+			ws.commandArea(cmdline, w),
 		))
+	l := &ws.lay
+	if l.sideOff {
+		body.Child(gpui.NewDiv().SizeW(1).Bg(uiBorder).FlexShrink(0))
+	} else {
+		body.Child(ws.splitter("split-side", splitSide, false, i18n.T("ui.panel.side_splitter_tip"),
+			func() float32 { s, _ := ws.widths(ws.winW); return s }, func() { l.sideW = 0 }))
+	}
+	body.Child(ws.sidePanel(sideW))
+	if ws.agentShown() {
+		body.Child(ws.splitter("split-agent", splitAgent, false, i18n.T("ui.panel.agent_splitter_tip"),
+			func() float32 { _, a := ws.widths(ws.winW); return a }, func() { l.agentW = 0 }),
+			ws.agent.render(w, cx, agentW))
+	}
+	return append(rows, body, hDivider())
 }
 
 // tb returns the translated toolbar caption for key.

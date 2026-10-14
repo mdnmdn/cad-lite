@@ -3,11 +3,11 @@ id: feat-canvas
 title: Drawing canvas
 kind: feature
 status: current
-summary: The canvas and the chrome around it — pan and zoom, grid, crosshair and pickbox, highlights, selection boxes, snap markers, the viewport label and zoom buttons, the title bar, the ribbon, the layers and properties panels and the status bar.
+summary: The canvas and the chrome around it — pan and zoom, grid, crosshair and pickbox, highlights, selection boxes, snap markers, the viewport label and zoom buttons, the title bar, the ribbon, the layers and properties panels, resizing and collapsing the panels, and the status bar.
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/toolbar_layout.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/toolbar_layout.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -95,27 +95,58 @@ never reaches the canvas, so it neither picks nor answers a point prompt.
 
 ### Layers panel
 
-The column's top section is headed `Layers` (semibold, normal case) with a `+` icon button at its
-right that runs `LAYER`, where `name=colour` creates a layer. Each layer shows its colour swatch, its name and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
+The column's top section is headed `Layers` (semibold, normal case, behind a disclosure chevron) with a
+`+` icon button at its right that runs `LAYER` and a chevron that folds the whole column, where `name=colour` creates a layer. Each layer shows its colour swatch, its name and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
 is bold. Clicking a row makes that layer current. Clicking the button toggles the layer off or on;
 entities on an off layer are neither drawn nor selectable.
 
 ### Properties panel
 
-Below a divider, under a `Properties` heading, the panel is read-only. With nothing selected it reads `No selection`. Otherwise it shows the count and a line per entity
+Below a splitter, under a `Properties` heading with its own disclosure chevron, the panel is read-only. With nothing selected it reads `No selection`. Otherwise it shows the count and a line per entity
 class (`LINE × 3`); a single selected entity also shows its layer and handle.
 
-Both sections scroll when their rows do not fit. The column is a fifth of the window wide, between
-220 and 410 px, on the panel colour and between 1 px borders; with the agent panel open it sits
-between the canvas column and the agent column, and both run from under the ribbon down to the status bar,
-so the command area spans only the canvas.
+Both sections scroll when their rows do not fit. The column defaults to a sixth of the window wide, between
+220 and 340 px, on the panel colour; with the agent panel open it sits between the canvas column and the
+agent column, and both run from under the ribbon down to the status bar, so the command area spans only the
+canvas.
+
+### Resizing and collapsing
+
+Every area can be resized with a splitter and folded away; a folded area keeps its size, so unfolding it
+restores what it had. Splitters are 5 px hit areas with the 1 px border line in the middle; the line takes the
+accent colour while the pointer is over it or a drag is in progress (gpui has no cursor styles, so the pointer
+shape does not change). A drag follows the pointer through the root element's mouse move and up, so it
+continues outside the splitter. A double click on a splitter or on the command handle resets that size to
+automatic. Every tooltip names the drag and the reset.
+
+| Area | Splitter | Limits | Fold |
+|---|---|---|---|
+| Layers and Properties column | its left edge (`split-side`) | 180 to 640 px | the chevron at the right of the Layers header folds the column to a 30 px strip with an expand button |
+| Agent column | its left edge (`split-agent`) | 280 to 800 px | its `>` button hides the panel; the title bar button, F2 and `AI` bring it back |
+| Layers and Properties sections | the line between them (`split-layers`) | from one row to all the rows | the chevron before each title folds that section to its header; the other takes the freed space |
+| Command history | the bar on its top edge | one line to 480 px, and the canvas keeps at least 420 px of the window | the chevron at the right of the bar leaves only the input row |
+| Ribbon | none | none | the chevron button in the title bar hides the button groups |
+
+The canvas column never gets narrower than 240 px: when the columns want more (a saved width, a small window,
+the agent panel opened), the agent column gives way first, then the Layers column, down to their minimums
+(`columnWidths`). Saved widths are not changed by that; a larger window gets them back.
+
+The Layers section uses only the space its rows need: its height is the header plus the rows, and Properties
+takes the rest. Dragging its splitter sets a cap that can only be below the rows (the splitter stops where
+the rows end, since more would be empty space); the list then scrolls, and a double click fits it to its rows
+again. With many layers the list stops where Properties keeps its header and a 56 px body. With Properties
+folded the list may take everything but its header. The command history keeps its fixed default height (96 px,
+less in a short window) rather than fitting its lines, so the canvas does not move as lines appear.
+
+The sizes and the folded flags are saved in the settings file (`layout` table, see [Settings](settings.md))
+shortly after each change and when the app closes, and applied at startup.
 
 ### Title bar
 
-A 52 px row on the background colour. From the left: the brand, a divider, the document chip, a
-divider, Open and Save, a divider, Undo and Redo; at the right end the agent panel toggle and the gear
+A 44 px row on the background colour. From the left: the brand, a divider, the document chip, a
+divider, Open and Save, a divider, Undo and Redo; at the right end the ribbon toggle (a chevron that hides and shows the ribbon's button groups), the agent panel toggle and the gear
 `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or `OPTIONS`). Every
-button is icon-only (32 px, an 18 px icon) with its tooltip. The document chip is a rounded box with
+button is icon-only (28 px, an 18 px icon) with its tooltip. The document chip is a rounded box with
 the file name, or `Untitled` while the drawing has no file, and a dot before the name while the drawing has unsaved
 changes (`Session.Dirty`); its tooltip gives the path. The agent button is filled while the panel is
 open and carries a dot while a session is live (amber when a background tab wants attention). Open and Save show the
@@ -133,7 +164,8 @@ before anything else moves.
 ### Ribbon
 
 Three panels, each with its name (`Draw`, `Modify`, `Utilities`) centred under its buttons in muted
-12 px text and a vertical divider after it. **Draw** has large buttons (icon over label) for Line,
+12 px text and a vertical divider after it; on one row the ribbon is 84 px high. The title bar's ribbon toggle
+hides the panels (the commands stay on the command line) and shows them again. **Draw** has large buttons (icon over label) for Line,
 Polyline, Circle and Arc, and Rectangle as a small one (icon left of label). **Modify** is a grid of small
 buttons in two rows and seven columns: Move, Rotate, Mirror, Offset, Chamfer, Extend, Join over Copy,
 Scale, Erase, Fillet, Trim, Break, Explode. **Utilities** is two columns of two: Distance, Area and ID point,
@@ -153,7 +185,7 @@ Every clickable control carries a tooltip that appears after the pointer rests o
 (`gpui.Div.Tooltip`): ribbon and title bar buttons show the command's tip (`i18n.Command(name).Tip`: title,
 what it does, shortcut or alias), the gear and agent buttons, the layer rows (make current), the
 visibility pills and the colour swatches, the document chip, the viewport label, the zoom buttons, the layer `+`,
-the command history handle and recent commands button, the layout tabs, the status bar toggles and the coordinates readout, and
+the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the layout tabs, the status bar toggles and the coordinates readout, and
 every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
 languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and grows to the wrapped height.
 
@@ -186,7 +218,11 @@ line at the right.
 
 `ui.Workspace` in `ui/workspace.go` is the root view: `titleBar` (`ui/titlebar.go`), `ribbon`, then a row of the
 canvas column (`canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.go`) and the agent panel, then
-`statusBar` (`ui/statusbar.go`), with 1 px dividers between. `ui/toolbar_layout.go` builds the ribbon:
+`statusBar` (`ui/statusbar.go`), with 1 px dividers or splitters between (`Workspace.chrome`).
+`ui/layout.go` holds `layoutState` (sizes, folded flags, the drag in progress), the pure sizing functions
+`columnWidths`, `sideRange`, `agentRange`, `layersHeight`, `layersLimits` and `resizeSpan`, the `splitter`
+and `collapseButton` elements, and `layoutSettings`, `applyLayout` and `persistLayout`, which move the layout
+to and from `settings.Layout`; `sidePanel` measures its own height from a `gpui.ScrollHandle` of the previous frame. `ui/toolbar_layout.go` builds the ribbon:
 `Workspace.ribbonGroups` lists the groups, `ribbonLarge`, `ribbonSmall` and `smallColumns` build the
 buttons around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `Workspace.ribbon` puts each group in
 a no-shrink `Div` inside a `FlexWrap` row, so gpui wraps between groups only. `ui/chrome.go` holds

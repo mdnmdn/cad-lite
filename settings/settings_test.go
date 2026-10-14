@@ -291,3 +291,48 @@ func TestPathEnvOverrideLegacyName(t *testing.T) {
 		t.Fatalf("Path = %q, %v", p, err)
 	}
 }
+
+func TestLayoutRoundTripsAndDefaultsToAutomatic(t *testing.T) {
+	if d := Default().Layout; d != (Layout{}) {
+		t.Fatalf("default layout %+v, want every size automatic and nothing collapsed", d)
+	}
+	path := filepath.Join(t.TempDir(), "cad-lite", "settings.toml")
+	want := Default()
+	want.Layout = Layout{
+		SideWidth: 333, AgentWidth: 410, LayersHeight: 120, HistoryHeight: 77,
+		SideCollapsed: true, LayersCollapsed: true, PropsCollapsed: true, HistoryCollapsed: true, RibbonCollapsed: true,
+	}
+	if err := Save(path, want); err != nil {
+		t.Fatal(err)
+	}
+	got, w, err := LoadWarn(path)
+	if err != nil || len(w) != 0 {
+		t.Fatalf("load: %v %v", w, err)
+	}
+	if got.Layout != want.Layout {
+		t.Fatalf("layout round trip\n got %+v\nwant %+v", got.Layout, want.Layout)
+	}
+}
+
+func TestLayoutValuesAreClampedAndUnknownKeysKept(t *testing.T) {
+	s, w, err := Parse([]byte(`
+[layout]
+side_width = 99999
+agent_width = -5
+layers_height = "tall"
+ribbon_collapsed = 1
+future_key = 3
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Layout.SideWidth != MaxLayoutSize || s.Layout.AgentWidth != 0 || s.Layout.LayersHeight != 0 || s.Layout.RibbonCollapsed {
+		t.Fatalf("layout not clamped: %+v", s.Layout)
+	}
+	if len(w) < 3 {
+		t.Fatalf("want a warning for the huge, the mistyped and the non-boolean value, got %v", w)
+	}
+	if s.Extra["layout.future_key"] != int64(3) || !strings.Contains(string(Marshal(s)), "future_key = 3") {
+		t.Fatalf("unknown layout key lost: %v", s.Extra)
+	}
+}

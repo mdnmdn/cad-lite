@@ -11,12 +11,20 @@ import (
 // Ribbon metrics, in logical pixels.
 const (
 	// ribbonLargeIcon and ribbonSmallIcon are the icon edges of the two button shapes.
-	ribbonLargeIcon = 24
-	ribbonSmallIcon = 18
+	ribbonLargeIcon = 22
+	ribbonSmallIcon = 16
 	// ribbonBodyHeight is the height of a group's buttons: one large button, or two small ones.
-	ribbonBodyHeight = 72
-	// ribbonSmallHeight is the height of a small button.
-	ribbonSmallHeight = 34
+	ribbonBodyHeight = 58
+	// ribbonSmallHeight is the height of a small button: two of them and the gap between fill the
+	// body.
+	ribbonSmallHeight = (ribbonBodyHeight - 2) / 2
+	// ribbonGroupPad is the space either side of a group's buttons; the group's divider adds 1.
+	ribbonGroupPad = 8
+	// ribbonLargePad and ribbonSmallPad are the horizontal padding of the two button shapes;
+	// ribbonSmallGap is the space between a small button's icon and its label.
+	ribbonLargePad = 8
+	ribbonSmallPad = 6
+	ribbonSmallGap = 6
 	// ribbonCharWidth is the average width of a ribbon label's character, which sizes the estimate
 	// of the groups' widths.
 	ribbonCharWidth = 7.3
@@ -77,13 +85,13 @@ func (ws *Workspace) ribbon(window float32) *gpui.Div {
 	for _, g := range groups {
 		name := gpui.NewDiv().FlexRow().JustifyCenter().Child(gpui.NewText(g.name).TextSize(fontSmall).TextColor(uiMuted))
 		row.Child(gpui.NewDiv().ID("tbgroup-"+g.id).FlexRow().FlexShrink(0).Child(
-			gpui.NewDiv().FlexCol().Gap(4).Px_(10).Pt(10).Pb(6).Child(
+			gpui.NewDiv().FlexCol().Gap(2).Px_(ribbonGroupPad).Pt(6).Pb(4).Child(
 				gpui.NewDiv().FlexRow().ItemsCenter().JustifyCenter().SizeH(ribbonBodyHeight).Child(g.body),
 				name),
 			gpui.NewDiv().SizeW(1).Bg(uiBorder),
 		))
 	}
-	return gpui.NewDiv().FlexCol().FlexShrink(0).Px_(6).Bg(uiPanel).Child(row)
+	return gpui.NewDiv().FlexCol().FlexShrink(0).Px_(4).Bg(uiPanel).Child(row)
 }
 
 // ribbonWidth estimates the width of the ribbon with its groups on one row, from the length of
@@ -92,13 +100,16 @@ func ribbonWidth() float32 {
 	label := func(command string) float32 {
 		return float32(utf8.RuneCountInString(i18n.Command(command).Name)) * ribbonCharWidth
 	}
-	large := func(command string) float32 { return max(ribbonLargeIcon, label(command)) + 22 }
-	small := func(a, b string) float32 { return max(label(a), label(b)) + 8 + ribbonSmallIcon + 8 + 8 + 2 }
-	draw := large("LINE") + large("PLINE") + large("CIRCLE") + large("ARC") + small("RECTANG", "RECTANG") + 21
+	large := func(command string) float32 { return max(ribbonLargeIcon, label(command)) + 2*ribbonLargePad + 2 }
+	small := func(a, b string) float32 {
+		return max(label(a), label(b)) + 2*ribbonSmallPad + ribbonSmallIcon + ribbonSmallGap + 2
+	}
+	groupPad := float32(2*ribbonGroupPad + 1)
+	draw := large("LINE") + large("PLINE") + large("CIRCLE") + large("ARC") + small("RECTANG", "RECTANG") + groupPad
 	modify := small("MOVE", "COPY") + small("ROTATE", "SCALE") + small("MIRROR", "ERASE") + small("OFFSET", "FILLET") +
-		small("CHAMFER", "TRIM") + small("EXTEND", "BREAK") + small("JOIN", "EXPLODE") + 21
-	utilities := small("DIST", "AREA") + small("ID", "ZOOM") + 21
-	return draw + modify + utilities + 14
+		small("CHAMFER", "TRIM") + small("EXTEND", "BREAK") + small("JOIN", "EXPLODE") + groupPad
+	utilities := small("DIST", "AREA") + small("ID", "ZOOM") + groupPad
+	return draw + modify + utilities + 10
 }
 
 // ribbonButtonBase is what both button shapes share: the id, the command's tooltip, hover, the
@@ -118,14 +129,14 @@ func (ws *Workspace) ribbonButtonBase(b ribbonButton) (d *gpui.Div, col gpui.Rgb
 // ribbonLarge is a ribbon button with its icon above its label.
 func (ws *Workspace) ribbonLarge(b ribbonButton) *gpui.Div {
 	d, col := ws.ribbonButtonBase(b)
-	return d.FlexCol().ItemsCenter().JustifyCenter().Gap(6).Px_(10).SizeH(ribbonBodyHeight-6).
+	return d.FlexCol().ItemsCenter().JustifyCenter().Gap(4).Px_(ribbonLargePad).SizeH(ribbonBodyHeight-2).
 		Child(NewIcon(b.icon, ribbonLargeIcon, col), gpui.NewText(i18n.Command(b.command).Name).TextSize(fontUI).TextColor(col))
 }
 
 // ribbonSmall is a ribbon button with its icon left of its label.
 func (ws *Workspace) ribbonSmall(b ribbonButton) *gpui.Div {
 	d, col := ws.ribbonButtonBase(b)
-	return d.FlexRow().ItemsCenter().Gap(8).Px_(8).SizeH(ribbonSmallHeight).
+	return d.FlexRow().ItemsCenter().Gap(ribbonSmallGap).Px_(ribbonSmallPad).SizeH(ribbonSmallHeight).
 		Child(NewIcon(b.icon, ribbonSmallIcon, col), gpui.NewText(i18n.Command(b.command).Name).TextSize(fontUI).TextColor(col))
 }
 

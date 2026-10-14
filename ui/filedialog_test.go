@@ -169,6 +169,7 @@ func TestOpenKeepsTheUnsavedChangesQuestion(t *testing.T) {
 	fd := &fakeDialog{path: savedDrawing(t)}
 	h := dialogRig(t, fd)
 	h.ws.Session().Script("LINE 0,0 5,5  ")
+	h.frame() // the unsaved-changes dot moves the buttons; find them where they are now
 	h.clickID("tool-open")
 	h.answered(fd)
 	p := h.ws.Session().CurrentPrompt()
@@ -195,6 +196,7 @@ func TestSaveButton(t *testing.T) {
 	fd := &fakeDialog{path: target}
 	h := dialogRig(t, fd)
 	h.ws.Session().Script("LINE 0,0 10,10  ")
+	h.frame() // the unsaved-changes dot moves the buttons; find them where they are now
 	h.clickID("tool-save")
 	h.answered(fd)
 	if fd.saves != 1 || fd.defaultName != "drawing" {
@@ -216,6 +218,7 @@ func TestSaveButton(t *testing.T) {
 
 	// With a file the button saves to it and shows no dialog.
 	h.ws.Session().Script("LINE 1,1 2,2  ")
+	h.frame()
 	h.clickID("tool-save")
 	if fd.calls() != 1 || h.ws.Session().Dirty() {
 		t.Fatalf("Save with a file: dialog calls %d, dirty %v", fd.calls(), h.ws.Session().Dirty())

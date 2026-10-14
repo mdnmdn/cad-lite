@@ -31,7 +31,8 @@ history. It sits under the canvas only: the layers and agent columns run down be
   prompt; errors, warnings and command output (`LIST`, `DIST`) are printed there. The history keeps
   the last 200 lines. The region is 96 px high (less in a window shorter than 860 px, down to 54 px) until the user
   drags the small bar centred on its top edge: moving the pointer up grows it, down shrinks it, between one line and 480 px, and the
-  height is kept for the session.
+  height is saved with the settings. A double click on the bar resets it, and the chevron at the right end of the bar's row folds the
+  history so only the input row remains (the height comes back when it is unfolded; the bar does not drag while it is folded).
 - **Recent commands.** The clock button opens a menu above the box of the last 8 distinct commands the user started, newest first
   (typed or from a button), under their display names; clicking one runs it again (cancelling a running command, as the buttons do) and
   closes the menu. Escape closes it too. The list is not saved between sessions.
@@ -121,7 +122,7 @@ Shortcuts, active anywhere in the window:
 `OnChange` turns a trailing space into a submission unless `Workspace.acceptsText`.
 `Workspace.commandArea` (`ui/cmdarea.go`) renders the handle, the history and the box; the field is
 styled by `themeBareField`, so the box carries the border. `cmdAreaState` holds the dragged height
-(`Workspace.dragHistory`, fed by the root element's mouse move and up) and the recent list (`noteCommand`, called
+(`Workspace.dragMove` in `ui/layout.go`, fed by the root element's mouse move and up; the folded flag is in `layoutState`) and the recent list (`noteCommand`, called
 by `Workspace.submit` and `Workspace.run` when `Session.RunCount` rose). `Workspace.Render` focuses the field on
 the first frame and binds the shortcut actions on the root element. Parsing and the history live in
 `cmdsys/session.go` and `cmdsys/input.go`.

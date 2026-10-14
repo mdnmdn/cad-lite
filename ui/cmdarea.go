@@ -20,20 +20,20 @@ const (
 	// minHistoryHeight and maxHistoryHeight bound the dragged history height.
 	minHistoryHeight = 18
 	maxHistoryHeight = 480
+	// cmdHandleHeight is the height of the handle row on the history's top edge, which also holds
+	// the collapse button.
+	cmdHandleHeight = 22
 	// recentLimit is how many distinct recent commands are kept; recentShown how many the menu lists.
 	recentLimit = 12
 	recentShown = 8
 )
 
 // cmdAreaState is the command area's own state: the history height the handle drags, and the
-// recent commands behind the clock button.
+// recent commands behind the clock button. Whether the history is collapsed lives in the
+// workspace layout, which also tracks the handle's drag.
 type cmdAreaState struct {
 	// histH is the history region's height; 0 means defaultHistoryHeight.
 	histH float32
-	// drag is set while the handle is held: the pointer's y and the height when it went down.
-	drag     bool
-	dragY    float32
-	dragFrom float32
 	// recent holds the commands run lately, newest first; open shows the menu of them.
 	recent []string
 	open   bool
@@ -47,16 +47,6 @@ func (ws *Workspace) historyHeight() float32 {
 		return defaultHistoryHeight
 	}
 	return min(maxHistoryHeight, max(minHistoryHeight, ws.cmd.histH))
-}
-
-// dragHistory resizes the history region while the handle is held: moving the pointer up grows it.
-func (ws *Workspace) dragHistory(y float32, w *gpui.Window) {
-	c := &ws.cmd
-	if !c.drag {
-		return
-	}
-	c.histH = min(maxHistoryHeight, max(minHistoryHeight, c.dragFrom+(c.dragY-y)))
-	w.Refresh()
 }
 
 // noteCommand puts a command the user ran at the front of the recent list.
@@ -81,19 +71,34 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement, w *gpui.Window) *gpui
 	hist := ws.session.History()
 	h := ws.historyHeight()
 	n := max(1, int(h/cmdLineHeight))
+	off := ws.lay.histOff
 	lines := gpui.NewDiv().ID("cmd-history").FlexCol().JustifyEnd().SizeH(h).FlexShrink(0).Px_(16).OverflowHidden()
 	for i := max(0, len(hist)-n); i < len(hist); i++ {
 		lines.Child(monoText(hist[i], fontUI).TextColor(uiMuted).TextLineHeight(cmdLineHeight))
 	}
-	handle := gpui.NewDiv().ID("cmd-handle").FlexRow().ItemsCenter().JustifyCenter().SizeH(12).FlexShrink(0).Tooltip(i18n.T("ui.cmdline.handle_tip")).
-		OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
-			if e.Button != gpui.MouseLeft {
-				return
-			}
-			ws.cmd.drag, ws.cmd.dragY, ws.cmd.dragFrom = true, float32(e.Position.Y), ws.historyHeight()
-			w.StopPropagation()
-		}).
-		Child(gpui.NewDiv().SizeWH(44, 3).Rounded(2).Bg(uiBorder))
+	fold := collapseButton("cmd-collapse", i18n.T("ui.cmdline.collapse_tip"), icons.AppChevronDown, func(w *gpui.Window) { ws.toggleFold(&ws.lay.histOff, w) })
+	if off {
+		fold = collapseButton("cmd-collapse", i18n.T("ui.cmdline.expand_tip"), icons.AppChevronUp, func(w *gpui.Window) { ws.toggleFold(&ws.lay.histOff, w) })
+	}
+	handle := gpui.NewDiv().ID("cmd-handle").Relative().FlexRow().ItemsCenter().JustifyCenter().SizeH(cmdHandleHeight).FlexShrink(0)
+	if !off {
+		handle.Tooltip(i18n.T("ui.cmdline.handle_tip")).
+			OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
+				if e.Button != gpui.MouseLeft {
+					return
+				}
+				w.StopPropagation()
+				if e.ClickCount >= 2 {
+					ws.cmd.histH = 0
+					ws.persistLayout(w)
+					w.Refresh()
+					return
+				}
+				ws.beginDrag(splitHistory, float32(e.Position.Y), ws.historyHeight())
+			}).
+			Child(gpui.NewDiv().SizeWH(44, 3).Rounded(2).Bg(uiBorder))
+	}
+	handle.Child(gpui.NewDiv().Absolute().Right(8).Top(0).Child(fold))
 
 	focused := false
 	if fh := ws.input.FocusHandle(); fh != nil {
@@ -116,7 +121,11 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement, w *gpui.Window) *gpui
 		recent,
 	)
 	area := gpui.NewDiv().ID("cmd-area").Relative().FlexCol().FlexShrink(0).Bg(uiPanel).
-		Child(handle, lines, gpui.NewDiv().Px_(10).Pb(10).Child(box))
+		Child(handle)
+	if !off {
+		area.Child(lines)
+	}
+	area.Child(gpui.NewDiv().Px_(10).Pb(10).Child(box))
 	if ws.cmd.open {
 		area.Child(ws.recentMenu())
 	}

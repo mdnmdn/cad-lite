@@ -331,7 +331,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 		ws.smallButton("settings-reset", i18n.T("ui.settings.reset"), i18n.T("ui.settings.reset_tip"), func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
-				d.Extra, d.Window, d.LastUpdateCheck = s.Extra, s.Window, s.LastUpdateCheck
+				d.Extra, d.Window, d.Layout, d.LastUpdateCheck = s.Extra, s.Window, s.Layout, s.LastUpdateCheck
 				*s = d
 			})
 		}).Px_(12),

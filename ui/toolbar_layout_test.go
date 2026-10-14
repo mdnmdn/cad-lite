@@ -77,7 +77,7 @@ var ribbonGroupButtons = [][]string{
 }
 
 // titleButtons are the title bar's buttons from left to right.
-var titleButtons = []string{"open", "save", "undo", "redo", "agent", "settings"}
+var titleButtons = []string{"open", "save", "undo", "redo", "ribbon", "agent", "settings"}
 
 func TestRibbonReflowsWithWidth(t *testing.T) {
 	for _, c := range []struct {
@@ -142,7 +142,7 @@ func TestTitleBarButtonsFitAndSitInOrder(t *testing.T) {
 			if !ok {
 				t.Fatalf("width %d: title bar button %s not visible", width, id)
 			}
-			if b.y1 > 52 || b.x1 > float32(width) || b.x0 < prev {
+			if b.y1 > 44 || b.x1 > float32(width) || b.x0 < prev {
 				t.Fatalf("width %d: button %s at %v is out of place (previous ends at %v)", width, id, b, prev)
 			}
 			if b.x1-b.x0 > 36 {

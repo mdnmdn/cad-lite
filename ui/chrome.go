@@ -14,11 +14,11 @@ const (
 	// fontTitle is the size of the brand and panel headings.
 	fontTitle = 14
 	// titleBarHeight is the title bar's height.
-	titleBarHeight = 52
+	titleBarHeight = 44
 	// ribbonHeight is the ribbon's height when its groups share one row.
-	ribbonHeight = 108
+	ribbonHeight = 84
 	// iconButtonSize is the edge of an icon-only button.
-	iconButtonSize = 32
+	iconButtonSize = 28
 	// chromeIconSize is the icon edge of ribbon, title bar and panel buttons.
 	chromeIconSize = 18
 )
