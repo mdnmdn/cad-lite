@@ -17,6 +17,9 @@ type lastState struct {
 	end     geom.Vec2
 	tangent float64
 	hasEnd  bool
+	// setvar is the variable SETVAR named last (its <default>); script the file SCRIPT ran last.
+	setvar string
+	script string
 }
 
 // Point returns the last point, the origin before any was entered.
@@ -58,3 +61,9 @@ func (c *Context) LastEnd() (p geom.Vec2, tangent float64, ok bool) {
 func (c *Context) SetLastEnd(p geom.Vec2, tangent float64) {
 	c.last.end, c.last.tangent, c.last.hasEnd = p, tangent, true
 }
+
+// LastScriptFile returns the script file SCRIPT ran last, the <default> of its prompt.
+func (c *Context) LastScriptFile() string { return c.last.script }
+
+// SetLastScriptFile records the script file SCRIPT ran.
+func (c *Context) SetLastScriptFile(name string) { c.last.script = name }

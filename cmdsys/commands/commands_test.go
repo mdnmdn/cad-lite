@@ -61,8 +61,9 @@ func TestParseInputForms(t *testing.T) {
 	if in, _ := cmdsys.ParseInput(p, "", &base, base); in.Kind != cmdsys.InputEnter {
 		t.Fatalf("empty = %+v", in)
 	}
-	if _, err := cmdsys.ParseInput(p, "@1,1", nil, base); err != cmdsys.ErrNoBase {
-		t.Fatalf("relative without base err = %v", err)
+	// LASTPOINT starts at the origin, so relative input before any point is valid (spec 1.7).
+	if in, err := cmdsys.ParseInput(p, "@1,1", nil, base); err != nil || in.Point != geom.V(1, 1) {
+		t.Fatalf("relative without base = %+v, %v", in, err)
 	}
 	if _, err := cmdsys.ParseInput(p, "1,x", &base, base); err != cmdsys.ErrInvalidPoint {
 		t.Fatalf("bad point err = %v", err)

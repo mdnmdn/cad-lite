@@ -7,7 +7,7 @@ summary: Every built-in command with its prompts and aliases, how selection, obj
 read_when: you are adding or changing a command, an alias, or what a click does while a command runs
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/snap.go]
+code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/commands/select.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/snap.go]
 depends_on: [tech-command-system, tech-document-model]
 review_cycle: monthly
 ---
@@ -61,6 +61,8 @@ on a typed keyword forces the English one.
 | NEW | — | Replaces the drawing with an empty one |
 | OPEN, SAVE | — | A DXF path; see [DXF files](dxf-files.md) |
 | OPTIONS | OP | Opens the [settings](settings.md) panel; prints `Settings are not available.` where the host has none |
+| SETVAR | SETV | A system variable name (`?` lists), then its value; a variable typed by name at `Command:` asks for the value too; see [Command line](command-line.md) |
+| SCRIPT, RSCRIPT, DELAY | SCR | Runs a script file (the nested script replaces the caller); restarts it; accepts a delay and does not wait |
 | AI | AGENT | `Ask the agent` takes free text (Space does not submit): text opens the [agent panel](agent-panel.md) and sends it; an empty answer toggles the panel |
 
 Commands that take a selection (ERASE, MOVE, COPY, ROTATE, SCALE, LIST) use the current selection
@@ -76,6 +78,18 @@ picks or drags boxes and presses Enter.
 - The entity under the pickbox is highlighted while hovering; selected entities are highlighted in
   blue.
 - Entities on locked layers or layers that are off cannot be selected.
+- **Typed options** at `Select objects:` (and in `SELECT`): `W` window, `C` crossing, `BOX`, `ALL`,
+  `L` last (the newest visible object), `P` previous selection, `F` fence, `WP` and `CP` polygon,
+  `A` and `R` to switch between adding and removing (the prompt reads `Remove objects:`), `M`, `AU`,
+  `SI` (ends the prompt after the first selection), `U` (undoes the last operation); Enter ends. W,
+  C and BOX ask `Specify first corner:` and `Specify opposite corner:`; WP, CP and F take points
+  until Enter (`U` drops the last one; Enter closes a polygon). A typed point picks the object under
+  it, or starts an automatic box when it is empty. Each operation reports `N found`, then
+  `N found, M total`, `N found, K duplicate` or `N found, K removed, M total`; other text prints
+  `Invalid selection` with the list of options. `ALL` includes objects on layers that are off but not
+  frozen or locked ones. Clicks reach the corner and polygon prompts as points. `SELECT` runs the
+  prompt and leaves the set as the previous selection for the next command's `P`; the set is not left
+  highlighted.
 
 ### Object snaps and ortho
 
@@ -117,7 +131,7 @@ snap like any point click.
 
 ## Failure
 
-- A zero or negative radius or scale factor prints `Value must be positive and nonzero.` and asks
+- A zero or negative radius or scale factor prints `Requires a positive and nonzero value.` and asks
   again.
 - An empty selection ends the command without a change.
 - `LAYER` with a colour outside 1–255 prints the valid range and changes nothing.

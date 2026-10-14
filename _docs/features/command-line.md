@@ -7,7 +7,7 @@ summary: The command line under the canvas — typing commands and answers, the 
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/workspace.go, cmdsys/session.go, cmdsys/input.go, i18n/keyword.go]
+code_anchors: [ui/workspace.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
 ---
@@ -48,11 +48,36 @@ history.
   (`_C`, `_Close`) means English only, as in AutoCAD, which a script can use to stay language
   independent.
 - Command names and aliases are case-insensitive, and at `Command:` a name may carry the prefixes `_`, `.`
-  and `'` (`_LINE`, `.ERASE`, `_.LINE`), which are ignored. In a script, `;` starts a comment to the end of the line. An unknown name prints
-  `Unknown command "NAME". Press F1 for help.` (`Comando "NAME" sconosciuto. Premere F1 per la guida.` in Italian) and starts nothing.
+  and `'` (`_LINE`, `.ERASE`, `_.LINE`), which are ignored. An unknown name prints
+  `Unknown command "NAME".  Press F1 for more help.` (`Comando "NAME" sconosciuto.  Premere F1 per ulteriore aiuto.` in Italian) and starts nothing.
+- **Command-line versions.** `-NAME` is the command-line version of a dialog command (`-LAYER`, `-OSNAP`,
+  `-ARRAY`): its own command with its own prompts, registered as `-NAME` with its aliases as `-ALIAS`.
+  `_-LAYER`, `-_LAYER` and the Italian `-LIVELLO` reach it too. Which `-` commands exist is the
+  [drawing and editing](drawing-and-editing.md) document's list.
+- **Transparent commands.** `'ZOOM`, `'PAN`, `'LAYER`, `'DIST`, `'ID`, `'SETVAR` and any other command
+  that marks itself transparent run at a prompt of another command. The prompt shows `>>` while one runs (`>>>>` for a second level),
+  and when it ends the interrupted prompt comes back unchanged. A text-entry prompt takes `'` as text; a command that is
+  not transparent prints `NAME command not allowed transparently.` and the prompt stays. Escape cancels
+  the whole stack. Enter at `Command:` repeats the last ordinary command, never a transparent one.
+- **System variables.** Typing a variable name at `Command:` (`FILLETRAD`) or `SETVAR` asks
+  `Enter new value for FILLETRAD <0.0000>:`; Enter keeps the value. `SETVAR` asks `Enter variable name or [?] <last>:`,
+  and `?` lists variables matching a pattern (`*`, `ORTHO*`), read-only ones marked `(read only)`. A wrong value prints
+  `Requires an integer value.`, `Requires numeric value.` or `Requires an integer value between 0 and 1.` and asks again;
+  an unknown name prints `Unknown variable name.`. Variables with no effect here (`MIRRTEXT`, `FILEDIA`, `DIMSCALE`)
+  accept a value and read it back.
+- **Scripts.** `SCRIPT` (alias `SCR`) asks `Enter script file name <last>:` and runs the file; `.scr` is added when the name has no
+  extension. The nested script runs to its end and the calling script does not resume. `RSCRIPT` restarts the
+  running script (at most 1000 times in a row: there is no Esc during a synchronous script) and `DELAY n` accepts 0 to 32767 and does not wait. In script text `;` starts a comment, a tab is a space,
+  the file's last newline terminates the last response (it sends no Enter; a blank line before it does) and
+  two separators in a row, or a trailing space, send Enter. `RESUME` is not provided.
 - Typed answers take the forms the [command system](../tech/command-system.md) lists: `x,y`,
-  `@dx,dy`, `d<angle`, `@d<angle`, a bare number for direct distance entry, keywords by name or
-  shortcut. An invalid answer prints the error and the prompt stays.
+  `@dx,dy`, `d<angle`, `@d<angle`, `#x,y` (absolute), `@` alone (the last point), `<angle` (locks the
+  direction of the next point: a bare number then is a distance along it), a bare number for direct
+  distance entry, keywords by name or shortcut. Relative forms before any point was entered measure from
+  the origin. Enter at a prompt that needs a point or distance and has no default ends the command quietly.
+- An invalid answer prints the error and the prompt stays, worded by the kind of prompt: `Invalid point.`,
+  `Point or option keyword required.`, `Requires numeric distance or second point.`,
+  `Requires numeric angle or second point.`, `Invalid option keyword.`.
 - Toolbar buttons run their command as if typed; the [canvas](canvas.md) document owns the toolbar's layout and icons.
 - The field's placeholder and the `Command:` label come from the catalog (`ui.cmdline.placeholder`); the placeholder follows a language change at once.
 - The field clears after every submission, cancel and canvas click that answers a prompt.
@@ -88,8 +113,8 @@ the first frame and binds the shortcut actions on the root element. Parsing and 
 
 ## Failure
 
-- A parse error leaves the command at the same prompt and prints the reason (`Invalid point.`,
-  `No base point for relative input.`).
+- A parse error leaves the command at the same prompt and prints the reason (see the wording list in
+  Behaviour).
 - A command that fails its own check (a zero radius, collinear arc points) prints the reason and
   either re-prompts or ends without changing the drawing.
 

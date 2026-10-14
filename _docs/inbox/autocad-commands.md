@@ -373,19 +373,19 @@ marked ✓ (script 40).
 
 | Id | Gap | Pri | Eff | Owner (section 4) | Corpus |
 |---|---|---|---|---|---|
-| G1-1 | Accept `_`, `.`, `_.` prefixes (strip; `.` bypasses user aliases); `-NAME` as separate commands; `MULTIPLE` | P1 | S | CW-G | 31 |
-| G1-2 | `_X` keyword matching at every prompt (exists in `i18n.MatchKeywords`; verify wired into `ParseInput`) | P1 | S | CW-G / i18n | 31 |
-| G2-1 | Transparent command frames (`'`, `>>`, resume the prompt) | P2 | M | CW-G | 36 |
+| G1-1 | Accept `_`, `.`, `_.` prefixes (strip; `.` bypasses user aliases); `-NAME` as separate commands; `MULTIPLE` **Done** except `MULTIPLE`: prefixes, `-_NAME`, `RegisterCLI` and Italian `-NAME` resolve (CW-G) | P1 | S | CW-G | 31 |
+| G1-2 | `_X` keyword matching at every prompt (exists in `i18n.MatchKeywords`; verify wired into `ParseInput`) **Done**: wired in `ParseInputIn` (CW-G verified) | P1 | S | CW-G / i18n | 31 |
+| G2-1 | Transparent command frames (`'`, `>>`, resume the prompt) **Done** (CW-G, `cmdsys/transparent.go`) | P2 | M | CW-G | 36 |
 | G3-1 | Prompt default formatting `<10.0000>`, Yes/No `<N>`, LUPREC | P3 | S | CW-C | 39 |
-| G4-1 | Error wording per prompt kind (1.12), Invalid option keyword, selection message | P3 | S | CW-G | 40 |
-| G5-1 | Enter at a required point prompt cancels the command quietly instead of an error loop | P2 | S | CW-G | |
-| G6-1 | Defaults live in `Vars`, per session; remove the package-level `filletRadius`, `chamferD1/2`, `lastOffset` shared across sessions | P1 | M | CW-G + CW-B2 | 33 |
+| G4-1 | Error wording per prompt kind (1.12), Invalid option keyword, selection message **Done** except the selection message (WP2) (CW-G, `cmdsys/wording.go`) | P3 | S | CW-G | 40 |
+| G5-1 | Enter at a required point prompt cancels the command quietly instead of an error loop **Done** (CW-G, `Session.enterEnds`) | P2 | S | CW-G | |
+| G6-1 | Defaults live in `Vars`, per session; remove the package-level `filletRadius`, `chamferD1/2`, `lastOffset` shared across sessions **Done** (CW-B2 moved them; CW-G added the stored placeholders for the rest) | P1 | M | CW-G + CW-B2 | 33 |
 | G7-1 | `#`, `*` strip; `<angle` override; `@` with no base = `LASTPOINT` (0,0 start) | P2 | S | WP3 | 03, 04 |
 | G7-2 | Typed object snaps END MID CEN INT QUA NEA (P1), PER TAN EXT APP FROM M2P NON TT NOD PAR INS (P2) | P1 / P2 | M | WP3 | 29, 30 |
-| G8-1 | Typed selection options W C WP CP F BOX ALL L P R A U M AU SI | P1 | M | WP2 | 15-18, 22-28 |
-| G8-2 | Selection memory (`Previous`), "N found, M total" messages, `Invalid selection` text | P2 | S | WP2 | 28 |
-| G9-1 | `Session.Script` comments (`;`) and final-newline rule; SCRIPT/RSCRIPT/RESUME/DELAY | P1 | S | CW-G | all |
-| G10-1 | `SETVAR`, variables typed by name, `SETVAR ?`, the 1.11 registry, stored no-ops | P1 | M | CW-G | 33 |
+| G8-1 | Typed selection options W C WP CP F BOX ALL L P R A U M AU SI | P1 | M | WP2 | 15-18, 22-28 | **done** (WP2; 18 and 28 newly pass, the rest wait on their command owners)
+| G8-2 | Selection memory (`Previous`), "N found, M total" messages, `Invalid selection` text | P2 | S | WP2 | 28 | **done** |
+| G9-1 | `Session.Script` comments (`;`) and final-newline rule; SCRIPT/RSCRIPT/RESUME/DELAY **Done** except `RESUME` (CW-G) | P1 | S | CW-G | all |
+| G10-1 | `SETVAR`, variables typed by name, `SETVAR ?`, the 1.11 registry, stored no-ops **Done** (CW-G, `cmdsys/sysvars.go`; angle variables stay with the units package) | P1 | M | CW-G | 33 |
 | G10-2 | Initial variable set persistent through `settings/` (read its API when it lands) | P3 | S | CW-G | |
 
 ---------------------------------------------------------------------------------------------------
@@ -1013,16 +1013,16 @@ angle 0:`/`Do you want angle measured clockwise? [Yes/No] <N>:` *(verify V42)*. 
 
 **AutoCAD.** `Enter variable name or [?] <CIRCLERAD>:` → `Enter new value for CIRCLERAD <0.0000>:`; `?`:
 `Enter variable(s) to list <*>:`. Also by typing the name (1.10). Transparent.
-**Today.** Missing; no variable registry (parity Wave 0 creates `Vars`). | **Gap.** G10-1: P1, M, corpus 33.
+**Today.** Done (CW-G): `SETVAR`, `?` listing, variables typed by name, the AutoCAD error sentences, transparent. | **Gap.** G10-1 closed; corpus 33 waits on CIRCLE's `CIRCLERAD` default.
 
 #### SCRIPT, RSCRIPT, RESUME, DELAY
 
 **AutoCAD.** As 1.9. `SCRIPT`: `Enter script file name <last>:`; `RSCRIPT`: restart; `RESUME`; `DELAY`.
-**Today.** No `SCRIPT` command (the host runs scripts through `Session.Script`; the agent MCP uses it).
+**Today.** `SCRIPT` (alias `SCR`, HumanOnly), `RSCRIPT` (capped at 1000 restarts) and `DELAY` (validates, does not wait) exist (CW-G); `RESUME` does not (Esc cannot interrupt a synchronous script).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| SCR-1 | `Session.Script` comments and terminator rule (G9-1) | P1 | S | all |
-| SCR-2 | `SCRIPT file` command (HumanOnly, reads through `FileHandler`), `RSCRIPT`, `DELAY`, `RESUME` | P2 | M | |
+| SCR-1 | `Session.Script` comments and terminator rule (G9-1) **Done** (CW-G) | P1 | S | all |
+| SCR-2 | `SCRIPT file` command (HumanOnly, reads through `FileHandler`), `RSCRIPT`, `DELAY`, `RESUME` **Done** except `RESUME`; the file is read with `os.ReadFile` (CW-G) | P2 | M | |
 
 ### 2.7 Files
 
@@ -1050,7 +1050,7 @@ same for all. Aliases: none for these (Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctr
 (`P` in the next command), they are not left selected for noun-verb use unless `PICKFIRST` highlights
 them *(verify V7)*; prints `N found`. `SELECT` is the scripting idiom `SELECT ALL`, then
 `MOVE P`. Related: `SELECTSIMILAR`, `QSELECT`, `FILTER` (P3).
-**Today.** None. | **Gap.** `SELECT` over the WP2 engine: P2, S (after G8-1); corpus 28 uses ALL/P directly.
+**Today.** `SELECT` runs the full prompt and records the previous selection (done, WP2).
 
 ### 2.9 go-draw only
 
@@ -1255,7 +1255,7 @@ unless `GODRAW_ACAD_CORPUS` is `report`, `1` (compare with each file's `go-draw:
 | `15_move_copy` | MOVE and COPY with Displacement, Multiple, mOde | fail | `L` selection; MOVE Displacement; COPY mOde |  |
 | `16_rotate` | ROTATE: angle, Copy, Reference | fail | `L` selection; ROTATE Copy, Reference |  |
 | `17_scale` | SCALE: factor, Copy, Reference | fail | `L` selection; SCALE Copy, Reference |  |
-| `18_mirror` | MIRROR: keep and erase source | fail | `L` selection |  |
+| `18_mirror` | MIRROR: keep and erase source | pass | `L` selection |  |
 | `19_offset` | OFFSET: distance, Through, Erase | fail | OFFSET Erase |  |
 | `20_fillet` | FILLET: Radius, radius 0 corner | pass |  |  |
 | `21_chamfer` | CHAMFER: Distance | pass |  |  |
@@ -1264,8 +1264,8 @@ unless `GODRAW_ACAD_CORPUS` is `report`, `1` (compare with each file's `go-draw:
 | `24_break_join_explode` | BREAK, BREAKATPOINT, JOIN, EXPLODE | fail | BREAKATPOINT; JOIN and EXPLODE selection options |  |
 | `25_stretch` | STRETCH: crossing window | fail | STRETCH |  |
 | `26_array` | -ARRAY: rectangular and polar | fail | -ARRAY | yes |
-| `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | fail | W, C, WP, CP |  |
-| `28_select_last_previous_fence_remove_single` | Selection: L, P, ALL+R, F, SI | fail | L, P, ALL, R, F, SI |  |
+| `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | pass | W, C, WP, CP |  |
+| `28_select_last_previous_fence_remove_single` | Selection: L, P, ALL+R, F, SI | pass | L, P, ALL, R, F, SI |  |
 | `29_snap_end_mid_cen_qua` | Typed object snaps END MID CEN QUA | fail | typed object snaps |  |
 | `30_snap_int_nea_per_from_m2p` | Typed snaps INT NEA PER FROM M2P NON | fail | typed object snaps |  |
 | `31_prefixes_and_keywords` | _ and . prefixes, keyword spellings | fail | `_` and `.` prefixes |  |

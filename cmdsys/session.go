@@ -50,6 +50,9 @@ type Session struct {
 	mem    *lastState
 	prev   *selMemory
 	stages []textStage
+	// cl is the command-line state of commandline.go: transparent frames, the angle override,
+	// queued scripts.
+	cl cmdLine
 
 	onDrawing []func(*doc.Drawing)
 	onPath    []func(string)
@@ -64,12 +67,13 @@ func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 	s := &Session{registry: reg, Snaps: DefaultSnaps, SnapOn: true, Aperture: 8,
 		vars: NewVars(), mem: &lastState{}, prev: &selMemory{}}
 	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath,
-		vars: s.vars, last: s.mem, prev: s.prev}
-	s.AddTextFilter(TextOrderNames, stripNamePrefixes)
+		vars: s.vars, last: s.mem, prev: s.prev, script: s.queueScript}
+	installCommandLine(s)
 	s.SetDrawing(d)
 	for _, g := range varGroups {
 		g(s, s.vars)
 	}
+	registerStoredVars(s)
 	return s
 }
 
@@ -108,6 +112,7 @@ func (s *Session) guard(f func()) (ok bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.dispatching = false
+			s.cl.frames = nil
 			name := s.Translator().T("session.fallback_command_name")
 			if s.active != nil {
 				name = s.active.Name()
@@ -209,7 +214,7 @@ func (s *Session) Prompt() string {
 	if s.prompt == nil {
 		return t.T("session.command_prompt")
 	}
-	return s.prompt.StringIn(t)
+	return strings.Repeat(transparentMark, len(s.cl.frames)) + s.prompt.StringIn(t)
 }
 
 // CurrentPrompt returns the active prompt, or nil when idle.
@@ -233,7 +238,7 @@ func (s *Session) print(line string) {
 
 // Run starts the named command, cancelling any running one.
 func (s *Session) Run(name string) bool {
-	cmd, ok := s.registry.Lookup(name)
+	cmd, ok := s.lookupCommand(name)
 	if !ok {
 		s.print(s.Translator().T("session.unknown_command", strings.ToUpper(strings.TrimSpace(name))))
 		return false
@@ -276,11 +281,16 @@ func (s *Session) finish() {
 		s.ctx.txn = nil
 	}
 	s.active, s.prompt = nil, nil
+	s.resumeFrame()
+	if len(s.cl.pending) > 0 {
+		s.pumpScripts()
+	}
 }
 
 // Escape cancels the running command, keeping what it already committed to
 // its transaction (as AutoCAD keeps the segments of a cancelled LINE).
 func (s *Session) Escape() {
+	s.unwindFrames()
 	if s.active == nil {
 		if s.ctx.Selection.Len() > 0 {
 			s.ctx.Selection.Clear()
@@ -322,6 +332,9 @@ func (s *Session) Submit(text string) {
 	}
 	in, err := ParseInputIn(s.Translator(), p, text, s.base(), s.cursor)
 	if err != nil {
+		if s.enterEnds(err, text) {
+			return
+		}
 		s.print(s.Prompt() + " " + text)
 		s.print(s.inputError(err))
 		return

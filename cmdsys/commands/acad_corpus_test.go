@@ -179,24 +179,9 @@ func acadRun(scr, exp string) (fails []string, declared string) {
 	return fails, declared
 }
 
-// acadScriptText turns a .scr file into the text Session.Script takes: ";" comments are removed
-// (a line that was only a comment disappears), and exactly one final newline is dropped because
-// Script treats newlines as separators where a script file treats them as terminators.
-func acadScriptText(scr string) string {
-	scr = strings.ReplaceAll(scr, "\r\n", "\n")
-	scr = strings.TrimSuffix(scr, "\n")
-	var out []string
-	for _, l := range strings.Split(scr, "\n") {
-		if i := strings.Index(l, ";"); i >= 0 {
-			l = strings.TrimRight(l[:i], " \t")
-			if l == "" {
-				continue
-			}
-		}
-		out = append(out, l)
-	}
-	return strings.Join(out, "\n")
-}
+// acadScriptText returns the script text Session.Script takes: the file as it is, because Script
+// itself drops ";" comments and reads the final newline as the file's terminator.
+func acadScriptText(scr string) string { return scr }
 
 type acadEnt struct {
 	class     string
@@ -498,17 +483,11 @@ func acadCheckLayer(d *doc.Drawing, rest string, fail func(string, ...any)) {
 
 // acadVar reads the system variables the session can answer today; the rest report false.
 func acadVar(s *cmdsys.Session, name string) (string, bool) {
-	switch name {
-	case "CLAYER":
-		return s.Drawing().CurrentLayer, true
-	case "ORTHOMODE":
-		if s.Ortho {
-			return "1", true
-		}
-		return "0", true
-	case "VIEWCTR":
-		c := s.View().Center
-		return cmdsys.FormatPoint(c) + ",0", true
+	if name == "VIEWCTR" { // a point is "x,y,z" in AutoCAD
+		return cmdsys.FormatPoint(s.View().Center) + ",0", true
+	}
+	if s.Vars().Has(name) {
+		return s.Vars().String(name), true
 	}
 	return "", false
 }

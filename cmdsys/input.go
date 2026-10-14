@@ -110,7 +110,9 @@ func FormatNumber(v float64) string {
 	return s
 }
 
-// Errors returned by ParseInput, shown on the command line.
+// Errors returned by ParseInput, shown on the command line. ErrNoBase is no longer returned by
+// ParseInput (relative input before any point measures from the origin, as LASTPOINT starts
+// there) and is kept for callers that test for it.
 var (
 	ErrInvalidPoint = errors.New("invalid point")
 	ErrInvalidValue = errors.New("invalid value")
@@ -123,7 +125,7 @@ var (
 // cursor position, which gives direct distance entry its direction.
 //
 // Accepted forms: "" (Enter), a keyword or its shortcut, "x,y", "@dx,dy",
-// "d<angle", "@d<angle", a bare number (a distance, an angle in degrees, an
+// "d<angle", "@d<angle", "#x,y" (absolute), "@" alone (the base), a bare number (a distance, an angle in degrees, an
 // integer, or — at a point prompt with a base — a distance along the
 // cursor direction), and free text. Keywords match in the current language and in English; a
 // leading "_" forces English.
@@ -190,14 +192,25 @@ func finitePoint(p geom.Vec2) bool {
 // parsePoint parses the point forms; ok is false when t is not shaped like
 // a point at all, so other interpretations may be tried.
 func parsePoint(t string, base *geom.Vec2, cursor geom.Vec2) (geom.Vec2, bool, error) {
+	// "#x,y" and "*x,y" force an absolute point. A plain x,y is already absolute here (there is no
+	// dynamic input to make it relative), so the prefix is stripped (spec V4); "*" is the WCS form
+	// of a UCS, identical in 2D.
+	if len(t) > 1 && (t[0] == '#' || t[0] == '*') {
+		t = strings.TrimSpace(t[1:])
+		base = nil
+		if strings.HasPrefix(t, "@") {
+			return geom.Vec2{}, true, ErrInvalidPoint
+		}
+	}
 	rel := strings.HasPrefix(t, "@")
 	body := strings.TrimPrefix(t, "@")
 	origin := geom.V(0, 0)
 	if rel {
-		if base == nil {
-			return geom.Vec2{}, true, ErrNoBase
+		// Relative input measures from the base, else from the last point, which starts at the
+		// origin: "@1,1" before any point is valid in AutoCAD.
+		if base != nil {
+			origin = *base
 		}
-		origin = *base
 		if body == "" {
 			return origin, true, nil
 		}
@@ -244,4 +257,91 @@ func parsePoint(t string, base *geom.Vec2, cursor geom.Vec2) (geom.Vec2, bool, e
 		}
 	}
 	return geom.Vec2{}, false, nil
+}
+
+// Text stage orders of the point-input forms (commandline stages of this package).
+const (
+	// TextOrderTransparent is a ' command typed at a prompt (transparent.go).
+	TextOrderTransparent = 15
+	// TextOrderPointForms is "<angle" (the angle override) and "@" alone (the last point).
+	TextOrderPointForms = 35
+)
+
+// cmdLine is the command-line state a Session keeps besides the prompt: the interrupted
+// commands under a transparent one, the angle override, the queued scripts.
+type cmdLine struct {
+	frames []frame
+	// angleDeg is the direction in degrees the last "<angle" locked, valid while lockOn.
+	angleDeg float64
+	lockOn   bool
+
+	pending  []string
+	pumping  bool
+	cur      string
+	restarts int
+}
+
+// installCommandLine registers the text stages of the command line on a new session.
+func installCommandLine(s *Session) {
+	s.AddTextFilter(TextOrderNames, stripNamePrefixes)
+	s.AddTextHandler(TextOrderTransparent, transparentStage)
+	s.AddTextHandler(TextOrderPointForms, angleOverrideStage)
+	s.AddTextFilter(TextOrderPointForms+1, pointFormsFilter)
+}
+
+// pointPrompt reports whether the session waits at a prompt that takes a point.
+func (s *Session) pointPrompt() bool {
+	return s.active != nil && s.prompt != nil && s.prompt.Accepts&InputPoint != 0
+}
+
+// angleOverrideStage consumes "<angle" at a point prompt: the next point is then a bare number,
+// a distance along that direction from the base (the AutoCAD angle override, spec V5). The
+// override lasts for one answer.
+func angleOverrideStage(s *Session, text string) bool {
+	t := strings.TrimSpace(text)
+	if !s.pointPrompt() || len(t) < 2 || t[0] != '<' {
+		return false
+	}
+	a, err := parseFloat(strings.TrimSpace(t[1:]))
+	if err != nil {
+		return false
+	}
+	s.print(s.Prompt() + " " + text)
+	s.cl.angleDeg, s.cl.lockOn = a, true
+	return true
+}
+
+// pointFormsFilter rewrites "@" alone to the last point and, while an angle override is on, a
+// bare distance to the relative polar form along the locked direction. Any other answer ends
+// the override.
+func pointFormsFilter(s *Session, text string) string {
+	lock := s.cl.lockOn
+	s.cl.lockOn = false
+	if !s.pointPrompt() {
+		return text
+	}
+	t := strings.TrimSpace(text)
+	switch {
+	case t == "@":
+		p := s.mem.Point()
+		return strconv.FormatFloat(p.X, 'g', -1, 64) + "," + strconv.FormatFloat(p.Y, 'g', -1, 64)
+	case lock:
+		if d, err := parseFloat(t); err == nil {
+			return "@" + strconv.FormatFloat(d, 'g', -1, 64) + "<" + strconv.FormatFloat(s.cl.angleDeg, 'g', -1, 64)
+		}
+	}
+	return text
+}
+
+// enterEnds handles Enter at a prompt that takes no Enter and has no default: the command ends
+// quietly (AutoCAD: a required point or distance answered with Enter just stops, spec G5-1, V3),
+// keeping what it committed. It reports whether it handled err.
+func (s *Session) enterEnds(err error, text string) bool {
+	if !errors.Is(err, ErrInvalidInput) || strings.TrimSpace(text) != "" {
+		return false
+	}
+	s.print(s.Prompt())
+	s.guard(func() { s.active.Cancel(&s.ctx) })
+	s.finish()
+	return true
 }

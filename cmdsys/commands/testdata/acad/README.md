@@ -45,10 +45,8 @@ Real AutoCAD script syntax:
   `Ortho=false` for the same reason.
 - A script leaves no command running. The harness fails a script that ends inside a command.
 
-`Session.Script` splits on spaces and newlines, so the harness does two things first: it removes
-`;` comments (and the lines they leave empty), and it drops exactly one final newline, because
-`Script` reads a newline as a separator where a script file reads it as a terminator. Doing the
-same inside `Session.Script` is a gap listed in the specification (the SCRIPT work package).
+The harness feeds the file to `Session.Script` as it is: `Script` drops the `;` comments and
+reads the final newline as the file's terminator, as AutoCAD does.
 
 ## Expect files
 
@@ -87,14 +85,14 @@ Rules:
 
 ## Scripts
 
-Outcome today is `go-draw:` in each `.expect` (3 of 40 pass: scripts that exercise only what exists).
+Outcome today is `go-draw:` in each `.expect` (12 of 40 pass: scripts that exercise only what exists).
 
 | Script | Covers | go-draw | Main gap | (verify) |
 |---|---|---|---|---|
 | `01_line_basic_close_undo` | LINE: continued points, relative input, Undo, Close, Enter | pass |  |  |
 | `02_line_continue` | LINE Enter continues from the last endpoint | fail | Enter at the first-point prompt (continue) |  |
-| `03_line_coordinate_forms` | Point input forms: absolute, relative, polar, # | fail | `#` absolute prefix | yes |
-| `04_line_angle_override` | Angle override <angle then a distance | fail | `<angle` override | yes |
+| `03_line_coordinate_forms` | Point input forms: absolute, relative, polar, # | pass | -- | yes |
+| `04_line_angle_override` | Angle override <angle then a distance | pass | -- | yes |
 | `05_circle_options` | CIRCLE: centre-radius, Diameter, 2P, 3P | fail | CIRCLE 2P, 3P |  |
 | `06_circle_ttr` | CIRCLE TTR tangent to two lines | fail | CIRCLE TTR | yes |
 | `07_arc_start_options` | ARC: three points, Start-Center-End/Angle/Length | fail | ARC Center/Angle/chord Length |  |
@@ -108,7 +106,7 @@ Outcome today is `go-draw:` in each `.expect` (3 of 40 pass: scripts that exerci
 | `15_move_copy` | MOVE and COPY with Displacement, Multiple, mOde | fail | `L` selection; MOVE Displacement; COPY mOde |  |
 | `16_rotate` | ROTATE: angle, Copy, Reference | fail | `L` selection; ROTATE Copy, Reference |  |
 | `17_scale` | SCALE: factor, Copy, Reference | fail | `L` selection; SCALE Copy, Reference |  |
-| `18_mirror` | MIRROR: keep and erase source | fail | `L` selection |  |
+| `18_mirror` | MIRROR: keep and erase source | pass | -- |  |
 | `19_offset` | OFFSET: distance, Through, Erase | fail | OFFSET Erase |  |
 | `20_fillet` | FILLET: Radius, radius 0 corner | pass |  |  |
 | `21_chamfer` | CHAMFER: Distance | pass |  |  |
@@ -117,18 +115,18 @@ Outcome today is `go-draw:` in each `.expect` (3 of 40 pass: scripts that exerci
 | `24_break_join_explode` | BREAK, BREAKATPOINT, JOIN, EXPLODE | fail | BREAKATPOINT; JOIN and EXPLODE selection options |  |
 | `25_stretch` | STRETCH: crossing window | fail | STRETCH |  |
 | `26_array` | -ARRAY: rectangular and polar | fail | -ARRAY | yes |
-| `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | fail | W, C, WP, CP |  |
-| `28_select_last_previous_fence_remove_single` | Selection: L, P, ALL+R, F, SI | fail | L, P, ALL, R, F, SI |  |
+| `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | pass | -- |  |
+| `28_select_last_previous_fence_remove_single` | Selection: L, P, ALL+R, F, SI | pass | -- |  |
 | `29_snap_end_mid_cen_qua` | Typed object snaps END MID CEN QUA | fail | typed object snaps |  |
 | `30_snap_int_nea_per_from_m2p` | Typed snaps INT NEA PER FROM M2P NON | fail | typed object snaps |  |
 | `31_prefixes_and_keywords` | _ and . prefixes, keyword spellings | fail | `_` and `.` prefixes |  |
 | `32_layer_options` | -LAYER: New, Color, Make, OFF, LOck, Set | fail | -LAYER |  |
-| `33_sysvars` | SETVAR and typed variable names feed command defaults | fail | SETVAR, variables by name |  |
+| `33_sysvars` | SETVAR and typed variable names feed command defaults | pass | -- |  |
 | `34_undo_mark_back` | UNDO Mark and Back | fail | UNDO Mark/Back |  |
 | `35_undo_number_group_redo` | UNDO n, BEgin/End, U, REDO | fail | UNDO n, BEgin/End |  |
-| `36_transparent_zoom` | Transparent 'ZOOM inside LINE | fail | transparent commands |  |
+| `36_transparent_zoom` | Transparent 'ZOOM inside LINE | pass | -- |  |
 | `37_drafting_aids` | ORTHO GRID SNAP -OSNAP commands, typed points unaffected | fail | ORTHO, GRID, SNAP, -OSNAP |  |
 | `38_matchprop_chprop` | MATCHPROP and CHPROP | fail | MATCHPROP, CHPROP |  |
 | `39_inquiry_vars` | DIST, AREA, ID results and variables | fail | DIST/AREA/ID variables, precision | yes |
-| `40_error_messages` | Error wording at bad input | fail | error wording | yes |
+| `40_error_messages` | Error wording at bad input | pass | -- | yes |
 

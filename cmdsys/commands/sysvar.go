@@ -2,6 +2,10 @@ package commands
 
 import "go-draw/cmdsys"
 
-// registerSysvar adds the commands of sysvar.go. Empty until CW-G lands them; the call from Register is already in
-// place, so that package edits only this file.
-func registerSysvar(r *cmdsys.Registry) {}
+// registerSysvar adds SETVAR. The command, the value prompts and the error sentences live in
+// cmdsys/sysvars.go next to the variable registry; a variable typed by name at Command: needs no
+// registration, the session resolves it after the command table (Session.Run).
+func registerSysvar(r *cmdsys.Registry) {
+	r.Register("SETVAR", cmdsys.NewSetvar)
+	r.Alias("SETV", "SETVAR")
+}

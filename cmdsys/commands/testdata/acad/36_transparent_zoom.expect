@@ -1,7 +1,7 @@
 # Transparent 'ZOOM inside LINE
 # Expected state after running 36_transparent_zoom.scr in AutoCAD 2024/2025 from the preamble state.
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: fail
+go-draw: pass
 line 0,0 50,0
 count 1
 var VIEWCTR 50,50,0

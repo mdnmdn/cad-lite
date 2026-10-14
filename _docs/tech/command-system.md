@@ -7,7 +7,7 @@ summary: The command model, the session state machine, typed-input parsing, the 
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
+code_anchors: [cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -52,15 +52,21 @@ text, integer and Enter. `cmdsys.Input` carries the response.
 2. **Starting a command cancels the running one.** Replacing the drawing (OPEN, NEW) from inside a
    command does not print a cancel.
 3. **Enter at `Command:` repeats the last command.** An unknown name prints
-   `Unknown command "NAME". Press F1 for help.` and starts nothing. At `Command:` the name prefixes
+   `Unknown command "NAME".  Press F1 for more help.` and starts nothing. At `Command:` the name prefixes
    `'`, `_` and `.` are stripped in any order (`_.LINE`, `'_ZOOM`; `cmdsys/names.go`); a leading `-` is part
-   of the name, and at a prompt nothing is stripped.
+   of the name (`-LAYER` is its own command, see below), and at a prompt only a leading `'` means
+   something (a transparent command).
+   `Session.lookupCommand` resolves a name in this order: the registry (aliases first), then
+   `-NAME` through the aliases of `NAME` (so `-LIVELLO` runs `-LAYER`), then a system variable typed by
+   name, which runs as a one-prompt SETVAR. Commands win over variables.
 4. **Typed input** is parsed by `cmdsys.ParseInputIn` (`ParseInput` for the current language), in this order:
    - empty → Enter if accepted, else the default, else an error;
    - a keyword or its shortcut, case-insensitive, in the session's language or English; a leading
      `_` forces English;
-   - a point: `x,y`, `@dx,dy`, `d<angle`, `@d<angle`; `@` measures from the prompt's `Base`, or
-     from the last point entered when the prompt has none;
+   - a point: `x,y`, `@dx,dy`, `d<angle`, `@d<angle`, `#x,y` and `*x,y` (absolute: a plain `x,y`
+     is, so the prefix is stripped; spec V4); `@` forms measure from the prompt's `Base`, or from
+     the last point entered, which starts at the origin (so `@1,1` is valid before any point). `@` alone
+     and `<angle` are text stages (below), not part of `ParseInput`;
    - a bare number: a distance, an angle in degrees, or an integer when the prompt takes one;
      otherwise, at a point prompt with a base, a point that distance along the cursor direction
      (direct distance entry);
@@ -68,10 +74,15 @@ text, integer and Enter. `cmdsys.Input` carries the response.
    A parse error is printed to the history and the prompt stays. Numbers must be finite: `nan`,
    `inf` and values that overflow (`1e999`) are rejected as an invalid value, and a point whose result overflows
    to infinity as an invalid point.
-5. **Scripts** follow AutoCAD script rules: `Session.Script` drops `;` comments to the end of the line
-   (`StripScriptComments`; a comment-only line vanishes, an empty line stays), splits on single spaces and
-   newlines and submits each token; an empty token (two separators in a row) is Enter. A final newline
-   still sends one more Enter.
+5. **Scripts** follow AutoCAD script rules (`scriptTokens`): `Session.Script` drops `;` comments to the end of the line
+   (`StripScriptComments`; a comment-only line vanishes, an empty line stays), treats a tab as a space, drops
+   exactly one final newline (the file's terminator: a script that ends after its last answer sends no Enter, one that
+   ends with a blank line sends one), splits on single spaces and newlines and submits each token; an empty token (two
+   separators in a row, a trailing space) is Enter. Scripts queue: the `SCRIPT` command hands the file's text to the
+   session (`Context.RunScript`), which runs it once that command ended and abandons the script that called it
+   (V32); `RSCRIPT` (`Context.RestartScript`) queues the running text again, at most 1000 times in a row. Nothing
+   aborts a script on an error, as in AutoCAD. `DELAY` validates its argument and does not wait; `RESUME` does
+   not exist, because Esc cannot interrupt a synchronous script.
 6. **A selection prompt answers with the selection set** when the user presses Enter. Modify commands
    take a non-empty pre-selection without prompting (noun-verb editing) and clear the selection.
 
@@ -83,6 +94,8 @@ text, integer and Enter. `cmdsys.Input` carries the response.
    with `NAME is not available to agents.` while `Session.SetAgentCaller(true)` is on, by name or alias,
    and an agent cannot answer the prompt of one a human started. `cadmcp` sets the flag around every
    tool body; see [Agent integration](agent-integration.md).
+9. **Enter ends a required prompt.** Enter at a prompt that accepts no Enter and has no default ends the
+   command quietly, keeping what it committed (no `*Cancel*`, no error loop; spec G5-1).
 
 ## Session extension points
 
@@ -98,21 +111,53 @@ default that changes nothing.
   `NewSession` runs the groups. `sysvars.go` registers the live ones (`ORTHOMODE`, `APERTURE`,
   `LASTPOINT`, `CLAYER`, which read and write session state) and `LUPREC`, `AUPREC`; `commands/construct.go`
   registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, so the construct defaults are per session.
+  After every group ran, `registerStoredVars` adds what section 1.11 of the AutoCAD specification lists and
+  nobody registered: **stored placeholders** that read back what was set (`MIRRTEXT`, `FILEDIA`, `DIMSCALE`
+  and also names a package will own, such as `OSMODE`, `CIRCLERAD`, `CECOLOR`), and live read-only state
+  (`VIEWCTR`, `VIEWSIZE`, `SCREENSIZE`, `LASTPROMPT`, `CMDNAMES`, `CMDACTIVE`, `DWGNAME`, `DWGPREFIX`). A package that
+  owns a variable just registers it: the placeholder steps aside whatever the init order. Angle variables
+  are not placeholders (their unit belongs to the units package).
+- **SETVAR** (`sysvars.go`, registered by `commands/sysvar.go`). `cmdsys.NewSetvar` asks for a name (`?` lists
+  by pattern) and then for the value; a variable typed by name at `Command:` runs the same value prompt
+  without the name step. The value arrives as text and goes through `Vars.SetString`; `VarErrorKey` maps the four
+  errors to the AutoCAD sentences. Both are transparent (`'SETVAR`, `'ORTHOMODE`).
+- **Command-line versions** (`names.go`). `RegisterCLI(r, "LAYER", factory, "LA")` registers `-LAYER` and `-LA`;
+  the factory's command is a separate command whose `Name` is `-LAYER`. A package adds its `-NAME` from its own
+  `registerX`.
 - **Text stages** (`textin.go`). `Session.AddTextFilter(order, f)` rewrites the line and
   `AddTextHandler(order, f)` may consume it; `Submit` runs them in ascending `TextOrder*` order before
-  anything else. The name-prefix filter is order 10.
+  anything else. The stages: name prefixes 10, transparent commands 15 (`transparentStage`), typed selection
+  options 20, snaps 30, `#` 31, the point forms 35 (`angleOverrideStage` consumes `<angle`) and 36
+  (`pointFormsFilter` turns `@` alone into the last point and a bare distance after `<angle` into
+  `@d<angle`).
 - **Last state** (`lastmem.go`). `Context.LastPoint`/`SetLastPoint` (what `@` measures from; the session
   records every point answered), `LastEntity` (set when a command's transaction commits) and
   `LastEnd`/`SetLastEnd` (end and tangent of the last line or arc, set by the draw commands).
 - **Previous selection** (`selmem.go`). `Context.PreviousSelection`/`SetPrevious`; `selecting.take` records
   each non-empty selection, and erased handles are pruned.
-- **Transparent marker** (`transparent.go`). `cmdsys.Transparent` and `IsTransparent`; ZOOM, LAYER, DIST
-  and ID implement it. Frames (`>>`, resuming the interrupted prompt) are not built: `'` at a prompt is
-  still an invalid response.
+- **Typed selection options** (`select.go`, `selectopts.go`). A text handler at `TextOrderSelection`,
+  installed per session by a var group, reads the options of a selection prompt (a prompt that accepts
+  a selection and no point, and whose own keywords do not match). Operations add to or remove from
+  `Context.Selection`, so Enter still answers with the set. W, C, BOX, WP, CP and F swap the active
+  command for a `selSub` until the shape is complete: it presents a point prompt, so clicks and typed
+  points reach it, and hands back to the command's own selection prompt. The prompt pointer identifies
+  the prompt; Remove mode, SI and the U history reset when it changes. The geometry (`PointInPolygon`,
+  `PathsInsidePolygon`, `PathsCrossPolygon`, `PathsCrossFence`) is pure.
+- **Transparent commands** (`transparent.go`). `cmdsys.Transparent` and `IsTransparent`; ZOOM, LAYER, DIST,
+  ID and SETVAR implement it. `'NAME` at a prompt (not a text prompt) parks the interrupted command, its
+  prompt and its open transaction in a frame, runs NAME with `>>` before its prompts (`>>>>` one level
+  deeper), and `finish` restores the frame when NAME ends, so the interrupted prompt is shown again unchanged; a
+  command that is not transparent prints `NAME command not allowed transparently.` (V2). Escape cancels every
+  level and then the outermost command. `Session.TransparentDepth` reports the nesting; `CMDNAMES` joins the
+  stack with `'`. A transparent command must not open a transaction (it would commit as a step of its own). The
+  repeat command (`Enter` at `Command:`) is not changed by a transparent one.
 - **Number formatting** (`format.go`). `Context.Fmt` and `FmtAngle` honour `LUPREC` and `AUPREC`; the
   defaults print exactly what `FormatNumber` does.
 - **Wording** (`wording.go`). Catalog-key constants for the session's own messages and `InputErrorKey`,
-  the one place that maps a parse error and a prompt to its sentence.
+  the one place that maps a parse error and a prompt to its sentence: a point prompt with keywords says
+  `Point or option keyword required.`, a distance prompt `Requires numeric distance or second point.`, an angle prompt
+  `Requires numeric angle or second point.`, an integer prompt `Requires an integer value.`, a keyword-only prompt
+  `Invalid option keyword.`, anything else the generic sentences (spec V9).
 
 The command package mirrors this split: one file per command group, each with a `registerX` function that
 `commands.Register` calls, a frozen `aliases.go` (a package registers its own aliases with `Registry.Alias`
@@ -136,7 +181,8 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 - **Names.** `Register` ends with `i18n.RegisterAliases`, so the Italian command names are aliases in
   every language; canonical names stay English. `SnapMode.String` is localized (`SnapMode.In` takes
   a translator).
-- **Parse errors** map to `input.err.*` keys through `InputErrorKey` in `Session.inputError`.
+- **Parse errors** map to `input.err.*` keys through `InputErrorKey` in `Session.inputError`; SETVAR's
+  sentences are `session.setvar.*`.
 
 ## Input pipeline
 

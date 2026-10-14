@@ -34,6 +34,8 @@ type Context struct {
 	vars *Vars
 	last *lastState
 	prev *selMemory
+	// script hands script text to the session (SCRIPT, RSCRIPT).
+	script func(text string, restart bool)
 }
 
 // FileHandler reads and writes drawings for the file commands.
