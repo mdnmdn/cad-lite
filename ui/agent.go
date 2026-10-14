@@ -110,7 +110,13 @@ type AgentPanel struct {
 	ep    mcp.Endpoint
 	timer *gpui.Timer
 	tgen  int
+	// openers counts start goroutines in flight, so quitting can wait for them and close
+	// the session a late start returns.
+	openers sync.WaitGroup
 }
+
+// openerJoinTimeout bounds how long quitting waits for a start in flight.
+const openerJoinTimeout = 10 * time.Second
 
 func newAgentPanel(ws *Workspace) *AgentPanel {
 	p := &AgentPanel{
@@ -311,13 +317,15 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 	t.state = agentStarting
 	t.harness = h
 	open := p.open
+	p.openers.Add(1)
 	go func() {
+		defer p.openers.Done()
 		s, err := open(ctx, cfg)
 		t.mu.Lock()
 		defer t.mu.Unlock()
 		if t.gen != gen {
 			if s != nil {
-				go s.Close()
+				s.Close()
 			}
 			return
 		}
@@ -337,6 +345,20 @@ func (p *AgentPanel) Stop(w *gpui.Window) {
 func (p *AgentPanel) stopAll(wait bool) {
 	for _, t := range p.tabs {
 		p.stopTab(t, wait)
+	}
+	if wait {
+		p.joinOpeners()
+	}
+}
+
+// joinOpeners waits (bounded) for starts in flight; each closes the session it returns once its
+// tab has moved on, so none outlives the application.
+func (p *AgentPanel) joinOpeners() {
+	done := make(chan struct{})
+	go func() { p.openers.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(openerJoinTimeout):
 	}
 }
 

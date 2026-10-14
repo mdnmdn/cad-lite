@@ -1,7 +1,5 @@
 package gpui
 
-import "math"
-
 // Pixels is a length in logical (device-independent) pixels.
 type Pixels float32
 
@@ -221,5 +219,3 @@ func clamp32(v, lo, hi float32) float32 {
 	}
 	return v
 }
-
-func isFinite(f float32) bool { return !math.IsNaN(float64(f)) && !math.IsInf(float64(f), 0) }

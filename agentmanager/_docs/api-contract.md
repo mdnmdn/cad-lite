@@ -137,6 +137,7 @@ const (StopEndTurn StopReason = "end_turn"; StopCancelled="cancelled"; StopFaile
 	StopMaxTokens="max_tokens"; StopMaxTurns="max_turn_requests"; StopRefusal="refusal")
 
 // AllowMCP returns a PermissionPolicy that allows (allow_once preferred) requests whose call has MCPServer==server.
+// Without MCPServer only the exact title "mcp__server__tool" matches; Kind must be nil, other or read.
 func AllowMCP(server string) PermissionPolicy
 ```
 `isEvent()` methods are defined in `types.go` (WP1). Backends fill `MCPServer`/`MCPTool` where they can
@@ -175,9 +176,12 @@ func (c *Conn) SendRaw(v any) error            // arbitrary line (claude control
 func (c *Conn) CloseWrite() error              // flush queue then close the writer (stdin EOF)
 func (c *Conn) Done() <-chan struct{}          // reader exited (EOF); pending calls fail with ErrClosed
 var ErrClosed error
+var ErrLineTooLong error                       // an inbound line exceeded the cap: the reader stops, Done closes, pending calls fail
+func (c *Conn) Err() error                     // why the reader stopped (ErrLineTooLong or a read error); nil on EOF; valid after Done
 func WithFrameLogger(func(dir string, line []byte)) Option // dir "in"|"out"
+func WithMaxLine(n int) Option                 // inbound line cap in bytes (default 64 MiB; n <= 0 keeps the default)
 ```
-Writer rule: unbounded queue, one goroutine owns the writer, `SendRaw` never blocks. A `Handler` for
+Writer rule: unbounded queue, one goroutine owns the writer, `SendRaw` never blocks. After a write error the writer goroutine exits, closes the writer, drops the queue and fails pending calls with `ErrClosed`; later sends return `ErrClosed`. A `Handler` for
 non-JSON-RPC protocols (Claude) may be `nil`-requests plus a `WithRawHandler(func(line []byte))` option
 so the Claude backend reuses the framing/writer without the JSON-RPC semantics.
 
@@ -225,7 +229,7 @@ handshakes (ACP, Codex), returns a Session; MCP injection and Close semantics as
 
 ## ToolCallPatch.MCPServer
 
-`ToolCallPatch` carries `MCPServer string`: the owning MCP server when the backend knows it. Backends set it (Claude from `mcp__server__tool`, Codex from MCP tool-call items, ACP from the tool call's MCP metadata or title). `AllowMCP` matches on it first and falls back to title prefixes.
+`ToolCallPatch` carries `MCPServer string`: the owning MCP server when the backend knows it. Backends set it (Claude from `mcp__server__tool`, Codex from MCP tool-call items, ACP from the tool call's MCP metadata or title). `AllowMCP` matches `MCPServer` only when it is set; without it only the exact Claude title `mcp__server__tool` counts. A call whose `Kind` is not `other` or `read` is never auto-allowed. ACP derives `MCPServer` strictly: `mcp__server__tool`, or opencode's `<server>_<tool>` with the tool in `[a-z0-9_]+`, and never for execute/edit/delete/move/fetch kinds.
 
 ## Package `store` (session persistence)
 

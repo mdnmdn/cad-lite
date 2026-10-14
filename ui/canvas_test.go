@@ -6,6 +6,7 @@ import (
 
 	"go-draw/geom"
 	"go-draw/internal/gpui"
+	"go-draw/settings"
 )
 
 const notch = 20 // one mouse-wheel notch in logical pixels
@@ -213,5 +214,56 @@ func TestCanvasResizeKeepsVisibleBoxFramed(t *testing.T) {
 	h.key("f2")
 	if !near(v.Width, w0, 1e-9) || !near(v.Scale, s0, 1e-9) || !v.Center.Near(c0, 1e-9) {
 		t.Fatalf("closing the panel must restore the view: scale %v centre %v", v.Scale, v.Center)
+	}
+}
+
+func (h *harness) wheelMode(mode string) {
+	st := h.ws.Settings()
+	st.Wheel = mode
+	h.ws.SetSettings(st, nil)
+}
+
+func TestWheelModeZoomMakesPreciseScrollZoom(t *testing.T) {
+	h := open(t)
+	h.wheelMode(settings.WheelZoom)
+	v := h.ws.View()
+	s0 := v.Scale
+	h.wheel(gpui.ScrollWheelEvent{DeltaY: -notch, Precise: true})
+	if v.Scale <= s0 {
+		t.Fatalf("zoom mode: precise scroll up should zoom in, scale %v -> %v", s0, v.Scale)
+	}
+	h.wheel(gpui.ScrollWheelEvent{DeltaY: notch, Modifiers: gpui.Shift})
+	if !near(v.Scale, s0*math.Exp(notch/240.0), 1e-9) {
+		t.Fatalf("zoom mode: shift must pan, scale %v", v.Scale)
+	}
+}
+
+func TestWheelModePanPansAndCtrlZooms(t *testing.T) {
+	h := open(t)
+	h.wheelMode(settings.WheelPan)
+	v := h.ws.View()
+	c0, s0 := v.Center, v.Scale
+	h.wheel(gpui.ScrollWheelEvent{DeltaY: notch})
+	if v.Scale != s0 || !v.Center.Near(c0.Add(geom.V(0, -notch/s0)), 1e-9) {
+		t.Fatalf("pan mode notch: centre %v scale %v", v.Center, v.Scale)
+	}
+	h.wheel(gpui.ScrollWheelEvent{DeltaX: 8, DeltaY: 4, Precise: true})
+	if v.Scale != s0 {
+		t.Fatalf("pan mode precise: scale %v", v.Scale)
+	}
+	h.wheel(gpui.ScrollWheelEvent{DeltaY: -notch, Modifiers: gpui.Control})
+	if v.Scale <= s0 {
+		t.Fatalf("pan mode ctrl+notch should zoom in: %v -> %v", s0, v.Scale)
+	}
+}
+
+func TestWheelModeAutoKeepsHeuristics(t *testing.T) {
+	h := open(t)
+	h.wheelMode(settings.WheelAuto)
+	v := h.ws.View()
+	s0 := v.Scale
+	h.wheel(gpui.ScrollWheelEvent{DeltaY: -notch})
+	if v.Scale <= s0 {
+		t.Fatalf("auto: notch should zoom, %v -> %v", s0, v.Scale)
 	}
 }

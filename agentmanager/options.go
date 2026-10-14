@@ -6,31 +6,32 @@ import "strings"
 type PermissionPolicy func(PermissionRequest) (optionID string, ok bool)
 
 // AllowMCP returns a PermissionPolicy that allows (allow_once preferred) requests whose call
-// belongs to the MCP server named server: Call.MCPServer==server when the backend set it,
-// otherwise a Title in the naming the backends produce: "mcp__server__tool" (Claude),
-// "server_tool", "server.tool", "server:tool" or "server/tool" (ACP agents, Codex).
+// belongs to the MCP server named server. The backend-set Call.MCPServer is authoritative: when it
+// is set only an exact match is allowed. Without it, only the exact Claude title "mcp__server__tool"
+// qualifies. A call whose Kind is anything but other or read (execute, edit, delete, move, fetch,
+// ...) is never auto-allowed, whatever its title says.
 func AllowMCP(server string) PermissionPolicy {
-	prefixes := []string{"mcp__" + server + "__"}
-	for _, sep := range []string{"_", ".", ":", "/"} {
-		prefixes = append(prefixes, server+sep)
-	}
+	prefix := "mcp__" + server + "__"
 	return func(r PermissionRequest) (string, bool) {
 		if server == "" {
 			return "", false
 		}
-		match := r.Call.MCPServer == server
-		t := ""
-		if r.Call.Title != nil {
-			t = strings.TrimSpace(*r.Call.Title)
-		}
-		for _, p := range prefixes {
-			if !match && t != "" && strings.HasPrefix(t, p) {
-				match = true
-				break
-			}
-		}
-		if !match {
+		if k := r.Call.Kind; k != nil && *k != KindOther && *k != KindRead {
 			return "", false
+		}
+		if r.Call.MCPServer != "" {
+			if r.Call.MCPServer != server {
+				return "", false
+			}
+		} else {
+			t := ""
+			if r.Call.Title != nil {
+				t = *r.Call.Title
+			}
+			tool, ok := strings.CutPrefix(t, prefix)
+			if !ok || !validTool(tool) {
+				return "", false
+			}
 		}
 		for _, want := range []PermissionKind{AllowOnce, AllowAlways} {
 			for _, o := range r.Options {
@@ -41,4 +42,17 @@ func AllowMCP(server string) PermissionPolicy {
 		}
 		return "", false
 	}
+}
+
+// validTool reports whether s is a non-empty bare MCP tool name (no spaces or separators).
+func validTool(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
 }

@@ -50,6 +50,11 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	ws.session.OnDrawing(ws.attach)
 	ws.session.OnFilePath(ws.pathChanged)
 	ws.session.SetAgentHandler(ws.agentCommand)
+	ws.session.SetSettingsHandler(func() {
+		if ws.win != nil {
+			ws.ToggleSettings(ws.win)
+		}
+	})
 	ws.input = themeField(gpui.NewTextInput("Type a command"))
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
@@ -111,7 +116,7 @@ var (
 
 // Bindings returns the workspace key bindings, to add to the app keymap.
 func Bindings() []gpui.KeyBinding {
-	return []gpui.KeyBinding{
+	return append([]gpui.KeyBinding{
 		gpui.NewKeyBinding("ctrl-z", actionUndo, "cad"),
 		gpui.NewKeyBinding("cmd-z", actionUndo, "cad"),
 		gpui.NewKeyBinding("ctrl-y", actionRedo, "cad"),
@@ -121,7 +126,7 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("f8", actionOrtho, "cad"),
 		gpui.NewKeyBinding("ctrl-e", actionZoomExtnt, "cad"),
 		gpui.NewKeyBinding("f2", actionAgent, "cad"),
-	}
+	}, settingsBindings()...)
 }
 
 // Render builds the window for the current state.
@@ -139,7 +144,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		return func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { f(); w.Refresh() }
 	}
 	s := ws.session
-	return gpui.NewDiv().KeyContext("cad").
+	return ws.withSettings(cx, gpui.NewDiv().KeyContext("cad").
 		FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13).
 		OnAction(actionUndo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("UNDO", w) }).
 		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
@@ -157,7 +162,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 			),
 			ws.commandArea(cmdline),
 			ws.statusBar(),
-		)
+		))
 }
 
 // toolIconSize is the toolbar icon edge in logical pixels.
@@ -200,6 +205,7 @@ func (ws *Workspace) toolbar() *gpui.Div {
 		ws.button("zoom", "Zoom", "ZOOM", icons.ViewZoomWindow),
 		gpui.NewDiv().Flex1(),
 		ws.agentToggle(),
+		ws.settingsButton(),
 	)
 }
 

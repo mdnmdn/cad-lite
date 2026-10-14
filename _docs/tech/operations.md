@@ -66,7 +66,8 @@ Run `go mod tidy` after adding an import.
 | `-demo` | Draw the demo plate at startup |
 | `-png PATH` | Render one frame headlessly and exit; draws the demo plate unless `-open` or `-script` is given |
 | `-hover X,Y` | With `-png`: move the pointer to the model point first, so snaps and previews show |
-| `-width`, `-height` | Window size in logical pixels (default 1280×800) |
+| `-width`, `-height` | Window size in logical pixels; without them the size saved in the settings file, else 1280×800 |
+| `-version` | Print the version (`dev` unless the build sets `-X main.version=...`) and exit |
 | `-scale` | Device scale for `-png` |
 | `-smoke MS` | Quit the window after MS milliseconds |
 | `-save-on-exit PATH` | Write the drawing to this DXF path when the window closes or on SIGINT or SIGTERM; the real-window tests assert on that file |
@@ -86,7 +87,8 @@ The application keeps its [settings](../features/settings.md) in `settings.toml`
 OS user config folder: `~/Library/Application Support` on macOS, `%AppData%` on Windows,
 `$XDG_CONFIG_HOME` or `~/.config` on Linux. `GODRAW_CONFIG_DIR` replaces that whole directory (the
 file is then `$GODRAW_CONFIG_DIR/settings.toml`); tests and renders that must not touch the real file
-set it to a temporary directory. The browser build has no file and keeps them in memory.
+set it to a temporary directory. `cmd/cad` loads the file at startup unless `-png` is given (a failure is
+logged and the defaults apply) and saves it, with the window size, when the window closes. The browser build has no file and keeps them in memory.
 
 ## Environment notes
 

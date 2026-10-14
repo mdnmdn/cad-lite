@@ -57,6 +57,7 @@ This table is the owner of the command list and the default aliases.
 | LIST | LI | Prints each selected entity's type, layer, handle and geometry |
 | NEW | — | Replaces the drawing with an empty one |
 | OPEN, SAVE | — | A DXF path; see [DXF files](dxf-files.md) |
+| OPTIONS | OP | Opens the [settings](settings.md) panel; prints `Settings are not available.` where the host has none |
 | AI | AGENT | `Ask the agent` takes free text (Space does not submit): text opens the [agent panel](agent-panel.md) and sends it; an empty answer toggles the panel |
 
 Commands that take a selection (ERASE, MOVE, COPY, ROTATE, SCALE, LIST) use the current selection

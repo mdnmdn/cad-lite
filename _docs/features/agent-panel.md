@@ -51,6 +51,8 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   session the agent has lost ends with an error note; open a new tab to continue. OPEN or SAVE of a
   file in another directory closes every live session, keeps their records and switches to that project's
   tabs.
+- **Default harness.** The `agent.default` [setting](settings.md) selects the harness at startup and when
+  changed in the settings panel (`AgentPanel.Configure`); empty leaves the choice to `PATH`.
 - **Harness chips.** One chip per agent CLI found on `PATH` (`opencode`, `claude`, `codex`). The chips lock
   while the tab has a session or a stored conversation. With none found the panel says so; `-agent` with `-agent-cmd` offers the
   named harness regardless of `PATH`.
@@ -82,7 +84,7 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   `Workspace.SetProjectPath`, `AgentPanel.Configure`, `Start`, `Stop`, `Send`, `Cancel`, `Respond`,
   `SetOpener`, `Tabs`, `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`, `Sessions`; `Workspace.CloseAgent`;
   action `cad-toggle-agent` bound to F2. Command `AI` reaches the panel through
-  `cmdsys.Session.SetAgentHandler`; OPEN and SAVE report the file through `cmdsys.Session.OnFilePath`.
+  `cmdsys.Session.SetAgentHandler` (the `OPTIONS` command is wired the same way through `SetSettingsHandler`); OPEN and SAVE report the file through `cmdsys.Session.OnFilePath`.
 - Files: `<project>/.go-draw/agent/<id>.jsonl` and `open.json` (the open tabs), format in the store's
   section of the agentmanager API contract.
 - What the agent may do to the drawing is the tool set in [Agent integration](../tech/agent-integration.md).

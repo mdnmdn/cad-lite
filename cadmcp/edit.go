@@ -45,6 +45,12 @@ func withTx(s *cmdsys.Session, fn func(tx *doc.Txn) error) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Abort()
+			panic(r)
+		}
+	}()
 	if err := fn(tx); err != nil {
 		tx.Abort()
 		return err

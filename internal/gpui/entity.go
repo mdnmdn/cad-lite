@@ -177,7 +177,7 @@ func (e Entity[T]) Release(cx *App) {
 
 // Downgrade returns a weak handle that does not keep the entity alive.
 func (e Entity[T]) Downgrade() WeakEntity[T] {
-	return WeakEntity[T]{id: e.id, app: e.app}
+	return WeakEntity[T](e)
 }
 
 // Notify schedules the entity's observers to run during the next effect
@@ -204,7 +204,7 @@ func (w WeakEntity[T]) Upgrade() (Entity[T], bool) {
 	if w.app == nil || w.app.slot(w.id) == nil {
 		return Entity[T]{}, false
 	}
-	return Entity[T]{id: w.id, app: w.app}, true
+	return Entity[T](w), true
 }
 
 // releaseEntity frees the slot of an entity with no strong references left

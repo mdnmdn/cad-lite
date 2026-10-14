@@ -108,7 +108,6 @@ func TestTrimNothingToTrim(t *testing.T) {
 		t.Fatal("TRIM must keep prompting")
 	}
 	s.Submit("")
-	h = s.History()
 	// Nothing changed: no undo step was recorded, a miss prints a message.
 	s.Script("TRIM 500,500")
 	if got := lastLine(s); got != "No object found at that point." {

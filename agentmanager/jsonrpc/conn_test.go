@@ -346,3 +346,75 @@ func TestErrorString(t *testing.T) {
 		t.Fatal(e.Error())
 	}
 }
+
+type failingWriter struct{ closed chan struct{} }
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
+func (w failingWriter) Close() error            { close(w.closed); return nil }
+
+func TestWriteErrorStopsWriterAndFailsPending(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	fw := failingWriter{closed: make(chan struct{})}
+	c := jsonrpc.NewConn(pr, fw, nil)
+	errc := make(chan error, 1)
+	go func() { errc <- c.Call(context.Background(), "x", nil, nil) }()
+	select {
+	case err := <-errc:
+		if !errors.Is(err, jsonrpc.ErrClosed) {
+			t.Fatalf("Call error %v, want ErrClosed", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("pending call not failed after write error")
+	}
+	select {
+	case <-fw.closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("writer goroutine did not exit and close the writer")
+	}
+	if err := c.Notify("n", nil); !errors.Is(err, jsonrpc.ErrClosed) {
+		t.Fatalf("Notify after failure: %v", err)
+	}
+}
+
+func TestOverlongLineStopsReader(t *testing.T) {
+	pr, pw := io.Pipe()
+	c := jsonrpc.NewConn(pr, io.Discard, nil, jsonrpc.WithMaxLine(1024), jsonrpc.WithRawHandler(func([]byte) {}))
+	go func() {
+		chunk := []byte(strings.Repeat("a", 512))
+		for range 100 {
+			if _, err := pw.Write(chunk); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-c.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("reader kept reading an unbounded line")
+	}
+	if !errors.Is(c.Err(), jsonrpc.ErrLineTooLong) {
+		t.Fatalf("Err = %v", c.Err())
+	}
+	pw.Close()
+}
+
+func TestLineAtCapIsAccepted(t *testing.T) {
+	pr, pw := io.Pipe()
+	got := make(chan int, 1)
+	c := jsonrpc.NewConn(pr, io.Discard, nil, jsonrpc.WithMaxLine(100000), jsonrpc.WithRawHandler(func(l []byte) { got <- len(l) }))
+	go pw.Write([]byte(strings.Repeat("b", 90000) + "\n"))
+	select {
+	case n := <-got:
+		if n != 90000 {
+			t.Fatalf("len %d", n)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("line not delivered")
+	}
+	pw.Close()
+	<-c.Done()
+	if c.Err() != nil {
+		t.Fatal(c.Err())
+	}
+}

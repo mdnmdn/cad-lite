@@ -55,6 +55,9 @@ func (v View) Visible() geom.Box2 {
 // ZoomAt scales by factor, keeping the model point under the viewport
 // pixel (x, y) fixed.
 func (v *View) ZoomAt(x, y, factor float64) {
+	if math.IsNaN(factor) || math.IsInf(factor, 0) || math.IsNaN(x) || math.IsNaN(y) || math.IsInf(x, 0) || math.IsInf(y, 0) {
+		return
+	}
 	anchor := v.ToModel(x, y)
 	v.Scale = math.Max(MinScale, math.Min(MaxScale, v.Scale*factor))
 	after := v.ToModel(x, y)
@@ -69,13 +72,23 @@ func (v *View) PanBy(dx, dy float64) {
 // Fit centres box in the viewport, leaving margin pixels on each side. An
 // empty box leaves the view unchanged.
 func (v *View) Fit(box geom.Box2, margin float64) {
-	if box.IsEmpty() || v.Width <= 2*margin || v.Height <= 2*margin {
+	if box.IsEmpty() || !finiteBox(box) || v.Width <= 2*margin || v.Height <= 2*margin {
 		return
 	}
 	w, h := box.Size()
 	w, h = math.Max(w, 1e-9), math.Max(h, 1e-9)
 	v.Scale = math.Max(MinScale, math.Min(MaxScale, math.Min((v.Width-2*margin)/w, (v.Height-2*margin)/h)))
 	v.Center = box.Center()
+}
+
+func finiteBox(b geom.Box2) bool {
+	w, h := b.Size()
+	for _, f := range []float64{b.Min.X, b.Min.Y, b.Max.X, b.Max.Y, w, h} {
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return false
+		}
+	}
+	return true
 }
 
 // Band is the zoom bucket for scale: tessellations are cached per band, so

@@ -71,7 +71,27 @@ func (o object) str(code int) string {
 
 func (o object) float(code int) float64 {
 	v, _ := strconv.ParseFloat(o.str(code), 64)
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
 	return v
+}
+
+// zeroNonFinite rewrites the non-finite values (nan, inf, 1e999) of the numeric group codes
+// (10-59, 110-149, 210-239) to 0 and returns how many it changed.
+func zeroNonFinite(ps []pair) int {
+	n := 0
+	for i, p := range ps {
+		c := p.code
+		if !(c >= 10 && c <= 59 || c >= 110 && c <= 149 || c >= 210 && c <= 239) {
+			continue
+		}
+		if v, _ := strconv.ParseFloat(strings.TrimSpace(p.val), 64); math.IsNaN(v) || math.IsInf(v, 0) {
+			ps[i].val = "0"
+			n++
+		}
+	}
+	return n
 }
 
 func (o object) int(code int) int {
@@ -97,7 +117,11 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	d := doc.New()
 	d.Header.Extra = map[string][]string{}
 	st := &state{kept: map[string]int{}}
+	if n := zeroNonFinite(ps); n > 0 {
+		st.warns = append(st.warns, fmt.Sprintf("%d non-finite numbers (nan/inf) were read as 0", n))
+	}
 	var section string
+	var open, sawEOF bool
 	var objs []object
 	for i := 0; i < len(ps); i++ {
 		p := ps[i]
@@ -119,20 +143,31 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 		typ := strings.TrimSpace(p.val)
 		switch typ {
 		case "SECTION":
+			if open {
+				return nil, nil, fmt.Errorf("dxf: section %q has no ENDSEC (truncated file?)", section)
+			}
+			open = true
 			section = ""
 			objs = append(objs[:0], object{typ: typ})
 		case "ENDSEC":
 			if err := applySection(d, section, objs, st); err != nil {
 				return nil, nil, err
 			}
-			section, objs = "", objs[:0]
+			section, objs, open = "", objs[:0], false
 		case "EOF":
+			sawEOF = true
 			i = len(ps)
 		default:
 			objs = append(objs, object{typ: typ})
 		}
 	}
+	if open {
+		return nil, nil, fmt.Errorf("dxf: section %q has no ENDSEC (truncated file?)", section)
+	}
 	warns := st.warns
+	if !sawEOF {
+		warns = append(warns, "file has no EOF marker (it may be truncated)")
+	}
 	types := make([]string, 0, len(st.kept))
 	for t := range st.kept {
 		types = append(types, t)

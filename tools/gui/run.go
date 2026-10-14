@@ -194,13 +194,13 @@ func startXvfb(w, h int) (*exec.Cmd, string, error) {
 		if s == "" {
 			cmd.Process.Kill()
 			cmd.Wait()
-			return nil, "", errors.New("Xvfb exited before reporting a display")
+			return nil, "", errors.New("xvfb exited before reporting a display")
 		}
 		return cmd, ":" + s, nil
 	case <-time.After(10 * time.Second):
 		cmd.Process.Kill()
 		cmd.Wait()
-		return nil, "", errors.New("Xvfb did not start")
+		return nil, "", errors.New("xvfb did not start")
 	}
 }
 

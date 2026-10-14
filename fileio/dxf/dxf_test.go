@@ -407,3 +407,46 @@ func TestWriteDropsR13GroupsAndNonR12BlockEntities(t *testing.T) {
 		t.Fatalf("output:\n%s", out)
 	}
 }
+
+func TestReadTruncatedFileIsAnError(t *testing.T) {
+	for _, in := range []string{
+		"0\nSECTION\n",
+		"0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n10\n0\n20\n0\n11\n1\n21\n1\n",
+		"0\nSECTION\n2\nENTITIES\n0\nSECTION\n2\nTABLES\n0\nENDSEC\n0\nEOF\n",
+	} {
+		if d, _, err := (dxf.Codec{}).Read(strings.NewReader(in)); err == nil {
+			t.Errorf("%q: opened with %d entities, want an error", in, d.Len())
+		}
+	}
+}
+
+func TestReadMissingEOFWarns(t *testing.T) {
+	_, warns, err := (dxf.Codec{}).Read(strings.NewReader("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n"))
+	if err != nil || len(warns) != 1 || !strings.Contains(warns[0], "EOF") {
+		t.Fatalf("warns %v err %v", warns, err)
+	}
+}
+
+func TestReadNonFiniteNumbers(t *testing.T) {
+	in := "0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n10\nnan\n20\n0\n11\ninf\n21\n1e999\n0\nLWPOLYLINE\n8\n0\n90\n2\n70\n0\n10\n0\n20\n0\n10\nnan\n20\n5\n0\nENDSEC\n0\nEOF\n"
+	d, warns, err := (dxf.Codec{}).Read(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "non-finite") {
+		t.Errorf("warns %v", warns)
+	}
+	for _, h := range d.Handles() {
+		b := d.Entity(h).Bounds()
+		for _, f := range []float64{b.Min.X, b.Min.Y, b.Max.X, b.Max.Y} {
+			if math.IsNaN(f) || math.IsInf(f, 0) {
+				t.Fatalf("entity %s has non-finite bounds %v", h, b)
+			}
+		}
+	}
+	var buf bytes.Buffer
+	(dxf.Codec{}).Write(&buf, d)
+	if s := strings.ToLower(buf.String()); strings.Contains(s, "nan") || strings.Contains(s, "inf") {
+		t.Error("writer emitted a non-finite number")
+	}
+}

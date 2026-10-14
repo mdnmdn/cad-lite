@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"agentmanager"
+	"go-draw/assets/appicon"
 	"go-draw/doc"
 	"go-draw/fileio"
 	"go-draw/fileio/dxf"
@@ -35,6 +36,9 @@ const demoScript = `LAYER outline=4 REC 0,0 220,130 PLINE 70,95 150,95 150,111 7
 	`ARC 80,50 110,80 140,50 ` +
 	`LAYER center=3 LINE 110,10 110,90  LINE 70,50 150,50  LAYER outline`
 
+// version is the release version; packaging sets it with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	png := flag.String("png", "", "render one frame headlessly to this PNG path and exit")
 	width := flag.Int("width", 1280, "window width in logical pixels")
@@ -49,7 +53,12 @@ func main() {
 	agentCmd := flag.String("agent-cmd", "", "executable to run for the selected agent instead of the one on PATH")
 	agentDemo := flag.Bool("agent-demo", false, "open the agent panel on a canned conversation (for -png)")
 	saveOnExit := flag.String("save-on-exit", "", "dev: write the drawing to this DXF path when the window closes or on SIGINT/SIGTERM (GUI tests)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("go-draw", version)
+		return
+	}
 
 	files := &fileio.Registry{}
 	files.AddReader(dxf.Codec{})
@@ -69,12 +78,32 @@ func main() {
 	}
 	ws := ui.NewWorkspace(d, files)
 	defer ws.CloseAgent()
+	// fatal stops the agent subprocess first: log.Fatal and os.Exit skip deferred calls.
+	fatal := func(v ...any) { ws.CloseAgent(); log.Fatal(v...) }
+	if *open != "" {
+		ws.SetProjectPath(*open)
+	}
+	if *png == "" {
+		if err := ws.LoadSettings(); err != nil {
+			log.Printf("settings: %v", err)
+		}
+		set := map[string]bool{}
+		flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
+		if win := ws.Settings().Window; win.Width > 0 && win.Height > 0 {
+			if !set["width"] {
+				*width = win.Width
+			}
+			if !set["height"] {
+				*height = win.Height
+			}
+		}
+	}
 	if *agent != "" || *agentCmd != "" {
 		h := agentmanager.Harness(*agent)
 		switch h {
 		case agentmanager.OpenCode, agentmanager.Claude, agentmanager.Codex:
 		default:
-			log.Fatalf("-agent %q: want opencode, claude or codex", *agent)
+			fatal(fmt.Sprintf("-agent %q: want opencode, claude or codex", *agent))
 		}
 		ws.AgentPanel().Configure(h, *agentCmd)
 		ws.AgentPanel().Show()
@@ -94,12 +123,12 @@ func main() {
 
 	if *png != "" {
 		if err := renderPNG(ws, *png, *width, *height, float32(*scale), *hover); err != nil {
-			log.Fatal(err)
+			fatal(err)
 		}
 		return
 	}
 
-	p := ebitenplatform.New()
+	p := ebitenplatform.New(ebitenplatform.WithWindowIcon(appicon.Images()))
 	err := p.Run(func(cx *gpui.App) {
 		if *saveOnExit != "" {
 			sig := make(chan os.Signal, 1)
@@ -109,7 +138,7 @@ func main() {
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		opts := gpui.WindowOptions{Width: float32(*width), Height: float32(*height), Title: "go-draw", Resizable: true}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
-			log.Fatal(err)
+			fatal(err)
 		}
 		if *smoke > 0 {
 			time.AfterFunc(time.Duration(*smoke)*time.Millisecond, cx.Quit)
@@ -117,11 +146,15 @@ func main() {
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		ws.CloseAgent()
 		os.Exit(1)
+	}
+	if err := ws.SaveSettings(); err != nil {
+		log.Printf("settings: %v", err)
 	}
 	if *saveOnExit != "" {
 		if _, err := files.Save(*saveOnExit, ws.Session().Drawing()); err != nil {
-			log.Fatal(err)
+			fatal(err)
 		}
 	}
 }

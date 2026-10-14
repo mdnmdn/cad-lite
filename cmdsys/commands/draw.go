@@ -84,7 +84,6 @@ func (*lineCmd) Cancel(*cmdsys.Context) {}
 // --- PLINE --------------------------------------------------------------
 
 type plineCmd struct {
-	base
 	pts []geom.Vec2
 }
 

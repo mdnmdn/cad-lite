@@ -44,6 +44,7 @@ func Start(o Options) (*Process, error) {
 	}
 	pr, pw, err := os.Pipe()
 	if err != nil {
+		stdin.Close()
 		return nil, err
 	}
 	// An os.Pipe (rather than StdoutPipe) lets the reader drain output after the child exits;
@@ -69,8 +70,20 @@ func Start(o Options) (*Process, error) {
 // Stdin is the child's stdin.
 func (p *Process) Stdin() io.WriteCloser { return p.stdin }
 
-// Stdout is the child's stdout.
-func (p *Process) Stdout() io.Reader { return p.stdout }
+// Stdout is the child's stdout. Its read end is closed when the reader reaches EOF or an error,
+// and by Close.
+func (p *Process) Stdout() io.Reader { return eofCloser{p.stdout} }
+
+// eofCloser closes the pipe's read end once the stream ends.
+type eofCloser struct{ f *os.File }
+
+func (e eofCloser) Read(b []byte) (int, error) {
+	n, err := e.f.Read(b)
+	if err != nil {
+		e.f.Close()
+	}
+	return n, err
+}
 
 // StderrTail returns the last captured stderr bytes as text.
 func (p *Process) StderrTail() string { return p.stderr.String() }
@@ -94,6 +107,7 @@ func (p *Process) Close(grace time.Duration) error {
 		}
 	})
 	<-p.done
+	_ = p.stdout.Close()
 	return nil
 }
 

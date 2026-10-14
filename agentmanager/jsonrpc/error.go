@@ -27,3 +27,6 @@ const (
 
 // ErrClosed is returned by calls on a Conn whose reader has exited or whose writer was closed.
 var ErrClosed = errors.New("jsonrpc: connection closed")
+
+// ErrLineTooLong is Conn.Err when an inbound line exceeded the cap (WithMaxLine).
+var ErrLineTooLong = errors.New("jsonrpc: inbound line too long")

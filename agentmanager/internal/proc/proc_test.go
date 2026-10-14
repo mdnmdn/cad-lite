@@ -119,3 +119,26 @@ func TestStartMissingBinary(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func openFDs(t *testing.T) int {
+	t.Helper()
+	es, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		t.Skip("no /proc/self/fd")
+	}
+	return len(es)
+}
+
+func TestCloseReleasesPipeDescriptors(t *testing.T) {
+	before := openFDs(t)
+	for range 20 {
+		p, err := proc.Start(proc.Options{Path: os.Args[0], Env: []string{"PROC_HELPER=ignore-stdin"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Close(10 * time.Millisecond)
+	}
+	if after := openFDs(t); after > before+4 {
+		t.Fatalf("descriptors leaked: %d before, %d after 20 processes", before, after)
+	}
+}

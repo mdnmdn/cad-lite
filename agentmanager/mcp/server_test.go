@@ -398,3 +398,46 @@ func TestBodyLimit(t *testing.T) {
 		t.Errorf("status %d", resp.StatusCode)
 	}
 }
+
+func TestCancelledCallDoesNotWaitForOrRunAfterBusyHandler(t *testing.T) {
+	s := mcp.NewServer(mcp.Options{})
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var fastRan atomic.Int32
+	s.Register(mcp.Tool{Name: "block", Handler: func(context.Context, json.RawMessage) (mcp.Result, error) {
+		close(started)
+		<-release
+		return mcp.Text("ok"), nil
+	}})
+	s.Register(mcp.Tool{Name: "fast", Handler: func(context.Context, json.RawMessage) (mcp.Result, error) {
+		fastRan.Add(1)
+		return mcp.Text("ok"), nil
+	}})
+	ep, _ := s.Start()
+	defer s.Close()
+	go func() { _, _ = http.DefaultClient.Do(blockReq(ep)) }()
+	<-started
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", ep.URL, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fast","arguments":{}}}`))
+	req.Header.Set("Authorization", "Bearer "+ep.Token)
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		resp.Body.Close()
+		t.Fatal("expected the client to time out while the handler is busy")
+	}
+	close(release)
+	time.Sleep(200 * time.Millisecond)
+	if n := fastRan.Load(); n != 0 {
+		t.Fatalf("abandoned call ran %d times after the busy handler finished", n)
+	}
+	if r := call(t, ep, "fast", `{}`); r["isError"] != false {
+		t.Fatalf("server stuck: %v", r)
+	}
+}
+
+func blockReq(ep mcp.Endpoint) *http.Request {
+	req, _ := http.NewRequest("POST", ep.URL, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"block","arguments":{}}}`))
+	req.Header.Set("Authorization", "Bearer "+ep.Token)
+	return req
+}

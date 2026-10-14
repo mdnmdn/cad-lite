@@ -12,7 +12,6 @@ import (
 
 	"go-draw/cmdsys"
 	"go-draw/doc"
-	"go-draw/geom"
 
 	"agentmanager/mcp"
 )
@@ -69,7 +68,7 @@ func def[A any](e Env, name, desc, schema string, mutates bool, fn toolFunc[A]) 
 					ferr = errors.New("no drawing is open")
 					return
 				}
-				out, ferr = fn(s, a)
+				out, ferr = call(s, a, fn)
 				if mutates && e.Changed != nil {
 					e.Changed()
 				}
@@ -222,6 +221,21 @@ func parseHandles(s *cmdsys.Session, in []string) ([]doc.Handle, error) {
 	return out, nil
 }
 
+// call runs a tool body as an agent: HumanOnly commands are refused, and a panic aborts any
+// open transaction and becomes an error so the session stays usable.
+func call[A any](s *cmdsys.Session, a A, fn toolFunc[A]) (out any, err error) {
+	s.SetAgentCaller(true)
+	defer s.SetAgentCaller(false)
+	defer func() {
+		if r := recover(); r != nil {
+			s.Drawing().AbortOpen()
+			s.Escape()
+			out, err = nil, fmt.Errorf("tool panicked: %v", r)
+		}
+	}()
+	return fn(s, a)
+}
+
 func finite(vs ...float64) error {
 	for _, v := range vs {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -230,5 +244,3 @@ func finite(vs ...float64) error {
 	}
 	return nil
 }
-
-func pointOf(p [2]float64) geom.Vec2 { return geom.V(p[0], p[1]) }

@@ -76,17 +76,42 @@ func TestAllowMCP(t *testing.T) {
 	req := func(title string) agentmanager.PermissionRequest {
 		return agentmanager.PermissionRequest{Call: agentmanager.ToolCallPatch{Title: &title}, Options: opts}
 	}
-	for _, title := range []string{"mcp__cad__add_line", "cad_add_line", "cad.add_line"} {
+	for _, title := range []string{"mcp__cad__add_line", "mcp__cad__run_script"} {
 		if id, ok := p(req(title)); !ok || id != "once" {
 			t.Errorf("%s: %q %v", title, id, ok)
 		}
 	}
-	for _, title := range []string{"Bash", "mcp__other__x", "cadence_x"} {
+	for _, title := range []string{"Bash", "mcp__other__x", "cadence_x", "cad_add_line", "cad.add_line",
+		"cad/build.sh --all", "cad.sh", "cad:rm -rf ~", "cad_helper --wipe", "mcp__cad__x rm -rf", "mcp__cad__", "mcp__cad__a/b"} {
 		if _, ok := p(req(title)); ok {
 			t.Errorf("%s allowed", title)
 		}
 	}
 	if _, ok := p(agentmanager.PermissionRequest{Options: opts}); ok {
 		t.Error("nil title allowed")
+	}
+}
+
+func TestAllowMCPKindAndServer(t *testing.T) {
+	p := agentmanager.AllowMCP("cad")
+	opts := []agentmanager.PermissionOption{{ID: "once", Kind: agentmanager.AllowOnce}}
+	mk := func(server, title string, kind *agentmanager.ToolKind) agentmanager.PermissionRequest {
+		return agentmanager.PermissionRequest{Call: agentmanager.ToolCallPatch{Title: &title, MCPServer: server, Kind: kind}, Options: opts}
+	}
+	k := func(v agentmanager.ToolKind) *agentmanager.ToolKind { return &v }
+	if _, ok := p(mk("cad", "anything", k(agentmanager.KindOther))); !ok {
+		t.Error("MCPServer match with kind other denied")
+	}
+	if _, ok := p(mk("other", "mcp__cad__x", nil)); ok {
+		t.Error("MCPServer mismatch allowed via title")
+	}
+	for _, kind := range []agentmanager.ToolKind{agentmanager.KindExecute, agentmanager.KindEdit, agentmanager.KindDelete,
+		agentmanager.KindMove, agentmanager.KindFetch} {
+		if _, ok := p(mk("cad", "mcp__cad__x", k(kind))); ok {
+			t.Errorf("kind %s allowed", kind)
+		}
+		if _, ok := p(mk("", "mcp__cad__x", k(kind))); ok {
+			t.Errorf("title with kind %s allowed", kind)
+		}
 	}
 }

@@ -162,14 +162,14 @@ func ParseInput(p *Prompt, text string, base *geom.Vec2, cursor geom.Vec2) (Inpu
 			return Input{Kind: InputKeyword, Keyword: kw}, nil
 		}
 	}
-	_, numErr := strconv.ParseFloat(t, 64)
+	_, numErr := parseFloat(t)
 	numberWanted := numErr == nil && p.Accepts&(InputDistance|InputAngle|InputInteger) != 0
 	if p.Accepts&InputPoint != 0 && !numberWanted {
 		if pt, ok, err := parsePoint(t, base, cursor); ok || err != nil {
 			return Input{Kind: InputPoint, Point: pt}, err
 		}
 	}
-	if v, err := strconv.ParseFloat(t, 64); err == nil {
+	if v, err := parseFloat(t); err == nil {
 		switch {
 		case p.Accepts&InputDistance != 0:
 			return Input{Kind: InputDistance, Value: v}, nil
@@ -188,6 +188,19 @@ func ParseInput(p *Prompt, text string, base *geom.Vec2, cursor geom.Vec2) (Inpu
 	return Input{}, ErrInvalidValue
 }
 
+// parseFloat is strconv.ParseFloat that rejects NaN and the infinities (nan, inf, 1e999).
+func parseFloat(s string) (float64, error) {
+	v, err := strconv.ParseFloat(s, 64)
+	if err == nil && (math.IsNaN(v) || math.IsInf(v, 0)) {
+		err = ErrInvalidValue
+	}
+	return v, err
+}
+
+func finitePoint(p geom.Vec2) bool {
+	return !math.IsNaN(p.X) && !math.IsInf(p.X, 0) && !math.IsNaN(p.Y) && !math.IsInf(p.Y, 0)
+}
+
 // parsePoint parses the point forms; ok is false when t is not shaped like
 // a point at all, so other interpretations may be tried.
 func parsePoint(t string, base *geom.Vec2, cursor geom.Vec2) (geom.Vec2, bool, error) {
@@ -204,32 +217,44 @@ func parsePoint(t string, base *geom.Vec2, cursor geom.Vec2) (geom.Vec2, bool, e
 		}
 	}
 	if d, a, found := strings.Cut(body, "<"); found {
-		dist, err1 := strconv.ParseFloat(strings.TrimSpace(d), 64)
-		ang, err2 := strconv.ParseFloat(strings.TrimSpace(a), 64)
+		dist, err1 := parseFloat(strings.TrimSpace(d))
+		ang, err2 := parseFloat(strings.TrimSpace(a))
 		if err1 != nil || err2 != nil {
 			return geom.Vec2{}, true, ErrInvalidPoint
 		}
-		return origin.Polar(dist, ang*math.Pi/180), true, nil
+		pt := origin.Polar(dist, ang*math.Pi/180)
+		if !finitePoint(pt) {
+			return geom.Vec2{}, true, ErrInvalidPoint
+		}
+		return pt, true, nil
 	}
 	if xs, ys, found := strings.Cut(body, ","); found {
-		x, err1 := strconv.ParseFloat(strings.TrimSpace(xs), 64)
-		y, err2 := strconv.ParseFloat(strings.TrimSpace(ys), 64)
+		x, err1 := parseFloat(strings.TrimSpace(xs))
+		y, err2 := parseFloat(strings.TrimSpace(ys))
 		if err1 != nil || err2 != nil {
 			return geom.Vec2{}, true, ErrInvalidPoint
 		}
-		return origin.Add(geom.V(x, y)), true, nil
+		pt := origin.Add(geom.V(x, y))
+		if !finitePoint(pt) {
+			return geom.Vec2{}, true, ErrInvalidPoint
+		}
+		return pt, true, nil
 	}
 	if rel {
 		return geom.Vec2{}, true, ErrInvalidPoint
 	}
 	// Direct distance entry: a bare number along the base→cursor direction.
 	if base != nil {
-		if d, err := strconv.ParseFloat(body, 64); err == nil {
+		if d, err := parseFloat(body); err == nil {
 			dir := cursor.Sub(*base).Norm()
 			if dir == (geom.Vec2{}) {
 				dir = geom.V(1, 0)
 			}
-			return base.Add(dir.Scale(d)), true, nil
+			pt := base.Add(dir.Scale(d))
+			if !finitePoint(pt) {
+				return geom.Vec2{}, true, ErrInvalidPoint
+			}
+			return pt, true, nil
 		}
 	}
 	return geom.Vec2{}, false, nil

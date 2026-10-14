@@ -33,6 +33,14 @@ type Command interface {
 	Cancel(ctx *Context)
 }
 
+// HumanOnly is implemented by commands an AI agent may not run: the ones that read or write
+// files or discard the drawing (NEW, OPEN, SAVE, and any future QUIT or SAVEAS). The session
+// refuses them while Session.SetAgentCaller is on, however they were named.
+type HumanOnly interface {
+	// HumanOnly reports true for a command agents must not run.
+	HumanOnly() bool
+}
+
 // Context is what a command may touch: the document, its transaction, the
 // view, the spatial index and the selection.
 type Context struct {
@@ -48,6 +56,8 @@ type Context struct {
 	replace func(*doc.Drawing)
 	setPath func(string)
 	agent   func(string)
+	// settings opens the host's settings panel; nil when the host has none.
+	settings func()
 }
 
 // FileHandler reads and writes drawings for the file commands.
@@ -80,6 +90,19 @@ func (c *Context) SetFilePath(path string) {
 	if c.setPath != nil {
 		c.setPath(path)
 	}
+}
+
+// HasSettings reports whether the host installed a settings handler.
+func (c *Context) HasSettings() bool { return c.settings != nil }
+
+// OpenSettings asks the host to show (or toggle) its settings panel. It reports false when the
+// host has none.
+func (c *Context) OpenSettings() bool {
+	if c.settings == nil {
+		return false
+	}
+	c.settings()
+	return true
 }
 
 // HasAgent reports whether the host installed an AI agent handler.

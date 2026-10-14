@@ -53,6 +53,7 @@ Shortcuts, active anywhere in the window:
 | F7 | Grid on or off |
 | F8 | Ortho on or off |
 | Ctrl+E | Zoom to extents |
+| Ctrl+, , Cmd+, | Settings panel on or off (the `OPTIONS` command opens it too) |
 
 ## Contract
 

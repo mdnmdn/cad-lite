@@ -24,6 +24,20 @@ type Option func(*connConfig)
 type connConfig struct {
 	frameLogger func(dir string, line []byte)
 	rawHandler  func(line []byte)
+	maxLine     int
+}
+
+// DefaultMaxLine is the inbound line cap when WithMaxLine is not given.
+const DefaultMaxLine = 64 << 20
+
+// WithMaxLine caps the length of one inbound line in bytes (default DefaultMaxLine). A longer line
+// stops the reader with ErrLineTooLong, so an agent that never sends a newline cannot exhaust memory.
+func WithMaxLine(n int) Option {
+	return func(c *connConfig) {
+		if n > 0 {
+			c.maxLine = n
+		}
+	}
 }
 
 // WithFrameLogger logs every frame; dir is "in" or "out".
@@ -50,6 +64,7 @@ type Conn struct {
 	nextID  int64
 	pending map[int64]func(json.RawMessage, *Error)
 	rdead   bool
+	rerr    error // why the reader stopped; nil on EOF
 
 	done chan struct{}
 }
@@ -71,6 +86,7 @@ type responseFrame struct {
 // NewConn starts the reader and writer goroutines. h may be nil with WithRawHandler.
 func NewConn(r io.Reader, w io.Writer, h Handler, opts ...Option) *Conn {
 	c := &Conn{h: h, pending: map[int64]func(json.RawMessage, *Error){}, done: make(chan struct{})}
+	c.cfg.maxLine = DefaultMaxLine
 	for _, o := range opts {
 		o(&c.cfg)
 	}
@@ -81,7 +97,6 @@ func NewConn(r io.Reader, w io.Writer, h Handler, opts ...Option) *Conn {
 }
 
 func (c *Conn) writeLoop(w io.Writer) {
-	failed := false
 	for {
 		c.mu.Lock()
 		for len(c.queue) == 0 && !c.closing {
@@ -96,19 +111,20 @@ func (c *Conn) writeLoop(w io.Writer) {
 		c.queue[0] = nil
 		c.queue = c.queue[1:]
 		c.mu.Unlock()
-		if failed {
-			continue
-		}
 		if c.cfg.frameLogger != nil {
 			c.cfg.frameLogger("out", bytes.TrimRight(line, "\n"))
 		}
 		if _, err := w.Write(line); err != nil {
-			failed = true
 			c.mu.Lock()
 			c.wdead = true
 			c.queue = nil
+			pend := c.pending
+			c.pending = map[int64]func(json.RawMessage, *Error){}
 			c.mu.Unlock()
-			continue
+			for _, f := range pend {
+				f(nil, &Error{Code: CodeInternal, Message: ErrClosed.Error()})
+			}
+			break
 		}
 	}
 	if cl, ok := w.(io.Closer); ok {
@@ -117,18 +133,23 @@ func (c *Conn) writeLoop(w io.Writer) {
 }
 
 func (c *Conn) readLoop(r io.Reader) {
-	br := bufio.NewReaderSize(r, 64<<10)
+	br := bufio.NewReaderSize(r, min(64<<10, max(c.cfg.maxLine, 16)))
+	var rerr error
 	for {
-		line, err := br.ReadBytes('\n')
+		line, err := readLine(br, c.cfg.maxLine)
 		if t := bytes.TrimSpace(line); len(t) > 0 {
 			c.handleLine(t)
 		}
 		if err != nil {
+			if err != io.EOF {
+				rerr = err
+			}
 			break
 		}
 	}
 	c.mu.Lock()
 	c.rdead = true
+	c.rerr = rerr
 	pend := c.pending
 	c.pending = map[int64]func(json.RawMessage, *Error){}
 	c.mu.Unlock()
@@ -136,6 +157,30 @@ func (c *Conn) readLoop(r io.Reader) {
 		f(nil, &Error{Code: CodeInternal, Message: ErrClosed.Error()})
 	}
 	close(c.done)
+}
+
+// readLine is bufio.Reader.ReadBytes('\n') with a cap: a line longer than max returns ErrLineTooLong.
+func readLine(br *bufio.Reader, max int) ([]byte, error) {
+	var buf []byte
+	for {
+		frag, err := br.ReadSlice('\n')
+		if len(buf)+len(frag) > max {
+			return nil, ErrLineTooLong
+		}
+		buf = append(buf, frag...)
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return buf, err
+	}
+}
+
+// Err returns why the reader stopped: ErrLineTooLong or a read error, nil on a clean EOF. It is
+// meaningful after Done is closed.
+func (c *Conn) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rerr
 }
 
 func (c *Conn) handleLine(line []byte) {

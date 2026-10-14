@@ -1,6 +1,7 @@
 package cmdsys
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -32,6 +33,9 @@ type Session struct {
 	history []string
 	printed int
 
+	// agentCaller is set while an AI agent drives the session; HumanOnly commands are refused.
+	agentCaller bool
+
 	// dispatching is set while a command's Start or Input runs.
 	dispatching bool
 
@@ -54,6 +58,41 @@ func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, replace: s.SetDrawing, setPath: s.SetFilePath}
 	s.SetDrawing(d)
 	return s
+}
+
+// SetAgentCaller marks the session as driven by an AI agent (true) or a human (false). While it
+// is on, commands implementing HumanOnly are refused with an error line.
+func (s *Session) SetAgentCaller(on bool) { s.agentCaller = on }
+
+func humanOnly(c Command) bool {
+	h, ok := c.(HumanOnly)
+	return ok && h.HumanOnly()
+}
+
+// guard runs f and recovers a panic: the open transaction is aborted, the active command ends
+// and an error line is printed, so the session stays usable. It reports whether f returned.
+func (s *Session) guard(f func()) (ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.dispatching = false
+			name := "command"
+			if s.active != nil {
+				name = s.active.Name()
+			}
+			if s.ctx.txn != nil {
+				s.ctx.txn.Abort()
+				s.ctx.txn = nil
+			}
+			if s.ctx.Doc != nil {
+				s.ctx.Doc.AbortOpen()
+			}
+			s.active, s.prompt = nil, nil
+			s.print(fmt.Sprintf("Error: %s failed: %v.", name, r))
+			ok = false
+		}
+	}()
+	f()
+	return true
 }
 
 // SetFiles installs the file handler OPEN and SAVE use.
@@ -169,16 +208,23 @@ func (s *Session) Run(name string) bool {
 		s.print("Unknown command \"" + strings.ToUpper(strings.TrimSpace(name)) + "\". Press F1 for help.")
 		return false
 	}
+	if s.agentCaller && humanOnly(cmd) {
+		s.print(cmd.Name() + " is not available to agents.")
+		return false
+	}
 	if s.active != nil {
 		s.Escape()
 	}
 	s.print("Command: " + cmd.Name())
 	s.last = cmd.Name()
 	s.active = cmd
+	var p *Prompt
 	s.dispatching = true
-	p := cmd.Start(&s.ctx)
+	ok = s.guard(func() { p = cmd.Start(&s.ctx) })
 	s.dispatching = false
-	s.next(p)
+	if ok {
+		s.next(p)
+	}
 	return true
 }
 
@@ -208,7 +254,7 @@ func (s *Session) Escape() {
 		}
 		return
 	}
-	s.active.Cancel(&s.ctx)
+	s.guard(func() { s.active.Cancel(&s.ctx) })
 	s.print("*Cancel*")
 	s.finish()
 }
@@ -226,6 +272,10 @@ func (s *Session) Submit(text string) {
 			return
 		}
 		s.Run(t)
+		return
+	}
+	if s.agentCaller && humanOnly(s.active) {
+		s.print(s.active.Name() + " is not available to agents.")
 		return
 	}
 	p := s.prompt
@@ -258,10 +308,13 @@ func (s *Session) respond(in Input, echo string) {
 		p := in.Point
 		s.lastPoint = &p
 	}
+	var p *Prompt
 	s.dispatching = true
-	p := s.active.Input(&s.ctx, in)
+	ok := s.guard(func() { p = s.active.Input(&s.ctx, in) })
 	s.dispatching = false
-	s.next(p)
+	if ok {
+		s.next(p)
+	}
 }
 
 // base returns the point relative input measures from: the prompt's base,
@@ -358,7 +411,7 @@ func (s *Session) SelectBox(a, b geom.Vec2, remove bool) {
 // cursor.
 func (s *Session) Overlay(dl *render.DisplayList) {
 	if s.active != nil && s.prompt != nil {
-		s.active.Preview(&s.ctx, s.cursor, dl)
+		s.guard(func() { s.active.Preview(&s.ctx, s.cursor, dl) })
 	}
 }
 

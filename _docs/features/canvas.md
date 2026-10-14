@@ -37,7 +37,9 @@ Gestures follow AutoCAD for a mouse and macOS for a trackpad. The backend tells 
 | Middle-button drag | Pan |
 | Double middle click | Zoom to extents |
 
-`Workspace.WheelZoom` makes a precise vertical scroll zoom as a mouse wheel does, for users who
+The [wheel setting](settings.md) `auto`, `zoom` or `pan` (`Workspace.WheelMode`) changes the table: `auto` is
+it as written, `zoom` makes a precise vertical scroll zoom like a notch, and `pan` makes every unmodified scroll
+pan, notch or precise, with only Ctrl or Cmd zooming. `Workspace.WheelZoom` makes a precise vertical scroll zoom as a mouse wheel does, for users who
 want the plain wheel to always zoom (an accelerated mouse that the heuristic reads as a trackpad
 is the usual reason). Scale is clamped to `render.MinScale` and `render.MaxScale`; panning is
 unbounded. There is no native pinch on desktop: ebiten does not expose one.
@@ -95,7 +97,8 @@ class (`LINE × 3`); a single selected entity also shows its layer and handle. T
 ### Toolbar
 
 Each button is an icon over a 10px label, in groups separated by a rule: Line, Polyline, Circle,
-Arc, Rect; Move, Copy, Rotate, Scale, Erase; Dist, Area; Undo, Redo, Zoom. A button runs its command
+Arc, Rect; Move, Copy, Rotate, Scale, Erase; Dist, Area; Undo, Redo, Zoom. At the right end sit the `AI` agent toggle and the gear `Settings` button, which
+opens the [settings](settings.md) panel (also Ctrl+, or `OPTIONS`). A button runs its command
 as if typed, and the button of the running command is highlighted. The icons come from the
 [icon pipeline](../tech/ui-framework.md); a command without a button is still reached by typing it.
 

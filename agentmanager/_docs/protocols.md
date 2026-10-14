@@ -166,8 +166,8 @@ resuming does not duplicate the transcript. (2) The opencode MCP env fallback re
   `tool_call` -> `ToolCallStart`, `tool_call_update` -> `ToolCallUpdate` (absent field = unchanged; text of `content`
   items becomes `Output`, diffs as `diff <path>`), `plan` -> `PlanUpdate`. `user_message_chunk`,
   `available_commands_update` and the other update kinds are ignored. Unknown kinds map to `other`. `MCPServer`/`MCPTool`
-  are derived from the title prefix (`<server>_<tool>`, `mcp__server__tool`, `server.tool`, `server:tool`, `server/tool`)
-  against the configured servers and remembered per tool call id so later patches and permission requests carry it.
+  are derived from the title (`<server>_<tool>` with the tool in `[a-z0-9_]+`, or `mcp__server__tool`) and only for
+  `other`/`read` kinds, against the configured servers and remembered per tool call id so later patches and permission requests carry it.
 - **Permissions.** `session/request_permission` becomes `PermissionRequest` with `RequestID` `n:<num>` or `s:<str>` (the
   raw JSON-RPC id is echoed). `Config.AutoApprove` is consulted first; an answer is sent at once and the UI only sees an
   info `Log`. Otherwise the request is parked until `RespondPermission`; the reply is

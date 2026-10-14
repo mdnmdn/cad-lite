@@ -17,7 +17,11 @@ type immediate struct {
 	base
 	name string
 	run  func(ctx *cmdsys.Context)
+	// humanOnly refuses the command to AI agents (cmdsys.HumanOnly).
+	humanOnly bool
 }
+
+func (c *immediate) HumanOnly() bool { return c.humanOnly }
 
 func (c *immediate) Name() string { return c.name }
 
@@ -235,6 +239,9 @@ type fileCmd struct {
 
 func (c *fileCmd) Name() string { return c.name }
 
+// HumanOnly marks OPEN and SAVE as unavailable to agents.
+func (c *fileCmd) HumanOnly() bool { return true }
+
 func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if ctx.Files == nil {
 		ctx.Printf("File commands are not available on this platform.")
@@ -327,13 +334,14 @@ func Register(r *cmdsys.Registry) {
 	r.Register("ID", func() cmdsys.Command { return &idCmd{} })
 	r.Register("LIST", func() cmdsys.Command { return &listCmd{} })
 	r.Register("NEW", func() cmdsys.Command {
-		return &immediate{name: "NEW", run: func(ctx *cmdsys.Context) { ctx.ReplaceDrawing(doc.New()) }}
+		return &immediate{name: "NEW", humanOnly: true, run: func(ctx *cmdsys.Context) { ctx.ReplaceDrawing(doc.New()) }}
 	})
 	r.Register("OPEN", func() cmdsys.Command { return &fileCmd{name: "OPEN"} })
 	r.Register("SAVE", func() cmdsys.Command { return &fileCmd{name: "SAVE"} })
 	registerConstruct(r)
 	registerTrim(r)
 	registerAgent(r)
+	registerSettings(r)
 	r.LoadAliases(Aliases)
 }
 

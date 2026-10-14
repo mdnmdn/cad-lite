@@ -79,5 +79,8 @@ New lines are appended below this heading.
 | G37 | OFFSET, FILLET and CHAMFER cannot pick entities created earlier in the same command (the index updates on commit), and their remembered settings are process-wide rather than per session | [Drawing and editing commands](features/drawing-and-editing.md) |
 | G38 | Confirm the macOS signing identity and the bundle identifier (`it.synesthesia.go-draw`) | [Operations](tech/operations.md) |
 | G39 | Windows Authenticode signing is not wired; unsigned executables trigger SmartScreen | [Operations](tech/operations.md) |
-| G40 | `cmd/cad/main.go` declares no `var version`, so the bundle scripts' `-X main.version` has nothing to set and the binary reports no version | [Operations](tech/operations.md) |
 | G41 | UI/UX review findings in `inbox/review-ux.md`, to be triaged | [Drawing canvas](features/canvas.md) |
+| G42 | Settings: persist the agent panel width and the side panel visibility | [Settings](features/settings.md) |
+| G43 | Settings: a key-binding editor | [Settings](features/settings.md) |
+| G44 | gpui has no pointer capture, so the UI-scale slider applies only on release instead of live while dragging | [Settings](features/settings.md) |
+| G45 | Tab traversal: no Tab binding to FocusNext, so the panels cannot be walked by keyboard | [UI framework](tech/ui-framework.md) |

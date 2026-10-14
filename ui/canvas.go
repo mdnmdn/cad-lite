@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"go-draw/settings"
 	"math"
 
 	"go-draw/cmdsys"
@@ -134,10 +135,15 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 //   - precise deltas (a trackpad's two-finger scroll): pan by the deltas;
 //   - a vertical notch: zoom about the pointer.
 //
-// With WheelZoom set a precise vertical scroll zooms too, like a mouse wheel.
+// With WheelZoom set, or the wheel setting "zoom", a precise vertical scroll
+// zooms too, like a mouse wheel. With the setting "pan" every unmodified
+// scroll, notch or precise, pans, and only Ctrl or Cmd zooms; "auto" is the
+// behaviour above.
 func (ws *Workspace) wheel(e *gpui.ScrollWheelEvent) {
 	dx, dy := float64(e.DeltaX), float64(e.DeltaY)
 	x, y := ws.local(e.Position)
+	mode := ws.WheelMode()
+	wheelZoom := ws.WheelZoom || mode == settings.WheelZoom
 	switch {
 	case e.Modifiers&(gpui.Control|gpui.ModPlatform) != 0:
 		k := zoomPerPixel
@@ -147,7 +153,7 @@ func (ws *Workspace) wheel(e *gpui.ScrollWheelEvent) {
 		ws.view.ZoomAt(x, y, math.Exp(-math.Max(-pinchMaxPixels, math.Min(pinchMaxPixels, dy))*k))
 	case e.Modifiers&gpui.Shift != 0:
 		ws.view.PanBy(-dx, -dy)
-	case e.Precise && !ws.WheelZoom:
+	case mode == settings.WheelPan, e.Precise && !wheelZoom:
 		ws.view.PanBy(-dx, -dy)
 	case dx != 0 && dy == 0:
 		ws.view.PanBy(-dx, 0)

@@ -122,18 +122,37 @@ func normStatus(st *string) *agentmanager.ToolStatus {
 	return nil
 }
 
-// mcpOf matches a tool title against the configured MCP server names (opencode names tools
-// "<server>_<tool>"; other agents use "mcp__server__tool", "server.tool", "server:tool", "server/tool").
-func (s *session) mcpOf(title string) (server, tool string) {
-	title = strings.TrimSpace(title)
+// mcpOf matches a tool title against the configured MCP server names. opencode names tools
+// "<server>_<tool>" (tool in [a-z0-9_]+); "mcp__server__tool" is also accepted. Calls whose kind
+// is execute, edit, delete, move or fetch are never MCP calls: their titles are free text.
+func (s *session) mcpOf(title string, kind *agentmanager.ToolKind) (server, tool string) {
+	if kind != nil && *kind != agentmanager.KindOther && *kind != agentmanager.KindRead {
+		return "", ""
+	}
 	for _, m := range s.cfg.MCPServers {
-		for _, p := range []string{"mcp__" + m.Name + "__", m.Name + "_", m.Name + ".", m.Name + ":", m.Name + "/"} {
-			if m.Name != "" && strings.HasPrefix(title, p) && len(title) > len(p) {
-				return m.Name, title[len(p):]
-			}
+		if m.Name == "" {
+			continue
+		}
+		if t, ok := strings.CutPrefix(title, "mcp__"+m.Name+"__"); ok && t != "" && !strings.ContainsAny(t, " \t\n/:.") {
+			return m.Name, t
+		}
+		if t, ok := strings.CutPrefix(title, m.Name+"_"); ok && lowerTool(t) {
+			return m.Name, t
 		}
 	}
 	return "", ""
+}
+
+func lowerTool(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *session) toolStart(f toolFields) {
@@ -147,7 +166,7 @@ func (s *session) toolStart(f toolFields) {
 	if st := normStatus(f.Status); st != nil {
 		call.Status = *st
 	}
-	call.MCPServer, call.MCPTool = s.mcpOf(call.Title)
+	call.MCPServer, call.MCPTool = s.mcpOf(call.Title, &call.Kind)
 	s.tools[call.ID] = toolInfo{call.MCPServer, call.MCPTool}
 	s.q.Push(agentmanager.ToolCallStart{Call: call})
 	if out := outputOf(f.Content); out != nil || len(rawOrNil(f.RawOutput)) > 0 {
@@ -164,7 +183,7 @@ func (s *session) patchFor(f toolFields) agentmanager.ToolCallPatch {
 		p.MCPServer = info.server
 	}
 	if p.MCPServer == "" && f.Title != nil {
-		if srv, tool := s.mcpOf(*f.Title); srv != "" {
+		if srv, tool := s.mcpOf(*f.Title, p.Kind); srv != "" {
 			p.MCPServer = srv
 			s.tools[f.ToolCallID] = toolInfo{srv, tool}
 		}

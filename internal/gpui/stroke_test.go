@@ -97,3 +97,15 @@ func TestCanvasPaintsWithItsBounds(t *testing.T) {
 		t.Fatalf("strokes = %d, want 1", n)
 	}
 }
+
+func TestStrokeBufResetSameAreaDifferentShape(t *testing.T) {
+	var b strokeBuf
+	b.reset(200, 100)
+	b.reset(100, 200)
+	if len(b.rowMin) != 200 || len(b.rowMax) != 200 || len(b.cov) != 100*200 {
+		t.Fatalf("rowMin %d rowMax %d cov %d", len(b.rowMin), len(b.rowMax), len(b.cov))
+	}
+	if b.rowMin[150] != 100 || b.rowMax[150] != -1 {
+		t.Fatalf("row sentinels %d %d", b.rowMin[150], b.rowMax[150])
+	}
+}

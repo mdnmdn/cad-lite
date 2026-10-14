@@ -61,20 +61,54 @@ func (r *Registry) Open(path string) (*doc.Drawing, []string, error) {
 	return nil, nil, fmt.Errorf("no reader for %q files", ext(path))
 }
 
-// Save writes d to path with the writer registered for its extension.
+// Save writes d to path with the writer registered for its extension. The file is written to a
+// temporary file in the same directory, synced and renamed over path, so a failed write leaves
+// any existing file untouched.
 func (r *Registry) Save(path string, d *doc.Drawing) ([]string, error) {
 	for _, w := range r.writers {
 		if slices.Contains(w.Extensions(), ext(path)) {
-			f, err := os.Create(path)
-			if err != nil {
-				return nil, err
-			}
-			warns, err := w.Write(f, d)
-			if cerr := f.Close(); err == nil {
-				err = cerr
-			}
-			return warns, err
+			return atomicWrite(path, func(f io.Writer) ([]string, error) { return w.Write(f, d) })
 		}
 	}
 	return nil, fmt.Errorf("no writer for %q files", ext(path))
+}
+
+func atomicWrite(path string, write func(io.Writer) ([]string, error)) (warns []string, err error) {
+	mode := os.FileMode(0o644)
+	if real, rerr := filepath.EvalSymlinks(path); rerr == nil {
+		path = real
+		if st, serr := os.Stat(path); serr == nil {
+			if !st.Mode().IsRegular() {
+				return nil, fmt.Errorf("%s is not a regular file", path)
+			}
+			mode = st.Mode().Perm()
+		}
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp*")
+	if err != nil {
+		return nil, err
+	}
+	tmp := f.Name()
+	defer func() {
+		if err != nil {
+			f.Close()
+			os.Remove(tmp)
+		}
+	}()
+	if warns, err = write(f); err != nil {
+		return warns, err
+	}
+	if err = f.Chmod(mode); err != nil {
+		return warns, err
+	}
+	if err = f.Sync(); err != nil {
+		return warns, err
+	}
+	if err = f.Close(); err != nil {
+		return warns, err
+	}
+	if err = os.Rename(tmp, path); err != nil {
+		return warns, err
+	}
+	return warns, nil
 }

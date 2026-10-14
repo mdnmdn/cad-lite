@@ -119,17 +119,6 @@ func (m focusMap) alloc() FocusID {
 	}
 }
 
-// retain bumps the refcount of a live id. Retaining an unknown or zero id is
-// a no-op.
-func (m focusMap) retain(id FocusID) {
-	if id == 0 {
-		return
-	}
-	if _, ok := m[id]; ok {
-		m[id]++
-	}
-}
-
 // release drops one refcount, deleting the id when it hits zero and
 // reporting whether that happened.
 func (m focusMap) release(id FocusID) bool {

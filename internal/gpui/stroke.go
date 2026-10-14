@@ -48,10 +48,12 @@ type strokeBuf struct {
 	rowMin     []int
 	rowMax     []int
 	yMin, yMax int
+	w, h       int
 }
 
 func (b *strokeBuf) reset(w, h int) {
-	if len(b.cov) != w*h {
+	if b.w != w || b.h != h || len(b.cov) != w*h {
+		b.w, b.h = w, h
 		b.cov = make([]float32, w*h)
 		b.rowMin = make([]int, h)
 		b.rowMax = make([]int, h)

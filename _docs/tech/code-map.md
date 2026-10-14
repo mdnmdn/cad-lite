@@ -35,6 +35,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `go-draw/internal/gpui/ebitenplatform` | Package ebitenplatform implements gpui.Platform on top of ebiten. |
 | `go-draw/render` | Package render turns document entities into a backend-neutral display list and owns the view (camera). |
 | `go-draw/render/gpuirender` | Package gpuirender draws a render.DisplayList with the gpui library. |
+| `go-draw/settings` | Package settings holds go-draw's user preferences and their TOML file. |
 | `go-draw/spatial` | Package spatial indexes entity bounding boxes for viewport culling, selection and snap-candidate gathering. |
 | `go-draw/tools/docs` | Command docs maintains the _docs/ library: it lints documents against the rules in _docs/_meta/librarian.md, lists the documents a change touches, reports drift between documents and the code they anchor, and regenerates the INDEX.md catalogue and the code map. |
 | `go-draw/tools/gui` | Command gui runs go-draw's real interactive window under Xvfb with software GL, drives it with xdotool from a scenario file, and captures screenshots. |

@@ -35,7 +35,7 @@ func BuildFake(t testing.TB) string {
 		buildPath = filepath.Join(dir, name)
 		goBin, err := exec.LookPath("go")
 		if err != nil {
-			goBin = filepath.Join(runtime.GOROOT(), "bin", "go")
+			goBin = filepath.Join(os.Getenv("GOROOT"), "bin", "go")
 		}
 		cmd := exec.Command(goBin, "build", "-o", buildPath, "./internal/fakeagent")
 		cmd.Dir = root

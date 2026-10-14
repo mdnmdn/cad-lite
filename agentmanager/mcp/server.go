@@ -49,12 +49,13 @@ type Server struct {
 	cancel  context.CancelFunc
 	done    chan struct{}
 
-	callMu sync.Mutex
+	// callSem serialises handler calls (capacity 1); waiting honours the request context.
+	callSem chan struct{}
 }
 
 // NewServer returns a stopped Server.
 func NewServer(o Options) *Server {
-	return &Server{opts: o, tools: map[string]Tool{}}
+	return &Server{opts: o, tools: map[string]Tool{}, callSem: make(chan struct{}, 1)}
 }
 
 // Register adds or replaces a tool, before or after Start; tools/list reflects the current set.
@@ -92,6 +93,7 @@ func (s *Server) Start() (Endpoint, error) {
 		Handler:           mux,
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 	s.done = make(chan struct{})
 	srv, done := s.srv, s.done
@@ -345,8 +347,12 @@ func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (r
 		return Errorf("unknown tool: %s", name)
 	}
 	if s.opts.Serialize == nil || *s.opts.Serialize {
-		s.callMu.Lock()
-		defer s.callMu.Unlock()
+		select {
+		case s.callSem <- struct{}{}:
+			defer func() { <-s.callSem }()
+		case <-ctx.Done():
+			return Errorf("%s: cancelled while waiting for another tool call: %v", name, ctx.Err())
+		}
 	}
 	defer func() {
 		if r := recover(); r != nil {

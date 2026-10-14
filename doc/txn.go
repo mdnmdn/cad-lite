@@ -142,6 +142,14 @@ func (t *Txn) Abort() {
 	t.d.publish(cs)
 }
 
+// AbortOpen aborts the open transaction, if any, restoring the entities it touched. A host
+// uses it to recover after a panic left a transaction open.
+func (d *Drawing) AbortOpen() {
+	if d.open != nil {
+		d.open.Abort()
+	}
+}
+
 // Touched reports whether the transaction has changed anything yet.
 func (t *Txn) Touched() bool { return len(t.order) > 0 }
 
