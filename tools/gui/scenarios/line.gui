@@ -1,0 +1,11 @@
+# Draw a LINE from the keyboard command line and the mouse.
+app -demo
+shot before
+type "l\n"
+click 200 280
+click 330 320
+shot rubber
+click right 330 320
+shot after
+expect-diff before after
+expect-count LINE 3

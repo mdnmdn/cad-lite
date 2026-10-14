@@ -65,3 +65,17 @@ icons-audit *ARGS:
 # pairs of icons that look alike
 icons-dupes:
     uv run tools/icons/icons.py dupes
+
+# run scenarios in the real window under Xvfb: `just gui-run tools/gui/scenarios/line.gui` (add -video; needs xvfb, xdotool, imagemagick)
+gui-run *ARGS:
+    go run ./tools/gui {{ARGS}}
+
+# every scenario in tools/gui/scenarios; fails on any assertion; output in _tmp/gui/out
+gui-test:
+    GODRAW_GUI_TEST=1 go test -count=1 ./tools/gui
+
+# one screenshot of the real window: `just gui-shot -demo` -> _tmp/gui/out/shot/shot.png
+gui-shot *FLAGS:
+    mkdir -p _tmp/gui
+    printf 'app %s\nshot shot\n' "{{FLAGS}}" > _tmp/gui/shot.gui
+    go run ./tools/gui _tmp/gui/shot.gui

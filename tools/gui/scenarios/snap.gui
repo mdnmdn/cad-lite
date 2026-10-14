@@ -1,0 +1,12 @@
+# Hovering near the big hole's centre shows the snap marker.
+app -demo
+type "l\n"
+click 250 300
+move 420 380
+shot far
+move 538 424
+shot snap
+expect-diff far snap
+key Escape
+key Escape
+expect-count LINE 2

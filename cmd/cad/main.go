@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"agentmanager"
@@ -46,6 +48,7 @@ func main() {
 	agent := flag.String("agent", "", "agent harness to select in the agent panel: opencode, claude or codex (opens the panel)")
 	agentCmd := flag.String("agent-cmd", "", "executable to run for the selected agent instead of the one on PATH")
 	agentDemo := flag.Bool("agent-demo", false, "open the agent panel on a canned conversation (for -png)")
+	saveOnExit := flag.String("save-on-exit", "", "dev: write the drawing to this DXF path when the window closes or on SIGINT/SIGTERM (GUI tests)")
 	flag.Parse()
 
 	files := &fileio.Registry{}
@@ -98,6 +101,11 @@ func main() {
 
 	p := ebitenplatform.New()
 	err := p.Run(func(cx *gpui.App) {
+		if *saveOnExit != "" {
+			sig := make(chan os.Signal, 1)
+			signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+			go func() { <-sig; cx.Quit() }()
+		}
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		opts := gpui.WindowOptions{Width: float32(*width), Height: float32(*height), Title: "go-draw", Resizable: true}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
@@ -110,6 +118,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+	if *saveOnExit != "" {
+		if _, err := files.Save(*saveOnExit, ws.Session().Drawing()); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
