@@ -96,3 +96,19 @@ New lines are appended below this heading.
 | G55 | Updates: delta updates and a rollback to the `.old` copy are not implemented | [Updates](features/updates.md) |
 | G56 | Updates: the restart prompt uses the undo depth as a stand-in for "unsaved changes" until the drawing has a dirty flag (see G50); a status-bar notice is not wired (only the gear badge) | [Updates](features/updates.md) |
 | G57 | Updates: a real install and relaunch on Windows and macOS is untested (tests simulate the layouts on Linux); macOS in `/Applications` for a non-admin user falls back to the release page | [Updates](features/updates.md) |
+| G58 | Codex: a withdrawn permission request (`serverRequest/resolved`) is dropped silently; the agent panel keeps showing the prompt until it is answered and the answer fails. Emit a withdrawal event and remove the prompt | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
+
+## Next features
+
+Requested next, in no fixed order.
+
+| id | Item | Affects |
+|---|---|---|
+| N1 | Document tabs: open several drawings at once, one tab each, each with its own session, undo history and view; the agent panel follows the active tab | [Drawing canvas](features/canvas.md), [Architecture](tech/architecture.md) |
+| N2 | Drop a file onto the window to open it (in a new tab once N1 lands); needs a drop event from the platform layer | [DXF files](features/dxf-files.md), [UI framework](tech/ui-framework.md) |
+| N3 | macOS: open a file dropped on the Dock or Finder icon (document types in `Info.plist` and the open-file Apple event) | [DXF files](features/dxf-files.md), [Operations](tech/operations.md) |
+| N4 | Windows: shell integration, an "Open in Cad-lite" context-menu entry and the `.dxf` association, written by the installer | [DXF files](features/dxf-files.md), [Operations](tech/operations.md) |
+| N5 | Recent folders (and files) list, persisted in settings, shown on start and in an Open menu | [Settings](features/settings.md), [DXF files](features/dxf-files.md) |
+| N6 | Agent auto-install: when no agent is on PATH, install mise into the app's private folder (no system install), run mise with its data and working directories in that folder to install OpenCode, check whether OpenCode is authenticated, and if not open a terminal (Terminal, PowerShell or cmd) running its login so the user can sign in | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
+| N7 | OpenCode over ACP: suggest `big-pickle` and the `*-free` models by default; when the chosen model supports vision, let the user drop or paste an image into the agent chat and send it to the agent | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
+| N8 | Agent panel: a ring that fills with the context-window usage, and a Compact button that asks the agent to compact its context | [Agent panel](features/agent-panel.md) |
