@@ -6,7 +6,7 @@ Source: `events.go`, `window.go` (dispatch), `keymap.go`,
 
 The platform turns OS input into `PlatformInput` values (`MouseDownEvent`,
 `MouseUpEvent`, `MouseMoveEvent`, `ClickEvent`, `ScrollWheelEvent`, `PinchEvent`,
-`KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
+`FileDropEvent`, `ImagePasteEvent`, `KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
 `Window.DispatchEvent(input, app)`, which runs inside `App.Update` itself, so
 effects queued by handlers flush once after dispatch. Dispatch reads the
 **rendered frame** - the hitboxes and key nodes recorded during the last
@@ -169,6 +169,30 @@ pinch as Ctrl+wheel instead, so an application that zooms should handle both:
 `OnPinch` and a Ctrl `ScrollWheelEvent`. In the browser the backend sets
 `Control` on that wheel event from `WheelEvent.ctrlKey`, since a pinch has no
 Control keydown. Smart magnify (two-finger double tap) is not delivered.
+
+### Files from the OS
+
+`FileDropEvent{Position, Paths, Modifiers}` is files or folders dragged from the
+OS and dropped on the window; `Paths` are absolute real paths, sorted by name.
+`OnFileDrop` listeners run along the hit path at `Position`, innermost first,
+until `Window.StopPropagation()`, as pinch does. The ebiten backend sends it on
+desktops (from `ebiten.DroppedFiles`, at the cursor position, which GLFW moves
+to the drop point); a browser drop has no real paths and sends nothing.
+
+A request to open files that has no window position (macOS: a file opened from
+Finder or dropped on the Dock icon) goes to the app instead: register
+`App.OnOpenPaths(func(paths []string, cx *App))`, and the platform calls
+`App.OpenPaths(paths)`. Requests made before a handler is set are kept and
+delivered when it is, so a launch-by-document is not lost. Tests inject both
+directly: `HeadlessWindow.Dispatch(FileDropEvent{...})` and `App.OpenPaths`.
+
+### Pasted images
+
+`ImagePasteEvent{Data, MIME}` is an image pasted with the paste shortcut while
+the clipboard holds no text. It has no position: `OnImagePaste` listeners run
+along the focus path (the focused element, then its ancestors), innermost
+first, until `Window.StopPropagation()`, as key events do. Tests dispatch it
+with `HeadlessWindow.Dispatch`.
 
 ### Scrollbar input
 
@@ -397,7 +421,28 @@ fallback estimate counts runes, never surrogate halves. The cache refreshes on
 text, inherited style or measurer changes. Existing logical scale-1 shaping
 APIs remain in use; glyph masks still rasterize at the window scale.
 
-Not implemented: up/down, word-arrow shortcuts, select-all, horizontal
+### Multi-line fields
+
+`Multiline(maxLines)` turns a field into a multi-line editor, for chat
+prompts and notes:
+
+```go
+prompt := gpui.NewTextInput("Ask anything").Multiline(8).
+    OnSubmit(func(text string, w *gpui.Window, cx *gpui.App) { /* Enter */ })
+```
+
+Text breaks at `\n` and wraps at the field's width. The text area starts one
+line tall, grows a line at a time up to `maxLines`, then scrolls (the caret
+line stays in view; the mouse wheel scrolls too). Shift+Enter inserts a
+newline; Enter submits when an `OnSubmit` callback is registered and inserts a
+newline otherwise. `up`/`down` move to the nearest position on the
+neighbouring visual line, keeping the column across chained moves;
+`home`/`end` go to the ends of the visual line; Shift extends with all of
+them. Triple-click selects the logical line. Pasted or IME text keeps its line
+breaks (`\r\n` and `\r` become `\n`); a single-line field turns them into
+spaces.
+
+Not implemented: up/down in a single-line field, word-arrow shortcuts, select-all, horizontal
 scroll/autoscroll, undo, grapheme-cluster navigation or BiDi visual selection.
 `SetText` replaces content, moves the caret to the end and refreshes an already
 rendered field. Selection-only changes do not call `OnChange`.
@@ -447,7 +492,10 @@ elsewhere - on a worker goroutine, applying results on the next `Update`:
 paste is delivered as character input (newlines/tabs become spaces, control
 characters dropped); copy needs a focused handler with a non-empty selection;
 cut also deletes the text, but only if the write succeeded and the selection
-is unchanged. These shortcuts are handled by the platform and are not
+is unchanged. A paste that finds no text reads the clipboard image
+(`ClipboardReadImage`: `osascript` on macOS, PowerShell on Windows,
+`wl-paste`/`xclip` on Linux, up to 3 s) and dispatches an `ImagePasteEvent`
+when there is one. These shortcuts are handled by the platform and are not
 dispatched as key events.
 
 See also: [reference/events.md](../reference/events.md) (event fields, keymap and focus API), [cookbook](../guides/cookbook.md#keyboard-shortcuts-with-key-contexts) recipes for shortcuts and tab navigation, [testing](../guides/testing.md#dispatching-input) for synthetic input, and troubleshooting for [key bindings](../guides/troubleshooting.md#key-binding-not-firing) and [focus](../guides/troubleshooting.md#focus-not-moving).

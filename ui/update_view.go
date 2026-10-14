@@ -171,7 +171,7 @@ func (ws *Workspace) updateBadge() gpui.IntoElement {
 
 // settingsTip is the gear button's tooltip, with the update notice appended.
 func (ws *Workspace) settingsTip() string {
-	tip := i18n.T("ui.toolbar.settings_tip")
+	tip := toolTip(i18n.CommandName("OPTIONS"), ws.keyHint(actionSettings, "OPTIONS"), tb("settings_tip"))
 	if rel, ok := ws.UpdateAvailable(); ok {
 		tip += "\n" + i18n.T("ui.update.badge_tip", rel.Version)
 	}
@@ -189,7 +189,7 @@ func (ws *Workspace) updateOverlay() gpui.IntoElement {
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
 		Child(
 			gpui.NewText(i18n.T("ui.update.restart_title")).FontWeight(700).TextSize(16),
-			gpui.NewText(i18n.T(restartBodyKey(ws.session.Dirty()), u.latest.Version)),
+			gpui.NewText(i18n.T(restartBodyKey(ws.anyDirty()), u.latest.Version)),
 			gpui.NewDiv().FlexRow().Gap(8).JustifyEnd().Child(
 				actionButton("update-restart-later", i18n.T("ui.update.restart_later"), i18n.T("ui.update.restart_later_tip"), false, true,
 					func(w *gpui.Window, _ *gpui.App) { u.confirm = false; w.Refresh() }),

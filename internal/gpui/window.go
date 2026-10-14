@@ -1,6 +1,7 @@
 package gpui
 
 import (
+	"image"
 	"math"
 	"reflect"
 	"slices"
@@ -158,6 +159,7 @@ type MouseListener struct {
 	OnClick       func(*ClickEvent, *Window, *App)
 	OnScrollWheel func(*ScrollWheelEvent, *Window, *App)
 	OnPinch       func(*PinchEvent, *Window, *App)
+	OnFileDrop    func(*FileDropEvent, *Window, *App)
 	OnHoverStart  func(*Window, *App)
 	OnHoverEnd    func(*Window, *App)
 	tooltip       string
@@ -194,7 +196,9 @@ type keyNode struct {
 	FocusID    FocusID
 	OnKeyDown  func(*KeyDownEvent, *Window, *App)
 	OnKeyUp    func(*KeyUpEvent, *Window, *App)
-	OnAction   map[ActionKey]func(Action, *Window, *App)
+	// OnImagePaste receives pasted images along the focus path.
+	OnImagePaste func(*ImagePasteEvent, *Window, *App)
+	OnAction     map[ActionKey]func(Action, *Window, *App)
 	// tabIndex and tabStop place the node in Tab traversal.
 	tabIndex int
 	tabStop  bool
@@ -462,6 +466,15 @@ func (w *Window) PaintGlyph(g GlyphSprite) {
 		g.Color = g.Color.Opacity(w.opacity)
 	}
 	w.nextFrame.scene.InsertSprite(g)
+}
+
+// PaintImage draws img scaled into b (window space, logical pixels), clipped
+// to the current content mask, with the current opacity. nil draws nothing.
+func (w *Window) PaintImage(b Bounds, img *image.NRGBA) {
+	if img == nil || img.Rect.Empty() {
+		return
+	}
+	w.PaintGlyph(GlyphSprite{Bounds: b, Image: img, Color: Rgba{R: 255, G: 255, B: 255, A: 255}})
 }
 
 // PushLayer records a z-order boundary in the scene being built.
@@ -1183,6 +1196,9 @@ func (w *Window) toUICoords(input PlatformInput) PlatformInput {
 	case PinchEvent:
 		e.Position = div(e.Position)
 		return e
+	case FileDropEvent:
+		e.Position = div(e.Position)
+		return e
 	case ClickEvent:
 		if e.Up != nil {
 			up := *e.Up
@@ -1305,12 +1321,17 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	case PinchEvent:
 		w.dismissTooltip()
 		w.dispatchPinch(e, cx)
+	case FileDropEvent:
+		w.dismissTooltip()
+		w.dispatchFileDrop(e, cx)
 	case KeyDownEvent:
 		w.dismissTooltip()
 		w.setFocusVisible(true)
 		w.dispatchKeyDown(e, cx)
 	case KeyUpEvent:
 		w.dispatchKeyUp(e, cx)
+	case ImagePasteEvent:
+		w.dispatchImagePaste(e, cx)
 	case ModifiersChangedEvent:
 		// The POC has no modifier-state listeners.
 	}
@@ -1498,6 +1519,18 @@ func (w *Window) dispatchPinch(e PinchEvent, cx *App) {
 	})
 }
 
+// dispatchFileDrop runs OnFileDrop over the hit path at the drop position,
+// innermost first, until a handler calls StopPropagation.
+func (w *Window) dispatchFileDrop(e FileDropEvent, cx *App) {
+	ev := e
+	w.mousePosition, w.hasMouse = e.Position, true
+	w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
+		if l.OnFileDrop != nil {
+			l.OnFileDrop(&ev, w, cx)
+		}
+	})
+}
+
 // focusID moves focus to id if it is still alive.
 func (w *Window) focusID(id FocusID) {
 	if id == 0 || w.focus == id {
@@ -1672,6 +1705,19 @@ func (w *Window) dispatchBinding(ks Keystroke, path []keyNode, cx *App) bool {
 		}
 	}
 	return handled
+}
+
+// dispatchImagePaste runs OnImagePaste along the focus path, innermost first,
+// until a handler calls StopPropagation.
+func (w *Window) dispatchImagePaste(e ImagePasteEvent, cx *App) {
+	ev := e
+	path := w.keyPath()
+	w.propagateEvent = true
+	for i := len(path) - 1; i >= 0 && w.propagateEvent; i-- {
+		if path[i].OnImagePaste != nil {
+			path[i].OnImagePaste(&ev, w, cx)
+		}
+	}
 }
 
 // dispatchKeyUp runs OnKeyUp over the focus path, target first.

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"strings"
 	"time"
 	"unicode"
@@ -21,11 +22,16 @@ func agentPanelWidth(window float32) float32 { return min(510, max(300, window/4
 // agentOutputLimit caps the tool output shown in a block, in runes.
 const agentOutputLimit = 280
 
+// agentTip is the agent button's tooltip.
+func (ws *Workspace) agentTip() string {
+	return toolTip(i18n.CommandName("AI"), ws.keyHint(actionAgent, "AI"), i18n.T("ui.toolbar.agent_tip"))
+}
+
 // agentToggle is the title bar's button that shows and hides the agent panel; it carries a dot
 // while an agent session is live (amber when a background tab wants attention).
 func (ws *Workspace) agentToggle() *gpui.Div {
 	on := ws.agent != nil && ws.agent.visible
-	b := iconButton("tool-agent", i18n.T("ui.toolbar.agent_tip"), icons.AppAgent, on, func(w *gpui.Window) { ws.AgentPanel().Toggle(w) })
+	b := iconButton("tool-agent", ws.agentTip(), icons.AppAgent, on, func(w *gpui.Window) { ws.AgentPanel().Toggle(w) })
 	if ws.agent != nil {
 		if live, attn := ws.agent.Live(); attn {
 			b.Relative().Child(gpui.NewDiv().Absolute().Top(3).Right(3).Child(dot(8, uiWarn)))
@@ -119,8 +125,11 @@ func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 		foot.Child(p.button("agent-cancel", i18n.T("ui.agent.cancel"), i18n.T("ui.agent.cancel_tip"), false, p.Cancel))
 	}
 	foot.Child(send)
-	return gpui.NewDiv().ID("agent-composer").FlexCol().Gap(8).P(12).Rounded(10).Border(1, uiBorder).Bg(uiField).
-		Child(gpui.NewDiv().SizeH(36).FlexCol().Child(input), foot)
+	box := gpui.NewDiv().ID("agent-composer").FlexCol().Gap(8).P(12).Rounded(10).Border(1, uiBorder).Bg(uiField)
+	if len(t.images) > 0 {
+		box.Child(p.imageChips())
+	}
+	return box.Child(gpui.NewDiv().ID("agent-input").MinH(36).FlexCol().Child(input), foot)
 }
 
 func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.Div {
@@ -169,6 +178,7 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	tabs.Child(p.button("agent-history", histLabel, i18n.T("ui.agent.history_tip"), false, func(w *gpui.Window) {
 		p.ensureLoaded()
 		p.hist.menu = !p.hist.menu
+		p.modelMenu = false
 		p.syncSessions()
 		w.Refresh()
 	}))
@@ -194,6 +204,7 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 			}
 			row.Child(chip)
 		}
+		row.Child(p.modelChip())
 		row.Child(gpui.NewDiv().Flex1())
 		if t.state == agentIdle {
 			row.Child(p.button("agent-start", i18n.T("ui.agent.start"), i18n.T("ui.agent.start_tip"), true, p.Start))
@@ -204,8 +215,14 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	}
 
 	top := gpui.NewDiv().FlexCol().Gap(10).P(16).Pb(12).Child(head, tabs, picker)
+	if p.ws.installWanted(len(p.choices) == 0) {
+		top.Child(p.ws.agentInstallBlock("agent"))
+	}
 	if p.hist.menu {
 		top.Child(p.historyMenu())
+	}
+	if p.modelMenu {
+		top.Child(p.modelMenuView(w, cx))
 	}
 
 	list := gpui.NewDiv().ID("agent-list").FlexCol().Flex1().MinH(0).Gap(8).P(12).OverflowYScroll().TrackScroll(t.scroll)
@@ -223,7 +240,8 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		t.scroll.ScrollToBottom()
 	}
 
-	return gpui.NewDiv().ID("agent-panel").FlexCol().FlexShrink(0).SizeW(width).MinW(0).Bg(uiPanel).Child(
+	return gpui.NewDiv().ID("agent-panel").FlexCol().FlexShrink(0).SizeW(width).MinW(0).Bg(uiPanel).
+		OnFileDrop(p.onFileDrop).OnImagePaste(p.onImagePaste).Child(
 		top,
 		hDivider(),
 		list,
@@ -253,6 +271,9 @@ func (p *AgentPanel) historyMenu() *gpui.Div {
 			title = i18n.T("ui.agent.history_untitled")
 		}
 		sub := string(m.Harness) + ", " + relTime(m.Updated, now)
+		if m.Drawing != "" && m.Drawing != p.hist.drawing {
+			sub = clip(m.Drawing, 16) + ", " + sub
+		}
 		if open[m.ID] {
 			sub += ", " + i18n.T("ui.agent.history_open")
 		}
@@ -291,8 +312,18 @@ func (p *AgentPanel) card() *gpui.Div {
 func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 	switch b := b.(type) {
 	case transcript.UserMsg:
-		return gpui.NewDiv().FlexCol().Gap(2).P(8).Rounded(6).Bg(uiAccent).
-			Child(gpui.NewText(i18n.T("ui.agent.you")).FontWeight(700).TextSize(11), gpui.NewText(b.Text))
+		d := gpui.NewDiv().FlexCol().Gap(2).P(8).Rounded(6).Bg(uiAccent).
+			Child(gpui.NewText(i18n.T("ui.agent.you")).FontWeight(700).TextSize(11))
+		if b.Text != "" {
+			d.Child(gpui.NewText(b.Text))
+		}
+		if len(b.Attachments) > 0 {
+			if p.thumbs == nil {
+				p.thumbs = map[string]*image.NRGBA{}
+			}
+			d.Child(attachmentRow(b.Attachments, p.thumbs))
+		}
+		return d
 	case transcript.AgentMsg:
 		return gpui.NewText(b.Text)
 	case transcript.Thought:

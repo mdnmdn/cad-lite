@@ -1,6 +1,9 @@
 // Command cad is the Cad-lite desktop application: an AutoCAD-style 2D
 // drafting editor built on the gpui library and shown in an ebiten window.
 //
+// Files named after the flags (cad [flags] [file ...], as Windows and Linux pass a file opened with
+// the application) are opened at startup as files dropped on the window are.
+//
 // With -png it runs headlessly instead: it seeds a drawing (the demo plate,
 // -open and/or -script), renders one frame with the pointer at -hover and
 // writes it to the PNG path.
@@ -59,10 +62,19 @@ func main() {
 	agentDemo := flag.Bool("agent-demo", false, "open the agent panel on a canned conversation (for -png)")
 	saveOnExit := flag.String("save-on-exit", "", "dev: write the drawing to this DXF path when the window closes or on SIGINT/SIGTERM (GUI tests)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
-	flag.Parse()
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags] [file ...]\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+	// ExitOnError: a bad flag exits with status 2 inside Parse.
+	_ = flag.CommandLine.Parse(launchArgs(os.Args[1:]))
 	if *showVersion {
 		fmt.Println("cad-lite", version)
 		return
+	}
+	args, argErr := fileArgs(*open, flag.Args())
+	if argErr != nil {
+		log.Fatal(argErr)
 	}
 
 	// The system language until the settings file is read (-png renders keep it: LANG=it_IT.UTF-8).
@@ -121,6 +133,9 @@ func main() {
 			}
 		}
 	}
+	if len(args) > 0 {
+		ws.OpenPaths(args)
+	}
 	ws.Brand = brandFromEnv()
 	if *png != "" {
 		// CADLITE_THEME picks the theme of a -png render, which reads no settings file.
@@ -141,7 +156,7 @@ func main() {
 	if *agentDemo {
 		ui.SeedAgentDemo(ws)
 	}
-	if *demo || (*png != "" && *open == "" && *script == "") {
+	if *demo || (*png != "" && *open == "" && len(args) == 0 && *script == "") {
 		ws.Session().Script(demoScript)
 	}
 	if *script != "" {
@@ -165,8 +180,10 @@ func main() {
 			signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 			go func() { <-sig; cx.Quit() }()
 		}
-		ws.Session().SetQuitHandler(cx.Quit)
+		ws.SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
+		// Files opened from Finder or dropped on the Dock icon (macOS).
+		cx.OnOpenPaths(func(paths []string, _ *gpui.App) { ws.OpenPaths(paths) })
 		opts := gpui.WindowOptions{Width: float32(*width), Height: float32(*height), Title: "Cad-lite", Resizable: true}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
 			fatal(err)
@@ -197,7 +214,7 @@ func renderPNG(ws *ui.Workspace, path string, w, h int, scale float32, hover str
 	p.SetScaleFactor(scale)
 	var hw *gpui.HeadlessWindow
 	err := p.Run(func(cx *gpui.App) {
-		ws.Session().SetQuitHandler(cx.Quit)
+		ws.SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		opts := gpui.WindowOptions{Width: float32(w), Height: float32(h), Title: "Cad-lite"}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
@@ -228,4 +245,26 @@ func brandFromEnv() ui.Brand {
 		return b
 	}
 	return ui.BrandForOS(runtime.GOOS)
+}
+
+// launchArgs drops the process serial number argument (-psn_0_1234) that macOS LaunchServices
+// passes to an application it starts on some systems; the flag package would reject it.
+func launchArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-psn_") {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// fileArgs checks the files named after the flags. -open names the drawing a script or a GUI test
+// works on and stops on a bad file; a file argument is opened as a dropped file is, reporting
+// problems in the command history. The two do not mix.
+func fileArgs(open string, args []string) ([]string, error) {
+	if open != "" && len(args) > 0 {
+		return nil, fmt.Errorf("-open %s and file arguments %q: give one or the other", open, args)
+	}
+	return args, nil
 }

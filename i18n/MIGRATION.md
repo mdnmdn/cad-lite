@@ -36,9 +36,10 @@ i18n.Command("LINE")                            // Name, Desc, Tip, Aliases; i18
   `x/sys` or exec, which does not belong in a leaf package). With neither, and on js/wasm, the
   result is English.
 * Key naming: `ui.<area>.<thing>`, `cmd.<command>.prompt.<id>` (text of a prompt, no colon),
-  `cmd.<command>.msg.<id>` (a history line), `cmd.<command>.name|desc|tip|aliases`, `input.err.*`,
+  `cmd.<command>.msg.<id>` (a history line), `cmd.<command>.name|desc|aliases`, `input.err.*`,
   `snap.*`, `kw.<slug>`, `dxf.warn.*`, `dxf.err.*`, `settings.warn.*`. A `_tip` suffix marks a
-  tooltip. Tooltip format everywhere: `Title — what it does (Shortcut / alias)`.
+  tooltip. Tooltip format: `Title — what it does (Shortcut / alias)`; a toolbar button that runs a
+  command composes its tooltip instead (§3).
 
 ## 2. Keywords
 
@@ -91,9 +92,8 @@ Keywords typed in a script stay portable: English always matches, so `LINE 0,0 1
 
 ## 3. Commands, aliases, tooltips
 
-Every command in `i18n.Commands` has four catalog entries per language, under `cmd.<name>.`:
-`name` (display, e.g. "Linea"), `desc` (one line), `tip` (full tooltip) and `aliases` (array of extra
-typed names). `i18n.Command("LINE")` returns them for the current language.
+Every command in `i18n.Commands` has three catalog entries per language, under `cmd.<name>.`:
+`name` (display, e.g. "Linea"), `desc` (one line) and `aliases` (array of extra typed names). `i18n.Command("LINE")` returns them for the current language.
 
 **Aliases.** Replace the hand-kept pgp table's role for localized names with the catalog:
 
@@ -122,11 +122,10 @@ Più punti, `on`/`off` for layer state, `SNAP OGG.`, and `Pan`.
 `Command.Name()` itself keeps returning the English canonical name: lookup, history keys, the
 agent and `HumanOnly` all depend on it.
 
-**Toolbar tooltips** are `cmd.<name>.tip` (button id -> command: `rect` is `RECTANG`, `dist`
-`DIST`; the rest are the same word). The gear and agent buttons use `ui.toolbar.settings_tip` and
-`ui.toolbar.agent_tip`. gpui has no tooltip facility yet (`grep -i tooltip internal/gpui` is
-empty); the integration needs a `Div.Tooltip(text)` or equivalent first, behind the gpui contract
-(rule 4 of `AGENTS.md`). Until then the strings are ready and unused.
+**Toolbar tooltips** are composed by `ui` (`Workspace.commandTip`, `ui/tooltip.go`): the
+command's `name` with a keyboard hint in brackets, then its `desc` — `Line (L)`. The hint comes
+from the key bindings and the command registry, never from the catalog, so no catalog string
+repeats an alias or a shortcut.
 
 ## 4. Session and input errors
 
@@ -172,7 +171,7 @@ empty); the integration needs a `Div.Tooltip(text)` or equivalent first, behind 
 | `cmdsys/commands` | every prompt `Message`, `ctx.Printf` format, `RegisterAliases` |
 | `fileio`, `fileio/dxf` | `dxf.warn.*`, `dxf.err.*`, `fileio.err.*` at creation time |
 | `settings` | `settings.warn.*` (optional; they are shown in the panel footer) |
-| `ui` | everything under `ui.*`, `cmd.<name>.tip`, theme labels (`ui.settings.theme.<name>`, `-` as `_`), `i18n.Set` on load and on a settings change (the frame re-renders from `T`, so no refresh plumbing) |
+| `ui` | everything under `ui.*`, theme labels (`ui.settings.theme.<name>`, `-` as `_`), `i18n.Set` on load and on a settings change (the frame re-renders from `T`, so no refresh plumbing) |
 | `cadmcp` | nothing, except possibly `For(English)` as above |
 
 Startup, in `cmd/cad` after loading settings: `i18n.Set(i18n.FromSetting(ws.Settings().Language))`.
@@ -201,7 +200,7 @@ button width must cope.
 Each row is a literal as it appears in the source (or the construct it comes from) and the key that
 replaces it. `Printf` literals keep their arguments: `ctx.Printf("Layer %q created.", name)` becomes
 `ctx.Printf("%s", i18n.T("cmd.layer.msg.created", name))`, or better a new `ctx.Say(key, args...)`.
-Rows for the `cmd.<name>.name|desc|tip|aliases`, `ui.toolbar.*_tip`, `ui.status.*_tip`,
+Rows for the `cmd.<name>.name|desc|aliases`, `ui.toolbar.*_tip`, `ui.status.*_tip`,
 `ui.layers.*_tip`, `ui.agent.*_tip` and `ui.settings.*_tip` entries have no literal in the code:
 they are new tooltips and new language-picker rows.
 
@@ -211,51 +210,11 @@ they are new tooltips and new language-picker rows.
 |---|---|
 | `"Nothing found at that point."` | `cmd.offset.msg.nothing_found` |
 
-### `(toolbar`
-
-| Literal | Key |
-|---|---|
-| `"Line — draws straight segments between the points you pick (LINE / L)"` | `cmd.line.tip` |
-| `"Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"` | `cmd.pline.tip` |
-| `"Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"` | `cmd.circle.tip` |
-| `"Arc — draws an arc through three points (ARC / A)"` | `cmd.arc.tip` |
-| `"Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"` | `cmd.rectang.tip` |
-| `"Erase — removes the selected objects from the drawing (ERASE / E)"` | `cmd.erase.tip` |
-| `"Move — moves the selected objects without changing them (MOVE / M)"` | `cmd.move.tip` |
-| `"Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"` | `cmd.copy.tip` |
-| `"Rotate — turns the selected objects around a base point (ROTATE / RO)"` | `cmd.rotate.tip` |
-| `"Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"` | `cmd.scale.tip` |
-| `"Undo — takes back the last change (Ctrl+Z / U)"` | `cmd.undo.tip` |
-| `"Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"` | `cmd.redo.tip` |
-| `"Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"` | `cmd.zoom.tip` |
-| `"Distance — measures the distance and angle between two points (DIST / DI)"` | `cmd.dist.tip` |
-| `"Area — measures the area and perimeter of points or of an object (AREA / AA)"` | `cmd.area.tip` |
-
 ### `FILLET/CHAMFER:`
 
 | Literal | Key |
 |---|---|
 | `"Nothing found at that point."` | `cmd.offset.msg.nothing_found` |
-
-### `cmd.<name>.tip)`
-
-| Literal | Key |
-|---|---|
-| `"Line — draws straight segments between the points you pick (LINE / L)"` | `cmd.line.tip` |
-| `"Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"` | `cmd.pline.tip` |
-| `"Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"` | `cmd.circle.tip` |
-| `"Arc — draws an arc through three points (ARC / A)"` | `cmd.arc.tip` |
-| `"Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"` | `cmd.rectang.tip` |
-| `"Erase — removes the selected objects from the drawing (ERASE / E)"` | `cmd.erase.tip` |
-| `"Move — moves the selected objects without changing them (MOVE / M)"` | `cmd.move.tip` |
-| `"Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"` | `cmd.copy.tip` |
-| `"Rotate — turns the selected objects around a base point (ROTATE / RO)"` | `cmd.rotate.tip` |
-| `"Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"` | `cmd.scale.tip` |
-| `"Undo — takes back the last change (Ctrl+Z / U)"` | `cmd.undo.tip` |
-| `"Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"` | `cmd.redo.tip` |
-| `"Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"` | `cmd.zoom.tip` |
-| `"Distance — measures the distance and angle between two points (DIST / DI)"` | `cmd.dist.tip` |
-| `"Area — measures the area and perimeter of points or of an object (AREA / AA)"` | `cmd.area.tip` |
 
 ### `cmd.corner.msg.nothing_found)`
 
@@ -557,26 +516,6 @@ they are new tooltips and new language-picker rows.
 | `"no reader for %q files"` | `fileio.err.no_reader` |
 | `"no writer for %q files"` | `fileio.err.no_writer` |
 
-### `key`
-
-| Literal | Key |
-|---|---|
-| `"Line — draws straight segments between the points you pick (LINE / L)"` | `cmd.line.tip` |
-| `"Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"` | `cmd.pline.tip` |
-| `"Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"` | `cmd.circle.tip` |
-| `"Arc — draws an arc through three points (ARC / A)"` | `cmd.arc.tip` |
-| `"Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"` | `cmd.rectang.tip` |
-| `"Erase — removes the selected objects from the drawing (ERASE / E)"` | `cmd.erase.tip` |
-| `"Move — moves the selected objects without changing them (MOVE / M)"` | `cmd.move.tip` |
-| `"Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"` | `cmd.copy.tip` |
-| `"Rotate — turns the selected objects around a base point (ROTATE / RO)"` | `cmd.rotate.tip` |
-| `"Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"` | `cmd.scale.tip` |
-| `"Undo — takes back the last change (Ctrl+Z / U)"` | `cmd.undo.tip` |
-| `"Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"` | `cmd.redo.tip` |
-| `"Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"` | `cmd.zoom.tip` |
-| `"Distance — measures the distance and angle between two points (DIST / DI)"` | `cmd.dist.tip` |
-| `"Area — measures the area and perimeter of points or of an object (AREA / AA)"` | `cmd.area.tip` |
-
 ### `settings/file.go`
 
 | Literal | Key |
@@ -592,26 +531,6 @@ they are new tooltips and new language-picker rows.
 | `"language %q is not one of %v; using %q"` | `settings.warn.language` |
 | `"wheel %q is not one of %v; using %q"` | `settings.warn.wheel` |
 | `"%s %d is out of range; using %d"` | `settings.warn.out_of_range` |
-
-### `tooltip;`
-
-| Literal | Key |
-|---|---|
-| `"Line — draws straight segments between the points you pick (LINE / L)"` | `cmd.line.tip` |
-| `"Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"` | `cmd.pline.tip` |
-| `"Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"` | `cmd.circle.tip` |
-| `"Arc — draws an arc through three points (ARC / A)"` | `cmd.arc.tip` |
-| `"Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"` | `cmd.rectang.tip` |
-| `"Erase — removes the selected objects from the drawing (ERASE / E)"` | `cmd.erase.tip` |
-| `"Move — moves the selected objects without changing them (MOVE / M)"` | `cmd.move.tip` |
-| `"Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"` | `cmd.copy.tip` |
-| `"Rotate — turns the selected objects around a base point (ROTATE / RO)"` | `cmd.rotate.tip` |
-| `"Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"` | `cmd.scale.tip` |
-| `"Undo — takes back the last change (Ctrl+Z / U)"` | `cmd.undo.tip` |
-| `"Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"` | `cmd.redo.tip` |
-| `"Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"` | `cmd.zoom.tip` |
-| `"Distance — measures the distance and angle between two points (DIST / DI)"` | `cmd.dist.tip` |
-| `"Area — measures the area and perimeter of points or of an object (AREA / AA)"` | `cmd.area.tip` |
 
 ### `ui/agent.go`
 
@@ -648,7 +567,7 @@ they are new tooltips and new language-picker rows.
 | Literal | Key |
 |---|---|
 | `NewText("Agent") on the AI button` | `ui.toolbar.agent` |
-| `"AI agent — opens the agent panel: describe a drawing in words and the agent draws it (F2 / AI)"` | `ui.toolbar.agent_tip` |
+| `"Opens the agent panel: describe a drawing in words and the agent draws it"` | `ui.toolbar.agent_tip` |
 | `"AGENT"` | `ui.agent.title` |
 | `"+"` | `ui.agent.new_tab` |
 | `"New conversation — opens another tab"` | `ui.agent.new_tab_tip` |
@@ -775,18 +694,3 @@ they are new tooltips and new language-picker rows.
 | `"ORTHO"` | `ui.status.ortho` |
 | `"Ortho — constrains movement to horizontal and vertical (F8)"` | `ui.status.ortho_tip` |
 | `(count is not pluralised; 1 oggetti is accepted)` | `ui.status.summary` |
-| `"Line — draws straight segments between the points you pick (LINE / L)"` | `cmd.line.tip` |
-| `"Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"` | `cmd.pline.tip` |
-| `"Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"` | `cmd.circle.tip` |
-| `"Arc — draws an arc through three points (ARC / A)"` | `cmd.arc.tip` |
-| `"Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"` | `cmd.rectang.tip` |
-| `"Erase — removes the selected objects from the drawing (ERASE / E)"` | `cmd.erase.tip` |
-| `"Move — moves the selected objects without changing them (MOVE / M)"` | `cmd.move.tip` |
-| `"Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"` | `cmd.copy.tip` |
-| `"Rotate — turns the selected objects around a base point (ROTATE / RO)"` | `cmd.rotate.tip` |
-| `"Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"` | `cmd.scale.tip` |
-| `"Undo — takes back the last change (Ctrl+Z / U)"` | `cmd.undo.tip` |
-| `"Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"` | `cmd.redo.tip` |
-| `"Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"` | `cmd.zoom.tip` |
-| `"Distance — measures the distance and angle between two points (DIST / DI)"` | `cmd.dist.tip` |
-| `"Area — measures the area and perimeter of points or of an object (AREA / AA)"` | `cmd.area.tip` |

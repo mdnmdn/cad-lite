@@ -15,6 +15,15 @@ type Builder struct {
 	// instead of at Weight; the owner drops the cache with InvalidateAll when it changes.
 	Lineweights bool
 	cache       map[doc.Handle]cached
+	// layers is the layer appearance the cache was built against (see SyncLayers).
+	layers []layerLook
+}
+
+// layerLook is the part of a layer that cached items depend on.
+type layerLook struct {
+	name       string
+	color      int
+	lineweight int
 }
 
 type cached struct {
@@ -24,7 +33,9 @@ type cached struct {
 
 // NewBuilder returns a builder for d drawing on background.
 func NewBuilder(d *doc.Drawing, background Color) *Builder {
-	return &Builder{d: d, Background: background, Weight: 1, cache: map[doc.Handle]cached{}}
+	b := &Builder{d: d, Background: background, Weight: 1, cache: map[doc.Handle]cached{}}
+	b.layers = b.lookLayers(nil)
+	return b
 }
 
 // lineweightPx converts a lineweight in hundredths of a millimetre to logical pixels at 96 dpi.
@@ -50,8 +61,40 @@ func (b *Builder) Invalidate(cs doc.ChangeSet) {
 	}
 }
 
-// InvalidateAll drops every cached item, e.g. after a layer colour changes.
-func (b *Builder) InvalidateAll() { clear(b.cache) }
+// InvalidateAll drops every cached item, e.g. after the background changes.
+func (b *Builder) InvalidateAll() {
+	clear(b.cache)
+	b.layers = b.lookLayers(b.layers[:0])
+}
+
+// SyncLayers drops every cached item only when a layer's colour or lineweight, or the layer table
+// itself, changed since the cache was last built or synced, and reports whether it did. Layer table
+// edits are not journalled, so no change set reports them; a caller that may have edited layers
+// calls SyncLayers instead of InvalidateAll so that entity edits (which Invalidate already handles)
+// keep the rest of the cache.
+func (b *Builder) SyncLayers() bool {
+	ls := b.d.Layers()
+	same := len(ls) == len(b.layers)
+	for i := 0; same && i < len(ls); i++ {
+		same = b.layers[i] == layerLook{ls[i].Name, ls[i].Color, ls[i].Lineweight}
+	}
+	if same {
+		return false
+	}
+	b.InvalidateAll()
+	return true
+}
+
+// lookLayers appends the appearance of every layer to dst.
+func (b *Builder) lookLayers(dst []layerLook) []layerLook {
+	for _, l := range b.d.Layers() {
+		dst = append(dst, layerLook{l.Name, l.Color, l.Lineweight})
+	}
+	return dst
+}
+
+// Cached returns the number of entities whose items are cached.
+func (b *Builder) Cached() int { return len(b.cache) }
 
 // Visible reports whether the entity's layer is on and thawed.
 func (b *Builder) Visible(e doc.Entity) bool { return b.d.EntityVisible(e) }

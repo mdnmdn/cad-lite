@@ -37,6 +37,12 @@ func SeedAgentDemo(ws *Workspace) {
 				{ID: "r", Name: "Reject", Kind: agentmanager.RejectOnce},
 			}})
 	})
+	p.cur.mdl = tabModel{chosen: "sonnet", current: "sonnet", offered: []agentmanager.ModelInfo{
+		{ID: "default", Name: "Default (recommended)"},
+		{ID: "opus", Name: "Opus"},
+		{ID: "sonnet", Name: "Sonnet"},
+		{ID: "haiku", Name: "Haiku"},
+	}}
 	second := newAgentTab()
 	second.tr.AddUser("Add a centre line")
 	second.tr.Apply(agentmanager.TextDelta{Text: "Done."})

@@ -23,14 +23,14 @@ and process: `_docs/roadmap.md`. Repo map and where to add things:
 
 - **Works:**
   - Flexbox layout with wrapping and absolute positioning, including margins (auto margins too), gaps, min/max and grow/shrink/basis.
-  - Elements: `Div`, `Text`, `StyledText`, `TextInput` with selection and Shift navigation, the virtualized `UniformList`, scroll containers with thumb dragging and track paging, `Canvas` with `Stroke` polylines.
+  - Elements: `Div`, `Text`, `StyledText`, `TextInput` (single- or multi-line) with selection and Shift navigation, the virtualized `UniformList`, scroll containers with thumb dragging and track paging, `Canvas` with `Stroke` polylines.
   - Styling: borders, rounded corners and clips, gradients, box shadows, opacity, hover/focus/focus-visible/active styles.
   - Text: style inheritance, font family lookup with system fallback, HarfBuzz shaping and wrapping.
   - Entities with observe, emit and release; keymap, actions, key contexts, tab order.
   - Headless platform and PNG output.
   - Ebiten backend, with a snapshot key (`cmd/ctrl-shift-s`).
 - **Examples:** 17 under `examples/`. 14 are ports of gpui-ce examples; each file's header comment says what was not ported.
-- **Missing:** animation, images/SVG, grid, colour emoji, IME, multi-window, drag and drop. Priorities are in `_docs/roadmap.md` §3.
+- **Missing:** animation, an image element and SVG (colour images paint through `Window.PaintImage`), grid, colour emoji, IME, multi-window, in-app drag and drop (files dropped from the OS arrive as `FileDropEvent`). Priorities are in `_docs/roadmap.md` §3.
 - **Performance:** a full todo frame at scale 2 takes about 1.2 ms (`go test . -run X -bench Draw`). Treat a clear regression as a bug.
 
 ## Rules

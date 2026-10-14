@@ -7,8 +7,19 @@ import "agentmanager"
 // Block is one chat item; it is one of the concrete types in this package.
 type Block interface{}
 
-// UserMsg is text the user sent.
-type UserMsg struct{ Text string }
+// UserMsg is text the user sent, with the images attached to it.
+type UserMsg struct {
+	Text        string
+	Attachments []Attachment
+}
+
+// Attachment is an image sent with a user message: its file name ("" when it had none, such as a
+// pasted image), MIME type, size in pixels and a small PNG preview the host chose (nil for none).
+type Attachment struct {
+	Name, MIME    string
+	Width, Height int
+	Thumb         []byte
+}
 
 // AgentMsg is an agent message being streamed.
 type AgentMsg struct{ ID, Text string }
@@ -54,8 +65,11 @@ type T struct {
 func (t *T) bump() { t.version++ }
 
 // AddUser appends a UserMsg and marks a turn as running.
-func (t *T) AddUser(text string) {
-	t.blocks = append(t.blocks, UserMsg{Text: text})
+func (t *T) AddUser(text string) { t.AddUserWith(text, nil) }
+
+// AddUserWith appends a UserMsg with attachments and marks a turn as running.
+func (t *T) AddUserWith(text string, a []Attachment) {
+	t.blocks = append(t.blocks, UserMsg{Text: text, Attachments: a})
 	t.running = true
 	t.bump()
 }

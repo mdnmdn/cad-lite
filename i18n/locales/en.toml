@@ -762,12 +762,12 @@ history_tip = "Recent commands — lists the commands you ran lately; click one 
 history_empty = "No commands yet"
 
 [ui.toolbar]
-settings_tip = "Settings — theme, UI scale, drawing aids, language (Ctrl+, / OPTIONS)"
-agent_tip = "AI agent — opens the agent panel: describe a drawing in words and the agent draws it (F2 / AI)"
+settings_tip = "Theme, UI scale, drawing aids, language"
+agent_tip = "Opens the agent panel: describe a drawing in words and the agent draws it"
 ribbon_collapse_tip = "Collapse the ribbon — hides the command buttons; the commands stay on the command line"
 ribbon_expand_tip = "Show the ribbon — the Draw, Modify and Utilities buttons"
-open_tip = "Open — choose a drawing file to open (Ctrl+O / OPEN)"
-save_tip = "Save — saves the drawing to its file, or asks where when it has none; right-click for Save as (Ctrl+S / QSAVE, Ctrl+Shift+S / SAVEAS)"
+open_tip = "Chooses a drawing file to open"
+save_tip = "Saves the drawing to its file, or asks where when it has none; right-click for Save as (%s)"
 
 [ui.ribbon]
 draw = "Draw"
@@ -777,6 +777,11 @@ utilities = "Utilities"
 [ui.title]
 untitled = "Untitled"
 doc_tip = "Drawing: %s"
+
+[ui.tabs]
+untitled_tip = "Untitled drawing — not saved to a file yet"
+switch_tip = "Click to show it, middle-click or x to close it; Ctrl+Tab and Ctrl+Shift+Tab switch drawings"
+close_tip = "Close this drawing (CLOSE) — asks to save unsaved changes first"
 
 [ui.canvas]
 viewport_label = "[-][Top][2D Wireframe]"
@@ -792,6 +797,21 @@ default_name = "drawing"
 filter_all_supported = "All supported files"
 filter_all = "All files"
 filter_ext = "%s drawing"
+unsupported = "Cannot open %s: Cad-lite opens %s files."
+
+[ui.recent]
+menu_tip = "Recent — the drawings and folders you used lately; pick a file to open it or a folder to browse it"
+files = "Recent files"
+folders = "Recent folders"
+none = "No recent drawings yet"
+file_tip = "%s — click to open it"
+folder_tip = "%s — click to choose a drawing in this folder"
+missing_tip = "%s — not found; clicking tries it once more and drops it from the list"
+clear = "Clear recent"
+clear_tip = "Forget the recent files and folders"
+start_title = "Recent drawings"
+start_hint = "Click one to open it, or just start drawing."
+start_open = "Open another drawing…"
 
 [ui.panel]
 layers = "Layers"
@@ -917,6 +937,73 @@ write_failed = "agent history write failed: %v"
 mcp = "cannot start the MCP server: %v"
 start = "cannot start %s: %v"
 
+[ui.agent.model]
+default = "default"
+default_named = "default (%s)"
+tip = "Model — the model this conversation uses; click to choose another"
+pick_tip = "Use this model — it applies from the next turn"
+menu_title = "Model for this %s conversation"
+none_listed = "The agent lists its models once its session starts; type a model id below."
+input_placeholder = "Other model id, Enter to apply"
+make_default = "Make default for %s"
+make_default_tip = "Default — new %s conversations start on this model (saved in the settings)"
+restarts = "Model %s applies from the next prompt; the agent session restarts and resumes this conversation."
+failed = "cannot switch to model %s: %v"
+free = "free"
+free_tip = "Free — a model opencode offers at no cost (OpenCode Zen)"
+
+[ui.agent.image]
+pasted = "pasted image"
+chip_tip = "Image — goes with your next message"
+remove_tip = "Remove — takes this image off the message"
+no_vision = "%s does not read images; the image was not attached."
+no_vision_send = "%s does not read images: remove them or pick another model."
+not_accepted = "the agent does not accept images"
+unsupported = "%s: not an image the agent can read (PNG, JPEG, GIF or WebP)."
+too_large = "%s is too large: over %d MB even scaled down."
+unreadable = "cannot read %s: %v"
+too_many = "At most %d images per message."
+
+[ui.agent.install]
+offer_title = "Install OpenCode"
+offer_hint = "No agent is installed. Cad-lite can install OpenCode for you, in its own folder only."
+offer = "Install OpenCode…"
+offer_tip = "Install OpenCode — shows what will be downloaded and where, and asks before starting"
+cancelled = "Installation cancelled."
+confirm_title = "Install OpenCode?"
+confirm_what = "Cad-lite downloads mise (about 50 MB) from its official releases on github.com/jdx/mise, checks it against the release's SHA256 list, and uses it to install the OpenCode release binary from github.com/anomalyco/opencode (about 60 MB to download). Both take about 350 MB on disk."
+confirm_fallback = "Only if the release binary cannot be fetched and Node.js is installed, OpenCode's npm package is used instead (up to about 1 GB)."
+confirm_where = "Everything goes into %s. Nothing is installed system-wide and your shell configuration is not changed."
+confirm_login = "If OpenCode is not signed in yet, a terminal opens for you to sign in."
+go = "Install"
+go_tip = "Install — downloads mise and installs OpenCode into Cad-lite's folder"
+not_now = "Not now"
+not_now_tip = "Not now — closes this without installing anything"
+running_title = "Installing OpenCode…"
+step_mise = "Download and verify mise"
+step_tool = "Install OpenCode"
+step_auth = "Check the sign-in"
+mb = "%s MB"
+mb_of = "%s of %s MB"
+cancel = "Cancel"
+cancelling = "Cancelling…"
+cancel_tip = "Cancel — stops the installation; nothing half-downloaded is kept"
+done_title = "OpenCode is installed"
+signed_in = "OpenCode is signed in. Press Start to begin."
+auth_failed = "Could not check the sign-in: %s"
+login_opened = "Opened %s to sign in to OpenCode. Finish there, then press Start."
+login_failed = "Could not open a terminal (%s). Run \"%s auth login\" yourself."
+ok = "OK"
+ok_tip = "OK — closes this message"
+login = "Sign in…"
+login_tip = "Sign in — opens a terminal running OpenCode's sign-in"
+failed_title = "Installation failed"
+retry = "Retry"
+retry_tip = "Retry — runs the installation again"
+close = "Close"
+close_tip = "Close — dismisses the error"
+terminal_close = "Done. Press Enter to close this window."
+
 [ui.settings]
 title = "Settings"
 close = "Close  Esc"
@@ -957,6 +1044,28 @@ default_harness = "Default harness"
 default_harness_tip = "Default agent — the agent CLI the panel selects first"
 harness_auto = "Auto"
 agent_auto_hint = "Auto picks the first agent found: OpenCode, then Claude, then Codex. See Agent discovery below."
+agent_bins = "Executables"
+agent_bins_hint = "The program Cad-lite starts for each agent. When it finds none, or the wrong one, choose it with Browse…; Reset goes back to the PATH."
+agent_bin_tip = "%s executable — the program Cad-lite starts for this agent: the one you chose, else the one on the PATH"
+agent_bin_chosen = "chosen by you"
+agent_bin_chosen_version = "chosen by you · %s"
+agent_bin_on_path = "found on the PATH"
+agent_bin_on_path_version = "found on the PATH · %s"
+agent_bin_not_found = "not found — choose it with Browse…"
+agent_bin_gone = "this file no longer exists; choose it again or press Reset"
+agent_bin_browse = "Browse…"
+agent_bin_browsing = "Choosing…"
+agent_bin_browse_tip = "Browse — choose this agent's executable in a file dialog; it is used instead of the one on the PATH"
+agent_bin_reset = "Reset"
+agent_bin_reset_tip = "Reset — forget the chosen executable and look for the agent on the PATH again"
+agent_bin_dialog_title = "Choose the %s executable"
+agent_bin_filter = "Programs"
+agent_bin_err_missing = "%s does not exist."
+agent_bin_err_dir = "%s is a folder, not a program."
+agent_bin_err_exec = "%s is not executable (it lacks execute permission)."
+agent_bin_err_exec_windows = "%s is not a program Windows can run (.exe, .cmd, .bat or .com)."
+agent_bin_err_dialog = "No file dialog is available here; set agent.binaries in the settings file instead."
+discovery_override = "chosen in AI agent above"
 section_discovery = "AGENT DISCOVERY"
 discovery_hint = "Cad-lite looks for agents on your terminal's PATH as well as its own, because apps started from the desktop often get a shorter one."
 discovery_not_checked = "Not checked yet. Press Check."
@@ -1026,7 +1135,7 @@ open_release_tip = "Open release page — shows the release on GitHub, to downlo
 badge_tip = "Update available — version %s; open the settings to install it"
 restart_title = "Restart to finish the update?"
 restart_body = "Version %s is installed. Restart now to use it, or keep working and get it the next time you open Cad-lite."
-restart_body_dirty = "Version %s is installed. This drawing has unsaved changes: restarting now loses them. Save first, or choose Later."
+restart_body_dirty = "Version %s is installed. An open drawing has unsaved changes: restarting now loses them. Save first, or choose Later."
 restart_now = "Restart and update"
 restart_now_tip = "Restart now — closes Cad-lite and opens the new version"
 restart_later = "Later"
@@ -1035,55 +1144,46 @@ restart_later_tip = "Later — keeps working; the new version starts the next ti
 [cmd.line]
 name = "Line"
 desc = "Draws straight segments between the points you pick"
-tip = "Line — draws straight segments between the points you pick (LINE / L)"
 aliases = ["L"]
 
 [cmd.pline]
 name = "Polyline"
 desc = "Draws a connected chain of line and arc segments as one object"
-tip = "Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"
 aliases = ["PL"]
 
 [cmd.circle]
 name = "Circle"
 desc = "Draws a circle from its centre and radius or diameter"
-tip = "Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"
 aliases = ["C"]
 
 [cmd.arc]
 name = "Arc"
 desc = "Draws an arc from points, centre, angle, chord length, radius or direction"
-tip = "Arc — draws an arc from points, centre, angle, chord length, radius or direction (ARC / A)"
 aliases = ["A"]
 
 [cmd.rectang]
 name = "Rectangle"
 desc = "Draws a rectangle from two corners or its dimensions, with optional chamfer, fillet or width"
-tip = "Rectangle — draws a rectangle from two corners or its dimensions, with optional chamfer, fillet or width (RECTANG / REC)"
 aliases = ["REC"]
 
 [cmd.polygon]
 name = "Polygon"
 desc = "Draws a regular polygon from its centre and radius, or from one edge"
-tip = "Polygon — draws a regular polygon from its centre and radius, or from one edge (POLYGON / POL)"
 aliases = ["POL"]
 
 [cmd.erase]
 name = "Erase"
 desc = "Removes the selected objects from the drawing"
-tip = "Erase — removes the selected objects from the drawing (ERASE / E)"
 aliases = ["E"]
 
 [cmd.move]
 name = "Move"
 desc = "Moves the selected objects without changing them"
-tip = "Move — moves the selected objects without changing them (MOVE / M)"
 aliases = ["M"]
 
 [cmd.stretch]
 name = "Stretch"
 desc = "Stretches the objects crossed by a window, moving the vertices and endpoints inside it"
-tip = "Stretch — stretches the objects crossed by a window, moving the vertices and endpoints inside it (STRETCH / S)"
 aliases = ["S"]
 
 [cmd.multiple.prompt]
@@ -1095,175 +1195,146 @@ hint = "Select objects to stretch by crossing-window or crossing-polygon..."
 [cmd.copy]
 name = "Copy"
 desc = "Duplicates the selected objects, leaving the originals in place"
-tip = "Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"
 aliases = ["CO", "CP"]
 
 [cmd.rotate]
 name = "Rotate"
 desc = "Turns the selected objects around a base point"
-tip = "Rotate — turns the selected objects around a base point (ROTATE / RO)"
 aliases = ["RO"]
 
 [cmd.scale]
 name = "Scale"
 desc = "Makes the selected objects bigger or smaller about a base point"
-tip = "Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"
 aliases = ["SC"]
 
 [cmd.undo]
 name = "Undo"
 desc = "Takes back changes, or sets an undo mark or group"
-tip = "Undo — takes back changes, or sets an undo mark or group (UNDO)"
 aliases = []
 
 [cmd.u]
 name = "Undo"
 desc = "Takes back the last change"
-tip = "Undo — takes back the last change (Ctrl+Z / U)"
 aliases = ["U"]
 
 [cmd.redo]
 name = "Redo"
 desc = "Brings back the change that was just taken back"
-tip = "Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"
 aliases = []
 
 [cmd.zoom]
 name = "Zoom"
 desc = "Fits the view to the drawing or to a window you pick"
-tip = "Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"
 aliases = ["Z"]
 
 [cmd.layer]
 name = "Layer"
 desc = "Makes a layer current, or creates it as name=color"
-tip = "Layer — makes a layer current, or creates it as name=color (LAYER / LA)"
 aliases = ["LA"]
 
 [cmd.dist]
 name = "Distance"
 desc = "Measures the distance and angle between two points"
-tip = "Distance — measures the distance and angle between two points (DIST / DI)"
 aliases = ["DI"]
 
 [cmd.area]
 name = "Area"
 desc = "Measures the area and perimeter of points or of an object"
-tip = "Area — measures the area and perimeter of points or of an object (AREA / AA)"
 aliases = ["AA"]
 
 [cmd.measuregeom]
 name = "Measure geometry"
 desc = "Measures distance, radius, angle or area"
-tip = "Measure geometry — measures distance, radius, angle or area (MEASUREGEOM / MEA)"
 aliases = ["MEA"]
 
 [cmd.units]
 name = "Units"
 desc = "Sets the length and angle formats, their precision and the direction of angle 0"
-tip = "Units — sets the length and angle formats, their precision and the direction of angle 0 (UNITS / UN)"
 aliases = ["UN"]
 
 [cmd.id]
 name = "ID point"
 desc = "Reports the coordinates of a picked point"
-tip = "ID point — reports the coordinates of a picked point (ID)"
 aliases = []
 
 [cmd.list]
 name = "List"
 desc = "Lists the properties of the selected objects"
-tip = "List — lists the properties of the selected objects (LIST / LI)"
 aliases = ["LI"]
 
 [cmd.new]
 name = "New"
 desc = "Starts a new, empty drawing"
-tip = "New — starts a new, empty drawing (NEW)"
 aliases = []
 
 [cmd.open]
 name = "Open"
 desc = "Opens a drawing from a file"
-tip = "Open — opens a drawing from a file (OPEN)"
 aliases = []
 
 [cmd.save]
 name = "Save"
 desc = "Saves the drawing to a file"
-tip = "Save — saves the drawing to a file (SAVE)"
 aliases = []
 
 [cmd.mirror]
 name = "Mirror"
 desc = "Creates a mirrored copy of the selected objects about a line"
-tip = "Mirror — creates a mirrored copy of the selected objects about a line (MIRROR / MI)"
 aliases = ["MI"]
 
 [cmd.offset]
 name = "Offset"
 desc = "Creates a parallel copy of an object at a distance or through a point"
-tip = "Offset — creates a parallel copy of an object at a distance or through a point (OFFSET / O)"
 aliases = ["O"]
 
 [cmd.fillet]
 name = "Fillet"
 desc = "Rounds the corner between two objects with a radius"
-tip = "Fillet — rounds the corner between two objects with a radius (FILLET / F)"
 aliases = ["F"]
 
 [cmd.chamfer]
 name = "Chamfer"
 desc = "Bevels the corner between two lines with two distances"
-tip = "Chamfer — bevels the corner between two lines with two distances (CHAMFER / CHA)"
 aliases = ["CHA"]
 
 [cmd.trim]
 name = "Trim"
 desc = "Trims objects at the cutting edges you pick"
-tip = "Trim — trims objects at the cutting edges you pick (TRIM / TR)"
 aliases = ["TR"]
 
 [cmd.extend]
 name = "Extend"
 desc = "Extends objects up to the boundary edges"
-tip = "Extend — extends objects up to the boundary edges (EXTEND / EX)"
 aliases = ["EX"]
 
 [cmd.break]
 name = "Break"
 desc = "Breaks an object between two points"
-tip = "Break — breaks an object between two points (BREAK / BR)"
 aliases = ["BR"]
 
 [cmd.breakatpoint]
 name = "Break at point"
 desc = "Splits an object in two at one point"
-tip = "Break at point — splits an object in two at one point (BREAKATPOINT)"
 aliases = []
 
 [cmd.join]
 name = "Join"
 desc = "Joins objects that touch end to end into one"
-tip = "Join — joins objects that touch end to end into one (JOIN / J)"
 aliases = ["J"]
 
 [cmd.explode]
 name = "Explode"
 desc = "Breaks a compound object into its parts"
-tip = "Explode — breaks a compound object into its parts (EXPLODE / X)"
 aliases = ["X"]
 
 [cmd.ai]
 name = "AI agent"
 desc = "Asks the AI agent, or shows and hides the agent panel"
-tip = "AI agent — asks the AI agent, or shows and hides the agent panel (F2 / AI)"
 aliases = ["AGENT"]
 
 [cmd.options]
 name = "Options"
 desc = "Opens the settings panel"
-tip = "Options — opens the settings panel (Ctrl+, / OPTIONS)"
 aliases = ["OP"]
 
 [cmd.options.msg]

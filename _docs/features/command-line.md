@@ -41,7 +41,8 @@ history. It sits under the canvas only: the layers and agent columns run down be
   it types a space.
 - **Right-click** on the canvas is Enter.
 - **Escape** cancels the running command and prints `*Cancel*`; with no command running it clears
-  the selection. What a command committed before Escape stays in the drawing.
+  the selection. What a command committed before Escape stays in the drawing. It also closes the Open menu and
+  the start panel (see [Drawing canvas](canvas.md)).
 - **Language.** Prompts, history lines, errors and keywords follow the interface language
   ([Settings](settings.md)); in Italian the idle prompt is `Comando:`, a running command echoes as
   `Comando: LINEA` and `LINE` asks `Specificare punto successivo o [Chiudi/Annulla]:`.
@@ -99,6 +100,7 @@ Shortcuts, active anywhere in the window:
 | Ctrl+O, Cmd+O | OPEN, through the system file dialog when there is one |
 | Ctrl+S, Cmd+S | QSAVE; the save dialog first when the drawing has no file |
 | Ctrl+Shift+S, Cmd+Shift+S | SAVEAS, through the system file dialog when there is one |
+| Ctrl+Tab, Ctrl+Shift+Tab | Next or previous [document tab](document-tabs.md) |
 | F2 | Agent panel on or off |
 | F3 | Object snap on or off |
 | F7 | Grid on or off |

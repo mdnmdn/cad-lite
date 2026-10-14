@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -37,6 +38,8 @@ type Meta struct {
 	Harness        string // an agentmanager.Harness value
 	AgentSessionID string // backend resume id, "" until the backend reported one
 	Title          string // first user prompt, whitespace collapsed, at most 80 runes
+	Model          string // the model the user chose (SetModel), "" for the harness default
+	Drawing        string // the drawing the host associated (SetDrawing), "" for none
 	Created        time.Time
 	Updated        time.Time // the file's modification time
 }
@@ -123,6 +126,8 @@ func (s *Store) readMeta(id string) (Meta, bool) {
 			if json.Unmarshal(env.D, &l) == nil && l.ID != "" {
 				m.AgentSessionID = l.ID
 			}
+		case kindModel, kindDrawing:
+			setMetaLine(&m, env)
 		case "session_started":
 			var e agentmanager.SessionStarted
 			if json.Unmarshal(env.D, &e) == nil && e.SessionID != "" {
@@ -131,6 +136,22 @@ func (s *Store) readMeta(id string) (Meta, bool) {
 		}
 	})
 	return m, haveMeta
+}
+
+// setMetaLine applies a model or drawing line to m; the last one wins.
+func setMetaLine(m *Meta, env envelope) {
+	switch env.K {
+	case kindModel:
+		var l modelLine
+		if json.Unmarshal(env.D, &l) == nil {
+			m.Model = l.Model
+		}
+	case kindDrawing:
+		var l drawingLine
+		if json.Unmarshal(env.D, &l) == nil {
+			m.Drawing = l.Drawing
+		}
+	}
 }
 
 func title(s string) string {
@@ -240,6 +261,8 @@ func (s *Store) Load(id string) (*Record, error) {
 			if json.Unmarshal(env.D, &l) == nil && l.ID != "" {
 				r.meta.AgentSessionID = l.ID
 			}
+		case kindModel, kindDrawing:
+			setMetaLine(&r.meta, env)
 		default:
 			if ev, err := decodeEvent(env); err == nil {
 				r.addItem(ev)
@@ -364,8 +387,12 @@ func (r *Record) Append(ev agentmanager.Event) error {
 }
 
 // AddUser stores a user message.
-func (r *Record) AddUser(text string) error {
-	return r.item(kindUser, User{Text: text}, User{Text: text})
+func (r *Record) AddUser(text string) error { return r.AddUserWith(text, nil) }
+
+// AddUserWith stores a user message and the attachments sent with it.
+func (r *Record) AddUserWith(text string, a []transcript.Attachment) error {
+	u := User{Text: text, Attachments: a}
+	return r.item(kindUser, u, u)
 }
 
 // ResolvePermission stores that a permission ask was answered.
@@ -405,13 +432,51 @@ func (r *Record) SetAgentSessionID(id string) error {
 	return nil
 }
 
+// SetModel stores the model the user chose for the session ("" for the harness default); an
+// unchanged model writes nothing.
+func (r *Record) SetModel(model string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if model == r.meta.Model {
+		return nil
+	}
+	if err := r.metaLine(kindModel, modelLine{Model: model}); err != nil {
+		return err
+	}
+	r.meta.Model = model
+	return nil
+}
+
+// SetDrawing stores the drawing the host associates the session with ("" for none); an unchanged
+// drawing writes nothing.
+func (r *Record) SetDrawing(drawing string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if drawing == r.meta.Drawing {
+		return nil
+	}
+	if err := r.metaLine(kindDrawing, drawingLine{Drawing: drawing}); err != nil {
+		return err
+	}
+	r.meta.Drawing = drawing
+	return nil
+}
+
+func (r *Record) metaLine(kind string, payload any) error {
+	line, err := marshalLine(kind, time.Now(), payload)
+	if err != nil {
+		return err
+	}
+	return r.write(line, true)
+}
+
 // Replay folds the stored items into t. A turn the stored session never finished (the host died
 // mid-turn) is closed with a cancelled TurnEnd so the transcript is not stuck running.
 func (r *Record) Replay(t *transcript.T) {
 	for _, it := range r.Items() {
 		switch v := it.(type) {
 		case User:
-			t.AddUser(v.Text)
+			t.AddUserWith(v.Text, v.Attachments)
 		case Resolved:
 			t.ResolvePermission(v.RequestID)
 		case agentmanager.Event:
@@ -442,19 +507,52 @@ func (r *Record) Close() error {
 type OpenSet struct {
 	IDs    []string
 	Active string
+	// Legacy is set by LoadOpen when the file predates per-drawing open sets (no drawing sets
+	// existed when it was written); it is never saved.
+	Legacy bool `json:"-"`
 }
 
-const openFile = "open.json"
+// openFile is the open set of no drawing; a drawing's set is open-<hash>.json.
+const (
+	openFile    = "open.json"
+	openVersion = 2
+)
 
-// SaveOpen writes the open set atomically.
-func (s *Store) SaveOpen(o OpenSet) error {
+// openDisk is the file format: the set plus the drawing it belongs to and the format version
+// (absent in files written before per-drawing sets).
+type openDisk struct {
+	IDs     []string
+	Active  string
+	Drawing string `json:",omitempty"`
+	V       int    `json:",omitempty"`
+}
+
+// openName is the file name of drawing's open set.
+func openName(drawing string) string {
+	if drawing == "" {
+		return openFile
+	}
+	sum := sha256.Sum256([]byte(drawing))
+	return "open-" + hex.EncodeToString(sum[:8]) + ".json"
+}
+
+// SaveOpen writes the open set of no drawing; it is SaveOpenFor("", o).
+func (s *Store) SaveOpen(o OpenSet) error { return s.SaveOpenFor("", o) }
+
+// LoadOpen reads the open set of no drawing; it is LoadOpenFor("").
+func (s *Store) LoadOpen() (OpenSet, error) { return s.LoadOpenFor("") }
+
+// SaveOpenFor writes the open set of drawing atomically. drawing is a host key, such as the
+// drawing's file name; "" is the set of no drawing (open.json).
+func (s *Store) SaveOpenFor(drawing string, o OpenSet) error {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	if o.IDs == nil {
-		o.IDs = []string{}
+	d := openDisk{IDs: o.IDs, Active: o.Active, Drawing: drawing, V: openVersion}
+	if d.IDs == nil {
+		d.IDs = []string{}
 	}
-	b, err := json.Marshal(o)
+	b, err := json.Marshal(d)
 	if err != nil {
 		return err
 	}
@@ -471,7 +569,7 @@ func (s *Store) SaveOpen(o OpenSet) error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(name, filepath.Join(s.dir, openFile))
+		err = os.Rename(name, filepath.Join(s.dir, openName(drawing)))
 	}
 	if err != nil {
 		os.Remove(name)
@@ -479,35 +577,62 @@ func (s *Store) SaveOpen(o OpenSet) error {
 	return err
 }
 
-// LoadOpen reads the open set; ErrNotFound when none was saved. Ids whose session file is gone are
-// dropped, and an Active that is no longer listed is cleared.
-func (s *Store) LoadOpen() (OpenSet, error) {
-	b, err := os.ReadFile(filepath.Join(s.dir, openFile))
+// LoadOpenFor reads the open set of drawing; ErrNotFound when none was saved. Ids whose session
+// file is gone are dropped, and an Active that is no longer listed is cleared.
+func (s *Store) LoadOpenFor(drawing string) (OpenSet, error) {
+	b, err := os.ReadFile(filepath.Join(s.dir, openName(drawing)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return OpenSet{}, ErrNotFound
 	}
 	if err != nil {
 		return OpenSet{}, err
 	}
-	var o OpenSet
-	if err := json.Unmarshal(b, &o); err != nil {
+	var d openDisk
+	if err := json.Unmarshal(b, &d); err != nil {
 		return OpenSet{}, ErrNotFound
 	}
-	ids := o.IDs[:0:0]
-	for _, id := range o.IDs {
+	o := OpenSet{Active: d.Active, Legacy: d.V == 0}
+	for _, id := range d.IDs {
 		if validID(id) {
 			if _, err := os.Stat(s.path(id)); err == nil {
-				ids = append(ids, id)
+				o.IDs = append(o.IDs, id)
 			}
 		}
 	}
-	o.IDs = ids
 	found := false
-	for _, id := range ids {
+	for _, id := range o.IDs {
 		found = found || id == o.Active
 	}
 	if !found {
 		o.Active = ""
 	}
 	return o, nil
+}
+
+// DeleteOpenFor removes the open set of drawing; a missing one is not an error.
+func (s *Store) DeleteOpenFor(drawing string) error {
+	err := os.Remove(filepath.Join(s.dir, openName(drawing)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+// CopyTo copies session id into dst under the same id, replacing a session of that id there. The
+// record of id should be closed (or idle) while it is copied.
+func (s *Store) CopyTo(dst *Store, id string) error {
+	if !validID(id) {
+		return ErrNotFound
+	}
+	b, err := os.ReadFile(s.path(id))
+	if errors.Is(err, fs.ErrNotExist) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst.dir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(dst.path(id), b, 0o600)
 }

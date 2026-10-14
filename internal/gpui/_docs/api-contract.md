@@ -679,6 +679,8 @@ type Div struct {
     onClick      func(*ClickEvent, *Window, *App)
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
     onPinch      func(*PinchEvent, *Window, *App)
+    onFileDrop   func(*FileDropEvent, *Window, *App)
+    onImagePaste func(*ImagePasteEvent, *Window, *App)
     onKeyDown    func(*KeyDownEvent, *Window, *App)
     onKeyUp      func(*KeyUpEvent, *Window, *App)
     onHoverStart func(*Window, *App)
@@ -700,6 +702,8 @@ func (d *Div) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) *Div
 func (d *Div) OnClick(f func(*ClickEvent, *Window, *App)) *Div
 func (d *Div) OnScrollWheel(f func(*ScrollWheelEvent, *Window, *App)) *Div
 func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div
+func (d *Div) OnFileDrop(f func(*FileDropEvent, *Window, *App)) *Div
+func (d *Div) OnImagePaste(f func(*ImagePasteEvent, *Window, *App)) *Div // focus path, like OnKeyDown
 func (d *Div) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *Div
 func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div
@@ -840,6 +844,15 @@ func (h *ScrollHandle) ScrollToBottom()
 Pinch semantics: `OnPinch` listeners run along the hit path at the event
 position, innermost first, until one calls `Window.StopPropagation()`. A pinch
 never scrolls containers.
+
+File drop semantics: `OnFileDrop` listeners run along the hit path at the drop
+position, innermost first, until one calls `Window.StopPropagation()`, as
+pinch does. A drop no listener takes is ignored.
+
+Image paste semantics: `OnImagePaste` listeners run along the focus path (the
+focused element and its ancestors, as key events), innermost first, until one
+calls `Window.StopPropagation()`; with nothing focused the path is the root
+key node, as for keys. A paste no listener takes is ignored.
 
 Scroll semantics: `OnScrollWheel` listeners run first (bubble, innermost
 first); if one calls `Window.StopPropagation()` no container scrolls. Then
@@ -1013,6 +1026,10 @@ type GlyphSprite struct {
     ContentMask ContentMask
     Mask        *GlyphMask  // grayscale alpha mask
     Color       Rgba
+    // Image, when set, is a colour picture drawn instead of Mask: its pixels
+    // are scaled into Bounds (bilinear, 1:1 when the sizes match) and Color's
+    // alpha multiplies them (opaque white draws the image as is).
+    Image       *image.NRGBA
 }
 
 type GlyphMask struct {
@@ -1107,7 +1124,9 @@ mask; borders are drawn as four strips (or as a rounded-rect stroke). Text is
 drawn by alpha-blending the `GlyphMask` into `GlyphSprite.Bounds` with
 bilinear sampling; when the device-space bounds size equals the mask size
 (masks rasterized at the window scale) the mask is blitted 1:1, snapped to
-whole device pixels, so text stays crisp on HiDPI.
+whole device pixels, so text stays crisp on HiDPI. A sprite with `Image` is
+drawn the same way from the image's premultiplied colours instead of a tinted
+mask.
 
 `raster.go` may import `image`, `image/draw`, `image/color`, `math`, but **not**
 `golang.org/x/*` or ebiten.
@@ -1196,6 +1215,22 @@ type PinchEvent struct {
     Position Point
     Delta float32
     Modifiers Modifiers
+}
+// FileDropEvent is files or folders dragged from the OS and dropped on the
+// window at Position. Paths are absolute paths in the real file system,
+// sorted by name; a backend that cannot see real paths (a browser) sends no
+// event. DispatchEvent divides Position by the UI scale.
+type FileDropEvent struct {
+    Position Point
+    Paths []string
+    Modifiers Modifiers
+}
+// ImagePasteEvent is an image the user pasted (the paste shortcut while the
+// clipboard holds no text but an image). Data is the encoded file and MIME its
+// type (image/png in practice). It goes to the focused element like a key.
+type ImagePasteEvent struct {
+    Data []byte
+    MIME string
 }
 type ClickEvent struct {
     Up *MouseUpEvent
@@ -1394,6 +1429,9 @@ func (t *TextInput) Style(f func(*Div) *Div) *TextInput
 func (t *TextInput) PlaceholderColor(c Rgba) *TextInput
 // SelectionColor sets the selection highlight fill (default Blue500 at 25%).
 func (t *TextInput) SelectionColor(c Rgba) *TextInput
+// Multiline makes the field a multi-line editor that grows from one line up
+// to maxLines visible lines (values below 1 count as 1) and then scrolls.
+func (t *TextInput) Multiline(maxLines int) *TextInput
 ```
 
 Theming follows GPUI's element-styling model rather than per-property setters:
@@ -1450,6 +1488,36 @@ rune boundaries. Fallback metrics count runes, not UTF-16 units. These are logic
 metrics using existing shaping APIs; no scale API change. Grapheme navigation,
 BiDi visual-order selection, word-arrow shortcuts, horizontal autoscroll,
 select-all and undo remain unsupported.
+
+### Multi-line fields
+
+`Multiline(maxLines)` switches a field to multi-line editing; without it every
+rule above holds unchanged (and resting renders are pixel-identical). A
+multi-line field lays its box out as a column; the text area is one line tall
+when empty and grows by a line height per visual line up to `maxLines`, after
+which it keeps that height and scrolls vertically. Lines break at `\n` and wrap
+softly at the text area's width (the same Unicode line breaking as `Text`);
+without a shaper only `\n` breaks lines. A caret at a soft-wrap boundary shows
+at the start of the next visual line.
+
+Keys: Shift+Enter inserts `\n`; Enter runs the `OnSubmit` callbacks when any
+is registered and otherwise inserts `\n`. Up/Down move to the nearest caret
+stop on the previous/next visual line, keeping the x of the first vertical move
+while vertical moves chain; Up on the first line goes to 0, Down on the last to
+the end, and either forgets that x. Home/End go to the start/end of the visual line (End on a soft-wrapped
+line stops before its last rune, so the caret stays on that line). Shift extends
+with all of them. Triple-click selects the logical line (between `\n`s).
+Double-click, drag, Shift-click and `CharacterIndexForPoint` map the point to
+the visual line under it and the nearest stop on that line; `BoundsForRange`
+returns the caret rect on its visual line.
+
+Any edit or caret move scrolls the text area so the caret line is visible; the
+mouse wheel over the field scrolls it within its content (and is consumed only
+when it moved). Text arriving through `ReplaceTextInRange` (typing, paste)
+keeps `\n` and turns `\r\n` and `\r` into `\n` in a multi-line field; a
+single-line field turns each of them into a space. `SetText` stores its
+argument unchanged. Copy and cut keep newlines; IME and the rest of the
+`PlatformInputHandler` surface use the same UTF-16 offsets across lines.
 
 ## 11. `entity.go`, `context.go`, `app.go`, `subscription.go`
 
@@ -1547,6 +1615,15 @@ func (a *App) UpdateGlobal(f func(any))
 func (a *App) Keymap() *Keymap
 func (a *App) NewFocusHandle() *FocusHandle
 func (a *App) Platform() Platform
+// OnOpenPaths sets the handler for the OS asking the app to open files with no
+// window position (macOS: a file opened from Finder or dropped on the Dock
+// icon). It replaces any earlier handler; nil removes it. Requests that came
+// while no handler was set are delivered to f at once, in order.
+func (a *App) OnOpenPaths(f func(paths []string, cx *App))
+// OpenPaths hands an open-files request to the OnOpenPaths handler inside
+// App.Update, or queues it until one is set. Platforms call it on the UI
+// goroutine; tests call it to inject the request. Empty requests are dropped.
+func (a *App) OpenPaths(paths []string)
 func (a *App) flushEffects()   // unexported
 ```
 
@@ -1641,6 +1718,9 @@ func (w *Window) InsertHitbox(b Bounds) int
 func (w *Window) PaintQuad(q Quad)
 func (w *Window) PaintUnderline(u Underline)
 func (w *Window) PaintGlyph(g GlyphSprite)
+// PaintImage draws img scaled into b (window space, logical pixels), clipped
+// to the current content mask, with the current opacity. nil draws nothing.
+func (w *Window) PaintImage(b Bounds, img *image.NRGBA)
 func (w *Window) PaintShadow(s Shadow)
 func (w *Window) PaintStroke(s Stroke)    // unset ContentMask = current clip; opacity applied
 // FocusNext / FocusPrev move focus along the rendered frame's tab stops,
@@ -1728,6 +1808,7 @@ type mouseListener struct {
     onClick      func(*ClickEvent, *Window, *App)
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
     onPinch      func(*PinchEvent, *Window, *App)
+    onFileDrop   func(*FileDropEvent, *Window, *App)
     keyContext   string
 }
 type keyNode struct {
@@ -1735,6 +1816,7 @@ type keyNode struct {
     focusID    FocusID
     onKeyDown  func(*KeyDownEvent, *Window, *App)
     onKeyUp    func(*KeyUpEvent, *Window, *App)
+    onImagePaste func(*ImagePasteEvent, *Window, *App)
     onAction   map[ActionKey]func(Action, *Window, *App)
 }
 func (f *Frame) SceneRef() *Scene
@@ -2041,7 +2123,21 @@ func ClipboardRead() (string, error)
 func ClipboardWrite(s string) error
 // ClipboardAvailable reports whether an OS clipboard tool was found.
 func ClipboardAvailable() bool
+// ClipboardReadImage returns the image on the system clipboard as PNG bytes
+// and its MIME type ("image/png"), or ErrNoClipboardImage when it holds none.
+// It blocks (up to ~3s); UI code calls it off the main loop.
+func ClipboardReadImage() (data []byte, mime string, err error)
+var ErrNoClipboardImage error
 ```
+
+Image read tools, each tried in turn like the text ones:
+- darwin: `osascript -e 'the clipboard as «class PNGf»'`, whose `«data PNGf<hex>»`
+  answer is decoded.
+- windows: PowerShell `System.Windows.Forms.Clipboard.GetImage()` saved as
+  PNG and written to stdout as base64.
+- linux: `wl-paste --no-newline --type image/png` (only with `WAYLAND_DISPLAY`),
+  then `xclip -selection clipboard -t image/png -o`; `xsel` has no images.
+- The answer must start with the PNG signature, else it counts as no image.
 
 - darwin: `pbpaste` / `pbcopy`
 - windows: `powershell -NoProfile -Command Get-Clipboard` /
@@ -2150,6 +2246,32 @@ Input mapping in `Update`:
   into `PinchEvent`s. Any failure to install logs once and leaves pinch
   unsupported. Smart magnify (double-tap) is not handled. Other OSes have no
   native source; Windows precision touchpads deliver a pinch as Ctrl+wheel.
+- File drops: `ebiten.DroppedFiles()` (non-nil only on the tick of a drop) →
+  one `FileDropEvent` at the cursor position, which GLFW moves to the drop
+  point before reporting the drop on every desktop OS. ebiten hands over a
+  virtual `fs.FS` rooted at the deepest directory holding every dropped path,
+  whose entries implement `ebiten.AbsPather` on desktops (ebiten 2.10+);
+  `droppedPaths` walks it back to the dropped paths. A root entry that is a
+  file is a dropped file; a directory is a dropped folder unless it lists
+  fewer entries than the real directory, in which case it is only the way to
+  dropped paths further down (files dropped from several folders at once) and
+  is walked. An entry with no `AbsPath` (a browser drop, whose files exist
+  only in memory) is skipped, so `GOOS=js` sends no event. Drop order is lost:
+  the virtual file system sorts by name.
+- macOS open-documents: GLFW installs no handler for the `odoc` Apple event
+  (a file opened from Finder, or dropped on the Dock icon), so
+  `openfiles_darwin.go` registers one through `purego/objc` on
+  `NSAppleEventManager` for `kCoreEventClass`/`kAEOpenDocuments`. `Run`
+  arranges it on the main thread before `ebiten.RunGame`: it installs the
+  handler and again from an `NSApplicationWillFinishLaunchingNotification`
+  observer, because `NSApplication` installs its own Apple event handlers while
+  launching and the `odoc` of a launch-by-document is dispatched right after
+  that notification, inside GLFW's initial `[NSApp run]`. The handler reads each
+  item's `fileURLValue` path and pushes the batch to a mutex-guarded queue;
+  `Update` drains it into `App.OpenPaths`. Other OSes pass files to open as
+  command-line arguments, which is the app's business. A failure to install
+  logs once and leaves the event unhandled (AppKit then reports that the
+  document cannot be opened).
 - `ebiten.AppendInputChars` → `KeyDownEvent{PreferCharacterInput:true}` per
   rune, always — except while a shortcut modifier is held: Cmd on darwin,
   Super elsewhere (`ModPlatform`), or Ctrl unless it is AltGr (Ctrl+Alt on
@@ -2168,7 +2290,9 @@ Input mapping in `Update`:
   ctrl-c/v/x elsewhere. The OS tools run on a goroutine; results are posted
   back over a channel and applied in a later `Update` (paste → character
   input; cut deletes the selection only if it is unchanged and the write
-  succeeded).
+  succeeded). A paste whose text read fails or is empty tries
+  `gpui.ClipboardReadImage` on the same goroutine and, when an image comes
+  back, dispatches an `ImagePasteEvent`.
 
 ## 18. `examples/todo/`
 

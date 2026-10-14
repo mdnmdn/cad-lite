@@ -3,7 +3,7 @@ package i18n
 import "strings"
 
 // Commands lists the canonical (English, upper-case) names of every command that has catalog
-// metadata. Verify requires name, desc, tip and aliases for each, in every language.
+// metadata. Verify requires name, desc and aliases for each, in every language.
 var Commands = []string{
 	"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "POLYGON", "ERASE", "MOVE", "COPY", "ROTATE", "SCALE",
 	"UNDO", "U", "REDO", "ZOOM", "LAYER", "DIST", "AREA", "MEASUREGEOM", "ID", "LIST", "UNITS", "NEW", "OPEN",
@@ -17,8 +17,6 @@ type CommandInfo struct {
 	Name string
 	// Desc is a one-line description ("Disegna segmenti di retta ...").
 	Desc string
-	// Tip is the full tooltip: "Title — what it does (Shortcut / alias)".
-	Tip string
 	// Aliases are the extra names typed to run the command in this language ("LINEA").
 	Aliases []string
 }
@@ -47,7 +45,6 @@ func CommandIn(lang Lang, name string) CommandInfo {
 	return CommandInfo{
 		Name:    t.T(cmdKey(name, "name")),
 		Desc:    t.T(cmdKey(name, "desc")),
-		Tip:     t.T(cmdKey(name, "tip")),
 		Aliases: upper(t.List(cmdKey(name, "aliases"))),
 	}
 }

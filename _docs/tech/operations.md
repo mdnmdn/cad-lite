@@ -7,7 +7,7 @@ summary: How to build, run, test and render Cad-lite, build the browser binary, 
 read_when: you need a build, run, test or docs command, or you are changing one
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, .github/workflows/release.yml, .github/workflows/ci.yml]
+code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -63,10 +63,11 @@ Run `go mod tidy` after adding an import.
 
 | Flag | Meaning |
 |---|---|
-| `-open PATH` | Open a DXF or DWG file at startup |
+| `-open PATH` | Open a DXF or DWG file at startup; a bad file stops the program |
+| `FILE ...` (after the flags) | Open the first readable drawing at startup as a dropped file is; problems go to the command history. Not together with `-open` |
 | `-script TEXT` | Run a command script after opening (AutoCAD script rules) |
 | `-demo` | Draw the demo plate at startup |
-| `-png PATH` | Render one frame headlessly and exit; draws the demo plate unless `-open` or `-script` is given |
+| `-png PATH` | Render one frame headlessly and exit; draws the demo plate unless `-open`, a file argument or `-script` is given |
 | `-hover X,Y` | With `-png`: move the pointer to the model point first, so snaps and previews show |
 | `-width`, `-height` | Window size in logical pixels; without them the size saved in the settings file, else 1280×800 |
 | `-version` | Print the version (`dev` unless the build sets `-X main.version=...`) and exit |
@@ -100,6 +101,12 @@ file is then `$CADLITE_CONFIG_DIR/settings.toml`); tests and renders that must n
 set it to a temporary directory. On the first start after the rename from go-draw, when
 `cad-lite/settings.toml` does not exist and `go-draw/settings.toml` does, the old file is copied over (and
 left in place).
+
+The agents Cad-lite installs itself (*Install OpenCode*, see [Agent integration](agent-integration.md)) go
+into `cad-lite/tools` under `%LocalAppData%` on Windows, `~/Library/Application Support` on macOS,
+`$XDG_DATA_HOME` or `~/.local/share` on Linux: mise, its data, config, cache and state, and OpenCode.
+`CADLITE_TOOLS_DIR` replaces that folder. Deleting it removes everything installed there; the
+`agent.binaries.opencode` setting then flags the executable as gone.
 
 Every `CADLITE_*` variable is read through `appenv`, which still accepts the old `GODRAW_*` name when the new one is unset. `cmd/cad` loads the file at startup unless `-png` is given (a failure is
 logged and the defaults apply) and saves it, with the window size, when the window closes. The browser build has no file and keeps them in memory.
@@ -158,6 +165,38 @@ Windows and macOS).
    updater installs from the zips and the tar.gz and verifies them against `SHA256SUMS.txt`; renaming
    an asset means changing `updater.AssetName` too.
 4. `CADLITE_NO_UPDATE=1` turns the in-app update checks off.
+
+### Windows installer
+
+`packaging/windows/cad-lite.iss` (Inno Setup 6) installs `cad-lite.exe` into `{autopf}\Cad-lite`:
+`%LOCALAPPDATA%\Programs\Cad-lite` per user (the default, `PrivilegesRequired=lowest`), Program Files
+with `/ALLUSERS`. Every registry entry uses the root `HKA`, so it lands in `HKCU\Software\Classes` per
+user and `HKLM\Software\Classes` per machine. Every verb runs `"{app}\cad-lite.exe" "%1"`, so the
+contract with `cmd/cad` is **`cad-lite.exe "<path>"` opens that drawing**, the path being the first
+argument.
+
+| Key (under `Software\Classes` unless named) | Written | Removed on uninstall |
+|---|---|---|
+| `CadLite.Drawing` (`CAD drawing`, `DefaultIcon`, `shell\open\command`) | always | the key |
+| `.dxf\OpenWithProgids`, `.dwg\OpenWithProgids`: value `CadLite.Drawing` | always | the value, the key when empty |
+| `Applications\cad-lite.exe` (`FriendlyAppName`, `DefaultIcon`, `SupportedTypes` `.dxf` `.dwg`, `shell\open\command`) | always | the key |
+| `Software\Synesthesia\Cad-lite\Capabilities` and the `Cad-lite` value of `Software\RegisteredApplications` (Settings → Default apps) | always | the key and the value |
+| `.dxf` default value `CadLite.Drawing` | task `dxfassoc`, ticked | the value, only while it is still `CadLite.Drawing` |
+| `.dwg` default value `CadLite.Drawing` | task `dwgassoc`, unticked | as `.dxf` |
+| `SystemFileAssociations\.dxf\shell\CadLite.Open` and `...\.dwg\...` ("Open in Cad-lite", icon, command) | task `contextmenu`, ticked | the key |
+
+`ChangesAssociations=yes` makes Setup and the uninstaller call `SHChangeNotify`. Re-running the
+installer with a task unticked removes what that task wrote (a default only while it is still ours).
+The `cad-lite.dxf` ProgID of earlier installers (`-open "%1"`) is deleted from `HKCU` on install. The
+uninstaller also deletes `cad-lite.exe.old`. A default the user picked in Explorer (`UserChoice`)
+outranks the installer's: Windows lets only the user change it, so on such a machine Cad-lite is
+offered in "Open with" and Default apps instead. On Windows 11 "Open in Cad-lite" is under "Show more
+options".
+
+The paths stay valid across updates: the in-app updater replaces `{app}\cad-lite.exe` in place
+(`updater.Install` renames it to `.old` and moves the new file to the same name), so no key needs
+rewriting. A per-machine install in Program Files is not writable by the user, so the updater reports
+the folder as not writable there; per-user installs update.
 
 ## Related docs
 

@@ -4,6 +4,7 @@ package ebitenplatform
 import (
 	"errors"
 	"log"
+	"os"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -75,14 +76,18 @@ func (p *Platform) OpenWindow(o gpui.WindowOptions) (gpui.PlatformWindow, error)
 }
 
 // Run creates the App, calls onLaunch, then blocks in ebiten.RunGame until
-// the app quits.
+// the app quits. On macOS it first installs the open-documents handler, whose
+// requests reach App.OpenPaths.
 func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	ebiten.SetScreenClearedEveryFrame(false)
 	app := gpui.NewAppWithPlatform(p)
 	if onLaunch != nil {
 		onLaunch(app)
 	}
-	g := &game{p: p, app: app, clip: newClipWorker(), wheel: wheelClassifier{pixels: runtime.GOOS == "js"}, pinch: newPinchQueue()}
+	g := &game{p: p, app: app, clip: &clipWorker{results: make(chan clipResult, 16), readImage: gpui.ClipboardReadImage}, wheel: wheelClassifier{pixels: runtime.GOOS == "js"}, pinch: newPinchQueue(), opens: newOpenQueue()}
+	if err := installOpenFilesHandler(g.opens); err != nil && !errors.Is(err, errOpenFilesUnsupported) {
+		log.Printf("gpui: opening files from the OS unavailable: %v", err)
+	}
 	err := ebiten.RunGame(g)
 	if errors.Is(err, ebiten.Termination) {
 		return nil
@@ -154,6 +159,8 @@ type game struct {
 	wheel    wheelClassifier
 	pinch    *pinchQueue
 	pinchSet bool
+	// opens carries the OS's open-documents requests (macOS) to Update.
+	opens    *openQueue
 	lastMods gpui.Modifiers
 	clicks   clickTracker
 	keyBuf   []ebiten.Key
@@ -205,6 +212,9 @@ func (g *game) Update() error {
 			applyClipboard(r, w.handler, func(ev gpui.PlatformInput) { win.DispatchEvent(ev, app) })
 		})
 		g.pollInput(win, app, w)
+		for _, paths := range g.opens.drain() {
+			app.OpenPaths(paths)
+		}
 	})
 	if g.p.quit.Load() || g.app.IsQuitting() {
 		return ebiten.Termination
@@ -262,6 +272,12 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 
 	cx, cy := ebiten.CursorPositionF()
 	pos := gpui.Point{X: gpui.Pixels(float32(cx) / w.scale), Y: gpui.Pixels(float32(cy) / w.scale)}
+	// GLFW moves the cursor to the drop point before it reports a drop.
+	if dropped := ebiten.DroppedFiles(); dropped != nil {
+		if paths := droppedPaths(dropped, os.ReadDir); len(paths) > 0 {
+			win.DispatchEvent(gpui.FileDropEvent{Position: pos, Paths: paths, Modifiers: mods}, app)
+		}
+	}
 	wx, wy := ebiten.Wheel()
 	interacted := wx != 0 || wy != 0 ||
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) ||

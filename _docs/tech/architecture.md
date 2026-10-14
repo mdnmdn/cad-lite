@@ -47,8 +47,11 @@ The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenp
 `GODRAW_*` names. `settings`, `updater`, `cmd/cad` and the tests use it.
 
 `updater` is a second stdlib-only leaf: it finds, downloads, verifies and installs GitHub releases and
-restarts the application. Only `ui` and `cmd/cad` use it; it imports nothing of the project. See
+restarts the application. Only `ui`, `cmd/cad` and `agentinstall` use it; it imports nothing of the project but `appenv`. See
 [Updates](../features/updates.md).
+
+`agentinstall` installs OpenCode through a private mise in the app's tools folder; it imports `appenv` and
+`updater` (archive extraction, checksum lists) and only `ui` uses it. See [Agent integration](agent-integration.md).
 
 AI agents attach on the side: `cadmcp` exposes the drawing as MCP tools on top of `cmdsys`, and the
 nested module `agentmanager` runs the agent CLIs and the MCP server; `ui` hosts the chat panel that
@@ -81,7 +84,8 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 
 ## Data flow of an edit
 
-1. Input (keyboard, mouse) reaches `ui.Workspace`, which forwards it to `cmdsys.Session`: typed text
+1. Input (keyboard, mouse) reaches `ui.Workspace`, which forwards it to the `cmdsys.Session` of the
+   active document tab: typed text
    to `Session.Submit`, clicks to `Session.Click`, pointer moves to `Session.Hover`, box drags to
    `Session.SelectBox`.
 2. The session parses the input for the active prompt and calls the active command's `Input`.

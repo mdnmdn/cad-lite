@@ -231,6 +231,10 @@ func (r *Rasterizer) drawUnderline(u Underline) {
 }
 
 func (r *Rasterizer) drawSprite(g GlyphSprite) {
+	if g.Image != nil {
+		r.drawImage(g)
+		return
+	}
 	m := g.Mask
 	if m == nil || m.W <= 0 || m.H <= 0 || len(m.Pix) < m.W*m.H {
 		return
@@ -280,6 +284,64 @@ func (r *Rasterizer) drawSprite(g GlyphSprite) {
 				continue
 			}
 			r.blend(x, y, pr*cov, pg*cov, pb*cov, pa*cov)
+		}
+	}
+}
+
+// drawImage draws a sprite's colour image scaled into its bounds with
+// bilinear sampling of premultiplied colours; Color's alpha scales it.
+func (r *Rasterizer) drawImage(g GlyphSprite) {
+	img := g.Image
+	iw, ih := img.Rect.Dx(), img.Rect.Dy()
+	if iw <= 0 || ih <= 0 || g.Color.A == 0 || g.Bounds.IsEmpty() {
+		return
+	}
+	x0, y0, x1, y1, ok := r.coverWindow(g.Bounds, g.ContentMask.Bounds)
+	if !ok {
+		return
+	}
+	minX, minY := float32(g.Bounds.Origin.X), float32(g.Bounds.Origin.Y)
+	maxX, maxY := float32(g.Bounds.Max().X), float32(g.Bounds.Max().Y)
+	// Pixels whose centre falls outside the bounds are skipped, so the image
+	// does not bleed into the anti-aliasing margin coverWindow adds.
+	sx := float32(iw) / (maxX - minX)
+	sy := float32(ih) / (maxY - minY)
+	alpha := float32(g.Color.A) / 255
+	texel := func(x, y int) [4]float32 {
+		x = min(max(x, 0), iw-1)
+		y = min(max(y, 0), ih-1)
+		i := img.PixOffset(img.Rect.Min.X+x, img.Rect.Min.Y+y)
+		p := img.Pix[i : i+4 : i+4]
+		a := float32(p[3]) / 255
+		return [4]float32{float32(p[0]) * a, float32(p[1]) * a, float32(p[2]) * a, float32(p[3])}
+	}
+	for y := y0; y < y1; y++ {
+		py := float32(y) + 0.5
+		if py < minY || py > maxY {
+			continue
+		}
+		v := (py-minY)*sy - 0.5
+		vy := int(math.Floor(float64(v)))
+		ty := v - float32(vy)
+		for x := x0; x < x1; x++ {
+			px := float32(x) + 0.5
+			if px < minX || px > maxX {
+				continue
+			}
+			u := (px-minX)*sx - 0.5
+			ux := int(math.Floor(float64(u)))
+			tx := u - float32(ux)
+			a, b, c, d := texel(ux, vy), texel(ux+1, vy), texel(ux, vy+1), texel(ux+1, vy+1)
+			var out [4]float32
+			for k := range out {
+				top := a[k]*(1-tx) + b[k]*tx
+				bot := c[k]*(1-tx) + d[k]*tx
+				out[k] = (top*(1-ty) + bot*ty) * alpha
+			}
+			if out[3] <= 0 {
+				continue
+			}
+			r.blend(x, y, out[0], out[1], out[2], out[3])
 		}
 	}
 }

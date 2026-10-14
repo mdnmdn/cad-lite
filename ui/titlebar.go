@@ -8,7 +8,8 @@ import (
 	"cad-lite/internal/gpui"
 )
 
-// titleBar is the window's top row: the brand, the document chip, Open and Save, Undo and Redo,
+// titleBar is the window's top row: the brand, the document chip, Open (with its recent menu) and
+// Save, Undo and Redo,
 // and at the right end the agent panel toggle and Settings. Every button is icon-only, so each
 // carries its tooltip.
 func (ws *Workspace) titleBar() *gpui.Div {
@@ -20,8 +21,8 @@ func (ws *Workspace) titleBar() *gpui.Div {
 		ws.docChip(),
 		vDivider(20),
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(
-			ws.fileButton("open", tb("open_tip"), icons.FileOpen, ws.openFile, nil),
-			ws.fileButton("save", tb("save_tip"), icons.FileSave, ws.saveFile, ws.saveFileAs),
+			ws.openButtons(),
+			ws.fileButton("save", ws.saveTip(), icons.FileSave, ws.saveFile, ws.saveFileAs),
 		),
 		vDivider(20),
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(
@@ -49,7 +50,7 @@ func (ws *Workspace) ribbonToggle() *gpui.Div {
 
 // commandIcon is an icon-only title bar button that runs a command and shows its tooltip.
 func (ws *Workspace) commandIcon(id, command string, icon icons.Name) *gpui.Div {
-	return iconButton("tool-"+id, i18n.Command(command).Tip, icon, false, func(w *gpui.Window) { ws.run(command, w) })
+	return iconButton("tool-"+id, ws.commandTip(command), icon, false, func(w *gpui.Window) { ws.run(command, w) })
 }
 
 // docName is the drawing's file name, or the translated "Untitled" when it has no file.

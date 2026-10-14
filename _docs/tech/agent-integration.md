@@ -7,7 +7,7 @@ summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/discovery.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -31,7 +31,7 @@ Three pieces connect an AI agent to a drawing:
   [agent panel](../features/agent-panel.md).
 
 `agentmanager/store` (stdlib, in the nested module) persists conversations as JSONL per session plus an
-open-tab set; Cad-lite keeps them in `<project>/.cad-lite/agent/`. Nothing in this chain exists until the
+open-tab set per drawing; Cad-lite keeps them in `<project>/.cad-lite/agent/`. Nothing in this chain exists until the
 panel or the `AI` command is first used.
 
 ## PATH discovery
@@ -45,17 +45,78 @@ terminal and no window, and it gives up after 5 s. On Windows it reads the Machi
 and expands `%VARS%`. `shellenv.Merge` puts the login entries first and drops repeats; `Set` stores the result
 for the process. `harnesses.Available`, `harnesses.Discover` (path and `--version` per agent, 3 s each) and
 `harnesses.Open` use the merged PATH: `Open` resolves the executable to its full path and gives the child
-`PATH=<merged>`, so the agent's own subprocesses (node, bun) are found. `ui/discovery.go` runs the probe once in
+`PATH=<merged>`, so the agent's own subprocesses (node, bun) are found. An executable the user chose in the settings
+(`agent.binaries`) is handed to `harnesses.SetBinary` by `ui/agent_binary.go`; it is process-wide and wins
+over the PATH lookup in `Available`, `Discover` (which marks it `Override`) and `Open`, while an explicit
+`Config.Binary` (`-agent-cmd`) still wins over it. `harnesses.Check` validates a chosen file (exists, not a
+folder, executable) and reads its `--version`. `ui/discovery.go` runs the probe once in
 the background at startup (not for `-png`), stores the result in memory only and shows it in the settings
 panel ([Settings](../features/settings.md)). Not covered by tests here: real macOS and Windows probes.
 
+## Installing OpenCode
+
+`agentinstall` (a Cad-lite package, not part of `agentmanager`, because it needs the app's folders and
+reuses `updater`'s archive and checksum helpers) installs OpenCode for a user who has no agent, only after
+the user confirms it in the UI. `Installer.Install` runs three steps, each cancellable through its context:
+
+1. **mise.** `EnsureMise` reuses `<tools>/mise/bin/mise` when it answers `--version`; otherwise it reads
+   `SHA256SUMS.txt` from `https://github.com/jdx/mise/releases/latest/download/`, picks the archive for the
+   platform (`AssetSuffix`: Linux the static `-musl.tar.gz`, macOS `.tar.gz`, Windows `.zip`) and the version
+   from its name, downloads `/download/v<version>/<archive>` over HTTPS (plain HTTP only to loopback, for
+   tests), refuses it unless its sha256 matches (`ErrChecksum`, `ErrNoChecksum`), unpacks it with
+   `updater.Extract` in a temporary folder and moves the executable into place, mode 0755. No shell
+   installer runs.
+2. **OpenCode.** `InstallTool` installs OpenCode's release binary, never needing node for it, trying in
+   order: `aqua:anomalyco/opencode@latest` (`BinarySpec`; mise's aqua backend asks the GitHub API for the
+   release, unauthenticated, 60 requests an hour); then the same archive through mise's `http` backend from a
+   direct URL, `http:opencode[url=https://github.com/anomalyco/opencode/releases/download/v{{version}}/<asset>]@<version>`,
+   where `<asset>` is `ReleaseAsset` (`opencode-linux-x64.tar.gz`, `opencode-darwin-arm64.zip`,
+   `opencode-windows-x64.zip` and the arm64 forms) and the version comes from the redirect of
+   `releases/latest/download/<asset>`, so no API call is made (github.com/sst/opencode redirects to that
+   repository); and only when `node` is on the merged PATH, mise's registry entry `opencode@latest` (`NpmSpec`,
+   npm, about 1 GB). Without node the error says so (`ErrNoNode`) with why the binary attempts failed; a
+   GitHub refusal (403, 429, rate limit) is marked `ErrRateLimited`, "try again later". After a success
+   `mise which --tool <spec> opencode` gives the executable and `mise cache clear` drops the second copy; a
+   failed or cancelled attempt removes the install folders it created. mise is confined to the tools
+   folder: `MISE_DATA_DIR`, `MISE_CONFIG_DIR`, `MISE_CACHE_DIR`, `MISE_STATE_DIR`, `MISE_GLOBAL_CONFIG_FILE`
+   and `MISE_SYSTEM_CONFIG_FILE` point inside it, `MISE_CEILING_PATHS` stops it reading project files above
+   it, `MISE_YES=1` answers its prompts, npm's cache is redirected there too, and the working directory is
+   `<tools>/work`. Every program runs in a process group of its own (Windows: `taskkill /T` on cancel), so a
+   cancel kills mise with the downloads and npm processes it started. mise plus the binary take about
+   320 MB on disk (mise about 140 MB, OpenCode about 180 MB) from about 110 MB of downloads.
+3. **Sign-in.** `CheckAuth` runs `opencode auth list` (30 s) and `HasCredentials` reads the layouts opencode
+   prints: the framed one with `N credentials` counts, in Unicode or with its ASCII fallback (`T`, `|`, `—`),
+   or one line per credential (2.x: `No authenticated integrations` when empty). Credentials given by
+   environment variables count. OpenCode 1.x leaves no process behind; OpenCode 2.x starts a detached
+   background service on this call (its own session, recorded in `~/.local/state/opencode/service.json` with
+   pid, URL and password) that would keep running. When that file appears only during the check, the
+   service is ours and `opencode service stop` ends it (else the recorded pid is killed); a service running
+   before the check is left alone. (`auth list --standalone` would avoid the service on 2.x, but 1.x rejects the
+   flag.)
+
+The tools folder is `cad-lite/tools` under `%LocalAppData%`, `~/Library/Application Support` or
+`$XDG_DATA_HOME` (`~/.local/share`), or `$CADLITE_TOOLS_DIR` ([Operations](operations.md)). `ui/agent_install.go`
+runs `Install` on a goroutine and adopts the result through a poll timer, like the discovery probe; the
+installed executable is stored as `agent.binaries.opencode`, which `applyAgentBinaries` hands to
+`harnesses.SetBinary`. `Workspace.CloseAgent` (quit) cancels a running installation and waits up to 10 s for
+it to kill its processes and remove what it half-wrote. When there is no credential, `OpenTerminalCommand`
+opens a terminal running `opencode auth login` (`agentinstall.LoginArgs`). Tests serve a fake release (a
+tarball holding a shell-script mise that writes a fake opencode) from `httptest`; covered are checksum
+refusal, cancellation during the download and during `mise install` (child process killed, partial folder
+removed), each fallback, the node rule, the service stop, and the isolation variables. Run for real once on
+Linux: the mise download, the aqua attempt failing on a blocked API, the direct-download fallback installing
+OpenCode 1.19.0 without node, and the sign-in check with no process left. A real sign-in, the aqua backend
+with a reachable API, and the macOS and Windows terminals were not run.
+
 ## The `cad` MCP server
 
-The first session start creates one `mcp.Server` named for Cad-lite, registers `cadmcp.Register` with an `Env`
-(`Dispatch`, `Session`, `Snapshot`, `Changed`), binds it to `127.0.0.1` on a random port and passes its
+The first session start of a document tab creates that tab's `mcp.Server` named for Cad-lite, registers
+`cadmcp.Register` with an `Env` (`Dispatch`, `Session`, which returns that document tab's session whichever tab
+is active, `Snapshot`, `Changed`), binds it to `127.0.0.1` on a random port and passes its
 URL and bearer token to the agent as `agentmanager.MCPServer{Name: "cad"}`. Every request needs the
-token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of the workspace (the MCP server is stateless per request): it
-starts with the first session and closes when the last one stops, exits or quits, so the port and token
+token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of its document tab (the MCP server is stateless per request), so a
+session edits the drawing it was started from (decision D32): it
+starts with the tab's first session and closes when its last one stops, exits or quits, so the port and token
 never outlive the chats. Tool calls are serialized by a capacity-one semaphore that honours the request
 context, so a cancelled request neither waits for nor runs after a busy handler. The HTTP server sets a
 header timeout of 10 s and an `IdleTimeout` of 2 minutes; it sets no write timeout and no batch-length
@@ -76,7 +137,12 @@ The tools (all coordinates in model units, Y up; one tool call is one undo step)
 | `measure` | Length, perimeter, area, distance |
 | `render_png` | The drawing as a PNG, returned as MCP image content so a vision model can look at it, with a JSON block that maps pixels to model coordinates; views by extents, box, centre and scale, or the user's current view, with optional grid, rulers and selection highlight |
 
-`render_png` is drawn by `ui.Snapshot`, headlessly, from the session; it never captures the window.
+`render_png` is drawn by `ui.SnapshotImage`, headlessly, from the session; it never captures the window.
+The image holds at most `cadmcp.MaxSnapshotPixels` (2 megapixels, e.g. 2048x1024): a larger
+width x height is scaled down uniformly, keeping the aspect ratio and the model window the arguments
+asked for, and the JSON block then reports the size drawn plus `requested` and `downscaled`. The render
+runs on the UI goroutine (it reads the session); the PNG encoding runs afterwards on the MCP handler's
+goroutine, so the window stalls only for the render.
 
 **Agents cannot run file or destructive commands.** `cadmcp` runs every tool body through `call`, which
 sets `Session.SetAgentCaller(true)` for its duration. A command that implements `cmdsys.HumanOnly` (NEW,
@@ -120,12 +186,38 @@ transcript (debug log lines excepted); `TurnEnd` and `Exited` fsync. Every backe
 own session id in `SessionStarted` (Claude only after the first prompt); the record keeps the latest.
 Starting a tab whose record has an id for the same harness sets `Config.ResumeID`: Claude `--resume`,
 Codex `thread/resume`, ACP `session/load`. ACP suppresses the history the agent replays on load, which
-is why Cad-lite shows its own stored transcript. The open tabs and the active one are saved on every
-change and at quit (`Store.SaveOpen`); restoring them reads records only, so no agent starts until the
-user sends. Project switch and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).
+is why Cad-lite shows its own stored transcript. The open tabs and the active one are saved for the
+current drawing (its file name, "" when untitled) on every change and at quit (`Store.SaveOpenFor`);
+restoring them reads records only, so no agent starts until the user sends. Each record also keeps the
+drawing (`Record.SetDrawing`) and the user's model choice (`Record.SetModel`), and stores the
+`ModelsChanged` events, so a restored tab shows its model and the list the agent offered. Drawing and
+project switches and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).
 
-`Env.Changed` runs inside `Do`: it clears the render cache and refreshes the window, so the canvas shows
-the agent's edits between frames.
+## Models
+
+`Config.Model` is the tab's choice, else `agent.model_<harness>` from the settings. Every backend reports
+what the agent offers as `ModelsChanged` and implements `agentmanager.ModelSetter`; the panel calls
+`SetModel` on a goroutine (it blocks on the agent's answer, up to 15 s) and folds the result back on the
+timer like a session start. A session without a setter, or a change back to the default, is closed and
+restarted with `ResumeID` on the next prompt. Wire details per harness are in `agentmanager/_docs/protocols.md`.
+On opencode a tab nobody picked a model for starts on a free one (`ui/agent_model.go`, `commitSuggestion`,
+decision D33).
+
+## Images
+
+A prompt's images go through `agentmanager.ImagePrompter.PromptImages`, which all three backends implement
+(ACP image content blocks, Claude base64 image blocks, Codex `image` items with a data URL). The panel
+decides whether to allow them from `ImagePrompter.AcceptsImages` of the live session and
+`ModelInfo.Vision` of the tab's model (`ui/agent_image.go`, `visionOf`): no when either says so, yes for
+Claude, otherwise unknown, which allows them. The UI goroutine decodes, scales and encodes the image when it
+is attached (up to 2048 px and 5 MB), so a large file costs one stall of the panel then. The record keeps a
+preview, not the image (`store.Record.AddUserWith`, D33). Not run live with an image on any harness.
+
+`Env.Changed` runs inside `Do` after every mutating tool (`AgentPanel.agentChanged`) and refreshes the
+window, so the canvas shows the agent's edits between frames. It does not clear the render cache: entity
+edits reach it through the drawing's change sets, so it calls `Builder.SyncLayers`, which drops
+the cache only when a layer table edit (not journalled) changed a layer's colour or lineweight or the
+table itself.
 
 ## Permission policy
 
@@ -144,9 +236,9 @@ the agent's edits between frames.
 
 | harness | status |
 |---|---|
-| Claude Code (`claude`, 2.1.299) | Verified live: start, MCP tool calls through the `cad` server with the auto-allow policy, permission round trips, interrupt. Claude defers MCP tools behind `ToolSearch`, so the first drawing call shows an extra `ToolSearch` tool card in the transcript. |
-| opencode (ACP) | Not run live. Verified against the fake agent only; wire details are marked unverified in `agentmanager/_docs/protocols.md`. |
-| Codex (`codex`) | Not run live. Verified against the fake agent only; wire details unverified, as above. |
+| Claude Code (`claude`, 2.1.299) | Verified live: start, MCP tool calls through the `cad` server with the auto-allow policy, permission round trips, interrupt; the model list (`initialize`) and `set_model`, accepted and refused, without a prompt (`TestLiveClaudeModels`). Claude defers MCP tools behind `ToolSearch`, so the first drawing call shows an extra `ToolSearch` tool card in the transcript. |
+| opencode (ACP) | Not run live (models included). Verified against the fake agent only; wire details are marked unverified in `agentmanager/_docs/protocols.md`. |
+| Codex (`codex`) | Not run live (`model/list` and the `turn/start` model included). Verified against the fake agent only; wire details unverified, as above. |
 
 `ui/agent_e2e_test.go` runs all three backends through the real panel, the real `cad` MCP server and the
 real `Dispatcher`, against `agentmanager`'s fake agent (built with `go build` from the nested module). The

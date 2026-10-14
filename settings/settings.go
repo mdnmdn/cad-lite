@@ -109,6 +109,14 @@ type Settings struct {
 	// DefaultAgent names the harness the agent panel selects; empty means the
 	// first one installed.
 	DefaultAgent string
+	// AgentBinaries maps a harness name ("opencode", "claude", "codex") to the
+	// executable the user chose for it, which wins over the PATH lookup. A
+	// harness without an entry is looked up on the PATH. Nil when empty.
+	AgentBinaries map[string]string
+	// AgentModels maps a harness name to the model a new agent tab on it uses;
+	// a missing or empty entry means the harness's own default. Stored as
+	// agent.model_<harness>.
+	AgentModels map[string]string
 	// AutoUpdate turns the periodic background check for a new release on or off.
 	AutoUpdate bool
 	// LastUpdateCheck is when the last check for a release finished; zero means never.
@@ -117,6 +125,9 @@ type Settings struct {
 	Window Window
 	// Layout is the arrangement of the workspace panels.
 	Layout Layout
+	// Recent is the drawings and folders used lately, for the Open menu and
+	// the start panel.
+	Recent Recent
 	// Extra round-trips keys this version does not know. Top-level keys are
 	// stored under their name, keys inside a known table as "table.key".
 	Extra map[string]any
@@ -192,7 +203,24 @@ func (s *Settings) Normalize() []string {
 			*d.v = c
 		}
 	}
+	s.AgentBinaries = cleanBinaries(s.AgentBinaries)
+	s.Recent.normalize()
 	return w
+}
+
+// cleanBinaries trims every path and drops empty ones; it returns nil for an
+// empty result. It never changes m itself.
+func cleanBinaries(m map[string]string) map[string]string {
+	var out map[string]string
+	for h, p := range m {
+		if p = strings.TrimSpace(p); p != "" && strings.TrimSpace(h) != "" {
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[h] = p
+		}
+	}
+	return out
 }
 
 func contains(l []string, v string) bool {
@@ -206,6 +234,21 @@ func contains(l []string, v string) bool {
 
 // Clone returns a copy that shares no map with s.
 func (s Settings) Clone() Settings {
+	if s.AgentBinaries != nil {
+		b := make(map[string]string, len(s.AgentBinaries))
+		for k, v := range s.AgentBinaries {
+			b[k] = v
+		}
+		s.AgentBinaries = b
+
+	}
+	if s.AgentModels != nil {
+		m := make(map[string]string, len(s.AgentModels))
+		for k, v := range s.AgentModels {
+			m[k] = v
+		}
+		s.AgentModels = m
+	}
 	if s.Extra != nil {
 		e := make(map[string]any, len(s.Extra))
 		for k, v := range s.Extra {
@@ -213,5 +256,6 @@ func (s Settings) Clone() Settings {
 		}
 		s.Extra = e
 	}
+	s.Recent = s.Recent.clone()
 	return s
 }

@@ -3,11 +3,11 @@ id: feat-agent-panel
 title: Agent panel
 kind: feature
 status: current
-summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex) against the open drawing, as several tabs whose conversations are stored per project, and asks the user before anything beyond drawing is allowed.
-read_when: you are changing the agent panel, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
+summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex) against the open drawing, as several tabs on a model the user picks (free models first on opencode), with images dropped or pasted into the prompt, whose conversations are stored with the drawing in its project, and asks the user before anything beyond drawing is allowed.
+read_when: you are changing the agent panel, its model picker, image attachments, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/doctabs.go, ui/agent.go, ui/agent_model.go, ui/agent_image.go, ui/agent_install.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -36,26 +36,86 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   others keep running and are drained and stored in the background. A tab's dot is green while its
   session is live, blue while a turn runs and amber when a background tab asked for permission or
   finished a turn; switching to it clears the amber. The harness chips apply to a tab without a stored
-  conversation; afterwards the tab is fixed to the harness it started with. All sessions share one `cad`
-  MCP server, started with the first session and closed with the last; tool calls still run one at a
-  time on the UI goroutine.
+  conversation; afterwards the tab is fixed to the harness it started with. The sessions of one drawing
+  share one `cad` MCP server, started with its first session and closed with its last; tool calls still
+  run one at a time on the UI goroutine.
 - **History.** `History` lists the project's stored conversations, newest first, with title (the first
-  prompt), harness and relative date; choosing one opens it in a tab, or switches to it if it is open.
-- **Per-project storage.** The project is the directory of the drawing file last given to `-open`,
-  OPEN or SAVE, else the working directory. Conversations live in `<project>/.cad-lite/agent/` (copied once from the old `.go-draw/agent/` when only that exists), one
-  JSONL file per conversation, created with the first prompt (directory 0700, files 0600). Opening the
-  panel restores the tabs that were open when the project was last used, with their transcripts,
-  read-only; no agent process starts. Sending to a restored tab starts its session with the stored agent
-  session id, so the agent continues its own context (Claude `--resume`, Codex `thread/resume`, ACP
-  `session/load`, whose replayed history is suppressed because the stored transcript is shown). A
-  session the agent has lost ends with an error note; open a new tab to continue. OPEN or SAVE of a
-  file in another directory closes every live session, keeps their records and switches to that project's
-  tabs.
-- **Default harness.** The `agent.default` [setting](settings.md) selects the harness at startup and when
+  prompt), harness and relative date, and the drawing's file name for a conversation of another drawing;
+  choosing one opens it in a tab, or switches to it if it is open.
+- **Model.** A chip after the harness chips shows the active tab's model: the chosen model's name, else
+  the harness default from the settings, else the model the agent reported, else `default`. Clicking it
+  opens a menu: *Default*, the models the agent reported (Claude's `initialize` list, ACP's session
+  models, Codex's `model/list`; the list arrives once a session runs and is stored with the
+  conversation), a field for any other model id (Enter applies, Escape closes), and *Make default for
+  <harness>*, which saves the tab's choice as `agent.model_<harness>` in the [settings](settings.md). The
+  choice is per tab and stored with its conversation, so a restored tab keeps it. A tab without a session
+  starts on it. A live session switches from the next turn when the harness can (Claude `set_model`, ACP
+  `session/set_config_option` or `session/set_model`, Codex's `turn/start` model); otherwise, and when
+  going back to *Default*, a note says so and the session ends (after the running turn), and the next
+  prompt starts it again on the new model, resuming the conversation. A model the agent refuses is
+  reported in the transcript and the previous choice comes back. The chip shows a model's name, else its
+  id without the `<provider>/` prefix opencode ids carry.
+- **Free models on opencode.** On the opencode harness the menu lists the free models first, each with a
+  green `free` badge: `big-pickle`, then the ids ending in `-free`, in the agent's order (with or without
+  the provider prefix, e.g. `opencode/big-pickle`, `opencode/grok-code-fast-1-free`), then the others. Until
+  the agent has listed its models the menu offers `opencode/big-pickle`. A new opencode tab, with no model
+  picked and no `agent.model_opencode` default, starts on `big-pickle` (the agent's own entry when it
+  listed one, else `opencode/big-pickle`), or on the first free model the agent lists when big-pickle is
+  not among them; the choice is stored with the conversation like a picked one. Picking *Default* means
+  opencode's own default. The ids are opencode's `<provider>/<model>` as its ACP model list reports them;
+  that `big-pickle` and the `-free` models are free on OpenCode Zen is an assumption, not checked live.
+- **Images.** Image files dropped anywhere on the panel, or an image pasted (Cmd/Ctrl+V with no text on the
+  clipboard) while the prompt field has the keyboard, wait above the prompt as chips: a preview, the file
+  name (`pasted image` for a paste), the pixel size and an `x` that removes the image. They go with the
+  next prompt, which may then be empty, and the sent message shows them as small previews. A drop on the
+  panel never opens a drawing; files that are not PNG, JPEG, GIF or WebP are reported in the transcript.
+  An image wider or taller than 2048 px is scaled down to fit (a JPEG stays JPEG, other types become PNG),
+  and one still over 5 MB is refused; at most six images go with one message. The tab's model must read
+  images: Claude's always do; a model the agent lists as text-only (Codex's `inputModalities`), or an
+  agent that takes no images at all (ACP without `promptCapabilities.image`), refuses the attachment with a
+  note, and a prompt with images for such a model is refused, keeping text and images. Where the agent
+  does not say (opencode's models over ACP), the images go and opencode answers for its model. Pasting a
+  file path pastes the text; a file is attached by dropping it.
+- **Storage with the drawing.** The project is the directory of the drawing file last given to `-open`,
+  OPEN or SAVE, else the working directory. Conversations live in `<project>/.cad-lite/agent/` (copied once
+  from the old `.go-draw/agent/` when only that exists), one JSONL file per conversation, created with the
+  first prompt (directory 0700, files 0600) and tagged with the drawing's file name. A message's images
+  are stored as their name, type, size and a PNG preview of at most 96 px inside its line, not the files;
+  the agent's own session keeps what it was sent. Each drawing remembers
+  its own open tabs; an untitled drawing has the project's untitled set. Opening the panel restores the
+  tabs that were open when the drawing was last used, with their transcripts, read-only; no agent process
+  starts. Sending to a restored tab starts its session with the stored agent session id, so the agent
+  continues its own context (Claude `--resume`, Codex `thread/resume`, ACP `session/load`, whose replayed
+  history is suppressed because the stored transcript is shown). A session the agent has lost ends with an
+  error note; open a new tab to continue.
+- **Document tabs.** The panel shows the conversations of the active [document tab](document-tabs.md):
+  switching tabs shows the other drawing's conversations (restored from the store the first time, none
+  for a drawing never used with the agent) while the sessions of the tab left keep running there. A
+  session is bound to the document tab it was started in: its `cad` tools act on that drawing whichever
+  tab is active (decision D32). Closing a document tab ends its sessions and keeps their records. OPEN
+  into the untouched untitled tab closes that tab's live sessions and shows the opened drawing's tabs. SAVE or SAVEAS under a new name takes the tabs along: in the same
+  directory the sessions keep running and reopening the old name shows no tabs; in another directory the open
+  conversations are copied into that project's store, their sessions close and the tabs reappear there
+  (the originals stay in the old project's History). The first save of an untitled drawing works the same
+  way. A store from before per-drawing tabs gives its open tabs to the first drawing opened.
+- **Default harness and model.** The `agent.default` [setting](settings.md) selects the harness at startup and when
   changed in the settings panel (`AgentPanel.Configure`); empty picks the first agent found (see PATH below).
-- **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. The chips lock
+  `agent.model_<harness>` is the model a tab without its own choice starts with on that harness.
+- **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. An agent whose executable the user chose in the settings (*Executables*, see [Settings](settings.md)) gets a chip while that file exists, and starts from that file. The chips lock
   while the tab has a session or a stored conversation. With none found the panel says so; `-agent` with `-agent-cmd` offers the
   named harness regardless of `PATH`.
+- **Install OpenCode.** With no agent found, the panel shows an *Install OpenCode* card under the
+  warning (the settings panel's Agent discovery section shows the same card whenever OpenCode is not
+  found). Nothing runs until the user clicks *Install OpenCode…* and then *Install* on the question that
+  follows, which says what is downloaded (mise, about 50 MB, from github.com/jdx/mise, checked against
+  the release's SHA256 list; then OpenCode's release binary, about 60 MB, from github.com/anomalyco/opencode; about 350 MB on disk in all; OpenCode's npm package, up to about 1 GB, only when the binary cannot be fetched and Node.js is installed), the folder it all goes into, that
+  nothing is installed system-wide, and that a terminal opens for sign-in; the other button closes it without installing. While it
+  runs, the card lists three steps (download and verify mise, with a bar and megabytes; install OpenCode;
+  check the sign-in) and a *Cancel* button, which stops the running step and keeps nothing
+  half-downloaded. On success the installed OpenCode becomes its executable (`agent.binaries`, as if
+  chosen with Browse, so a restart keeps it), its chip appears, and when `opencode auth list` shows no
+  credential a terminal opens running `opencode auth login`; the card says which terminal opened, and
+  *Sign in…* opens it again. A failure shows the error with *Retry* and *Close*. Quitting the application cancels a running installation and waits for it to stop its processes and remove what it half-wrote.
 - **Start and Stop.** Start launches the selected agent with the drawing's MCP server attached and
   shows `starting...`, then `ready`. Stop closes the session; the transcript stays. The session also
   ends, with a note, when the agent process exits. Sending a prompt with no session starts one and
@@ -64,7 +124,10 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   status line (`starting claude...`, `ready`), warning and relative date comes from the catalog
   (`ui.agent.*`), so the panel follows the interface language. Text sent to and received from the
   agent (prompts, tool names, permission option names) is not translated.
-- **Prompt.** One line; Enter or Send submits. Only one turn runs at a time, so Send does nothing
+- **Prompt.** Multi-line: Enter or Send submits, Shift+Enter starts a new line, and pasted text
+  keeps its line breaks. Long lines wrap at the panel's width; the field grows with its text up to
+  eight lines and then scrolls, keeping the caret in view. Up/Down move between lines and Home/End
+  go to the ends of the line. Only one turn runs at a time, so Send does nothing
   while the agent works. **Cancel** appears while a turn runs and stops it; the session stays usable.
 - **Transcript.** User messages, agent messages and notes in order; thoughts collapsed behind a
   `Thinking` line that expands on click; tool calls as cards with a status dot (pending, in progress,
@@ -79,7 +142,7 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 - **Focus.** The command line keeps the keyboard by default. Clicking the prompt field moves it to the
   field; **Escape** in the field, clicking the canvas or hiding the panel gives it back to the command
   line. Text typed into the prompt never reaches the command line.
-- **Quit.** Closing the application stops every session, the agent processes and the MCP server, and
+- **Quit.** Closing the application stops every session of every document tab, the agent processes and the MCP server, and
   saves which tabs were open. A session still starting when the application quits is waited for (up to
   10 s) and closed, and a fatal startup error stops the agent before the process exits.
 
@@ -90,23 +153,43 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   [Operations](../tech/operations.md).
 - Panel API: `Workspace.AgentPanel` (creates the panel), `Workspace.HasAgentPanel`,
   `Workspace.SetProjectPath`, `AgentPanel.Configure`, `Start`, `Stop`, `Send`, `Cancel`, `Respond`,
-  `SetOpener`, `Tabs`, `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`, `Sessions`; `Workspace.CloseAgent`;
+  `SetOpener`, `Tabs` (`Tab.Model` is the chip's label), `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`,
+  `Sessions`, `SetModel`, `SetDefaultModel`, `Models`, `AttachFiles`, `AttachImage`, `Attachments`,
+  `RemoveAttachment`; `Workspace.CloseAgent`; `Workspace.SetAgentInstaller`
+  (`ui.AgentInstaller`), `AgentInstalling`;
   action `cad-toggle-agent` bound to F2. Command `AI` reaches the panel through
   `cmdsys.Session.SetAgentHandler` (the `OPTIONS` command is wired the same way through `SetSettingsHandler`); OPEN and SAVE report the file through `cmdsys.Session.OnFilePath`.
-- Files: `<project>/.cad-lite/agent/<id>.jsonl` and `open.json` (the open tabs), format in the store's
-  section of the agentmanager API contract.
+- Files: `<project>/.cad-lite/agent/<id>.jsonl`, `open.json` (the untitled drawing's open tabs) and
+  `open-<hash>.json` (one drawing's open tabs, keyed by its file name), format in the store's section of the
+  agentmanager API contract. The design is [decision](../tech/decisions.md) D29; model switching is D30;
+  images and the free opencode default are D33.
+- Images reach the agent through `agentmanager.ImagePrompter`; drops through `gpui.Div.OnFileDrop` and
+  pastes through `gpui.ImagePasteEvent` on the panel's root.
 - What the agent may do to the drawing is the tool set in [Agent integration](../tech/agent-integration.md).
 
 ## Implementation
 
-`ui/agent.go` holds `AgentPanel` and `agentTab` (transcript, record, session state per conversation):
-`startTab` (shared MCP server, `agentmanager.Config` with `ResumeID`, launch on a goroutine), the timer
-`pump` over every tab and `stopTab`. `ui/agent_store.go` holds the persistence glue: project directory,
+`ui/agent.go` holds `AgentPanel`, `agentSet` (one document tab's conversations, history state and MCP
+server; the panel embeds the active tab's and `follow` swaps it) and `agentTab` (transcript, record,
+session state per conversation): `ensureServer` (the set's MCP server, whose session is the document
+tab's), `startTab` (`agentmanager.Config` with `ResumeID`, launch on a goroutine), the timer `pump` over
+every tab of every set and `stopTab`. `ui/agent_store.go` holds the persistence glue: project directory,
 `ensureLoaded` (open set restore), tabs, history and `apply`, which folds each event into the
-transcript and `agentmanager/store`. `ui/agent_view.go` renders the header, tabs, history menu,
-transcript (`agentmanager/transcript`) and prompt row. `ui/workspace.go` creates the panel lazily and
+transcript and `agentmanager/store`, and `drawingChanged`, which `Workspace.pathChanged` calls with whether
+the drawing was saved (the same `doc.Drawing`) or replaced, for the active document tab only. `ui/agent_model.go` holds the model state per
+tab (`tabModel`), `SetModel`/`applyModel` (a `ModelSetter` switch on a goroutine, or a restart), the chip
+and the menu, with `orderModels`, `freeModel` and `suggestedModel`/`commitSuggestion` for opencode's free
+models. `ui/agent_image.go` holds the attachments: `newAgentImage` (type check, downscale, preview),
+`visionOf`, `attach`, the panel's `onFileDrop` and `onImagePaste`, the composer chips and the transcript
+previews (painted with `gpui.Window.PaintImage`); `AgentPanel.Send` and `prompt` (`ui/agent.go`) send them
+with `ImagePrompter.PromptImages`. `ui/agent_view.go` renders the header, tabs, history menu,
+transcript (`agentmanager/transcript`) and prompt row; the prompt is a `gpui.TextInput` made
+`Multiline(agentPromptLines)` in `newAgentPanel` (`ui/agent.go`). `ui/workspace.go` creates the panel lazily and
 hosts the toggle and `agentCommand`; `cmdsys/commands/agent.go` is the `AI` command. `ui/agent_demo.go`
-seeds the canned transcript. Threading and lifecycle rules are in
+seeds the canned transcript. `ui/agent_install.go` is the Install OpenCode card and its flow
+(`askInstall`, `startInstall` running the `AgentInstaller` on a goroutine, the poll `pollInstall`,
+`cancelInstall`, `openLogin`); tests install fakes with `Workspace.SetAgentInstaller` and
+`SetTerminalOpener`. Threading and lifecycle rules are in
 [Agent integration](../tech/agent-integration.md).
 
 ## Failure
@@ -117,7 +200,18 @@ seeds the canned transcript. Threading and lifecycle rules are in
   and leaves the panel idle; a queued prompt is dropped.
 - A tool call that the UI goroutine cannot run in 15 s returns a busy error to the agent.
 - A failed prompt write ends the turn with the error as a note.
+- A model switch the agent refuses, or that does not answer within 15 s, shows a warning and restores the
+  previous choice; a model id the CLI rejects at start ends the start with the error, as above.
+- A conversation that cannot be copied on SAVE to another directory shows one warning; the others are copied.
+- An image that cannot be read, is no PNG, JPEG, GIF or WebP, is over 5 MB once scaled, would be the
+  seventh, or goes to a model without vision, shows a warning in the transcript (not stored) and is not
+  attached. A session that turns out to take no images when a queued prompt with images reaches it ends
+  that turn with `the agent does not accept images`.
 - In the browser build no agent can start; the panel reports the launch error.
+- An installation that fails (no network, a checksum mismatch, no mise build for the platform, `mise
+  install` failing) shows the error, with the last lines mise printed, and stores nothing; a cancelled one
+  goes back to the offer with a note. A sign-in check that cannot run, or a terminal that cannot be
+  opened, keeps the installed OpenCode and says to run `opencode auth login` by hand.
 
 ## Related docs
 
@@ -128,6 +222,7 @@ seeds the canned transcript. Threading and lifecycle rules are in
 ## Next steps
 
 - A multi-line prompt field, once `TextInput` supports it.
-- A model picker.
 - Delete or rename a stored conversation from the history menu.
 - A live resume test against the real CLIs.
+- Attach a file copied in the Finder or Explorer on paste (the clipboard's file list), not only image data.
+- Per-model vision for opencode, once its ACP model list says which models read images.

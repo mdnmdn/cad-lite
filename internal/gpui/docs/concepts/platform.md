@@ -76,6 +76,8 @@ Input mapping (`ebitenplatform/input.go`):
 | Cursor movement | `MouseMoveEvent` (logical px = cursor / scale); the first position is withheld until it changes or a button or the wheel is used, because ebiten reports a meaningless position before the pointer has entered the window |
 | Button press / release | `MouseDownEvent` / `MouseUpEvent`, plus `ClickEvent` when release is on the same element id as the press |
 | Pinch | macOS only: `PinchEvent` from an `NSEvent` magnify monitor (`ebitenplatform/pinch_darwin.go`); browser pinch is Ctrl+wheel, with `Control` taken from `WheelEvent.ctrlKey` |
+| Files dropped on the window | `FileDropEvent` at the cursor (GLFW moves it to the drop point), with the real paths behind `ebiten.DroppedFiles` (`ebitenplatform/drop.go`); none in a browser |
+| macOS open-documents event (Finder, Dock icon) | `App.OpenPaths` via an `NSAppleEventManager` handler (`ebitenplatform/openfiles_darwin.go`), installed by `Run` before `ebiten.RunGame` |
 | Wheel | `ScrollWheelEvent`, positive `DeltaY` = down; `Precise` false: `20 px` per notch, true: `10 px` per ebiten unit (browser builds: CSS pixels as delivered) |
 | Shift / Ctrl / Alt / Meta | `Shift` / `Control` / `Alt` / `ModPlatform` |
 | Named keys, shortcuts | `KeyDownEvent` / `KeyUpEvent` |

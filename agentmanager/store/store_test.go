@@ -22,6 +22,8 @@ func allEvents() []agentmanager.Event {
 	kind := agentmanager.KindEdit
 	return []agentmanager.Event{
 		agentmanager.SessionStarted{SessionID: "sess-1", Model: "m"},
+		agentmanager.ModelsChanged{Current: "m", Available: []agentmanager.ModelInfo{{ID: "m", Name: "Em", Vision: agentmanager.VisionYes}, {ID: "n"}}},
+		agentmanager.ModelsChanged{Current: "n"},
 		agentmanager.ThoughtDelta{MessageID: "t1", Text: "think"},
 		agentmanager.TextDelta{MessageID: "a1", Text: "hello "},
 		agentmanager.TextDelta{MessageID: "a1", Text: "world"},
@@ -162,7 +164,7 @@ func TestTruncatedLastLine(t *testing.T) {
 	l.Close()
 	l2, _ := s.Load(r.Meta().ID)
 	items := l2.Items()
-	if len(items) != 3 || items[2] != (store.User{Text: "two"}) {
+	if len(items) != 3 || !reflect.DeepEqual(items[2], store.User{Text: "two"}) {
 		t.Fatalf("items after append = %#v", items)
 	}
 	ms, _ := s.List()

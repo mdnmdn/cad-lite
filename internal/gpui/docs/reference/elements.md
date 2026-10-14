@@ -70,6 +70,8 @@ Each setter holds one handler; a second call replaces the first.
 | `OnClick(f)` | `func(*ClickEvent, *Window, *App)` |
 | `OnScrollWheel(f)` | `func(*ScrollWheelEvent, *Window, *App)` |
 | `OnPinch(f)` | `func(*PinchEvent, *Window, *App)` |
+| `OnFileDrop(f)` | `func(*FileDropEvent, *Window, *App)` |
+| `OnImagePaste(f)` | `func(*ImagePasteEvent, *Window, *App)`; runs along the focus path, like `OnKeyDown` |
 | `OnHoverStart(f)` | `func(*Window, *App)` |
 | `OnHoverEnd(f)` | `func(*Window, *App)` |
 | `OnKeyDown(f)` | `func(*KeyDownEvent, *Window, *App)` |
@@ -137,7 +139,7 @@ child; it inherits the text style cascaded from ancestors.
 
 ## TextInput
 
-A single-line field. Not an `Entity`: create it once, keep it in your view
+A single-line field, or a multi-line one with `Multiline`. Not an `Entity`: create it once, keep it in your view
 struct and call `Render` every frame. Setters that mutate it call
 `Window.Refresh`.
 
@@ -154,6 +156,7 @@ struct and call `Render` every frame. Setters that mutate it call
 | `Style(f func(*Div) *Div) *TextInput` | Applied to the field's box after the defaults (white background, 1 px `Gray300` border, `Rounded(6)`, `P(8)`), so it can override them. Set background, border, padding and text colour/size here; the text colour also colours the caret; `Div.Focus` styles the focused border. A later call replaces the earlier one. |
 | `PlaceholderColor(c Rgba) *TextInput` | Placeholder colour (default `Gray500`). |
 | `SelectionColor(c Rgba) *TextInput` | Selection highlight fill (default `Blue500` at 25% opacity). |
+| `Multiline(maxLines int) *TextInput` | Multi-line editing: wraps, grows to `maxLines` lines (at least 1) then scrolls; Shift+Enter inserts a newline, Enter submits when `OnSubmit` is set (else a newline), `up`/`down` and per-line `home`/`end`. See [multi-line fields](../concepts/events-and-input.md#multi-line-fields). |
 | `FocusHandle() *FocusHandle` | The field's handle; valid only after `Render` has run once. |
 
 ```go
@@ -289,4 +292,4 @@ layout (see [testing](../guides/testing.md)).
 
 `Quad`, `Shadow`, `GlyphSprite`, `Underline` and `ContentMask` are described
 in [platform.md](platform.md#scene-and-rasterizer); emit them with
-`Window.PaintQuad`, `PaintShadow`, `PaintGlyph`, `PaintUnderline`, `PaintStroke`.
+`Window.PaintQuad`, `PaintShadow`, `PaintGlyph`, `PaintImage`, `PaintUnderline`, `PaintStroke`.

@@ -30,6 +30,8 @@ your launch callback; there is no `App.Run` method.
 | `Update(f func(*App))` | Run `f`; only the outermost call flushes effects when it returns. Nesting is allowed. |
 | `Notify(id EntityID)` | Schedule the entity's observers and mark windows that read it during their last draw invalid. Deduplicated per flush. |
 | `RefreshWindows()` | Queue a refresh of every window. |
+| `OnOpenPaths(f func(paths []string, cx *App))` | Handle the OS asking the app to open files with no window position (macOS Finder and Dock). Replaces the previous handler; `nil` removes it; requests queued while none was set are delivered at once. |
+| `OpenPaths(paths []string)` | Deliver an open-files request to the handler inside `Update`, or queue it until one is set. Called by the platform; tests call it to inject one. Empty requests are dropped. |
 | `Defer(f func(*App))` | Run `f` at the end of the current effect cycle. |
 | `SetGlobal(v any)` | Store a value keyed by its concrete type (replaces any previous one). |
 | `Global(out any) bool` | Copy the stored value into `out` (a non-nil pointer to the value's type); false when absent. |
@@ -194,6 +196,7 @@ finishes ([architecture](../architecture.md#element-state)).
 | `InsertHitbox(b Bounds) int` | Register a hit-testable region (clipped to enclosing clips); returns its index. |
 | `HandleInput(h PlatformInputHandler)` | Register a text-input handler for this frame (called by focused text elements in prepaint). |
 | `PaintQuad(q Quad)` / `PaintShadow(s Shadow)` / `PaintGlyph(g GlyphSprite)` / `PaintUnderline(u Underline)` / `PaintStroke(s Stroke)` | Insert a primitive; an unset `ContentMask` is filled with the current one and the element opacity is applied. |
+| `PaintImage(b Bounds, img *image.NRGBA)` | Draw a colour image scaled into `b` (a `GlyphSprite` with `Image` set), clipped and with the current opacity; `nil` draws nothing. |
 | `PushClip(b Bounds)` / `PushContentMask(m ContentMask)` / `PopClip()` | Push/pop a clip (intersected with the current one). |
 | `CurrentClip() Bounds` / `CurrentContentMask() ContentMask` | Innermost clip; "infinite" when none. |
 | `PushLayer()` | Z-order boundary: everything painted afterwards is above everything before. |

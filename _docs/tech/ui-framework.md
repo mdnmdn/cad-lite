@@ -32,7 +32,7 @@ What Cad-lite uses from the library:
 | From gpui | Used for |
 |---|---|
 | `Div`, `Text`, flexbox builders, `Hover` styles | Every panel, button and label |
-| `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line |
+| `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line (single-line) and the agent prompt (`Multiline`) |
 | `Canvas` | The drawing area: a leaf that paints through a callback with its bounds |
 | `Stroke` via `Window.PaintStroke` | Every line the canvas draws |
 | `Quad` via `Window.PaintQuad` | The canvas background and box-selection rectangles |
@@ -41,14 +41,16 @@ What Cad-lite uses from the library:
 | `ebitenplatform.New` | The desktop window |
 | `Window.PaintGlyph` | Every icon: an alpha mask tinted with one theme colour |
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
+| `Div.OnFileDrop`, `App.OnOpenPaths` | Files dropped on the window and files the OS asks the app to open (macOS Finder and Dock), both into `Workspace.OpenPaths` |
 
-`Stroke`, `Canvas` and `TextInput.OnEscape` exist in the library for Cad-lite. A new need follows the
+`Stroke`, `Canvas`, `TextInput.OnEscape` and `TextInput.Multiline` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions
 
-- `ui.Workspace` is the window's root view and the only `EntityRoot`. It owns the session, the view
-  and the render builder, and builds the element tree from them each frame.
+- `ui.Workspace` is the window's root view and the only `EntityRoot`. It owns the open drawings as
+  document tabs, each with its session, view and render builder, and builds the element tree from the
+  active one each frame.
 - All state the UI shows lives in the session or the workspace; elements are rebuilt every frame and
   hold none.
 - The root element sets the key context `cad`; workspace shortcuts are bound in that context
@@ -66,8 +68,8 @@ ACI 7 draws black), `classic` (a near-black canvas in a grey shell, as in AutoCA
 workspace) and `high-contrast` (black with white borders and saturated accents). `ApplyTheme`
 copies a theme into the package-level variables of `ui/theme.go`, which every view reads while
 rendering, so a redraw shows the new theme without any view being told. `Workspace.applyAppearance`
-also updates the builder's `Background` (which decides how ACI 7 is drawn) and invalidates its
-cache. Views name a token, never a colour; the tokens, one `Theme` field each:
+also updates every tab's builder's `Background` (which decides how ACI 7 is drawn) and invalidates
+their caches. Views name a token, never a colour; the tokens, one `Theme` field each:
 
 | Token | Use |
 |---|---|
@@ -102,7 +104,9 @@ registry holds them weakly).
 ## Tooltips
 
 `Div.Tooltip(text)` is set on every button and clickable control; the text comes from the catalog
-(`i18n.T("ui.*_tip")`, `i18n.Command(name).Tip`). The bubble style is one function of the theme,
+(`i18n.T("ui.*_tip")`) or, for a button that runs a command, is composed from the command's name
+and description and its keyboard hint (`Workspace.commandTip` in `ui/tooltip.go`; the convention is in
+the [canvas](../features/canvas.md) document). The bubble style is one function of the theme,
 `tooltipStyle(Theme)` in `ui/theme.go`: `Field` fill, `Border` outline, `Text` colour, gpui's default
 size and 500 ms delay. `Workspace.Render` hands it to `App.SetTooltipStyle` on the first frame and
 again whenever the current theme differs from the one last applied, so a theme switch restyles the

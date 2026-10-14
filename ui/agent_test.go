@@ -83,11 +83,11 @@ func (r *agentRig) pos(id string) gpui.Point {
 // inputPos is a point on the composer's input line.
 func (r *agentRig) inputPos() gpui.Point {
 	r.t.Helper()
-	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere("agent-composer")
+	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere("agent-input")
 	if !ok {
-		r.t.Fatal("agent composer not on screen")
+		r.t.Fatal("agent prompt field not on screen")
 	}
-	return gpui.Point{X: gpui.Pixels((b.x0 + b.x1) / 2), Y: gpui.Pixels(b.y0 + 24)}
+	return gpui.Point{X: gpui.Pixels((b.x0 + b.x1) / 2), Y: gpui.Pixels(b.y0 + 12)}
 }
 
 func openAgent(t *testing.T) *agentRig {
@@ -305,11 +305,10 @@ func TestAgentEscapeReturnsFocusToCommandLine(t *testing.T) {
 	}
 }
 
-func TestAgentToolCallFromAnotherGoroutineIsDrained(t *testing.T) {
-	r := openAgent(t)
-	r.start()
-	cfg := <-r.cfg
-	srv := cfg.MCPServers[0]
+// callTool calls an MCP tool over HTTP from another goroutine, ticking the UI until it answers,
+// and fails the test unless the call succeeds.
+func (r *agentRig) callTool(srv agentmanager.MCPServer, name, args string) {
+	r.t.Helper()
 	type result struct {
 		code int
 		body []byte
@@ -317,7 +316,7 @@ func TestAgentToolCallFromAnotherGoroutineIsDrained(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"add_line","arguments":{"x1":0,"y1":0,"x2":50,"y2":0}}}`
+		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + name + `","arguments":` + args + `}}`
 		req, _ := http.NewRequest("POST", srv.URL, bytes.NewReader([]byte(body)))
 		req.Header.Set("Authorization", "Bearer "+srv.Token)
 		req.Header.Set("Content-Type", "application/json")
@@ -342,7 +341,7 @@ func TestAgentToolCallFromAnotherGoroutineIsDrained(t *testing.T) {
 		}
 	})
 	if res.err != nil || res.code != 200 {
-		t.Fatalf("http: %v %d %s", res.err, res.code, res.body)
+		r.t.Fatalf("http: %v %d %s", res.err, res.code, res.body)
 	}
 	var rpc struct {
 		Result struct {
@@ -350,10 +349,69 @@ func TestAgentToolCallFromAnotherGoroutineIsDrained(t *testing.T) {
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(res.body, &rpc); err != nil || rpc.Result.IsError {
-		t.Fatalf("result: %v %s", err, res.body)
+		r.t.Fatalf("result: %v %s", err, res.body)
 	}
+}
+
+func TestAgentToolCallFromAnotherGoroutineIsDrained(t *testing.T) {
+	r := openAgent(t)
+	r.start()
+	cfg := <-r.cfg
+	r.callTool(cfg.MCPServers[0], "add_line", `{"x1":0,"y1":0,"x2":50,"y2":0}`)
 	if n := r.ws.Session().Drawing().Len(); n != 1 {
 		t.Fatalf("entities = %d, want 1", n)
+	}
+}
+
+// Each document tab has its own MCP server: an agent session edits the drawing of the tab it was
+// started from, whichever tab is active when its tool call arrives.
+func TestAgentToolsEditTheTabTheSessionStartedIn(t *testing.T) {
+	r := newRig(t, t.TempDir(), memFiles{}, true)
+	r.start()
+	plate := <-r.cfg
+	r.open("/elsewhere/bracket.dxf")
+	if len(r.ws.Documents()) != 2 || r.ws.AgentPanel().Running() {
+		t.Fatalf("bracket should open in a tab showing no live conversation: %+v", r.ws.Documents())
+	}
+	r.callTool(plate.MCPServers[0], "add_line", `{"x1":0,"y1":0,"x2":50,"y2":0}`)
+	if a, b := r.ws.DocumentSession(0).Drawing().Len(), r.ws.Session().Drawing().Len(); a != 1 || b != 0 {
+		t.Fatalf("plate has %d entities, bracket %d: the edit went to the wrong tab", a, b)
+	}
+	r.say("draw on the bracket", 1)
+	bracket := r.nextCfg()
+	if bracket.MCPServers[0].URL == plate.MCPServers[0].URL {
+		t.Fatal("both drawings share one MCP server")
+	}
+	r.ws.SwitchDocument(0)
+	r.callTool(bracket.MCPServers[0], "add_circle", `{"cx":0,"cy":0,"r":5}`)
+	if a, b := r.ws.DocumentSession(0).Drawing().Len(), r.ws.DocumentSession(1).Drawing().Len(); a != 1 || b != 1 {
+		t.Fatalf("plate has %d entities, bracket %d", a, b)
+	}
+	if live, _ := r.ws.AgentPanel().Live(); !live || !r.ws.AgentPanel().Running() {
+		t.Fatal("plate's session should still be live and shown")
+	}
+}
+
+// An entity edit through MCP keeps the other entities' cached display items; a layer table edit,
+// which no change set reports, drops them.
+func TestAgentEntityEditKeepsRenderCache(t *testing.T) {
+	r := openAgent(t)
+	r.ws.Session().Script("LINE 0,0 40,0  LINE 0,10 40,10 ")
+	r.start()
+	cfg := <-r.cfg
+	r.tick()
+	h := r.ws.Session().Drawing().Handles()[0]
+	before := r.ws.RenderItems(h)
+	if len(before) == 0 {
+		t.Fatal("no cached items for the first line")
+	}
+	r.callTool(cfg.MCPServers[0], "add_line", `{"x1":0,"y1":20,"x2":40,"y2":20}`)
+	if after := r.ws.RenderItems(h); &after[0] != &before[0] {
+		t.Fatal("adding one line through MCP dropped the cached items of an untouched line")
+	}
+	r.callTool(cfg.MCPServers[0], "run_script", `{"script":"LAYER walls=4 "}`)
+	if after := r.ws.RenderItems(h); &after[0] == &before[0] {
+		t.Fatal("a layer table edit through MCP kept stale cached items")
 	}
 }
 

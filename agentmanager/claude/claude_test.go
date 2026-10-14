@@ -3,6 +3,7 @@ package claude_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,9 +85,65 @@ func (h *harness) prompt(text string) {
 	}
 }
 
+// logLines returns the frames the client wrote, without the initialize control request every
+// session opens with (see TestModelsListedAndSwitched).
 func (h *harness) logLines() []string {
+	var out []string
+	for _, l := range h.allLines() {
+		if !strings.Contains(l, `"subtype":"initialize"`) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func (h *harness) allLines() []string {
 	b, _ := os.ReadFile(h.log)
 	return strings.Split(strings.TrimSpace(string(b)), "\n")
+}
+
+func TestModelsListedAndSwitched(t *testing.T) {
+	h := open(t, builtin("echo-turn"), func(c *agentmanager.Config) {
+		c.Model = "opus"
+		c.Env = append(c.Env, "FAKEAGENT_MODELS=1")
+	})
+	mc := expect[agentmanager.ModelsChanged](h)
+	if mc.Current != "opus" || len(mc.Available) != 2 || mc.Available[1] != (agentmanager.ModelInfo{ID: "fake-fast", Name: "Fake Fast", Vision: agentmanager.VisionYes}) {
+		t.Fatalf("%+v", mc)
+	}
+	if first := h.allLines()[0]; !strings.Contains(first, `"type":"control_request"`) || !strings.Contains(first, `"subtype":"initialize"`) {
+		t.Errorf("first frame %s", first)
+	}
+	ms, ok := h.s.(agentmanager.ModelSetter)
+	if !ok {
+		t.Fatal("claude session is not a ModelSetter")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := ms.SetModel(ctx, "fake-fast"); err != nil {
+		t.Fatal(err)
+	}
+	if mc := expect[agentmanager.ModelsChanged](h); mc.Current != "fake-fast" || mc.Available != nil {
+		t.Errorf("%+v", mc)
+	}
+	if err := ms.SetModel(ctx, "bad-model"); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("bad model: %v", err)
+	}
+	if err := ms.SetModel(ctx, ""); !errors.Is(err, agentmanager.ErrNoModel) {
+		t.Errorf("empty model: %v", err)
+	}
+	h.prompt("hi")
+	if ss := expect[agentmanager.SessionStarted](h); ss.Model != "fake-fast" {
+		t.Errorf("model after switch %q", ss.Model)
+	}
+}
+
+func TestModelsUnansweredInitialize(t *testing.T) {
+	h := open(t, builtin("echo-turn"))
+	h.prompt("hi")
+	expect[agentmanager.SessionStarted](h)
+	expect[agentmanager.TextDelta](h)
+	expect[agentmanager.TurnEnd](h)
 }
 
 func waitFile(t *testing.T, path string) string {

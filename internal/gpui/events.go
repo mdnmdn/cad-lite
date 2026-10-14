@@ -110,6 +110,27 @@ type PinchEvent struct {
 
 func (e PinchEvent) isPlatformInput() {}
 
+// FileDropEvent is files or folders dragged from the OS and dropped on the
+// window at Position. Paths are absolute paths in the real file system, sorted
+// by name. Backends that cannot see real paths (a browser) never send it.
+type FileDropEvent struct {
+	Position  Point
+	Paths     []string
+	Modifiers Modifiers
+}
+
+func (e FileDropEvent) isPlatformInput() {}
+
+// ImagePasteEvent is an image the user pasted: the paste shortcut while the
+// clipboard holds no text but an image. Data is the encoded file and MIME its
+// type (image/png in practice). It goes to the focused element like a key.
+type ImagePasteEvent struct {
+	Data []byte
+	MIME string
+}
+
+func (e ImagePasteEvent) isPlatformInput() {}
+
 // ClickEvent is a completed click (a press-release pair on the same target).
 type ClickEvent struct {
 	Up *MouseUpEvent

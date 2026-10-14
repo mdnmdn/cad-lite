@@ -160,7 +160,7 @@ func TestRenderPNGThroughMCPServer(t *testing.T) {
 	cadmcp.Register(srv, cadmcp.Env{
 		Dispatch: &cadmcp.DirectDispatcher{},
 		Session:  func() *cmdsys.Session { return s },
-		Snapshot: ui.Snapshot,
+		Snapshot: ui.SnapshotImage,
 	})
 	ep, err := srv.Start()
 	if err != nil {

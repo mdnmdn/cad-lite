@@ -210,16 +210,21 @@ type Endpoint struct{ URL, Token string }  // URL = http://127.0.0.1:P/mcp
 ```
 (To keep `mcp` independent of the root package, the conversion is `agentmanager.MCPServer{Name:n,URL:e.URL,Token:e.Token}` written by the caller.)
 
-Package `transcript` (WP2): `type Block interface{}`; concrete `UserMsg{Text}`, `AgentMsg{ID,Text}`, `Thought{ID,Text}`,
+Package `transcript` (WP2): `type Block interface{}`; concrete `UserMsg{Text; Attachments []Attachment}`, `AgentMsg{ID,Text}`, `Thought{ID,Text}`,
 `ToolBlock{Call ToolCall; Status; Output}`, `PermissionBlock{RequestID; Call; Options; Answered bool}`, `Plan{Entries}`,
-`Note{Level,Text}`. `type T struct`; `func (t *T) AddUser(text string)`, `Apply(ev Event)`,
+`Note{Level,Text}`; `type Attachment struct{ Name, MIME string; Width, Height int; Thumb []byte }` (an image sent with the
+message: its file name or "", its type and pixel size, and a small PNG preview chosen by the host, nil for none).
+`type T struct`; `func (t *T) AddUser(text string)`, `AddUserWith(text string, a []Attachment)`, `Apply(ev Event)`,
 `Blocks() []Block`, `Version() uint64`, `Running() bool`, `ResolvePermission(requestID string)`. Pure, no goroutines.
 
 Package `harnesses` (WP1 stub, finalised after WP3-5): `func Open(ctx context.Context, cfg agentmanager.Config) (agentmanager.Session, error)`
-(switch on `cfg.Harness`; when `cfg.Binary` is empty it resolves the harness executable on the effective PATH of `shellenv`, and the child's environment gets that PATH);
-`func Available(h agentmanager.Harness) (path string, ok bool)` (looks the harness executable up on the effective PATH of `shellenv`);
-`type Found struct{ Harness agentmanager.Harness; Path, Version string }`; `func Discover(ctx context.Context, path string) []Found`
-(one entry per harness, OpenCode, Claude, Codex in that order, with `Path` empty when not found and `Version` the first line of `--version` when it answers within 3 s).
+(switch on `cfg.Harness`; when `cfg.Binary` is empty it takes the executable `SetBinary` stored for the harness, else resolves it on the effective PATH of `shellenv`, and the child's environment gets that PATH);
+`func SetBinary(h agentmanager.Harness, path string)` (process-wide override of a harness's executable; `""` goes back to the PATH lookup), `func Binary(h agentmanager.Harness) string` (the stored override, or `""`);
+`func Available(h agentmanager.Harness) (path string, ok bool)` (the override, ok while that file exists; else the harness executable on the effective PATH of `shellenv`);
+`type Found struct{ Harness agentmanager.Harness; Path, Version string; Override bool }`; `func Discover(ctx context.Context, path string) []Found`
+(one entry per harness, OpenCode, Claude, Codex in that order, with `Path` the override (`Override` set) or the one found on `path`, empty when neither, and `Version` the first line of `--version` when it answers within 3 s);
+`var ErrNotExist, ErrIsDir, ErrNotExecutable error`; `func Check(ctx context.Context, bin string) (ver string, err error)`
+(`bin` exists, is no directory and is executable — on Windows an `.exe`, `.cmd`, `.bat` or `.com` — else an error wrapping one of the three; then `Version` as Discover gets it).
 
 Package `shellenv` (stdlib only; the PATH a GUI process lacks): `type Source string` (`SourceLoginShell`, `SourceRegistry`, `SourceApp`);
 `type Probe struct{ Path string; Source Source; Err error }`; `func LoginPATH(ctx context.Context) (string, error)` (Unix: `$SHELL -l -i -c` printing `$PATH` between unique markers,
@@ -244,13 +249,73 @@ handshakes (ACP, Codex), returns a Session; MCP injection and Close semantics as
 
 `ToolCallPatch` carries `MCPServer string`: the owning MCP server when the backend knows it. Backends set it (Claude from `mcp__server__tool`, Codex from MCP tool-call items, ACP from the tool call's MCP metadata or title). `AllowMCP` matches `MCPServer` only when it is set; without it only the exact Claude title `mcp__server__tool` counts. A call whose `Kind` is not `other` or `read` is never auto-allowed. ACP derives `MCPServer` strictly: `mcp__server__tool`, or opencode's `<server>_<tool>` with the tool in `[a-z0-9_]+`, and never for execute/edit/delete/move/fetch kinds.
 
+## Models
+
+`Config.Model` picks the model a session starts on. Beyond that, a backend reports the models the agent
+offers and switches while live:
+
+```go
+// ModelInfo is one model an agent offers; ID is what Config.Model and SetModel take, Name a label ("" when none),
+// Vision whether it reads images.
+type ModelInfo struct{ ID, Name string; Vision Vision }
+// Vision says whether a model accepts images in a prompt.
+type Vision string
+const (VisionUnknown Vision = ""; VisionYes = "yes"; VisionNo = "no")
+// ModelsChanged (an Event) reports the offered models and the one in effect. Available nil = unchanged or
+// unknown; Current "" = the agent did not say.
+type ModelsChanged struct{ Current string; Available []ModelInfo }
+// ModelSetter is implemented by sessions that switch model while live (all three backends). SetModel blocks
+// until the agent accepted or refused, or ctx ends; the switch applies from the next turn and emits
+// ModelsChanged{Current: model}. An empty model returns ErrNoModel.
+type ModelSetter interface{ SetModel(ctx context.Context, model string) error }
+var ErrNoModel error
+```
+
+Where the list comes from: Claude's `initialize` control request (answered before the first prompt), ACP's
+`session/new`/`session/load` result (model config option values, else `models.availableModels`), Codex's
+`model/list`. A backend whose agent offers no list emits no `ModelsChanged`. Wire details are in
+`protocols.md`. The host uses the optional interface with a type assertion and falls back to restarting the
+session with a new `Config.Model` (resuming by `ResumeID`).
+
+`ModelInfo.Vision` comes from the agent where it says: Claude reports `VisionYes` for every model (all current
+Claude models read images); Codex maps `model/list`'s `inputModalities` (contains `"image"` -> yes, present without it
+-> no, absent -> unknown); ACP reports `VisionUnknown`, because ACP has no per-model modality field.
+
+## Images in prompts
+
+```go
+// Image is a picture attached to a prompt: MIME is image/png, image/jpeg, image/gif or image/webp, Data the
+// encoded file. Backends send it as is (base64 on the wire); size limits are the host's.
+type Image struct {
+	MIME string
+	Data []byte
+}
+// ImagePrompter is implemented by sessions that can attach images to a prompt (all three backends).
+type ImagePrompter interface {
+	// AcceptsImages reports whether the agent takes images at all: ACP's initialize
+	// agentCapabilities.promptCapabilities.image; always true for Claude and Codex.
+	AcceptsImages() bool
+	// PromptImages is Prompt with images after the text; with no images it is Prompt. It returns
+	// ErrNoImages, writing nothing, when images are given and AcceptsImages is false.
+	PromptImages(ctx context.Context, text string, images []Image) error
+}
+var ErrNoImages error
+```
+
+Wire shapes (details in `protocols.md`): ACP `{"type":"image","mimeType":M,"data":B64}` prompt blocks; Claude
+`{"type":"image","source":{"type":"base64","media_type":M,"data":B64}}` content blocks of the user line; Codex
+`{"type":"image","url":"data:M;base64,B64"}` items of `turn/start`'s `input`. Whether the *model* reads them is
+`ModelInfo.Vision`; an agent that accepts images for a text-only model answers as it sees fit.
+
 ## Package `store` (session persistence)
 
 A directory-based store of conversations, stdlib plus `agentmanager` and `agentmanager/transcript`. One
 session is one file `<dir>/<id>.jsonl` (dir 0700, files 0600), one JSON line per item. A line is the
 envelope `{"k":kind,"t":RFC3339Nano time,"d":payload}`; kinds are `meta` (first line: id, harness,
-created), `user`, `agent_session`, `permission_resolved` and one per `agentmanager.Event` (`session_started`,
-`text`, `thought`, `tool_start`, `tool_update`, `permission`, `plan`, `turn_end`, `log`, `exited`). Event
+created), `user`, `agent_session`, `permission_resolved`, `model` (`{"model":…}`, the user's choice) and
+`drawing` (`{"drawing":…}`, the host's drawing; for both the last line wins), and one per `agentmanager.Event`
+(`session_started`, `models`, `text`, `thought`, `tool_start`, `tool_update`, `permission`, `plan`,
+`turn_end`, `log`, `exited`). Event
 payloads are the event structs' default JSON (no tags on the frozen types); an empty `json.RawMessage`
 reads back as nil. Unknown kinds and unparsable lines are skipped, so a truncated last line costs only that line.
 
@@ -260,6 +325,8 @@ type Meta struct {
 	ID, Harness  string  // Harness is an agentmanager.Harness value
 	AgentSessionID string // backend resume id, "" until the backend reported one
 	Title        string  // first user prompt, whitespace collapsed, at most 80 runes
+	Model        string  // the user's model choice (SetModel), "" = harness default
+	Drawing      string  // the host's drawing key (SetDrawing), "" = none
 	Created, Updated time.Time // Updated is the file's modification time
 }
 var ErrNotFound error
@@ -273,14 +340,22 @@ func (s *Store) Load(id string) (*Record, error)   // ErrNotFound when absent
 func (s *Store) Latest() (*Record, error)          // ErrNotFound when the store is empty
 func (s *Store) Delete(id string) error
 
-// OpenSet is the sessions a host had open (tabs) and the active one. It lives in `<dir>/open.json`
-// (0600, written atomically through a temporary file), separate from the session files.
+// OpenSet is the sessions a host had open (tabs) and the active one, per drawing (a host key such as the
+// drawing's file name; "" = no drawing). The set of "" lives in `<dir>/open.json`, a drawing's in
+// `<dir>/open-<first 16 hex digits of sha256(key)>.json` (0600, written atomically through a temporary file),
+// separate from the session files. Files hold {IDs, Active, Drawing, V:2}; a file without V predates
+// per-drawing sets and loads with Legacy set.
 type OpenSet struct {
 	IDs    []string // session ids in tab order
 	Active string   // one of IDs, or ""
+	Legacy bool     // `json:"-"`: loaded from a file written before per-drawing sets; never saved
 }
-func (s *Store) SaveOpen(o OpenSet) error
-func (s *Store) LoadOpen() (OpenSet, error) // ErrNotFound when never saved; ids whose session is gone are dropped
+func (s *Store) SaveOpen(o OpenSet) error           // SaveOpenFor("", o)
+func (s *Store) LoadOpen() (OpenSet, error)         // LoadOpenFor("")
+func (s *Store) SaveOpenFor(drawing string, o OpenSet) error
+func (s *Store) LoadOpenFor(drawing string) (OpenSet, error) // ErrNotFound when never saved; ids whose session is gone are dropped
+func (s *Store) DeleteOpenFor(drawing string) error // a missing set is not an error
+func (s *Store) CopyTo(dst *Store, id string) error // copies the session file under the same id (ErrNotFound when absent)
 
 // Record is one open session; methods are goroutine-safe. The file opens on the first write, a write
 // after a truncated line starts a new line first, and TurnEnd, Exited and Close fsync.
@@ -288,13 +363,16 @@ type Record struct{ /* unexported */ }
 func (r *Record) Meta() Meta
 func (r *Record) Append(ev agentmanager.Event) error  // SessionStarted also sets AgentSessionID
 func (r *Record) AddUser(text string) error
+func (r *Record) AddUserWith(text string, a []transcript.Attachment) error // the user line also holds the attachments
 func (r *Record) ResolvePermission(requestID string) error
 func (r *Record) SetAgentSessionID(id string) error
+func (r *Record) SetModel(model string) error         // stores Meta.Model; unchanged writes nothing
+func (r *Record) SetDrawing(drawing string) error     // stores Meta.Drawing; unchanged writes nothing
 func (r *Record) Items() []any                        // loaded and appended items: agentmanager.Event, store.User, store.Resolved
 func (r *Record) Replay(t *transcript.T)              // rebuilds a transcript; an unfinished turn ends with a cancelled TurnEnd
 func (r *Record) Close() error
 
-type User struct{ Text string }
+type User struct{ Text string; Attachments []transcript.Attachment `json:",omitempty"` }
 type Resolved struct{ RequestID string }
 func MarshalEvent(ev agentmanager.Event) ([]byte, error)    // envelope line without the newline
 func UnmarshalEvent(line []byte) (agentmanager.Event, error)

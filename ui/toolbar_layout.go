@@ -116,7 +116,7 @@ func ribbonWidth() float32 {
 // click that runs the command and the soft accent fill while the command is the active one.
 func (ws *Workspace) ribbonButtonBase(b ribbonButton) (d *gpui.Div, col gpui.Rgba) {
 	col = uiText
-	d = gpui.NewDiv().ID("tool-" + b.id).Rounded(6).FlexShrink(0).Tooltip(i18n.Command(b.command).Tip).
+	d = gpui.NewDiv().ID("tool-" + b.id).Rounded(6).FlexShrink(0).Tooltip(ws.commandTip(b.command)).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.run(b.command, w) })
 	if ws.session.Active() == b.command {

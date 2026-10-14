@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cad-lite/assets/icons"
+	"cad-lite/cmdsys"
 	"cad-lite/filedialog"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
@@ -92,7 +93,21 @@ func (ws *Workspace) saveFileAs(w *gpui.Window) { ws.startDialog(w, dialogSaveAs
 
 // startDialog shows the dialog for kind on a goroutine, or runs the command line fallback at once
 // when there is no dialog or no file handler.
-func (ws *Workspace) startDialog(w *gpui.Window, kind dialogKind) {
+func (ws *Workspace) startDialog(w *gpui.Window, kind dialogKind) { ws.startDialogIn(w, kind, "") }
+
+// dialogDir is the folder a dialog starts in: the drawing's, else the most recent folder, else the
+// working directory.
+func (ws *Workspace) dialogDir() string {
+	if ws.session.FilePath() == "" {
+		if f := ws.prefs().cur.Recent.Folders; len(f) > 0 {
+			return f[0]
+		}
+	}
+	return ws.projectDir()
+}
+
+// startDialogIn is startDialog with the folder the dialog starts in; "" means dialogDir.
+func (ws *Workspace) startDialogIn(w *gpui.Window, kind dialogKind, dir string) {
 	d := &ws.dlg
 	if d.dialog == nil || ws.files == nil {
 		ws.run(kind.command(true), w)
@@ -102,7 +117,10 @@ func (ws *Workspace) startDialog(w *gpui.Window, kind dialogKind) {
 		return
 	}
 	d.busy = true
-	dialog, dir := d.dialog, ws.projectDir()
+	dialog := d.dialog
+	if dir == "" {
+		dir = ws.dialogDir()
+	}
 	var read, write []string
 	if l, ok := ws.files.(extensionLister); ok {
 		read, write = l.ReadExtensions(), l.WriteExtensions()
@@ -146,9 +164,11 @@ func (ws *Workspace) pollDialog(w *gpui.Window) {
 	}
 	d.busy = false
 	switch {
+	case res.err == nil && res.kind == dialogOpen:
+		ws.openFilePath(res.path, w)
 	case res.err == nil:
-		// The same command a typed OPEN or SAVEAS is: the unsaved-changes question, the undo reset
-		// and the project switch all happen in it.
+		// The same command a typed SAVEAS is: the unsaved-changes question and the project switch
+		// happen in it.
 		ws.run(res.kind.command(false), w)
 		ws.submit(res.path, w)
 	case errors.Is(res.err, filedialog.ErrCancelled):
@@ -157,6 +177,17 @@ func (ws *Workspace) pollDialog(w *gpui.Window) {
 		ws.run(res.kind.command(true), w)
 	}
 	w.Refresh()
+}
+
+// openFilePath opens the drawing at path as a typed OPEN does: in a tab of its own (or the tab that
+// has it, or in place of the untouched untitled drawing), with the project switch and the recent
+// list. Every "open this file" in the UI (the Open dialog, the recent menu, the start panel) comes
+// through here.
+func (ws *Workspace) openFilePath(path string, w *gpui.Window) {
+	ws.run("OPEN", w)
+	if p := ws.session.CurrentPrompt(); ws.session.Active() == "OPEN" && p != nil && p.Accepts&cmdsys.InputText != 0 {
+		ws.submit(path, w)
+	}
 }
 
 // openFilters is the Open dialog's file-type list: every extension a reader reads together, one

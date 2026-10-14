@@ -102,12 +102,16 @@ func LoadWarn(path string) (Settings, []string, error) {
 var tables = map[string]map[string]bool{
 	"appearance": {"theme": true, "ui_scale": true, "language": true},
 	"drawing":    {"grid": true, "osnap": true, "ortho": true, "wheel": true},
-	"agent":      {"default": true},
+	"agent":      {"default": true, "binaries": true},
 	"update":     {"auto_check": true, "last_check": true},
 	"window":     {"width": true, "height": true},
 	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
 		"side_collapsed": true, "layers_collapsed": true, "properties_collapsed": true, "history_collapsed": true, "ribbon_collapsed": true},
+	"recent": {"files": true, "folders": true},
 }
+
+// agentModelKey prefixes the agent table's per-harness model keys (model_claude, ...).
+const agentModelKey = "model_"
 
 // Parse decodes TOML text into Settings: absent keys keep their defaults,
 // values of the wrong type or range are replaced (one warning each) and
@@ -135,6 +139,17 @@ func Parse(data []byte) (Settings, []string, error) {
 			continue
 		}
 		for k, v := range tbl {
+			if h, ok := strings.CutPrefix(k, agentModelKey); ok && name == "agent" && h != "" {
+				if x, ok := v.(string); ok {
+					if s.AgentModels == nil {
+						s.AgentModels = map[string]string{}
+					}
+					s.AgentModels[h] = x
+				} else {
+					bad(name+"."+k, "a string", v)
+				}
+				continue
+			}
 			if !keys[k] {
 				extra[name+"."+k] = v
 				continue
@@ -188,6 +203,23 @@ func Parse(data []byte) (Settings, []string, error) {
 				} else {
 					bad(full, "a string", v)
 				}
+			case "agent.binaries":
+				m, ok := v.(map[string]any)
+				if !ok {
+					bad(full, "a table", v)
+					break
+				}
+				for h, p := range m {
+					x, ok := p.(string)
+					if !ok {
+						bad(full+"."+h, "a string", p)
+						continue
+					}
+					if s.AgentBinaries == nil {
+						s.AgentBinaries = map[string]string{}
+					}
+					s.AgentBinaries[h] = x
+				}
 			case "update.auto_check":
 				if x, ok := v.(bool); ok {
 					s.AutoUpdate = x
@@ -234,6 +266,17 @@ func Parse(data []byte) (Settings, []string, error) {
 					s.Layout.HistoryCollapsed = x
 				default:
 					s.Layout.RibbonCollapsed = x
+				}
+			case "recent.files", "recent.folders":
+				paths, ok := parsePaths(v)
+				if !ok {
+					bad(full, "an array of strings", v)
+					break
+				}
+				if k == "files" {
+					s.Recent.Files = paths
+				} else {
+					s.Recent.Folders = paths
 				}
 			case "window.width", "window.height":
 				x, ok := v.(int64)
@@ -301,8 +344,22 @@ func Marshal(s Settings) []byte {
 		"osnap = "+strconv.FormatBool(s.OSnap),
 		"ortho = "+strconv.FormatBool(s.Ortho),
 		"wheel = "+quote(s.Wheel))
-	section("agent", "default: the harness the agent panel selects (empty: first installed).",
-		"default = "+quote(s.DefaultAgent))
+	bins := make(map[string]any, len(s.AgentBinaries))
+	for h, p := range s.AgentBinaries {
+		bins[h] = p
+	}
+	binLine := "binaries = {}"
+	if len(bins) > 0 {
+		binLine = "binaries = " + formatValue(bins)
+	}
+	agent := []string{"default = " + quote(s.DefaultAgent), binLine}
+	for _, h := range sortedKeys(s.AgentModels) {
+		if m := s.AgentModels[h]; m != "" && bareKey(h) {
+			agent = append(agent, agentModelKey+h+" = "+quote(m))
+		}
+	}
+	section("agent", "default: the harness the agent panel selects (empty: first installed). binaries: an executable per harness that wins over the PATH, e.g. { claude = \"/opt/claude/bin/claude\" }. model_<harness>: the model new tabs on it use (absent: the harness default).",
+		agent...)
 	update := []string{"auto_check = " + strconv.FormatBool(s.AutoUpdate)}
 	if !s.LastUpdateCheck.IsZero() {
 		update = append(update, "last_check = "+s.LastUpdateCheck.UTC().Format(time.RFC3339))
@@ -322,6 +379,9 @@ func Marshal(s Settings) []byte {
 		"properties_collapsed = "+strconv.FormatBool(l.PropsCollapsed),
 		"history_collapsed = "+strconv.FormatBool(l.HistoryCollapsed),
 		"ribbon_collapsed = "+strconv.FormatBool(l.RibbonCollapsed))
+	section("recent", "drawings opened or saved lately and the folders used, newest first (written by the app).",
+		marshalPaths("files", s.Recent.Files),
+		marshalPaths("folders", s.Recent.Folders))
 	return append(bytes.TrimRight(b.Bytes(), "\n"), '\n')
 }
 
@@ -347,6 +407,16 @@ func formatKey(k string) string {
 		return k
 	}
 	return quote(k)
+}
+
+// bareKey reports whether k can be written as a bare TOML key.
+func bareKey(k string) bool {
+	for _, c := range k {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return k != ""
 }
 
 func quote(s string) string { return strconv.Quote(s) }

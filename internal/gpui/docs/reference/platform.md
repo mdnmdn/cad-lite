@@ -144,7 +144,7 @@ shadow, quad, stroke, underline, sprite.
 |---|---|
 | `Quad` | `Order uint32`, `Bounds`, `ContentMask`, `Background BackgroundKind`, `Fill Rgba`, `BorderColor Rgba`, `BorderWidths Edges`, `CornerRadii Corners`, `Gradient Gradient` |
 | `Shadow` | `Order`, `Bounds` (shape before blur), `CornerRadii`, `ContentMask`, `Color`, `BlurRadius`, `Inset bool`, `Clip Bounds`, `ClipRadii Corners` (the element shape an inset shadow is drawn in) |
-| `GlyphSprite` | `Order`, `Bounds`, `ContentMask`, `Mask *GlyphMask`, `Color Rgba` |
+| `GlyphSprite` | `Order`, `Bounds`, `ContentMask`, `Mask *GlyphMask`, `Color Rgba`, `Image *image.NRGBA` (a colour picture drawn instead of the mask, scaled bilinearly into `Bounds`; `Color.A` multiplies it) |
 | `Underline` | `Order`, `Bounds`, `ContentMask`, `Color`, `Thickness Pixels` (a rule drawn at the bottom of `Bounds`) |
 | `Stroke` | `Order`, `ContentMask`, `Points []Point`, `Closed bool`, `Width Pixels`, `Color`: an anti-aliased polyline with round joins and caps; `Width` 0 is a one-device-pixel hairline. Do not mutate `Points` before the frame is presented. |
 | `ContentMask` | `Bounds Bounds`, `CornerRadii Corners`. The zero value clips everything away; use `InfiniteContentMask()` for "unclipped". |
@@ -184,16 +184,26 @@ snapshot shortcut saves the last presented frame as
 `snapshot-YYYYMMDD-HHMMSS.png` in the working directory and is swallowed (not
 dispatched to the app).
 
+Files dropped on the window arrive as `FileDropEvent`s. On macOS, `Run` also
+installs a handler for the open-documents Apple event (Finder, the Dock icon)
+before `ebiten.RunGame`; its paths reach `App.OpenPaths`. Limits are in the
+API contract (§17).
+
 ## Clipboard
 
 ```text
 func ClipboardAvailable() bool                 // an OS clipboard tool was found
 func ClipboardRead() (string, error)
 func ClipboardWrite(s string) error
+func ClipboardReadImage() (data []byte, mime string, err error) // PNG; ErrNoClipboardImage when none
+var ErrNoClipboardImage error
 ```
 
 They shell out (`pbpaste`/`pbcopy`, PowerShell, `wl-paste`/`wl-copy`, `xclip`,
 `xsel`) with a one-second timeout and **block**: call them off the UI loop. The
 ebiten backend already wires `cmd-c/x/v` (macOS) and `ctrl-c/x/v` (elsewhere)
 to the focused text input on a worker goroutine, and those shortcuts are not
-dispatched as key events.
+dispatched as key events. `ClipboardReadImage` (3 s timeout) uses `osascript`
+(macOS), PowerShell's `System.Windows.Forms.Clipboard` (Windows) or
+`wl-paste`/`xclip` (Linux; `xsel` has no images); a paste with no text tries
+it and dispatches an `ImagePasteEvent`.

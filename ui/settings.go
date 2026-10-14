@@ -1,12 +1,14 @@
 package ui
 
 import (
+	"maps"
 	"runtime"
 	"sync"
 	"time"
 	"weak"
 
 	"agentmanager"
+	"cad-lite/cmdsys"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/settings"
@@ -117,6 +119,9 @@ func (ws *Workspace) LoadSettingsFrom(path string) error {
 	s, warn, err := settings.LoadWarn(path)
 	p.warnings, p.err = warn, err
 	ws.applySettings(s, nil)
+	// A file opened before the settings were read (-open) joins the recent list now.
+	ws.noteRecentFile(ws.session.FilePath())
+	ws.armStart()
 	return err
 }
 
@@ -135,6 +140,7 @@ func (ws *Workspace) applySettings(s settings.Settings, w *gpui.Window) {
 	p.fireLanguage()
 	ws.refreshPlaceholders()
 	ws.applyLayout(s.Layout)
+	ws.applyAgentBinaries(s.AgentBinaries)
 	if h := s.DefaultAgent; h != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(h), "")
 	}
@@ -152,9 +158,9 @@ func (ws *Workspace) applyAppearance(w *gpui.Window) {
 		t, _ = ThemeByName(DefaultThemeName)
 	}
 	ApplyTheme(t)
-	if ws.builder != nil {
-		ws.builder.Background = colCanvas
-		ws.builder.InvalidateAll()
+	for _, t := range ws.tabs {
+		t.builder.Background = colCanvas
+		t.builder.InvalidateAll()
 	}
 	if w == nil {
 		w = ws.win
@@ -168,13 +174,21 @@ func (ws *Workspace) applyAppearance(w *gpui.Window) {
 	}
 }
 
-// applyDrawingDefaults sets the grid, object snap and ortho flags from the
-// settings.
+// applyDrawingDefaults sets the grid, object snap and ortho flags of every tab from the
+// settings; a tab opened later starts with them too.
 func (ws *Workspace) applyDrawingDefaults() {
+	ws.aidsSet = true
+	for _, t := range ws.tabs {
+		ws.applyDrawingDefaultsTo(t.session)
+	}
+}
+
+// applyDrawingDefaultsTo sets the grid, object snap and ortho flags of s from the settings.
+func (ws *Workspace) applyDrawingDefaultsTo(s *cmdsys.Session) {
 	c := ws.prefs().cur
-	ws.session.SetGrid(c.Grid)
-	ws.session.SnapOn = c.OSnap
-	ws.session.Ortho = c.Ortho
+	s.SetGrid(c.Grid)
+	s.SnapOn = c.OSnap
+	s.Ortho = c.Ortho
 }
 
 // SetLanguageHandler installs the hook that applies the interface language:
@@ -226,6 +240,9 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 	}
 	if next.Grid != old.Grid || next.OSnap != old.OSnap || next.Ortho != old.Ortho {
 		ws.applyDrawingDefaults()
+	}
+	if !maps.Equal(next.AgentBinaries, old.AgentBinaries) {
+		ws.applyAgentBinaries(next.AgentBinaries)
 	}
 	if next.DefaultAgent != old.DefaultAgent && next.DefaultAgent != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(next.DefaultAgent), "")

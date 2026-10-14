@@ -84,6 +84,11 @@ type App struct {
 	ticking                      bool
 	tickTime                     time.Time
 	tickDrawn                    map[*Window]bool
+
+	// onOpenPaths receives OpenPaths requests; openQueue holds the ones that
+	// came while it was nil.
+	onOpenPaths func(paths []string, cx *App)
+	openQueue   [][]string
 }
 
 // NewApp returns an App with a no-op stub platform, suitable for headless
@@ -332,4 +337,36 @@ func (a *App) flushEffects() {
 			w.scheduleFrame()
 		}
 	}
+}
+
+// OnOpenPaths sets the handler for the OS asking the app to open files with no
+// window position (macOS: a file opened from Finder or dropped on the Dock
+// icon). It replaces any earlier handler; nil removes it. Requests that came
+// while no handler was set are delivered to f at once, in order.
+func (a *App) OnOpenPaths(f func(paths []string, cx *App)) {
+	a.onOpenPaths = f
+	if f == nil {
+		return
+	}
+	q := a.openQueue
+	a.openQueue = nil
+	for _, paths := range q {
+		a.OpenPaths(paths)
+	}
+}
+
+// OpenPaths hands an open-files request to the OnOpenPaths handler inside
+// Update, or queues it until one is set. Platforms call it on the UI
+// goroutine; tests call it to inject the request. Empty requests are dropped.
+func (a *App) OpenPaths(paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+	paths = append([]string(nil), paths...)
+	f := a.onOpenPaths
+	if f == nil {
+		a.openQueue = append(a.openQueue, paths)
+		return
+	}
+	a.Update(func(cx *App) { f(paths, cx) })
 }

@@ -43,6 +43,18 @@ type TextInput struct {
 	onSubmit []func(string, *Window, *App)
 	onChange []func(string, *Window, *App)
 	onEscape []func(*Window, *App)
+
+	// Multi-line state: the row cap, the laid-out text area, the vertical
+	// scroll, whether the next prepaint scrolls the caret into view, and
+	// the x that chained Up/Down moves keep.
+	multiline bool
+	maxLines  int
+	view      Bounds
+	scrollY   Pixels
+	follow    bool
+	goalX     Pixels
+	hasGoal   bool
+	rowsCache inputRowsCache
 }
 
 // NewTextInput returns an empty single-line text field showing placeholder
@@ -59,6 +71,7 @@ func (t *TextInput) SetText(s string) {
 	t.text = s
 	t.sel = UTF16Selection{Range: IntRange{Start: utf16Length(s), End: utf16Length(s)}}
 	t.hasMarked = false
+	t.follow, t.hasGoal = true, false
 	t.cancelSelectionDrag()
 	if t.win != nil {
 		t.win.Refresh()
@@ -137,6 +150,9 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 	if cx != nil {
 		t.app = cx
 	}
+	if t.multiline {
+		return t.renderMultiline()
+	}
 	var label IntoElement
 	if t.text == "" {
 		ph := Gray500
@@ -160,6 +176,30 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 		OnMouseDown(t.onMouseDown).
 		OnKeyDown(t.onKeyDown).
 		Child(label)
+	if t.style != nil {
+		if d := t.style(div); d != nil {
+			div = d
+		}
+	}
+	return inputElement{div: div, ti: t}
+}
+
+// renderMultiline builds a multi-line field: the same box laid out as a
+// column around the text area leaf, with wheel scrolling.
+func (t *TextInput) renderMultiline() IntoElement {
+	div := NewDiv().
+		FlexCol().
+		P(8).
+		Bg(White).
+		Rounded(6).
+		Border(1, Gray300).
+		TrackFocus(t.focus).
+		KeyContext("textbox").
+		OverflowHidden().
+		OnMouseDown(t.onMouseDown).
+		OnKeyDown(t.onKeyDown).
+		OnScrollWheel(t.onScrollWheel).
+		Child(inputLinesElement{t: t})
 	if t.style != nil {
 		if d := t.style(div); d != nil {
 			div = d
@@ -205,6 +245,9 @@ func (e inputElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, 
 		if len(dl.node.Children) > 0 {
 			label := dl.node.Children[0]
 			t.textOrigin = label.Rect.Translate(bounds.Origin).Origin
+			if t.multiline {
+				t.layoutMultiline(Bounds{Origin: t.textOrigin, Size: label.Rect.Size})
+			}
 		}
 	}
 	if ps, ok := st.(*divPrepaint); ok {
@@ -221,7 +264,11 @@ func (e inputElement) Prepaint(w *Window, cx *App, id ElementID, bounds Bounds, 
 func (e inputElement) Paint(w *Window, cx *App, id ElementID, bounds Bounds, layoutState, prepaintState any) {
 	e.div.paint(w, bounds, prepaintState)
 	if e.ti.focus != nil && e.ti.focus.IsFocused(w) {
-		e.paintSelection(w)
+		if e.ti.multiline {
+			e.paintMultilineSelection(w)
+		} else {
+			e.paintSelection(w)
+		}
 	}
 }
 
@@ -257,46 +304,66 @@ func (t *TextInput) caretStops() []inputCaretStop {
 	}
 	if t.measurer != nil && t.text != "" {
 		lines := t.measurer.ShapeWrapped(inputDisplayText(t.text), ts, float32(math.MaxFloat32))
-		if len(lines) > 0 && len(lines[0].Glyphs) > 0 {
-			starts := make(map[int]Pixels)
-			var pen Pixels
-			for _, g := range lines[0].Glyphs {
-				if _, ok := starts[g.Cluster]; !ok {
-					starts[g.Cluster] = pen
-				}
-				pen += g.Advance
-			}
-			keys := make([]int, 0, len(starts)+1)
-			for key := range starts {
-				keys = append(keys, key)
-			}
-			starts[len(t.text)] = lines[0].Width
-			keys = append(keys, len(t.text))
-			sort.Ints(keys)
-			firstIndex := 0
-			for k := 0; k+1 < len(keys); k++ {
-				first, end := keys[k], keys[k+1]
-				for firstIndex < len(stops) && stops[firstIndex].byteOffset < first {
-					firstIndex++
-				}
-				lastIndex := firstIndex
-				for lastIndex+1 < len(stops) && stops[lastIndex+1].byteOffset <= end {
-					lastIndex++
-				}
-				for i := firstIndex; i <= lastIndex && i < len(stops); i++ {
-					x := starts[first]
-					if lastIndex > firstIndex {
-						x += (starts[end] - x) * Pixels(i-firstIndex) / Pixels(lastIndex-firstIndex)
-					}
-					stops[i].x = x
-				}
-				firstIndex = lastIndex
-			}
+		if len(lines) > 0 {
+			placeStops(stops, lines[0].Glyphs, lines[0].Width, 0, len(t.text))
 		}
 	}
 	t.metricsText, t.metricsStyle, t.metrics = t.text, ts, stops
 	t.metricsVersion = t.measurerVersion
 	return stops
+}
+
+// caretX is the x of offset relative to the start of its (visual) line.
+func (t *TextInput) caretX(offset int) Pixels {
+	if t.multiline {
+		_, x := t.caretRowX(offset)
+		return x
+	}
+	return t.advance(offset)
+}
+
+// placeStops sets the x of each stop from one shaped line's glyphs. Glyph
+// clusters and end are byte offsets relative to base, the byte offset of the
+// line's first character in the text; stops inside a multi-rune cluster are
+// spread evenly across it, and end sits at width.
+func placeStops(stops []inputCaretStop, glyphs []ShapedGlyphOut, width Pixels, base, end int) {
+	if len(glyphs) == 0 {
+		return
+	}
+	starts := make(map[int]Pixels)
+	var pen Pixels
+	for _, g := range glyphs {
+		if _, ok := starts[g.Cluster]; !ok {
+			starts[g.Cluster] = pen
+		}
+		pen += g.Advance
+	}
+	keys := make([]int, 0, len(starts)+1)
+	for key := range starts {
+		keys = append(keys, key)
+	}
+	starts[end] = width
+	keys = append(keys, end)
+	sort.Ints(keys)
+	firstIndex := 0
+	for k := 0; k+1 < len(keys); k++ {
+		first, last := keys[k], keys[k+1]
+		for firstIndex < len(stops) && stops[firstIndex].byteOffset-base < first {
+			firstIndex++
+		}
+		lastIndex := firstIndex
+		for lastIndex+1 < len(stops) && stops[lastIndex+1].byteOffset-base <= last {
+			lastIndex++
+		}
+		for i := firstIndex; i <= lastIndex && i < len(stops); i++ {
+			x := starts[first]
+			if lastIndex > firstIndex {
+				x += (starts[last] - x) * Pixels(i-firstIndex) / Pixels(lastIndex-firstIndex)
+			}
+			stops[i].x = x
+		}
+		firstIndex = lastIndex
+	}
 }
 
 func (t *TextInput) advance(offset int) Pixels {
@@ -342,6 +409,7 @@ func (t *TextInput) selectTo(anchor, caret int) {
 	sel := UTF16Selection{Range: r, Reversed: caret < anchor}
 	if t.sel != sel {
 		t.sel = sel
+		t.follow = true
 		if t.win != nil {
 			t.win.Refresh()
 		}
@@ -371,14 +439,18 @@ func (t *TextInput) onMouseDown(e *MouseDownEvent, w *Window, _ *App) {
 		return
 	}
 	t.focus.Focus(w)
+	t.hasGoal = false
 	index, _ := t.CharacterIndexForPoint(e.Position, t.bounds)
 	mode := uint8(1)
 	r := IntRange{Start: index, End: index}
 	if e.ClickCount >= 3 {
 		mode, r = 3, IntRange{End: utf16Length(t.text)}
+		if t.multiline {
+			r = t.paragraphRange(index)
+		}
 	} else if e.ClickCount == 2 {
 		mode = 2
-		if index > 0 && e.Position.X-t.textOrigin.X < t.advance(index) {
+		if index > 0 && e.Position.X-t.textOrigin.X < t.caretX(index) {
 			index = t.runeBefore(index)
 		}
 		r = t.wordRange(index)
@@ -485,7 +557,7 @@ func (w *Window) moveInputSelection(p Point) {
 			t.selectTo(d.anchorRange.Start, d.anchorRange.End)
 		}
 	case 3:
-		t.selectTo(0, utf16Length(t.text))
+		t.selectTo(d.anchorRange.Start, d.anchorRange.End)
 	default:
 		t.selectTo(d.anchor, caret)
 	}
@@ -499,14 +571,39 @@ func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 	}
 	caret := tiCaret(t)
 	key := e.Keystroke.Key
-	if key == "left" || key == "right" || key == "home" || key == "end" || key == "backspace" || key == "delete" {
+	vertical := t.multiline && (key == "up" || key == "down")
+	if !vertical {
+		t.hasGoal = false
+	}
+	if vertical || key == "left" || key == "right" || key == "home" || key == "end" || key == "backspace" || key == "delete" {
 		t.cancelSelectionDrag()
 	}
 	switch key {
 	case "enter":
+		if t.multiline && (e.Keystroke.Modifiers&Shift != 0 || len(t.onSubmit) == 0) {
+			t.cancelSelectionDrag()
+			t.ReplaceTextInRange(&t.sel.Range, "\n")
+			w.StopPropagation()
+			return
+		}
 		for _, f := range t.onSubmit {
 			f(t.text, w, cx)
 		}
+		w.StopPropagation()
+	case "up", "down":
+		if !vertical {
+			return
+		}
+		anchor := t.anchor()
+		dir := 1
+		if key == "up" {
+			dir = -1
+		}
+		next := t.verticalMove(caret, dir)
+		if e.Keystroke.Modifiers&Shift == 0 {
+			anchor = next
+		}
+		t.selectTo(anchor, next)
 		w.StopPropagation()
 	case "escape":
 		if len(t.onEscape) == 0 {
@@ -542,8 +639,14 @@ func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 		switch key {
 		case "home":
 			next = 0
+			if t.multiline {
+				next, _ = t.rowEnds(caret)
+			}
 		case "end":
 			next = utf16Length(t.text)
+			if t.multiline {
+				_, next = t.rowEnds(caret)
+			}
 		case "left":
 			if !extend && t.sel.Range.Start != t.sel.Range.End {
 				next = t.sel.Range.Start
@@ -592,6 +695,7 @@ func (t *TextInput) replaceRange(start, end int, text string, w *Window) {
 	caret := utf16Length(t.text[:start]) + utf16Length(text)
 	t.sel = UTF16Selection{Range: IntRange{Start: caret, End: caret}}
 	t.hasMarked = false
+	t.follow, t.hasGoal = true, false
 	t.changed(w)
 }
 
@@ -699,6 +803,7 @@ func (t *TextInput) UnmarkText() { t.hasMarked = false }
 // ReplaceTextInRange replaces the given range (nil range = insert at caret)
 // with text and moves the caret to the end of the inserted text.
 func (t *TextInput) ReplaceTextInRange(rng *IntRange, text string) {
+	text = t.normalizeNewlines(text)
 	if rng == nil {
 		caret := tiCaret(t)
 		s := t.byteOffset(caret)
@@ -723,6 +828,10 @@ func (t *TextInput) BoundsForRange(rng IntRange, elementBounds Bounds) (Bounds, 
 		origin.X += elementBounds.Origin.X - t.bounds.Origin.X
 		origin.Y += elementBounds.Origin.Y - t.bounds.Origin.Y
 	}
+	if t.multiline {
+		row, x := t.caretRowX(rng.Start)
+		return Bounds{Origin: Point{X: origin.X + x, Y: origin.Y + Pixels(row)*t.lineHeight() - t.scrollY}, Size: Size{W: 2, H: t.lineHeight()}}, true
+	}
 	return Bounds{Origin: Point{X: origin.X + t.advance(rng.Start), Y: origin.Y}, Size: Size{W: 2, H: ts.ResolvedLineHeight()}}, true
 }
 
@@ -733,6 +842,13 @@ func (t *TextInput) CharacterIndexForPoint(p Point, elementBounds Bounds) (int, 
 		origin = elementBounds.Origin.X + 8
 	} else {
 		origin += elementBounds.Origin.X - t.bounds.Origin.X
+	}
+	if t.multiline {
+		oy := elementBounds.Origin.Y + 8
+		if t.bounds.Size != (Size{}) {
+			oy = t.textOrigin.Y + elementBounds.Origin.Y - t.bounds.Origin.Y
+		}
+		return t.multilineIndexForPoint(p, Point{X: origin, Y: oy}), true
 	}
 	x := p.X - origin
 	stops := t.caretStops()

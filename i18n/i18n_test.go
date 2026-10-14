@@ -282,9 +282,6 @@ func TestCommandMetadata(t *testing.T) {
 	if c.Name != "Linea" || !reflect.DeepEqual(c.Aliases, []string{"LINEA"}) {
 		t.Errorf("LINE it = %+v", c)
 	}
-	if !strings.HasPrefix(c.Tip, "Linea — ") || !strings.HasSuffix(c.Tip, "(LINEA / L)") {
-		t.Errorf("tip format: %q", c.Tip)
-	}
 	if got := CommandName("CHAMFER"); got != "Smusso" {
 		t.Errorf("CHAMFER = %q", got)
 	}
@@ -303,7 +300,8 @@ func TestCommandMetadata(t *testing.T) {
 }
 
 // TestRibbonTooltipsExist checks every command with a ribbon or title bar button: its caption (the
-// command's display name) and its "Title — text (keys)" tooltip exist in every language.
+// command's display name) and the description its tooltip shows exist in every language. The
+// tooltip's keyboard hint is composed by ui from the alias registry and the keymap.
 func TestRibbonTooltipsExist(t *testing.T) {
 	buttons := []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE", "MIRROR",
 		"OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "JOIN", "EXPLODE", "DIST", "AREA", "ID", "ZOOM", "U", "REDO"}
@@ -312,8 +310,8 @@ func TestRibbonTooltipsExist(t *testing.T) {
 			if CommandIn(l, cmd).Name == "" {
 				t.Errorf("%s: no display name for %s", l, cmd)
 			}
-			if tip := CommandIn(l, cmd).Tip; !strings.Contains(tip, " — ") || !strings.HasSuffix(tip, ")") {
-				t.Errorf("%s: tooltip for %s is not \"Title — text (keys)\": %q", l, cmd, tip)
+			if CommandIn(l, cmd).Desc == "" {
+				t.Errorf("%s: no description for %s", l, cmd)
 			}
 		}
 	}

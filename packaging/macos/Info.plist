@@ -9,14 +9,75 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>AutoCAD Drawing Exchange Format</string>
-			<key>CFBundleTypeExtensions</key>
+			<key>LSItemContentTypes</key>
 			<array>
-				<string>dxf</string>
+				<string>com.autodesk.dxf</string>
 			</array>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>AutoCAD Drawing</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.autodesk.dwg</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.autodesk.dxf</string>
+			<key>UTTypeDescription</key>
+			<string>AutoCAD Drawing Exchange Format</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>dxf</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>image/vnd.dxf</string>
+					<string>image/x-dxf</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.autodesk.dwg</string>
+			<key>UTTypeDescription</key>
+			<string>AutoCAD Drawing</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>dwg</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>image/vnd.dwg</string>
+					<string>image/x-dwg</string>
+				</array>
+			</dict>
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>

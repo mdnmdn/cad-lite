@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, crosshair a
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/toolbar_layout.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -17,7 +17,8 @@ review_cycle: monthly
 ## Purpose
 
 The canvas is where the drawing is seen and where clicks become points, picks and boxes. Around it,
-a title bar and a ribbon hold the commands, a side panel lists the layers and describes the
+a title bar and a ribbon hold the commands, a strip of [document tabs](document-tabs.md) over it switches
+drawings, a side panel lists the layers and describes the
 selection, and a status bar shows the cursor position, the drafting toggles and the view scale. The view behaves like AutoCAD's model space: dark
 background, a crosshair that follows the pointer, and snap markers that show what a click will hit.
 
@@ -79,11 +80,19 @@ The canvas is framed by a 1 px border in the theme's border colour (`uiBorder`),
 drawing along the inside edge of the canvas area, so it reads as a viewport apart from the ribbon,
 side panel and command line.
 
-Two overlays float over the canvas. At the top left a monospace, muted caption `[-][Top][2D Wireframe]`
+Two overlays float over the canvas, and a third at startup. At the top left a monospace, muted caption `[-][Top][2D Wireframe]`
 (`ui.canvas.viewport_label`) names the view, the only one Cad-lite has. At the top right a rounded
 column of three icon buttons zooms in and out by a step of 1.25 about the canvas centre and zooms
 to extents; each is a step of its own for ZOOM Previous, has a tooltip, and a press on the column
 never reaches the canvas, so it neither picks nor answers a point prompt.
+
+The **start panel** is a card centred near the top of the canvas, headed `Recent drawings`, listing up to six
+recent drawings (format, name, folder; greyed when the file was not found) and an `Open another drawing…` row that
+shows the Open dialog. It shows only when the settings file was loaded at startup (never in a `-png` render), the
+drawing is empty and untitled, and the recent list is not empty. It goes away for good on the first action: a
+command (typed, from a button or a script), a press on the canvas, typing in the command line, Escape, or any
+file opened. A press on the card never reaches the canvas. The lists and what clicking an entry does are in
+[DXF files](dxf-files.md).
 
 ### Pointer
 
@@ -144,15 +153,18 @@ shortly after each change and when the app closes, and applied at startup.
 ### Title bar
 
 A 44 px row on the background colour. From the left: the brand, a divider, the document chip, a
-divider, Open and Save, a divider, Undo and Redo; at the right end the ribbon toggle (a chevron that hides and shows the ribbon's button groups), the agent panel toggle and the gear
+divider, Open with a small chevron beside it and Save, a divider, Undo and Redo; at the right end the ribbon toggle (a chevron that hides and shows the ribbon's button groups), the agent panel toggle and the gear
 `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or `OPTIONS`). Every
 button is icon-only (28 px, an 18 px icon) with its tooltip. The document chip is a rounded box with
 the file name, or `Untitled` while the drawing has no file, and a dot before the name while the drawing has unsaved
 changes (`Session.Dirty`); its tooltip gives the path. The agent button is filled while the panel is
 open and carries a dot while a session is live (amber when a background tab wants attention). Open and Save show the
-system file dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. Undo and
-Redo run `U` and `REDO` with the command tips; the Open, Save, agent and Settings tooltips are
-`ui.toolbar.open_tip`, `save_tip`, `agent_tip` and `settings_tip`.
+system file dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. The chevron opens the
+Open menu of recent files and folders, a dropdown under the Open button that closes on a choice, a press
+anywhere else or Escape. Undo and
+Redo run `U` and `REDO` and show the command tooltips (see Tooltips); Open, Save, Settings and the
+agent button show the same kind of tooltip, their description from `ui.toolbar.open_tip`, `save_tip`,
+`settings_tip` and `agent_tip` (Save's names Save as and its keys).
 
 The brand depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`): Linux and the web show the
 application icon and the bold `Cad-lite` wordmark, macOS shows the icon alone (32 px, the 32 and 64 px
@@ -170,7 +182,7 @@ Polyline, Circle and Arc, and Rectangle as a small one (icon left of label). **M
 buttons in two rows and seven columns: Move, Rotate, Mirror, Offset, Chamfer, Extend, Join over Copy,
 Scale, Erase, Fillet, Trim, Break, Explode. **Utilities** is two columns of two: Distance, Area and ID point,
 Zoom. Labels are the commands' display names in the interface language; a button runs its command as if typed, shows
-the command's tip as its tooltip and, while its command runs, takes the soft accent fill and text. A command
+the command's tooltip (see Tooltips) and, while its command runs, takes the soft accent fill and text. A command
 without a button (LAYER, LIST, NEW, MEASUREGEOM) is still reached by typing it.
 
 The ribbon reflows with the window width: on a wide window the groups share one row, and as the window
@@ -182,10 +194,16 @@ wide, Draw and Utilities are the first row and Modify the second.
 ### Tooltips
 
 Every clickable control carries a tooltip that appears after the pointer rests on it for 500 ms
-(`gpui.Div.Tooltip`): ribbon and title bar buttons show the command's tip (`i18n.Command(name).Tip`: title,
-what it does, shortcut or alias), the gear and agent buttons, the layer rows (make current), the
+(`gpui.Div.Tooltip`); it hides when the pointer leaves the control and on a click, and stays hidden
+until the pointer leaves. Ribbon and title bar command buttons, Open, Save and the gear show two
+lines: the command's display name with its keyboard hint in brackets, then its description —
+`Line (L)`, `Undo (Ctrl+Z / U)`, `Save (Ctrl+S / QSAVE)`, `Linea (L)` in Italian. The hint is
+composed, never written in the catalog: the key comes from the binding in `Bindings` (the Cmd form on
+macOS, the Ctrl form elsewhere) and the typed part is the command's shortest registered alias
+(`Registry.AliasesOf`), or the command itself when no alias is shorter, so a hint always names
+something that works. The agent button, the layer rows (make current), the layer rows (make current), the
 visibility pills and the colour swatches, the document chip, the viewport label, the zoom buttons, the layer `+`,
-the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the layout tabs, the status bar toggles and the coordinates readout, and
+the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the Open menu chevron and its rows, the layout tabs, the status bar toggles and the coordinates readout, and
 every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
 languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and grows to the wrapped height.
 
@@ -206,7 +224,8 @@ line at the right.
 
 ## Contract
 
-- View: `render.View` (`ZoomAt`, `PanBy`, `Fit`, `PixelSize`), owned by the workspace.
+- View: `render.View` (`ZoomAt`, `PanBy`, `Fit`, `PixelSize`), one per document tab; the canvas, the
+  panels and the status bar show the active tab's view, session and drawing.
 - Session state read: `Session.Cursor`, `Session.Snap`, `Session.CurrentPrompt`, `Session.Selection`,
   `Session.Aperture`, `Session.SnapOn`, `Session.Ortho`, `Session.Polar`, `Session.Grid`,
   `Session.SnapGrid`, `Session.LineweightDisplay`, `Session.Units`; written through `Session.Click`,
@@ -217,17 +236,23 @@ line at the right.
 ## Implementation
 
 `ui.Workspace` in `ui/workspace.go` is the root view: `titleBar` (`ui/titlebar.go`), `ribbon`, then a row of the
-canvas column (`canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.go`) and the agent panel, then
+canvas column (the document tab strip `tabStrip` of `ui/doctabs.go`, then `canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.go`) and the agent panel, then
 `statusBar` (`ui/statusbar.go`), with 1 px dividers or splitters between (`Workspace.chrome`).
 `ui/layout.go` holds `layoutState` (sizes, folded flags, the drag in progress), the pure sizing functions
 `columnWidths`, `sideRange`, `agentRange`, `layersHeight`, `layersLimits` and `resizeSpan`, the `splitter`
 and `collapseButton` elements, and `layoutSettings`, `applyLayout` and `persistLayout`, which move the layout
 to and from `settings.Layout`; `sidePanel` measures its own height from a `gpui.ScrollHandle` of the previous frame. `ui/toolbar_layout.go` builds the ribbon:
 `Workspace.ribbonGroups` lists the groups, `ribbonLarge`, `ribbonSmall` and `smallColumns` build the
-buttons around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `Workspace.ribbon` puts each group in
+buttons around `ui.NewIcon` (`ui/icon.go`) with `Workspace.commandTip` as the tooltip, and `Workspace.ribbon` puts each group in
 a no-shrink `Div` inside a `FlexWrap` row, so gpui wraps between groups only. `ui/chrome.go` holds
 the type scale, `iconButton`, `monoText` and the dividers shared by the chrome; `mix` in `ui/theme.go` derives the soft
-accent fill. `Workspace.fileButton` (`ui/filedialog.go`) builds Open and Save with their own tooltips, and
+accent fill. `Workspace.fileButton` (`ui/filedialog.go`) builds Open and Save with `openTip` and `saveTip`.
+`ui/tooltip.go` composes the button tooltips: `commandTip`, `keyHint` (shortcut, then `typedName`),
+`shortcutTable` and `keystrokeLabel` (binding to `Ctrl+Shift+S`), and `commandKeys`, the commands a key
+runs directly, from which `Workspace.Render` also registers the key handlers.
+`Workspace.openButtons` (`ui/recent.go`) adds the chevron and a zero-width marker before Open whose paint callback
+records the button's position, because `openMenuOverlay` is mounted on the root after the chrome (gpui paints in
+tree order and has no z-index) and must hang under it. `startPanel` is the last canvas overlay.
 `toggleChip` and `layoutTab` in `ui/statusbar.go` build the status bar. User-visible text goes through `i18n.T`
 (`ui.*` keys); `Workspace.Render` installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app
 whenever the theme changes. `ui/brand.go` holds the title bar brand: `Brand`, `BrandForOS`, and a colour bitmap

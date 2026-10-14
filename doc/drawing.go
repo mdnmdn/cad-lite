@@ -8,6 +8,8 @@ import (
 
 // Layer is a LAYER table record.
 type Layer struct {
+	// Name is the layer's key in the table; Drawing.Layer matches it exactly (case-sensitive).
+	// It must not change while the layer is in a drawing's table.
 	Name string
 	// Color is the layer's AutoCAD Color Index (1–255).
 	Color int
@@ -56,10 +58,16 @@ type Drawing struct {
 	// 0 or ByLayer for the layer's colour.
 	CurrentColor int
 
-	layers   []*Layer
-	entities map[Handle]Entity
-	order    []Handle
-	sorted   bool
+	layers []*Layer
+	// layerIndex maps a layer name to its record in layers, so Layer is O(1).
+	layerIndex map[string]*Layer
+	entities   map[Handle]Entity
+	// order holds the handles for Handles. Erasing leaves a handle behind (a tombstone) and
+	// re-inserting may append it again; Handles drops both when it next sorts, so erasing is
+	// O(1). stale counts the tombstones and duplicates order holds.
+	order  []Handle
+	sorted bool
+	stale  int
 
 	journal   Journal
 	listeners []func(ChangeSet)
@@ -75,20 +83,34 @@ func New() *Drawing {
 		sorted:       true,
 	}
 	d.layers = []*Layer{{Name: "0", Color: 7}}
+	d.reindexLayers()
 	return d
 }
 
 // Layers returns the layer table in definition order.
 func (d *Drawing) Layers() []*Layer { return d.layers }
 
-// Layer returns the named layer, or nil.
+// Layer returns the named layer, or nil. The name matches exactly; the lookup is a map read,
+// cheap enough for render, snap and selection to call per entity.
 func (d *Drawing) Layer(name string) *Layer {
+	l := d.layerIndex[name]
+	if l != nil && l.Name != name {
+		// A caller renamed a layer in place; the index is stale, so rebuild it.
+		d.reindexLayers()
+		l = d.layerIndex[name]
+	}
+	return l
+}
+
+// reindexLayers rebuilds layerIndex from layers. The first layer of a name wins, as the linear
+// scan it replaces did.
+func (d *Drawing) reindexLayers() {
+	d.layerIndex = make(map[string]*Layer, len(d.layers))
 	for _, l := range d.layers {
-		if l.Name == name {
-			return l
+		if _, ok := d.layerIndex[l.Name]; !ok {
+			d.layerIndex[l.Name] = l
 		}
 	}
-	return nil
 }
 
 // AddLayer returns the named layer, creating it with color when missing.
@@ -99,6 +121,7 @@ func (d *Drawing) AddLayer(name string, color int) *Layer {
 	}
 	l := &Layer{Name: name, Color: color}
 	d.layers = append(d.layers, l)
+	d.layerIndex[name] = l
 	return l
 }
 
@@ -109,13 +132,34 @@ func (d *Drawing) Entity(h Handle) Entity { return d.entities[h] }
 func (d *Drawing) Len() int { return len(d.entities) }
 
 // Handles returns the entity handles in draw order (ascending handle, so
-// newer entities draw on top). The slice is shared; do not modify it.
+// newer entities draw on top). The slice is shared; do not modify it, and
+// do not keep it across an edit.
 func (d *Drawing) Handles() []Handle {
+	if d.stale > 0 {
+		d.compact()
+	}
 	if !d.sorted {
 		slices.Sort(d.order)
 		d.sorted = true
 	}
 	return d.order
+}
+
+// compact replaces order with a sorted copy free of the tombstones and
+// duplicates erasing and re-inserting left in it. It copies rather than
+// filtering in place, so a slice an earlier Handles returned is left intact.
+func (d *Drawing) compact() {
+	all := slices.Clone(d.order)
+	slices.Sort(all)
+	out := make([]Handle, 0, len(d.entities))
+	for i, h := range all {
+		if _, live := d.entities[h]; live && (i == 0 || all[i-1] != h) {
+			out = append(out, h)
+		}
+	}
+	d.order = out
+	d.sorted = true
+	d.stale = 0
 }
 
 // Extents returns the bounding box of every displayed entity, or an empty
@@ -150,6 +194,11 @@ func (d *Drawing) insert(e Entity) {
 	if _, ok := d.entities[h]; !ok {
 		d.order = append(d.order, h)
 		d.sorted = false
+		// A handle erased earlier may still sit in order as a tombstone: the
+		// new entry is then a duplicate for compact to drop.
+		if d.stale > 0 {
+			d.stale++
+		}
 	}
 	d.entities[h] = e
 	if h >= d.Header.HandSeed {
@@ -157,14 +206,18 @@ func (d *Drawing) insert(e Entity) {
 	}
 }
 
-// remove deletes the entity with handle h without journalling.
+// remove deletes the entity with handle h without journalling. Its handle
+// stays in order as a tombstone until Handles compacts it; a drawing that
+// is edited without being drawn compacts once tombstones outnumber the
+// live entities.
 func (d *Drawing) remove(h Handle) {
 	if _, ok := d.entities[h]; !ok {
 		return
 	}
 	delete(d.entities, h)
-	if i := slices.Index(d.order, h); i >= 0 {
-		d.order = slices.Delete(d.order, i, i+1)
+	d.stale++
+	if d.stale > len(d.entities)+64 {
+		d.compact()
 	}
 }
 

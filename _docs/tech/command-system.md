@@ -46,12 +46,16 @@ text, integer and Enter. `cmdsys.Input` carries the response.
 change listener (a committed transaction, an undo, a redo): `Session.Modified`, `Dirty`, `MarkSaved`, and the
 read-only variable `DBMOD`. The counter is reset when the drawing is replaced (`SetDrawing`) and by a save.
 The host reads `Dirty` for its title, status and restart decisions and installs `SetQuitHandler` for QUIT and
-EXIT. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
+EXIT. A host that keeps several drawings, one session each, installs a `DocumentHost` per session
+(`SetDocumentHost`, read by commands through `Context.Documents`): OPEN asks it to show a tab that has the
+file (`ShowOpen`) before reading and to open the drawing it read in a new one (`OpenNew`, which returns
+that tab's session, or nil to replace this drawing), NEW asks `New`, and CLOSE asks `Close` once the
+unsaved changes are dealt with. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
 REDO reverses a whole `UNDO n`. When a command ends the session names the undo step after it
 (`Drawing.NameLastStep`), so `U` can print the command it undid.
 
 **Registry.** `cmdsys.Registry` maps upper-case names and aliases to command factories.
-`Registry.LoadAliases` reads `ALIAS,*COMMAND` lines in the `acad.pgp` format.
+`Registry.LoadAliases` reads `ALIAS,*COMMAND` lines in the `acad.pgp` format. `Registry.AliasesOf` lists the aliases of one command, shortest first; the toolbar tooltips read their keyboard hint from it.
 
 ## Rules
 
@@ -189,6 +193,8 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 - **Commands build text from whole sentences.** A command calls `Context.T`, `Context.Say` or
   `Context.SayPlural` with a key (`cmd.<name>.prompt.*`, `msg.*`), never assembling a sentence from
   fragments, so word order stays the catalog's. `Context.Cmd` gives a command's display name.
+  `Session.Say` prints a catalog line the same way for the UI, when no command is running to say it
+  (a dropped file Cad-lite cannot open).
 - **Keywords keep their English id** in `Prompt.Keywords` and in `Input.Keyword`; the display
   (`i18n.PromptKeywords`) and the matching (`i18n.MatchKeywords`) are localized. English always
   matches, whatever the language.

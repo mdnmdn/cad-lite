@@ -763,12 +763,12 @@ history_tip = "Comandi recenti — elenca i comandi eseguiti da poco; fai clic s
 history_empty = "Ancora nessun comando"
 
 [ui.toolbar]
-settings_tip = "Opzioni — tema, scala dell'interfaccia, ausili di disegno, lingua (Ctrl+, / OPZIONI)"
-agent_tip = "Agente IA — apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza (F2 / AGENTE)"
+settings_tip = "Tema, scala dell'interfaccia, ausili di disegno, lingua"
+agent_tip = "Apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza"
 ribbon_collapse_tip = "Comprimi la barra multifunzione — nasconde i pulsanti dei comandi; i comandi restano sulla riga di comando"
 ribbon_expand_tip = "Mostra la barra multifunzione — i pulsanti Disegna, Modifica e Utilità"
-open_tip = "Apri — sceglie un file di disegno da aprire (Ctrl+O / APRI)"
-save_tip = "Salva — salva il disegno nel suo file, o chiede dove quando non ne ha uno; clic destro per Salva con nome (Ctrl+S / QSAVE, Ctrl+Shift+S / SAVEAS)"
+open_tip = "Sceglie un file di disegno da aprire"
+save_tip = "Salva il disegno nel suo file, o chiede dove quando non ne ha uno; clic destro per Salva con nome (%s)"
 
 [ui.ribbon]
 draw = "Disegna"
@@ -778,6 +778,11 @@ utilities = "Utilità"
 [ui.title]
 untitled = "Senza titolo"
 doc_tip = "Disegno: %s"
+
+[ui.tabs]
+untitled_tip = "Disegno senza titolo — non ancora salvato in un file"
+switch_tip = "Clic per mostrarlo, clic centrale o x per chiuderlo; Ctrl+Tab e Ctrl+Maiusc+Tab passano da un disegno all'altro"
+close_tip = "Chiudi questo disegno (CLOSE) — chiede prima di salvare le modifiche"
 
 [ui.canvas]
 viewport_label = "[-][Alto][Wireframe 2D]"
@@ -793,6 +798,21 @@ default_name = "disegno"
 filter_all_supported = "Tutti i file supportati"
 filter_all = "Tutti i file"
 filter_ext = "Disegno %s"
+unsupported = "Impossibile aprire %s: Cad-lite apre file %s."
+
+[ui.recent]
+menu_tip = "Recenti — i disegni e le cartelle usati di recente; scegli un file per aprirlo o una cartella per sfogliarla"
+files = "File recenti"
+folders = "Cartelle recenti"
+none = "Ancora nessun disegno recente"
+file_tip = "%s — clic per aprirlo"
+folder_tip = "%s — clic per scegliere un disegno in questa cartella"
+missing_tip = "%s — non trovato; il clic lo riprova e lo toglie dall'elenco"
+clear = "Svuota recenti"
+clear_tip = "Dimentica i file e le cartelle recenti"
+start_title = "Disegni recenti"
+start_hint = "Clic su uno per aprirlo, oppure inizia a disegnare."
+start_open = "Apri un altro disegno…"
 
 [ui.panel]
 layers = "Layer"
@@ -921,6 +941,73 @@ write_failed = "scrittura della cronologia dell'agente non riuscita: %v"
 mcp = "impossibile avviare il server MCP: %v"
 start = "impossibile avviare %s: %v"
 
+[ui.agent.model]
+default = "predefinito"
+default_named = "predefinito (%s)"
+tip = "Modello — il modello usato da questa conversazione; fai clic per sceglierne un altro"
+pick_tip = "Usa questo modello — vale dal turno successivo"
+menu_title = "Modello per questa conversazione %s"
+none_listed = "L'agente elenca i suoi modelli quando la sessione parte; scrivi qui sotto l'id di un modello."
+input_placeholder = "Altro id di modello, Invio per applicare"
+make_default = "Rendi predefinito per %s"
+make_default_tip = "Predefinito — le nuove conversazioni %s partono con questo modello (salvato nelle impostazioni)"
+restarts = "Il modello %s vale dal prossimo messaggio; la sessione dell'agente riparte e riprende questa conversazione."
+failed = "impossibile passare al modello %s: %v"
+free = "gratis"
+free_tip = "Gratis — un modello che opencode offre senza costi (OpenCode Zen)"
+
+[ui.agent.image]
+pasted = "immagine incollata"
+chip_tip = "Immagine — parte con il prossimo messaggio"
+remove_tip = "Rimuovi — toglie questa immagine dal messaggio"
+no_vision = "%s non legge le immagini; l'immagine non è stata allegata."
+no_vision_send = "%s non legge le immagini: rimuovile o scegli un altro modello."
+not_accepted = "l'agente non accetta immagini"
+unsupported = "%s: non è un'immagine che l'agente sa leggere (PNG, JPEG, GIF o WebP)."
+too_large = "%s è troppo grande: supera %d MB anche ridotta."
+unreadable = "impossibile leggere %s: %v"
+too_many = "Al massimo %d immagini per messaggio."
+
+[ui.agent.install]
+offer_title = "Installa OpenCode"
+offer_hint = "Nessun agente è installato. Cad-lite può installare OpenCode per te, solo nella propria cartella."
+offer = "Installa OpenCode…"
+offer_tip = "Installa OpenCode — mostra cosa verrà scaricato e dove, e chiede conferma prima di iniziare"
+cancelled = "Installazione annullata."
+confirm_title = "Installare OpenCode?"
+confirm_what = "Cad-lite scarica mise (circa 50 MB) dalle sue release ufficiali su github.com/jdx/mise, lo verifica con l'elenco SHA256 della release e lo usa per installare il binario di OpenCode da github.com/anomalyco/opencode (circa 60 MB da scaricare). In tutto occupano circa 350 MB su disco."
+confirm_fallback = "Solo se il binario non si può scaricare e Node.js è installato, si usa invece il pacchetto npm di OpenCode (fino a circa 1 GB)."
+confirm_where = "Tutto finisce in %s. Nulla viene installato nel sistema e la configurazione della shell non cambia."
+confirm_login = "Se OpenCode non ha ancora un accesso, si apre un terminale per accedere."
+go = "Installa"
+go_tip = "Installa — scarica mise e installa OpenCode nella cartella di Cad-lite"
+not_now = "Non ora"
+not_now_tip = "Non ora — chiude senza installare nulla"
+running_title = "Installazione di OpenCode…"
+step_mise = "Scarica e verifica mise"
+step_tool = "Installa OpenCode"
+step_auth = "Controlla l'accesso"
+mb = "%s MB"
+mb_of = "%s di %s MB"
+cancel = "Annulla"
+cancelling = "Annullamento…"
+cancel_tip = "Annulla — interrompe l'installazione; nulla di scaricato a metà viene tenuto"
+done_title = "OpenCode è installato"
+signed_in = "OpenCode ha già un accesso. Premi Avvia per iniziare."
+auth_failed = "Impossibile controllare l'accesso: %s"
+login_opened = "%s aperto per accedere a OpenCode. Completa lì, poi premi Avvia."
+login_failed = "Impossibile aprire un terminale (%s). Esegui tu \"%s auth login\"."
+ok = "OK"
+ok_tip = "OK — chiude questo messaggio"
+login = "Accedi…"
+login_tip = "Accedi — apre un terminale con l'accesso di OpenCode"
+failed_title = "Installazione non riuscita"
+retry = "Riprova"
+retry_tip = "Riprova — esegue di nuovo l'installazione"
+close = "Chiudi"
+close_tip = "Chiudi — nasconde l'errore"
+terminal_close = "Fatto. Premi Invio per chiudere questa finestra."
+
 [ui.settings]
 title = "Opzioni"
 close = "Chiudi  Esc"
@@ -962,6 +1049,28 @@ default_harness = "Agente predefinito"
 default_harness_tip = "Agente predefinito — la CLI dell'agente selezionata per prima nel pannello"
 harness_auto = "Auto"
 agent_auto_hint = "Auto sceglie il primo agente trovato: OpenCode, poi Claude, poi Codex. Vedi Ricerca agenti qui sotto."
+agent_bins = "Eseguibili"
+agent_bins_hint = "Il programma che Cad-lite avvia per ogni agente. Se non ne trova nessuno, o trova quello sbagliato, sceglilo con Sfoglia…; Reimposta torna al PATH."
+agent_bin_tip = "Eseguibile di %s — il programma che Cad-lite avvia per questo agente: quello scelto da te, altrimenti quello sul PATH"
+agent_bin_chosen = "scelto da te"
+agent_bin_chosen_version = "scelto da te · %s"
+agent_bin_on_path = "trovato sul PATH"
+agent_bin_on_path_version = "trovato sul PATH · %s"
+agent_bin_not_found = "non trovato — sceglilo con Sfoglia…"
+agent_bin_gone = "questo file non esiste più; sceglilo di nuovo o premi Reimposta"
+agent_bin_browse = "Sfoglia…"
+agent_bin_browsing = "Scelta…"
+agent_bin_browse_tip = "Sfoglia — scegli l'eseguibile di questo agente in una finestra di dialogo; viene usato al posto di quello sul PATH"
+agent_bin_reset = "Reimposta"
+agent_bin_reset_tip = "Reimposta — dimentica l'eseguibile scelto e cerca di nuovo l'agente sul PATH"
+agent_bin_dialog_title = "Scegli l'eseguibile di %s"
+agent_bin_filter = "Programmi"
+agent_bin_err_missing = "%s non esiste."
+agent_bin_err_dir = "%s è una cartella, non un programma."
+agent_bin_err_exec = "%s non è eseguibile (manca il permesso di esecuzione)."
+agent_bin_err_exec_windows = "%s non è un programma che Windows può avviare (.exe, .cmd, .bat o .com)."
+agent_bin_err_dialog = "Nessuna finestra di dialogo dei file disponibile; imposta agent.binaries nel file delle impostazioni."
+discovery_override = "scelto in Agente IA qui sopra"
 section_discovery = "RICERCA AGENTI"
 discovery_hint = "Cad-lite cerca gli agenti nel PATH del tuo terminale oltre che nel proprio, perché le app avviate dal desktop spesso ne ricevono uno più corto."
 discovery_not_checked = "Non ancora controllato. Premi Controlla."
@@ -1031,7 +1140,7 @@ open_release_tip = "Apri la pagina della versione — mostra la versione su GitH
 badge_tip = "Aggiornamento disponibile — versione %s; apri le opzioni per installarla"
 restart_title = "Riavviare per completare l'aggiornamento?"
 restart_body = "La versione %s è installata. Riavvia ora per usarla, oppure continua a lavorare e la troverai alla prossima apertura di Cad-lite."
-restart_body_dirty = "La versione %s è installata. Questo disegno ha modifiche non salvate: riavviando ora vanno perse. Salva prima, oppure scegli Più tardi."
+restart_body_dirty = "La versione %s è installata. Un disegno aperto ha modifiche non salvate: riavviando ora vanno perse. Salva prima, oppure scegli Più tardi."
 restart_now = "Riavvia ora"
 restart_now_tip = "Riavvia ora — chiude Cad-lite e apre la nuova versione"
 restart_later = "Più tardi"
@@ -1040,56 +1149,47 @@ restart_later_tip = "Più tardi — continua a lavorare; la nuova versione parte
 [cmd.line]
 name = "Linea"
 desc = "Disegna segmenti di retta tra i punti indicati"
-tip = "Linea — disegna segmenti di retta tra i punti indicati (LINEA / L)"
 aliases = ["LINEA"]
 
 [cmd.pline]
 name = "Polilinea"
 desc = "Disegna una catena di segmenti connessi come un unico oggetto"
-tip = "Polilinea — disegna una catena di segmenti connessi come un unico oggetto (POLILINEA / PL)"
 aliases = ["POLILINEA"]
 
 [cmd.circle]
 name = "Cerchio"
 desc = "Disegna un cerchio dal centro e dal raggio o diametro"
-tip = "Cerchio — disegna un cerchio dal centro e dal raggio o diametro (CERCHIO / C)"
 aliases = ["CERCHIO"]
 
 [cmd.arc]
 name = "Arco"
 desc = "Disegna un arco da punti, centro, angolo, lunghezza della corda, raggio o direzione"
-tip = "Arco — disegna un arco da punti, centro, angolo, lunghezza della corda, raggio o direzione (ARCO / A)"
 aliases = ["ARCO"]
 
 [cmd.rectang]
 name = "Rettangolo"
 desc = "Disegna un rettangolo da due angoli o dalle dimensioni, con smusso, raccordo o larghezza opzionali"
-tip = "Rettangolo — disegna un rettangolo da due angoli o dalle dimensioni, con smusso, raccordo o larghezza opzionali (RETTANGOLO / REC)"
 # (verify)
 aliases = ["RETTANGOLO", "RETTANG"]
 
 [cmd.polygon]
 name = "Poligono"
 desc = "Disegna un poligono regolare dal centro e dal raggio, o da un lato"
-tip = "Poligono — disegna un poligono regolare dal centro e dal raggio, o da un lato (POLIGONO / POL)"
 aliases = ["POLIGONO"]
 
 [cmd.erase]
 name = "Cancella"
 desc = "Rimuove dal disegno gli oggetti selezionati"
-tip = "Cancella — rimuove dal disegno gli oggetti selezionati (CANCELLA / E)"
 aliases = ["CANCELLA"]
 
 [cmd.move]
 name = "Sposta"
 desc = "Sposta gli oggetti selezionati senza modificarli"
-tip = "Sposta — sposta gli oggetti selezionati senza modificarli (SPOSTA / M)"
 aliases = ["SPOSTA"]
 
 [cmd.stretch]
 name = "Stira"
 desc = "Stira gli oggetti intersecati da una finestra, spostando i vertici e gli estremi al suo interno"
-tip = "Stira — stira gli oggetti intersecati da una finestra, spostando i vertici e gli estremi al suo interno (STIRA / S)"
 aliases = ["STIRA"]
 
 [cmd.multiple.prompt]
@@ -1101,51 +1201,43 @@ hint = "Selezionare gli oggetti da stirare con una finestra di selezione interse
 [cmd.copy]
 name = "Copia"
 desc = "Duplica gli oggetti selezionati lasciando gli originali al loro posto"
-tip = "Copia — duplica gli oggetti selezionati lasciando gli originali al loro posto (COPIA / CO)"
 aliases = ["COPIA"]
 
 [cmd.rotate]
 name = "Ruota"
 desc = "Ruota gli oggetti selezionati attorno a un punto base"
-tip = "Ruota — ruota gli oggetti selezionati attorno a un punto base (RUOTA / RO)"
 aliases = ["RUOTA"]
 
 [cmd.scale]
 name = "Scala"
 desc = "Ingrandisce o riduce gli oggetti selezionati rispetto a un punto base"
-tip = "Scala — ingrandisce o riduce gli oggetti selezionati rispetto a un punto base (SCALA / SC)"
 aliases = ["SCALA"]
 
 [cmd.undo]
 name = "Annulla"
 desc = "Annulla le modifiche, oppure imposta un segno o un gruppo di annullamento"
-tip = "Annulla — annulla le modifiche, oppure imposta un segno o un gruppo di annullamento (ANNULLA)"
 aliases = ["ANNULLA"]
 
 [cmd.u]
 name = "Annulla"
 desc = "Annulla l'ultima modifica"
-tip = "Annulla — annulla l'ultima modifica (Ctrl+Z / U)"
 aliases = ["U"]
 
 [cmd.redo]
 # (verify)
 name = "Ripeti"
 desc = "Ripristina la modifica appena annullata"
-tip = "Ripeti — ripristina la modifica appena annullata (Ctrl+Y / RIPETI)"
 # (verify)
 aliases = ["RIPETI", "RIPRISTINA"]
 
 [cmd.zoom]
 name = "Zoom"
 desc = "Adatta la vista al disegno o a una finestra indicata"
-tip = "Zoom — adatta la vista al disegno o a una finestra indicata (ZOOM / Z)"
 aliases = []
 
 [cmd.layer]
 name = "Layer"
 desc = "Imposta un layer come corrente, o lo crea come nome=colore"
-tip = "Layer — imposta un layer come corrente, o lo crea come nome=colore (LAYER / LA)"
 # (verify)
 aliases = ["LIVELLO"]
 
@@ -1153,20 +1245,17 @@ aliases = ["LIVELLO"]
 # (verify)
 name = "Distanza"
 desc = "Misura la distanza e l'angolo tra due punti"
-tip = "Distanza — misura la distanza e l'angolo tra due punti (DISTANZA / DI)"
 aliases = ["DISTANZA"]
 
 [cmd.area]
 name = "Area"
 desc = "Misura l'area e il perimetro di punti o di un oggetto"
-tip = "Area — misura l'area e il perimetro di punti o di un oggetto (AREA / AA)"
 aliases = []
 
 [cmd.measuregeom]
 # (verify)
 name = "Misura geometria"
 desc = "Misura distanza, raggio, angolo o area"
-tip = "Misura geometria — misura distanza, raggio, angolo o area (MISURAGEOM / MEA)"
 # (verify)
 aliases = ["MISURAGEOM"]
 
@@ -1174,109 +1263,93 @@ aliases = ["MISURAGEOM"]
 # (verify)
 name = "Unità"
 desc = "Imposta i formati di lunghezza e angolo, la precisione e la direzione dell'angolo 0"
-tip = "Unità — imposta i formati di lunghezza e angolo, la precisione e la direzione dell'angolo 0 (UNITA / UN)"
 aliases = ["UNITA"]
 
 [cmd.id]
 # (verify)
 name = "ID punto"
 desc = "Riporta le coordinate di un punto indicato"
-tip = "ID punto — riporta le coordinate di un punto indicato (ID)"
 aliases = []
 
 [cmd.list]
 # (verify)
 name = "Elenca"
 desc = "Elenca le proprietà degli oggetti selezionati"
-tip = "Elenca — elenca le proprietà degli oggetti selezionati (ELENCA / LI)"
 # (verify)
 aliases = ["ELENCA"]
 
 [cmd.new]
 name = "Nuovo"
 desc = "Inizia un nuovo disegno vuoto"
-tip = "Nuovo — inizia un nuovo disegno vuoto (NUOVO)"
 # (verify)
 aliases = ["NUOVO"]
 
 [cmd.open]
 name = "Apri"
 desc = "Apre un disegno da file"
-tip = "Apri — apre un disegno da file (APRI)"
 # (verify)
 aliases = ["APRI"]
 
 [cmd.save]
 name = "Salva"
 desc = "Salva il disegno in un file"
-tip = "Salva — salva il disegno in un file (SALVA)"
 # (verify)
 aliases = ["SALVA"]
 
 [cmd.mirror]
 name = "Specchio"
 desc = "Crea una copia speculare degli oggetti selezionati rispetto a una linea"
-tip = "Specchio — crea una copia speculare degli oggetti selezionati rispetto a una linea (SPECCHIO / MI)"
 # (verify)
 aliases = ["SPECCHIO"]
 
 [cmd.offset]
 name = "Offset"
 desc = "Crea una copia parallela di un oggetto a una distanza o passante per un punto"
-tip = "Offset — crea una copia parallela di un oggetto a una distanza o passante per un punto (OFFSET / O)"
 aliases = []
 
 [cmd.fillet]
 name = "Raccordo"
 desc = "Raccorda lo spigolo tra due oggetti con un raggio"
-tip = "Raccordo — raccorda lo spigolo tra due oggetti con un raggio (RACCORDO / F)"
 aliases = ["RACCORDO"]
 
 [cmd.chamfer]
 name = "Smusso"
 desc = "Smussa lo spigolo tra due linee con due distanze"
-tip = "Smusso — smussa lo spigolo tra due linee con due distanze (SMUSSO / CHA)"
 # (verify)
 aliases = ["SMUSSO", "CIMATURA", "SMUSSA"]
 
 [cmd.trim]
 name = "Taglia"
 desc = "Taglia gli oggetti in corrispondenza dei bordi di taglio indicati"
-tip = "Taglia — taglia gli oggetti in corrispondenza dei bordi di taglio indicati (TAGLIA / TR)"
 # (verify)
 aliases = ["TAGLIA"]
 
 [cmd.extend]
 name = "Estendi"
 desc = "Estende gli oggetti fino ai bordi limite"
-tip = "Estendi — estende gli oggetti fino ai bordi limite (ESTENDI / EX)"
 # (verify)
 aliases = ["ESTENDI"]
 
 [cmd.break]
 name = "Spezza"
 desc = "Spezza un oggetto tra due punti"
-tip = "Spezza — spezza un oggetto tra due punti (SPEZZA / BR)"
 # (verify)
 aliases = ["SPEZZA"]
 
 [cmd.breakatpoint]
 name = "Spezza in punto"
 desc = "Divide un oggetto in due in un solo punto"
-tip = "Spezza in punto — divide un oggetto in due in un solo punto (SPEZZAINPUNTO)"
 aliases = ["SPEZZAINPUNTO"]
 
 [cmd.join]
 name = "Unisci"
 desc = "Unisce in un solo oggetto gli oggetti che si toccano estremità con estremità"
-tip = "Unisci — unisce in un solo oggetto gli oggetti che si toccano estremità con estremità (UNISCI / J)"
 # (verify)
 aliases = ["UNISCI"]
 
 [cmd.explode]
 name = "Esplodi"
 desc = "Scompone un oggetto composto nelle sue parti"
-tip = "Esplodi — scompone un oggetto composto nelle sue parti (ESPLODI / X)"
 # (verify)
 aliases = ["ESPLODI"]
 
@@ -1284,14 +1357,12 @@ aliases = ["ESPLODI"]
 # (verify)
 name = "Agente IA"
 desc = "Interroga l'agente IA, o mostra e nasconde il pannello dell'agente"
-tip = "Agente IA — interroga l'agente IA, o mostra e nasconde il pannello dell'agente (F2 / AI)"
 # (verify)
 aliases = ["AGENTE", "IA"]
 
 [cmd.options]
 name = "Opzioni"
 desc = "Apre il pannello delle opzioni"
-tip = "Opzioni — apre il pannello delle opzioni (Ctrl+, / OPZIONI)"
 # (verify)
 aliases = ["OPZIONI"]
 

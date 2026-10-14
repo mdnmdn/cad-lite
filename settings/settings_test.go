@@ -32,6 +32,7 @@ func TestRoundTrip(t *testing.T) {
 	want := Settings{
 		Theme: "light", Language: LangItalian, UIScale: 1.25, Grid: false, OSnap: true, Ortho: true,
 		Wheel: WheelPan, DefaultAgent: "claude", Window: Window{Width: 1000, Height: 700},
+		AgentBinaries: map[string]string{"claude": `C:\Users\me\AppData\Roaming\npm\claude.cmd`, "codex": "/opt/codex/bin/codex"},
 	}
 	if err := Save(path, want); err != nil {
 		t.Fatal(err)
@@ -242,6 +243,45 @@ func TestUpdateSettings(t *testing.T) {
 	s, _, _ := Parse([]byte("[update]\nchannel = \"beta\"\n"))
 	if !s.AutoUpdate || s.Extra["update.channel"] != "beta" || !strings.Contains(string(Marshal(s)), `channel = "beta"`) {
 		t.Errorf("unknown key in update not kept: %+v", s.Extra)
+	}
+}
+
+func TestAgentBinaries(t *testing.T) {
+	// A file from before agent.binaries existed loads with no overrides and gains the key on save.
+	old, warn, err := Parse([]byte("[agent]\ndefault = \"codex\"\n"))
+	if err != nil || len(warn) != 0 || old.AgentBinaries != nil || old.DefaultAgent != "codex" {
+		t.Fatalf("old file: %+v %v %v", old, warn, err)
+	}
+	if text := string(Marshal(old)); !strings.Contains(text, "binaries = {}") {
+		t.Errorf("empty overrides not written:\n%s", text)
+	}
+
+	s, warn, err := Parse([]byte(`[agent]
+binaries = { claude = "  /opt/claude  ", codex = "", opencode = 7, future = "/x/future" }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"claude": "/opt/claude", "future": "/x/future"}
+	if !reflect.DeepEqual(s.AgentBinaries, want) {
+		t.Errorf("binaries = %#v, want %#v (trimmed, empty dropped, unknown harness kept)", s.AgentBinaries, want)
+	}
+	if len(warn) != 1 || !strings.Contains(warn[0], "agent.binaries.opencode") {
+		t.Errorf("want one warning for the number: %v", warn)
+	}
+	again, _, err := Parse(Marshal(s))
+	if err != nil || !reflect.DeepEqual(again.AgentBinaries, want) {
+		t.Fatalf("round trip: %#v %v", again.AgentBinaries, err)
+	}
+
+	c := s.Clone()
+	c.AgentBinaries["claude"] = "/elsewhere"
+	if s.AgentBinaries["claude"] != "/opt/claude" {
+		t.Error("Clone shares the binaries map")
+	}
+
+	if _, warn, _ := Parse([]byte("[agent]\nbinaries = \"/usr/bin/claude\"\n")); len(warn) != 1 {
+		t.Errorf("a string instead of a table must warn once: %v", warn)
 	}
 }
 

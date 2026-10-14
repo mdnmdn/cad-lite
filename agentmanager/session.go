@@ -24,6 +24,38 @@ type Session interface {
 	Close() error
 }
 
+// ModelSetter is implemented by sessions that can switch model while live. SetModel blocks until
+// the agent accepted or refused model (a non-empty ModelInfo.ID or any id the harness takes) or ctx
+// ends; the switch applies from the next turn. On success the session emits ModelsChanged with
+// Current set to model. An empty model is an error: to return to the harness default, start a new
+// session without Config.Model.
+type ModelSetter interface {
+	SetModel(ctx context.Context, model string) error
+}
+
+// Image is a picture attached to a prompt. MIME is image/png, image/jpeg, image/gif or image/webp;
+// Data is the encoded file, sent as is (base64 on the wire). Size limits are the host's.
+type Image struct {
+	MIME string
+	Data []byte
+}
+
+// ImagePrompter is implemented by sessions that can attach images to a prompt (all three backends).
+type ImagePrompter interface {
+	// AcceptsImages reports whether the agent takes images at all: ACP's initialize
+	// agentCapabilities.promptCapabilities.image; always true for Claude and Codex.
+	AcceptsImages() bool
+	// PromptImages is Prompt with images after the text; with no images it is Prompt. It returns
+	// ErrNoImages, writing nothing, when images are given and AcceptsImages is false.
+	PromptImages(ctx context.Context, text string, images []Image) error
+}
+
+// ErrNoImages is returned by PromptImages when the agent does not accept images.
+var ErrNoImages = errors.New("agentmanager: the agent does not accept images")
+
+// ErrNoModel is returned by SetModel for an empty model.
+var ErrNoModel = errors.New("agentmanager: empty model")
+
 // Opener starts sessions; every backend package exports one.
 type Opener interface {
 	Open(ctx context.Context, cfg Config) (Session, error)

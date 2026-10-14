@@ -21,6 +21,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 
 | Package | Purpose |
 |---|---|
+| `cad-lite/agentinstall` | Package agentinstall installs an AI agent CLI for Cad-lite without touching the system: it downloads mise (github.com/jdx/mise) into Cad-lite's private tools folder, verifies it against the release's SHA256 list, has that mise install OpenCode inside the same folder, and asks OpenCode whether it has credentials. |
 | `cad-lite/appenv` | Package appenv reads Cad-lite's environment variables. |
 | `cad-lite/assets/appicon` | Package appicon embeds Cad-lite's application icon as the PNG set the window icon is made of. |
 | `cad-lite/assets/icons` | Package icons holds Cad-lite's icon set: monochrome 24x24 SVG files, one per registry row in icons.yaml, embedded into the binary. |
@@ -34,7 +35,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `cad-lite/fileio/dwg` | Package dwg reads Autodesk DWG drawings in pure Go: no cgo, no external library, so it builds for every platform the application does, the browser included. |
 | `cad-lite/fileio/dxf` | Package dxf reads and writes ASCII DXF. |
 | `cad-lite/geom` | Package geom is the geometry kernel: double-precision 2D vectors, affine transforms, boxes and curves. |
-| `cad-lite/i18n` | Package i18n is Cad-lite's internationalisation foundation: English and Italian message catalogs, language selection and detection, plurals, localized command-line keywords and the per-command metadata (display name, description, tooltip, typed aliases). |
+| `cad-lite/i18n` | Package i18n is Cad-lite's internationalisation foundation: English and Italian message catalogs, language selection and detection, plurals, localized command-line keywords and the per-command metadata (display name, description, typed aliases). |
 | `cad-lite/i18n/cmd/i18ncheck` | Command i18ncheck verifies Cad-lite's message catalogs and finds user-facing string literals that are not catalog keys yet. |
 | `cad-lite/internal/gpui` |  |
 | `cad-lite/internal/gpui/ebitenplatform` | Package ebitenplatform implements gpui.Platform on top of ebiten. |

@@ -290,8 +290,9 @@ func (ws *Workspace) drawingSection() *gpui.Div {
 	)
 }
 
-// agentSection is the "AI AGENT" block: which agent a session starts with.
-// Which agents exist on this machine is the discovery section's business.
+// agentSection is the "AI AGENT" block: which agent a session starts with
+// and which executable each agent runs (agentBinaryRows). How the PATH was
+// searched is the discovery section's business.
 func (ws *Workspace) agentSection() *gpui.Div {
 	c := ws.prefs().cur
 	opts := [][2]string{{"", i18n.T("ui.settings.harness_auto")}, {"opencode", "OpenCode"}, {"claude", "Claude"}, {"codex", "Codex"}}
@@ -309,6 +310,7 @@ func (ws *Workspace) agentSection() *gpui.Div {
 			ws.change(w, func(s *settings.Settings) { s.DefaultAgent = v })
 		}).Flex1()),
 		gpui.NewText(i18n.T("ui.settings.agent_auto_hint")).TextSize(11).TextColor(uiMuted),
+		ws.agentBinaryRows(),
 	)
 }
 
@@ -332,6 +334,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
 				d.Extra, d.Window, d.Layout, d.LastUpdateCheck = s.Extra, s.Window, s.Layout, s.LastUpdateCheck
+				d.Recent = s.Recent
 				*s = d
 			})
 		}).Px_(12),
