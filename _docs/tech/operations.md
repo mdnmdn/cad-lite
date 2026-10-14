@@ -122,7 +122,8 @@ logged and the defaults apply) and saves it, with the window size, when the wind
 `.github/workflows/release.yml` runs on a pushed `v*` tag and on manual dispatch. It builds the
 macOS universal `.app` as `cad-lite-<v>-macos-universal.zip` and `.dmg`, the Windows `amd64` and
 `arm64` zips with an Inno Setup `-setup.exe` each, and the Linux `cad-lite-<v>-linux-amd64.tar.gz`; a
-`publish` job on a tag attaches them with `SHA256SUMS.txt` to a GitHub Release. The signing secrets
+`publish` job attaches them with `SHA256SUMS.txt` to a GitHub Release, on a tag or on a manual run that
+names a version. The signing secrets
 are optional (see `packaging/README.md`); without them the macOS app is ad-hoc signed. The scripts
 share `packaging/lib.sh`, so a `just bundle-*` recipe builds what the workflow releases.
 
@@ -133,7 +134,12 @@ Windows and macOS).
 
 ### Release steps and update assets
 
-1. Push a tag `vX.Y.Z` (a tag with `-` is a pre-release and is never offered by the [updater](../features/updates.md)).
+1. Either push a tag `vX.Y.Z`, or run the `release` workflow by hand (Actions → release → Run
+   workflow) with `version` set to `X.Y.Z`: a `check` job first refuses a malformed version or a tag
+   that exists, and `publish` creates the tag `vX.Y.Z` on the commit it built. The `draft` box keeps the
+   release a draft; GitHub then creates the tag when the draft is published. A manual run with an empty
+   `version` only builds the packages and keeps them as run artifacts. A version with `-` is a
+   pre-release and is never offered by the [updater](../features/updates.md).
 2. `packaging/lib.sh` turns the tag into the version and every bundle script links it with
    `-ldflags "-X main.version=X.Y.Z"` (also into `Info.plist` and the Windows version resource).
    CI stamps `0.0.0-ci+<shortsha>` so its binaries show where they came from.

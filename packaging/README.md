@@ -53,8 +53,13 @@ before the Inno Setup step when a certificate exists.
 Push a tag `v*` (`git tag v0.2.0 && git push origin v0.2.0`). `release.yml` builds all platforms,
 and the `publish` job attaches everything plus `SHA256SUMS.txt` (the in-app updater verifies its
 download against it and installs from the `.zip` and `.tar.gz`, never the `-setup.exe` or `.dmg`) to a GitHub Release with generated
-notes; a tag containing `-` is a prerelease. Run from the Actions tab (`workflow_dispatch`) to
-build artifacts without a tag; on a tag ref a manual run creates a draft release.
+notes; a tag containing `-` is a prerelease.
+
+Or release from the Actions tab (`release` → Run workflow) with `version` set to `0.2.0` (no
+leading `v`): the run checks the version is well formed and its tag is new, builds, then creates the
+tag `v0.2.0` on that commit and publishes the release. Tick `draft` to review it first (the tag is
+created when you publish the draft). With `version` empty the run only builds and keeps the
+packages as run artifacts.
 
 ## Local checks
 
