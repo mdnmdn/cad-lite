@@ -27,7 +27,8 @@ agent session.
   Unknown tool, handler error, and handler panic are in-band `isError` results with the message as text,
   not JSON-RPC errors.
 - **Concurrency.** Handlers run on the request goroutine with `r.Context()` (cancelled on client disconnect
-  and on `Close`). `Options.Serialize` (default true) serialises handler calls with a mutex.
+  and on `Close`). `Options.Serialize` (default true) serialises handler calls with a context-aware semaphore: a call
+  whose request context is done while waiting, or by the time it wins the slot, returns an error and never runs its handler.
 - **Lifecycle.** `Close()` stops accepting, waits up to 2 s for in-flight requests, then cancels their
   contexts and force-closes. Idempotent; a closed server cannot be restarted.
 

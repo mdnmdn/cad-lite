@@ -351,7 +351,12 @@ func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (r
 		case s.callSem <- struct{}{}:
 			defer func() { <-s.callSem }()
 		case <-ctx.Done():
-			return Errorf("%s: cancelled while waiting for another tool call: %v", name, ctx.Err())
+			return s.abandoned(name, ctx)
+		}
+		// select picks randomly when both cases are ready, so re-check: a call whose
+		// request is already gone must never reach its handler.
+		if ctx.Err() != nil {
+			return s.abandoned(name, ctx)
 		}
 	}
 	defer func() {
@@ -365,4 +370,9 @@ func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (r
 		return Errorf("%s", err.Error())
 	}
 	return res
+}
+
+func (s *Server) abandoned(name string, ctx context.Context) Result {
+	s.logf("tool %s: request cancelled before the handler started: %v", name, ctx.Err())
+	return Errorf("%s: cancelled while waiting for another tool call: %v", name, ctx.Err())
 }

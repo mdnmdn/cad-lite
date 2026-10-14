@@ -366,9 +366,10 @@ func TestClose(t *testing.T) {
 	if d := time.Since(t0); d > 4*time.Second {
 		t.Errorf("Close took %v", d)
 	}
+	// Close does not wait for handlers, so the handler may still be unwinding.
 	select {
 	case <-cancelled:
-	default:
+	case <-time.After(5 * time.Second):
 		t.Error("handler context not cancelled")
 	}
 	if err := s.Close(); err != nil {
@@ -400,7 +401,15 @@ func TestBodyLimit(t *testing.T) {
 }
 
 func TestCancelledCallDoesNotWaitForOrRunAfterBusyHandler(t *testing.T) {
-	s := mcp.NewServer(mcp.Options{})
+	noticed := make(chan struct{}, 1)
+	s := mcp.NewServer(mcp.Options{Logger: func(m string) {
+		if strings.Contains(m, "cancelled before the handler started") {
+			select {
+			case noticed <- struct{}{}:
+			default:
+			}
+		}
+	}})
 	release := make(chan struct{})
 	started := make(chan struct{})
 	var fastRan atomic.Int32
@@ -426,8 +435,13 @@ func TestCancelledCallDoesNotWaitForOrRunAfterBusyHandler(t *testing.T) {
 		resp.Body.Close()
 		t.Fatal("expected the client to time out while the handler is busy")
 	}
+	// Wait until the server has seen the cancellation, then free the slot.
+	select {
+	case <-noticed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server never noticed the cancelled call")
+	}
 	close(release)
-	time.Sleep(200 * time.Millisecond)
 	if n := fastRan.Load(); n != 0 {
 		t.Fatalf("abandoned call ran %d times after the busy handler finished", n)
 	}
