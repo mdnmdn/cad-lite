@@ -53,7 +53,7 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   tabs.
 - **Default harness.** The `agent.default` [setting](settings.md) selects the harness at startup and when
   changed in the settings panel (`AgentPanel.Configure`); empty picks the first agent found (see PATH below).
-- **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. The chips lock
+- **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. An agent whose executable the user chose in the settings (*Executables*, see [Settings](settings.md)) gets a chip while that file exists, and starts from that file. The chips lock
   while the tab has a session or a stored conversation. With none found the panel says so; `-agent` with `-agent-cmd` offers the
   named harness regardless of `PATH`.
 - **Start and Stop.** Start launches the selected agent with the drawing's MCP server attached and

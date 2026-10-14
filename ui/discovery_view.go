@@ -86,16 +86,21 @@ func (ws *Workspace) discoveryRow(h agentmanager.Harness, name string) *gpui.Div
 	return settingRow(name, tip, val).ItemsStart()
 }
 
-// discoveryRowLines is the text of an agent's row: its full path and, when it
-// answered, its version; or "not found".
+// discoveryRowLines is the text of an agent's row: its full path, when it
+// answered its version, and whether the path is the one chosen in the AI
+// agent section; or "not found".
 func discoveryRowLines(f harnesses.Found) []string {
 	if f.Path == "" {
 		return []string{i18n.T("ui.settings.discovery_not_found")}
 	}
-	if f.Version == "" {
-		return []string{f.Path}
+	l := []string{f.Path}
+	if f.Version != "" {
+		l = append(l, f.Version)
 	}
-	return []string{f.Path, f.Version}
+	if f.Override {
+		l = append(l, i18n.T("ui.settings.discovery_override"))
+	}
+	return l
 }
 
 // discoveryPathText says where the PATH came from.

@@ -77,6 +77,9 @@ type discoveryState struct {
 
 	poll *gpui.Timer
 
+	// bin is the executable picker of the AI agent section.
+	bin binaryPicker
+
 	mu  sync.Mutex
 	res *AgentDiscovery
 }

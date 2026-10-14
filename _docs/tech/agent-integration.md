@@ -7,7 +7,7 @@ summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/discovery.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -45,7 +45,11 @@ terminal and no window, and it gives up after 5 s. On Windows it reads the Machi
 and expands `%VARS%`. `shellenv.Merge` puts the login entries first and drops repeats; `Set` stores the result
 for the process. `harnesses.Available`, `harnesses.Discover` (path and `--version` per agent, 3 s each) and
 `harnesses.Open` use the merged PATH: `Open` resolves the executable to its full path and gives the child
-`PATH=<merged>`, so the agent's own subprocesses (node, bun) are found. `ui/discovery.go` runs the probe once in
+`PATH=<merged>`, so the agent's own subprocesses (node, bun) are found. An executable the user chose in the settings
+(`agent.binaries`) is handed to `harnesses.SetBinary` by `ui/agent_binary.go`; it is process-wide and wins
+over the PATH lookup in `Available`, `Discover` (which marks it `Override`) and `Open`, while an explicit
+`Config.Binary` (`-agent-cmd`) still wins over it. `harnesses.Check` validates a chosen file (exists, not a
+folder, executable) and reads its `--version`. `ui/discovery.go` runs the probe once in
 the background at startup (not for `-png`), stores the result in memory only and shows it in the settings
 panel ([Settings](../features/settings.md)). Not covered by tests here: real macOS and Windows probes.
 

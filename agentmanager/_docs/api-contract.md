@@ -216,10 +216,13 @@ Package `transcript` (WP2): `type Block interface{}`; concrete `UserMsg{Text}`, 
 `Blocks() []Block`, `Version() uint64`, `Running() bool`, `ResolvePermission(requestID string)`. Pure, no goroutines.
 
 Package `harnesses` (WP1 stub, finalised after WP3-5): `func Open(ctx context.Context, cfg agentmanager.Config) (agentmanager.Session, error)`
-(switch on `cfg.Harness`; when `cfg.Binary` is empty it resolves the harness executable on the effective PATH of `shellenv`, and the child's environment gets that PATH);
-`func Available(h agentmanager.Harness) (path string, ok bool)` (looks the harness executable up on the effective PATH of `shellenv`);
-`type Found struct{ Harness agentmanager.Harness; Path, Version string }`; `func Discover(ctx context.Context, path string) []Found`
-(one entry per harness, OpenCode, Claude, Codex in that order, with `Path` empty when not found and `Version` the first line of `--version` when it answers within 3 s).
+(switch on `cfg.Harness`; when `cfg.Binary` is empty it takes the executable `SetBinary` stored for the harness, else resolves it on the effective PATH of `shellenv`, and the child's environment gets that PATH);
+`func SetBinary(h agentmanager.Harness, path string)` (process-wide override of a harness's executable; `""` goes back to the PATH lookup), `func Binary(h agentmanager.Harness) string` (the stored override, or `""`);
+`func Available(h agentmanager.Harness) (path string, ok bool)` (the override, ok while that file exists; else the harness executable on the effective PATH of `shellenv`);
+`type Found struct{ Harness agentmanager.Harness; Path, Version string; Override bool }`; `func Discover(ctx context.Context, path string) []Found`
+(one entry per harness, OpenCode, Claude, Codex in that order, with `Path` the override (`Override` set) or the one found on `path`, empty when neither, and `Version` the first line of `--version` when it answers within 3 s);
+`var ErrNotExist, ErrIsDir, ErrNotExecutable error`; `func Check(ctx context.Context, bin string) (ver string, err error)`
+(`bin` exists, is no directory and is executable — on Windows an `.exe`, `.cmd`, `.bat` or `.com` — else an error wrapping one of the three; then `Version` as Discover gets it).
 
 Package `shellenv` (stdlib only; the PATH a GUI process lacks): `type Source string` (`SourceLoginShell`, `SourceRegistry`, `SourceApp`);
 `type Probe struct{ Path string; Source Source; Err error }`; `func LoginPATH(ctx context.Context) (string, error)` (Unix: `$SHELL -l -i -c` printing `$PATH` between unique markers,

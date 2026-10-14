@@ -102,7 +102,7 @@ func LoadWarn(path string) (Settings, []string, error) {
 var tables = map[string]map[string]bool{
 	"appearance": {"theme": true, "ui_scale": true, "language": true},
 	"drawing":    {"grid": true, "osnap": true, "ortho": true, "wheel": true},
-	"agent":      {"default": true},
+	"agent":      {"default": true, "binaries": true},
 	"update":     {"auto_check": true, "last_check": true},
 	"window":     {"width": true, "height": true},
 	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
@@ -187,6 +187,23 @@ func Parse(data []byte) (Settings, []string, error) {
 					s.DefaultAgent = x
 				} else {
 					bad(full, "a string", v)
+				}
+			case "agent.binaries":
+				m, ok := v.(map[string]any)
+				if !ok {
+					bad(full, "a table", v)
+					break
+				}
+				for h, p := range m {
+					x, ok := p.(string)
+					if !ok {
+						bad(full+"."+h, "a string", p)
+						continue
+					}
+					if s.AgentBinaries == nil {
+						s.AgentBinaries = map[string]string{}
+					}
+					s.AgentBinaries[h] = x
 				}
 			case "update.auto_check":
 				if x, ok := v.(bool); ok {
@@ -301,8 +318,17 @@ func Marshal(s Settings) []byte {
 		"osnap = "+strconv.FormatBool(s.OSnap),
 		"ortho = "+strconv.FormatBool(s.Ortho),
 		"wheel = "+quote(s.Wheel))
-	section("agent", "default: the harness the agent panel selects (empty: first installed).",
-		"default = "+quote(s.DefaultAgent))
+	bins := make(map[string]any, len(s.AgentBinaries))
+	for h, p := range s.AgentBinaries {
+		bins[h] = p
+	}
+	binLine := "binaries = {}"
+	if len(bins) > 0 {
+		binLine = "binaries = " + formatValue(bins)
+	}
+	section("agent", "default: the harness the agent panel selects (empty: first installed). binaries: an executable per harness that wins over the PATH, e.g. { claude = \"/opt/claude/bin/claude\" }.",
+		"default = "+quote(s.DefaultAgent),
+		binLine)
 	update := []string{"auto_check = " + strconv.FormatBool(s.AutoUpdate)}
 	if !s.LastUpdateCheck.IsZero() {
 		update = append(update, "last_check = "+s.LastUpdateCheck.UTC().Format(time.RFC3339))

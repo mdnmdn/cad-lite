@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"maps"
 	"runtime"
 	"sync"
 	"time"
@@ -135,6 +136,7 @@ func (ws *Workspace) applySettings(s settings.Settings, w *gpui.Window) {
 	p.fireLanguage()
 	ws.refreshPlaceholders()
 	ws.applyLayout(s.Layout)
+	ws.applyAgentBinaries(s.AgentBinaries)
 	if h := s.DefaultAgent; h != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(h), "")
 	}
@@ -226,6 +228,9 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 	}
 	if next.Grid != old.Grid || next.OSnap != old.OSnap || next.Ortho != old.Ortho {
 		ws.applyDrawingDefaults()
+	}
+	if !maps.Equal(next.AgentBinaries, old.AgentBinaries) {
+		ws.applyAgentBinaries(next.AgentBinaries)
 	}
 	if next.DefaultAgent != old.DefaultAgent && next.DefaultAgent != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(next.DefaultAgent), "")

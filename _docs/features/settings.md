@@ -7,7 +7,7 @@ summary: The settings panel (theme, UI scale, drawing defaults, mouse wheel, def
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
+code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
@@ -53,9 +53,20 @@ behaviour and the default agent and where agents are found. Changes show at once
   The wheel or trackpad over the panel or its backdrop scrolls the body and never reaches the canvas. The
   body returns to the top each time the panel opens.
 - **AI agent.** The default harness (`auto`, `opencode`, `claude`, `codex`); `auto` takes the first one
-  found, in that order.
+  found, in that order. Below it, **Executables**: one row per agent with the program Cad-lite starts for
+  it — the file the user chose (`chosen by you`, with the version it reported), else the one on the PATH
+  (`found on the PATH`), else `not found` — a **Browse…** button and, for a chosen file, **Reset**.
+  Browse opens the native open dialog (the workspace's file dialog, as for Open) titled for that agent,
+  starting in the folder of the executable in use, else the home folder; on Windows it lists `.exe`,
+  `.cmd`, `.bat` and `.com` programs first, elsewhere every file. The chosen file must exist, not be a
+  folder and be executable (Windows: one of those extensions); it is then asked for `--version` (3 s at
+  most, silence is accepted). A refused file leaves the setting alone and shows why under the row; a
+  cancelled dialog does nothing; without a dialog backend the row says to edit `agent.binaries` in the
+  file. A chosen file wins over the PATH for discovery, for the agent panel's chips and for every
+  session start; Reset goes back to the PATH. A chosen file that has since disappeared is flagged in
+  red. After a change the discovery probe runs again if it ran before.
 - **Agent discovery.** Which of OpenCode, Claude and Codex were found, each with its full path and the
-  version its `--version` reports, or `not found`; a line saying where the PATH came from (login shell,
+  version its `--version` reports (marked when it is the executable chosen under AI agent), or `not found`; a line saying where the PATH came from (login shell,
   Windows registry, or the app's own when the probe failed, with the reason) and a `Show PATH` expander
   that lists the folders the login shell added. **Check** runs the probe again (the button shows
   `Checking…` meanwhile); **Open terminal** opens the user's terminal in the project folder, to install or
@@ -85,6 +96,7 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 | `drawing.grid`, `drawing.osnap`, `drawing.ortho` | boolean | true, true, false |
 | `drawing.wheel` | `auto`, `zoom`, `pan` | `auto` |
 | `agent.default` | harness name, or empty | empty |
+| `agent.binaries` | inline table of harness name to executable path, e.g. `{ claude = "/opt/claude/bin/claude" }`; empty paths are dropped, unknown names kept | `{}` |
 | `update.auto_check` | boolean | true |
 | `update.last_check` | timestamp, written by the app | unset |
 | `window.width`, `window.height` | logical pixels, 0 for unset | 1280, 800 |
@@ -105,10 +117,10 @@ API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Par
 `settings/settings.go` defines the values and `Normalize`; `settings/file.go` holds `Path`, `Parse`
 (into `Settings`, unknown keys into `Extra`), `Marshal` and the atomic `Save` (temporary file in the
 same directory, mode 0600, directory 0700, then rename). `ui/settings.go` keeps the workspace's
-settings state, `applySettings` (theme, scale, drawing defaults, agent), the debounced save through
+settings state, `applySettings` (theme, scale, drawing defaults, agent and its executables), the debounced save through
 `Window.After` and the hook `withSettings`, which `Workspace.Render` calls to mount the panel and the
 action; `ui/settings_view.go` renders the gear button and the panel; `ui/slider.go` is the reusable
-`Slider`. `ui/discovery.go` holds the discovery state (a worker goroutine hands its result to the UI goroutine through a poll timer, as the update check does), `ui/discovery_view.go` the section and `ui/terminal.go` `OpenTerminal` (macOS `open -a Terminal`, Windows `cmd /c start powershell`, elsewhere `$TERMINAL`, x-terminal-emulator, gnome-terminal, konsole or xterm, the first installed). Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
+`Slider`. `ui/agent_binary.go` holds the executables rows: `applyAgentBinaries` hands `Settings.AgentBinaries` to `harnesses.SetBinary` (on load and on every change) and reprobes the agent panel; `browseAgentBinary` runs the workspace's `FileDialog.Open` and `harnesses.Check` on a goroutine, and `pollBinary` adopts the answer on the UI goroutine (tests install a fake dialog with `SetFileDialog`). `ui/discovery.go` holds the discovery state (a worker goroutine hands its result to the UI goroutine through a poll timer, as the update check does), `ui/discovery_view.go` the section and `ui/terminal.go` `OpenTerminal` (macOS `open -a Terminal`, Windows `cmd /c start powershell`, elsewhere `$TERMINAL`, x-terminal-emulator, gnome-terminal, konsole or xterm, the first installed). Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
 applies the stored language with `i18n.Set` and takes the window size from it; a loaded UI scale
 applies on the first frame. The wording of the warnings is in `i18n/locales` (`settings.warn.*`).
 
