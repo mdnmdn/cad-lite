@@ -277,6 +277,16 @@ func (p *AgentPanel) harnessOf(t *agentTab) agentmanager.Harness {
 	return p.selected
 }
 
+// agentChanged is the MCP refresh hook, run on the UI goroutine after a mutating tool. Entity edits
+// already reached the render cache through the drawing's change sets, so only a layer table edit
+// (which no change set reports) drops the whole cache.
+func (p *AgentPanel) agentChanged() {
+	p.ws.builder.SyncLayers()
+	if p.win != nil {
+		p.win.Refresh()
+	}
+}
+
 // ensureServer starts the shared MCP server on first use.
 func (p *AgentPanel) ensureServer(w *gpui.Window) error {
 	if p.srv != nil {
@@ -287,13 +297,8 @@ func (p *AgentPanel) ensureServer(w *gpui.Window) error {
 	cadmcp.Register(srv, cadmcp.Env{
 		Dispatch: disp,
 		Session:  p.ws.Session,
-		Snapshot: Snapshot,
-		Changed: func() {
-			p.ws.builder.InvalidateAll()
-			if p.win != nil {
-				p.win.Refresh()
-			}
-		},
+		Snapshot: SnapshotImage,
+		Changed:  p.agentChanged,
 	})
 	ep, err := srv.Start()
 	if err != nil {

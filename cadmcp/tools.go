@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"math"
 	"strings"
@@ -26,10 +27,11 @@ type Env struct {
 	// Changed is the UI refresh hook, called on the UI goroutine after every
 	// tool that may have modified the drawing, selection or view.
 	Changed func()
-	// Snapshot renders the drawing to PNG bytes (see SnapshotRequest). It is
-	// called on the UI goroutine. When nil, render_png reports that
-	// rendering is not available.
-	Snapshot func(*cmdsys.Session, SnapshotRequest) ([]byte, error)
+	// Snapshot renders the drawing to an image (see SnapshotRequest). It is
+	// called on the UI goroutine; the image must not be shared with later
+	// renders, because render_png PNG-encodes it on the MCP handler's
+	// goroutine. When nil, render_png reports that rendering is not available.
+	Snapshot func(*cmdsys.Session, SnapshotRequest) (image.Image, error)
 }
 
 // Register adds every drawing tool to srv.

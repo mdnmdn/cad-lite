@@ -30,3 +30,34 @@ func TestBuilderDrawsLayerLineweightsOnlyWhenAsked(t *testing.T) {
 		t.Fatalf("default lineweight: weight %v, want 1", w)
 	}
 }
+
+func TestBuilderSyncLayersDropsCacheOnlyOnLayerChange(t *testing.T) {
+	d := doc.New()
+	tx, _ := d.Begin()
+	h := tx.Add(&doc.Line{End: geom.V(10, 0)})
+	tx.Commit()
+	b := render.NewBuilder(d, render.Color{A: 255})
+	v := render.DefaultView(800, 600)
+	b.Items(h, v)
+	if b.SyncLayers() || b.Cached() != 1 {
+		t.Fatalf("unchanged layers dropped the cache (cached %d)", b.Cached())
+	}
+	d.Layer("0").Color = 1
+	if !b.SyncLayers() || b.Cached() != 0 {
+		t.Fatal("a layer colour change kept the cache")
+	}
+	if c := b.Items(h, v)[0].Color; c != render.ACI(1) {
+		t.Fatalf("colour after sync = %v, want red", c)
+	}
+	d.AddLayer("walls", 4)
+	if !b.SyncLayers() {
+		t.Fatal("a new layer kept the cache")
+	}
+	d.Layer("walls").Lineweight = 50
+	if !b.SyncLayers() {
+		t.Fatal("a lineweight change kept the cache")
+	}
+	if b.SyncLayers() {
+		t.Fatal("a second sync without changes dropped the cache")
+	}
+}

@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"errors"
+	"image"
 	"image/png"
 	"math"
 
@@ -26,10 +27,24 @@ var (
 	uiRulerText  = gpui.RgbaOf(215, 220, 226, 255)
 )
 
-// Snapshot renders only the drawing of s as a PNG: background, optional grid,
-// entities, highlights and optional coordinate rulers, at req.View. It needs
-// no window and must run on the goroutine that owns s.
+// Snapshot renders only the drawing of s as a PNG; see SnapshotImage.
 func Snapshot(s *cmdsys.Session, req cadmcp.SnapshotRequest) ([]byte, error) {
+	img, err := SnapshotImage(s, req)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// SnapshotImage renders only the drawing of s: background, optional grid,
+// entities, highlights and optional coordinate rulers, at req.View. It needs
+// no window and must run on the goroutine that owns s; the image it returns
+// is its own, so it may be encoded on any goroutine.
+func SnapshotImage(s *cmdsys.Session, req cadmcp.SnapshotRequest) (image.Image, error) {
 	if s == nil {
 		return nil, errors.New("no drawing is open")
 	}
@@ -75,11 +90,7 @@ func Snapshot(s *cmdsys.Session, req cadmcp.SnapshotRequest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return img, nil
 }
 
 // gridLines mirrors the interactive grid: every power of ten at least 16 px

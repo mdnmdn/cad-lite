@@ -1,10 +1,13 @@
 package cadmcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"math"
 
 	"cad-lite/cmdsys"
@@ -17,7 +20,8 @@ import (
 
 // SnapshotRequest describes one render_png image. View is already resolved:
 // its Width and Height equal the image size and Center/Scale map model space
-// to pixels (Y up in the model, down in the image).
+// to pixels (Y up in the model, down in the image). The size never exceeds
+// MaxSnapshotPixels.
 type SnapshotRequest struct {
 	Width, Height int
 	View          render.View
@@ -35,8 +39,24 @@ const (
 	minSnap, maxSnap           = 64, 2048
 )
 
+// MaxSnapshotPixels caps the pixel count of a render_png image (2 megapixels, e.g. 2048x1024). A
+// larger request is scaled down uniformly, keeping its aspect ratio and the model window it asked
+// for, because rendering runs on the UI goroutine and freezes the window while it does.
+const MaxSnapshotPixels = 2048 * 1024
+
+// capSize scales w x h down, keeping its aspect ratio, until it holds at most MaxSnapshotPixels
+// pixels, and returns the new size and the factor applied (1 when it already fits).
+func capSize(w, h int) (int, int, float64) {
+	if w*h <= MaxSnapshotPixels {
+		return w, h, 1
+	}
+	k := math.Sqrt(float64(MaxSnapshotPixels) / float64(w*h))
+	cw, ch := max(1, int(float64(w)*k)), max(1, int(float64(h)*k))
+	return cw, ch, float64(cw) / float64(w)
+}
+
 const schemaRenderPNG = `{"type":"object","properties":{` +
-	`"width":{"type":"integer","minimum":64,"maximum":2048,"description":"image width in pixels, default 1024"},` +
+	`"width":{"type":"integer","minimum":64,"maximum":2048,"description":"image width in pixels, default 1024; width x height above 2 megapixels is scaled down keeping the aspect ratio and the view"},` +
 	`"height":{"type":"integer","minimum":64,"maximum":2048,"description":"image height in pixels, default 768"},` +
 	`"extents":{"type":"boolean","description":"fit the drawing extents with a margin (the default when no other view option is given)"},` +
 	`"bbox":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"[minx,miny,maxx,maxy] model window to fit exactly"},` +
@@ -166,7 +186,8 @@ func renderPNG(e Env) mcp.Tool {
 			if w < minSnap || w > maxSnap || h < minSnap || h > maxSnap {
 				return errResult("width and height must be between %d and %d", minSnap, maxSnap), nil
 			}
-			var png []byte
+			cw, ch, k := capSize(w, h)
+			var img image.Image
 			var info map[string]any
 			var ferr error
 			err := e.Dispatch.Do(ctx, func() {
@@ -180,18 +201,22 @@ func renderPNG(e Env) mcp.Tool {
 					ferr = err
 					return
 				}
-				req := SnapshotRequest{Width: w, Height: h, View: v, Grid: orTrue(a.Grid), Rulers: orTrue(a.Rulers)}
+				// The view is resolved at the requested size, then shrunk with the image so that a
+				// capped render still shows the model window that was asked for.
+				v.Scale *= k
+				v.Width, v.Height = float64(cw), float64(ch)
+				req := SnapshotRequest{Width: cw, Height: ch, View: v, Grid: orTrue(a.Grid), Rulers: orTrue(a.Rulers)}
 				if len(a.Highlight) > 0 {
 					if req.Highlight, err = parseHandles(s, a.Highlight); err != nil {
 						ferr = err
 						return
 					}
 				}
-				if png, err = e.Snapshot(s, req); err != nil {
+				if img, err = e.Snapshot(s, req); err != nil {
 					ferr = fmt.Errorf("rendering failed: %v", err)
 					return
 				}
-				info = snapshotInfo(s, v, w, h)
+				info = snapshotInfo(s, v, cw, ch)
 			})
 			switch {
 			case err != nil:
@@ -199,8 +224,18 @@ func renderPNG(e Env) mcp.Tool {
 			case ferr != nil:
 				return errResult("%v", ferr), nil
 			}
+			if k != 1 {
+				info["requested"] = []int{w, h}
+				info["downscaled"] = true
+			}
+			// PNG encoding is the costlier half and needs nothing the UI goroutine owns, so it runs
+			// here, on the MCP handler's goroutine.
+			var buf bytes.Buffer
+			if err := png.Encode(&buf, img); err != nil {
+				return errResult("encoding the image failed: %v", err), nil
+			}
 			text, _ := json.Marshal(info)
-			return mcp.Result{Content: []mcp.Content{mcp.Image(png), {Type: "text", Text: string(text)}}}, nil
+			return mcp.Result{Content: []mcp.Content{mcp.Image(buf.Bytes()), {Type: "text", Text: string(text)}}}, nil
 		},
 	}
 }

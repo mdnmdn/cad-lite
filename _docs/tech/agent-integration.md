@@ -76,7 +76,12 @@ The tools (all coordinates in model units, Y up; one tool call is one undo step)
 | `measure` | Length, perimeter, area, distance |
 | `render_png` | The drawing as a PNG, returned as MCP image content so a vision model can look at it, with a JSON block that maps pixels to model coordinates; views by extents, box, centre and scale, or the user's current view, with optional grid, rulers and selection highlight |
 
-`render_png` is drawn by `ui.Snapshot`, headlessly, from the session; it never captures the window.
+`render_png` is drawn by `ui.SnapshotImage`, headlessly, from the session; it never captures the window.
+The image holds at most `cadmcp.MaxSnapshotPixels` (2 megapixels, e.g. 2048x1024): a larger
+width x height is scaled down uniformly, keeping the aspect ratio and the model window the arguments
+asked for, and the JSON block then reports the size drawn plus `requested` and `downscaled`. The render
+runs on the UI goroutine (it reads the session); the PNG encoding runs afterwards on the MCP handler's
+goroutine, so the window stalls only for the render.
 
 **Agents cannot run file or destructive commands.** `cadmcp` runs every tool body through `call`, which
 sets `Session.SetAgentCaller(true)` for its duration. A command that implements `cmdsys.HumanOnly` (NEW,
@@ -124,8 +129,11 @@ is why Cad-lite shows its own stored transcript. The open tabs and the active on
 change and at quit (`Store.SaveOpen`); restoring them reads records only, so no agent starts until the
 user sends. Project switch and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).
 
-`Env.Changed` runs inside `Do`: it clears the render cache and refreshes the window, so the canvas shows
-the agent's edits between frames.
+`Env.Changed` runs inside `Do` after every mutating tool (`AgentPanel.agentChanged`) and refreshes the
+window, so the canvas shows the agent's edits between frames. It does not clear the render cache: entity
+edits reach it through the drawing's change sets, so it calls `Builder.SyncLayers`, which drops
+the cache only when a layer table edit (not journalled) changed a layer's colour or lineweight or the
+table itself.
 
 ## Permission policy
 

@@ -1,9 +1,12 @@
 package cadmcp_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"math"
 	"strings"
 	"testing"
@@ -17,7 +20,19 @@ import (
 	"agentmanager/mcp"
 )
 
-var fakePNG = []byte("\x89PNG fake")
+// decodePNG decodes the base64 PNG of an image content block.
+func decodePNG(t *testing.T, data string) image.Image {
+	t.Helper()
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("image does not decode: %v", err)
+	}
+	return img
+}
 
 func renderRig(t *testing.T, withSnapshot bool) (*cmdsys.Session, func(string) mcp.Result, *cadmcp.SnapshotRequest) {
 	t.Helper()
@@ -27,7 +42,10 @@ func renderRig(t *testing.T, withSnapshot bool) (*cmdsys.Session, func(string) m
 	got := &cadmcp.SnapshotRequest{}
 	env := cadmcp.Env{Dispatch: &cadmcp.DirectDispatcher{}, Session: func() *cmdsys.Session { return s }}
 	if withSnapshot {
-		env.Snapshot = func(_ *cmdsys.Session, r cadmcp.SnapshotRequest) ([]byte, error) { *got = r; return fakePNG, nil }
+		env.Snapshot = func(_ *cmdsys.Session, r cadmcp.SnapshotRequest) (image.Image, error) {
+			*got = r
+			return image.NewNRGBA(image.Rect(0, 0, r.Width, r.Height)), nil
+		}
 	}
 	var tool mcp.Tool
 	for _, tl := range cadmcp.Tools(env) {
@@ -56,8 +74,11 @@ func TestRenderPNGDefaultsAndResult(t *testing.T) {
 	if res.IsError || len(res.Content) != 2 {
 		t.Fatalf("result = %+v", res)
 	}
-	if c := res.Content[0]; c.Type != "image" || c.MIMEType != "image/png" || c.Data != base64.StdEncoding.EncodeToString(fakePNG) {
+	if c := res.Content[0]; c.Type != "image" || c.MIMEType != "image/png" {
 		t.Fatalf("image content = %+v", c)
+	}
+	if b := decodePNG(t, res.Content[0].Data).Bounds(); b.Dx() != 1024 || b.Dy() != 768 {
+		t.Fatalf("image is %v, want 1024x768", b)
 	}
 	var info struct {
 		Width, Height int
@@ -125,6 +146,44 @@ func TestRenderPNGViews(t *testing.T) {
 	call(`{"highlight":["` + h + `"]}`)
 	if len(got.Highlight) != 1 || got.Highlight[0].String() != h {
 		t.Fatalf("highlight = %v", got.Highlight)
+	}
+}
+
+// A request above MaxSnapshotPixels renders smaller, with the same aspect ratio and model window.
+func TestRenderPNGCapsPixelCount(t *testing.T) {
+	_, call, got := renderRig(t, true)
+	res := call(`{"width":2048,"height":2048,"center":[0,0],"scale":1}`)
+	if res.IsError {
+		t.Fatalf("result = %+v", res)
+	}
+	if got.Width*got.Height > cadmcp.MaxSnapshotPixels || got.Width != got.Height || got.Width < 1400 {
+		t.Fatalf("capped size = %dx%d, want square within %d pixels", got.Width, got.Height, cadmcp.MaxSnapshotPixels)
+	}
+	if v := got.View; v.Width != float64(got.Width) || !near(v.Scale*2048, float64(got.Width)) {
+		t.Fatalf("view = %+v, want the 2048-unit window at the capped size", v)
+	}
+	if b := decodePNG(t, res.Content[0].Data).Bounds(); b.Dx() != got.Width || b.Dy() != got.Height {
+		t.Fatalf("image is %v, want %dx%d", b, got.Width, got.Height)
+	}
+	var info struct {
+		Width, Height int
+		Requested     []int
+		Downscaled    bool
+	}
+	if err := json.Unmarshal([]byte(res.Content[1].Text), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.Width != got.Width || info.Height != got.Height || !info.Downscaled || len(info.Requested) != 2 || info.Requested[0] != 2048 {
+		t.Fatalf("info = %+v", info)
+	}
+
+	call(`{"width":2048,"height":1024}`)
+	if got.Width != 2048 || got.Height != 1024 {
+		t.Fatalf("a request at the cap was scaled: %dx%d", got.Width, got.Height)
+	}
+	call(`{"width":2048,"height":64}`)
+	if got.Width != 2048 || got.Height != 64 {
+		t.Fatalf("a small request was scaled: %dx%d", got.Width, got.Height)
 	}
 }
 
