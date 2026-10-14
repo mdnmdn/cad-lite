@@ -23,9 +23,9 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 
 | # | Milestone | Spike covers | Missing |
 |---|---|---|---|
-| M1 | Kernel, model, DXF read | Kernel, document, spatial index, DXF read for LINE, CIRCLE, ARC, polylines, layers, handles | Unknown objects, blocks, text, other entities (G1, G7) |
+| M1 | Kernel, model, DXF read | Kernel, document, spatial index, DXF read for LINE, CIRCLE, ARC, polylines, layers, handles | Unknown objects in newer classes, blocks, text, other entities (G1, G7) |
 | M2 | Viewer | Pan, zoom, layers on and off | Linetypes, lineweights, text, hatch (G7) |
-| M3 | Editing core | LINE, PLINE, CIRCLE, ARC, RECTANG, MOVE, COPY, ERASE, ROTATE, SCALE, snaps, selection, undo and redo, DXF save (R12) | Lossless round trip (G1, G2) |
+| M3 | Editing core | LINE, PLINE, CIRCLE, ARC, RECTANG, MOVE, COPY, ERASE, ROTATE, SCALE, snaps, selection, undo and redo, DXF save (R12) | Lossless round trip for newer classes (G2) |
 | M4 | DWG | Reader and writer interfaces | The library (O1) |
 | M5 | Full v1 command set | The commands in the drawing and editing document | G8, G9 |
 | M6 | Annotation and output | None | Dimensions, MTEXT, layouts, SVG and PDF export (G7, G17) |
@@ -35,8 +35,8 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 
 | id | Gap | Affects |
 |---|---|---|
-| G1 | Unknown-object preservation: the DXF reader skips unsupported entities with warnings, so a save is not lossless | [DXF files](features/dxf-files.md), [File I/O](tech/file-io.md) |
-| G2 | DXF 2018 writer (the writer emits R12) and a binary DXF reader | [File I/O](tech/file-io.md) |
+| G1 | Unknown objects in OBJECTS and CLASSES, unmodelled header variables and paper-space (code 67) entities are not preserved or separated; unknown entities of classes R12 lacks cannot be saved until G2 | [DXF files](features/dxf-files.md), [File I/O](tech/file-io.md) |
+| G2 | Writing newer DXF versions (AC1015+: handles and owners, BLOCK_RECORD, CLASSES, OBJECTS) so unknown SPLINE, MTEXT, HATCH and custom entities survive a save; a binary DXF reader | [File I/O](tech/file-io.md) |
 | G3 | R-tree: the spatial index is a linear scan | [Geometry kernel](tech/geometry-kernel.md) |
 | G4 | Pointer move re-rasterises the whole window; no base-layer cache | [Rendering](tech/rendering.md), [Drawing canvas](features/canvas.md) |
 | G5 | No large-drawing benchmark and no DXF corpus test | [Testing](tech/testing.md) |
@@ -71,3 +71,4 @@ New lines are appended below this heading.
 | G29 | Alternative to image results: a small CLI, found through an environment variable, that talks to the running instance and writes a PNG for agents whose harness drops MCP images | [Agent integration](tech/agent-integration.md) |
 | G30 | Agent token usage: `TurnEnd` has no usage field, so usage only reaches the debug log and the panel cannot show it | [Agent panel](features/agent-panel.md) |
 | G31 | Live tests of agent session resume and of killing the Claude process on close | [Agent integration](tech/agent-integration.md) |
+| G32 | Handle-taking MCP tools accept unknown-entity handles and silently do nothing; they should return an error (`parseHandles` in `cadmcp/tools.go`) | [Agent integration](tech/agent-integration.md) |

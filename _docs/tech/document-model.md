@@ -7,7 +7,7 @@ summary: How a drawing is stored — handles, entities, layers, the header — a
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go]
+code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go, doc/unknown.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -42,6 +42,16 @@ and not journalled.
 
 **Header.** `doc.Header` holds `HandSeed`, `InsUnits` and, in `Extra`, every header variable the
 reader does not model, kept as read.
+
+**Unknown entities and preserved records.** `doc.Unknown` keeps an entity of a class the document
+does not model. `Type` is the class name and `Raw` the groups after its `0 CLASS` line in file order,
+including 5, 8, 62 and 330; `EntityCommon` is a parsed view of `Raw`, and the writer emits `Raw`. It
+has no geometry, so it is never drawn, picked, snapped to or selected. `Bounds` is the box of its
+point groups, a hint only, and `Drawing.Extents` ignores it. It is never editable: `Txn.Modify` does
+not call the edit function, `Txn.Erase` does nothing and `Txn.Add` returns 0. Only `Drawing.Load`
+creates one. `Drawing.Preserved` holds the table records and blocks the document does not model, as
+`doc.RawRecord` groups; the user cannot change them. [File I/O](file-io.md) says what the DXF codec
+keeps and writes.
 
 **Draw order.** `Drawing.Handles` returns entity handles in ascending order, so newer entities draw
 on top.

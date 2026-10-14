@@ -7,7 +7,7 @@ summary: The format plugin interface and registry, what the DXF codec reads and 
 read_when: you are adding a file format, changing what the DXF codec reads or writes, or deciding how DWG support lands
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go]
+code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, doc/unknown.go]
 depends_on: [tech-document-model]
 review_cycle: quarterly
 ---
@@ -35,16 +35,27 @@ never shadows the standard library's `io`.
 | TABLES | `LAYER` records: name, colour (negative means off), the locked flag |
 | ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, and 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline` |
 
-Entity handles (code 5), layers (8) and colours (62) are kept. Every other entity type, and 3D
-polylines and meshes, is skipped and counted: the reader returns one warning per skipped type. A
-file whose group codes are not integers (binary DXF) or that ends inside a pair is an error.
+Entity handles (code 5), layers (8) and colours (62) are kept. Every other entity class, and 3D
+polylines and meshes, is kept as a `doc.Unknown` holding its raw group list and the sub-records it
+owns (ATTRIB, VERTEX, SEQEND); the reader returns one warning per class with the count. Tables the
+document does not model (VPORT, LTYPE other than CONTINUOUS, STYLE, VIEW, UCS, APPID, DIMSTYLE) and
+every block except `*Model_Space` and `*Paper_Space` go to `Drawing.Preserved`. An entity whose
+handle duplicates one read earlier is renumbered, with a warning. OBJECTS, CLASSES and the thumbnail are not
+read. A file whose group codes are not integers (binary DXF) or that ends inside a pair is an error.
 
-**Writing** emits R12 (`AC1009`), the most widely readable version: the header (`$ACADVER`,
-`$CLAYER`, `$HANDLING`, `$HANDSEED`), a `CONTINUOUS` linetype, the layer table with colours, the
-off and locked states, and the entities with their handles. An `LWPolyline` is written as
+**Writing** emits R12 (`AC1009`), the most widely readable version, in this order: the header
+(`$ACADVER`, `$CLAYER`, `$HANDLING`, `$HANDSEED`), the `CONTINUOUS` linetype followed by the
+preserved linetypes, the layer table with colours and the off and locked states, the other preserved
+tables, the preserved blocks, and the entities with their handles. An `LWPolyline` is written as
 `POLYLINE`/`VERTEX`/`SEQEND`; the vertex and sequence-end records take handles above the drawing's
 seed, which are not part of the document. Header variables the document does not model are not
 written.
+
+An `Unknown` whose class R12 defines (POINT, TRACE, SOLID, TEXT, SHAPE, INSERT, ATTDEF, POLYLINE,
+3DLINE, 3DFACE, VIEWPORT, DIMENSION) is written group for group, minus the groups that exist only
+from R13 on: 100, 102, 330 and 360. A strict R12 reader such as ezdxf rejects them; a file written
+this way passes an ezdxf 1.4.4 audit clean. An `Unknown` of any other class (SPLINE, MTEXT, HATCH,
+ELLIPSE, custom classes) is skipped with a warning, as is a non-R12 entity inside a preserved block.
 
 A written file reads back with the same handles, layers, colours and geometry; the round-trip test
 in `fileio/dxf` holds the codec to that.

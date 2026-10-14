@@ -7,7 +7,7 @@ summary: Opening and saving DXF drawings from the command line and the -open fla
 read_when: you are changing OPEN, SAVE or the -open flag, or how file problems are reported to the user
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/util.go, cmd/cad/main.go, fileio/format.go]
+code_anchors: [cmdsys/commands/util.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -31,13 +31,19 @@ reported rather than hidden, so the drafter knows what the opened drawing lacks.
 - `-open PATH` on the command line opens a file at startup and zooms to its extents.
 - Opening replaces the drawing, its undo history and the selection; the previous drawing is not saved first.
 - Reading and writing keep handles, layers, colours and geometry for `LINE`, `CIRCLE`, `ARC` and
-  polylines. What else is read, what is skipped and which DXF version is written are owned by
+  polylines. What else is read, what is kept and which DXF version is written are owned by
   [File I/O](../tech/file-io.md).
+- **Unknown entities.** An entity of a class go-draw does not model opens without error. It is not
+  shown and cannot be selected, snapped to or edited, but it stays in the drawing and SAVE writes it
+  again when R12 has its class. Entities of classes R12 lacks (SPLINE, MTEXT, HATCH, ELLIPSE and
+  custom classes) are left out of the saved file, with a warning that names each one. The
+  `list_entities` agent tool lists them with `unknown: true`.
 
 ### Warnings
 
-A reader or writer that skips or drops something reports a warning, such as
-`skipped 12 TEXT entities (not supported)` on reading or `... not written (not supported by the R12 writer)` on saving. Each shows in the history as `Warning: <text>`. At most
+A reader or writer that keeps, skips or drops something reports a warning, such as
+`kept 12 SPLINE entities as unknown objects (not displayed or editable)` on reading, one per unknown
+class, or `... not written (not supported by the R12 writer)` on saving. Each shows in the history as `Warning: <text>`. At most
 five show; any further ones collapse into `... and N more warnings.` With `-open`, warnings go to the
 standard error log instead, one line each, prefixed with the path.
 
@@ -74,19 +80,19 @@ builds the registry, opens `-open` before creating the workspace and calls
 ## Failure
 
 - Warnings never fail an operation; the file opens or saves with what could be handled.
-- Saving a drawing that was opened with warnings writes only what the document holds, so the skipped
-  entities are absent from the saved file. The reader does not preserve them, so a round trip of a
-  file with unsupported entities is lossy.
+- Saving writes unknown entities of R12 classes and the preserved tables and blocks. Unknown
+  entities of other classes are absent from the saved file, each with a warning, so a round trip of
+  a file that has them is lossy.
 - The reader rejects binary DXF and files that end inside a group-code pair.
 
 ## Related docs
 
 - [File I/O](../tech/file-io.md) — the codec, the supported entities and the DXF version written
 - [Drawing and editing commands](drawing-and-editing.md) — the command list that names OPEN and SAVE
-- [Backlog](../backlog.md) — unknown-object preservation, DXF 2018 and binary DXF
+- [Backlog](../backlog.md) — unknown objects that cannot be saved, newer DXF versions and binary DXF
 
 ## Next steps
 
-- Preserve unsupported entities so unread data survives a save.
+- Write newer DXF versions so unknown entities of classes R12 lacks survive a save.
 - A native open and save dialog.
 - Browser file access through the browser's own APIs.
