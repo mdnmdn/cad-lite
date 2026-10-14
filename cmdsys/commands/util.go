@@ -329,6 +329,8 @@ func Register(r *cmdsys.Registry) {
 	})
 	r.Register("OPEN", func() cmdsys.Command { return &fileCmd{name: "OPEN"} })
 	r.Register("SAVE", func() cmdsys.Command { return &fileCmd{name: "SAVE"} })
+	registerConstruct(r)
+	registerTrim(r)
 	r.LoadAliases(Aliases)
 }
 
