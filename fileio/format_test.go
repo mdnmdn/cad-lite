@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"cad-lite/doc"
@@ -62,7 +63,8 @@ func TestSaveReplacesAtomicallyAndKeepsMode(t *testing.T) {
 	if b, _ := os.ReadFile(path); string(b) != "new content" {
 		t.Fatalf("content %q", b)
 	}
-	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits: Stat reports 0666 for any writable file.
+	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v", st.Mode())
 	}
 	fresh := filepath.Join(dir, "b.bad")
