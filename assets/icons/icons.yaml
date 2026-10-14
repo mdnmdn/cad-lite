@@ -28,39 +28,71 @@ categories:
       goal: a straight segment between two picked points
       keywords: [line, segment, stroke]
     draw-polyline:
-      goal: a connected chain of segments with corners you pick one by one
+      goal: a connected chain of segments, one of them an arc, with a grip at every picked vertex
       keywords: [pline, polyline, path, zigzag]
     draw-circle:
       goal: a circle placed by its centre point
       keywords: [circle, ring, round]
     draw-arc:
-      goal: a curved piece of a circle with its two end points
+      goal: a curved piece of a circle through three picked points (start, middle, end)
       keywords: [arc, curve, bend]
     draw-rectangle:
       goal: an axis-aligned rectangle from two opposite corners
       keywords: [rectang, rect, box, square]
+    draw-polygon:
+      goal: a regular polygon, drawn as a hexagon
+      keywords: [polygon, hexagon, regular]
+    draw-ellipse:
+      goal: an ellipse with its centre marked
+      keywords: [ellipse, oval]
 
   modify:
     modify-move:
       goal: shift the selection to another place without changing it
-      source: adopted:move
-      keywords: [move, translate, shift, four arrows]
+      keywords: [move, translate, shift, four arrows, displacement]
     modify-copy:
       goal: duplicate the selection, leaving the original where it is
-      source: adopted:copy
       keywords: [copy, duplicate, clone]
     modify-rotate:
       goal: turn the selection around a base point
-      source: adopted:rotate-cw
-      keywords: [rotate, turn, spin]
+      keywords: [rotate, turn, spin, base point]
     modify-scale:
       goal: make the selection bigger or smaller about a base point
-      source: adopted:scaling
       keywords: [scale, resize, grow, shrink]
     modify-erase:
       goal: remove the selection from the drawing
       source: adopted:eraser
       keywords: [erase, delete, remove, rubber]
+    modify-mirror:
+      goal: reflect the selection across an axis, shown as a dashed line
+      keywords: [mirror, reflect, flip, symmetry, axis]
+    modify-offset:
+      goal: a parallel copy of a curve at a set distance
+      keywords: [offset, parallel, concentric, distance]
+    modify-fillet:
+      goal: two lines joined by a rounded corner
+      keywords: [fillet, round corner, radius]
+    modify-chamfer:
+      goal: two lines joined by a bevelled corner
+      keywords: [chamfer, bevel, cut corner]
+    modify-trim:
+      goal: cut a line back to a cutting edge, the removed part dotted
+      keywords: [trim, cut, cutting edge, clip]
+    modify-extend:
+      goal: lengthen a line up to a boundary edge, the new part dotted
+      keywords: [extend, lengthen, boundary, stretch to]
+    modify-break:
+      goal: split a line, leaving a gap between two grips
+      keywords: [break, gap, split, cut]
+    modify-join:
+      goal: two segments merge into one
+      keywords: [join, merge, connect, weld]
+    modify-explode:
+      goal: a polyline falls apart into separate segments
+      keywords: [explode, burst, split apart, ungroup]
+    modify-stretch:
+      goal: pull the part of the geometry inside a crossing window
+      keywords: [stretch, crossing window, pull]
 
   edit:
     edit-undo:
@@ -73,14 +105,15 @@ categories:
       keywords: [redo, forward, reapply]
 
   view:
+    view-zoom:
+      goal: change the magnification of the view
+      keywords: [zoom, magnifier, realtime, in, out]
     view-zoom-extents:
       goal: fit the whole drawing in the window
-      source: adopted:maximize
       keywords: [zoom extents, fit, all, maximize]
     view-zoom-window:
       goal: zoom into a window the reader picks
-      source: adopted:scan-search
-      keywords: [zoom, magnifier, window, search]
+      keywords: [zoom window, magnifier, window, search]
     view-pan:
       goal: slide the view around without changing the drawing
       source: adopted:hand
@@ -88,7 +121,7 @@ categories:
     view-grid:
       goal: the background grid, shown or hidden
       source: adopted:grid-3x3
-      keywords: [grid, snap grid, lattice]
+      keywords: [grid, lattice, grid display]
 
   snap:
     snap-osnap:
@@ -97,11 +130,26 @@ categories:
     snap-ortho:
       goal: movement is held to right angles, horizontal and vertical only
       keywords: [ortho, orthogonal, right angle, perpendicular]
+    snap-polar:
+      goal: movement locks to angle increments around the start point
+      keywords: [polar, polar tracking, angle increment, rays]
+    snap-grid:
+      goal: the pointer jumps from grid point to grid point
+      keywords: [snap, grid snap, snap mode, dots, cursor]
+    snap-otrack:
+      goal: dotted tracking lines run from acquired points to the pointer
+      keywords: [otrack, object snap tracking, tracking, alignment]
+    snap-dyn:
+      goal: values appear in a box beside the pointer for typing
+      keywords: [dyn, dynamic input, tooltip, cursor]
+    snap-lwt:
+      goal: lines are shown with their weight, thin to thick
+      keywords: [lwt, lineweight, thickness, thick line]
 
   measure:
     measure-distance:
       goal: the length between two picked points, as a dimension line
-      keywords: [dist, distance, length, dimension]
+      keywords: [dist, distance, length, dimension, ruler]
     measure-area:
       goal: the surface enclosed by a closed outline
       keywords: [area, surface, hatch, polygon]
@@ -119,20 +167,30 @@ categories:
 
   layer:
     layer-visible:
-      goal: the layer is shown
-      source: adopted:eye
-      keywords: [visible, show, on, eye]
+      goal: the layer is on, a lit bulb
+      keywords: [visible, show, on, bulb, lamp]
     layer-hidden:
-      goal: the layer is hidden
-      source: adopted:eye-off
-      keywords: [hidden, hide, off, frozen]
+      goal: the layer is off, a dark bulb
+      keywords: [hidden, hide, off, bulb]
     layer-current:
-      goal: the layer new geometry goes on
+      goal: the layer new geometry goes on, a stack of sheets
       source: adopted:layers
-      keywords: [layer, current, stack]
+      keywords: [layer, current, stack, properties]
+    layer-frozen:
+      goal: the layer is frozen, a snowflake
+      keywords: [freeze, frozen, snowflake, cold]
+    layer-thawed:
+      goal: the layer is thawed, a sun
+      keywords: [thaw, thawed, sun, warm]
+    layer-locked:
+      goal: the layer is locked against edits, a closed padlock
+      keywords: [lock, locked, padlock, protect]
+    layer-unlocked:
+      goal: the layer can be edited, an open padlock
+      keywords: [unlock, unlocked, open padlock]
 
   app:
     app-settings:
       goal: open the settings panel
-      source: adopted:settings
+      source: custom
       keywords: [settings, preferences, options, gear, cog, theme]

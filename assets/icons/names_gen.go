@@ -6,16 +6,22 @@ const (
 	// AppSettings: open the settings panel
 	AppSettings Name = "app-settings"
 
-	// DrawArc: a curved piece of a circle with its two end points
+	// DrawArc: a curved piece of a circle through three picked points (start, middle, end)
 	DrawArc Name = "draw-arc"
 
 	// DrawCircle: a circle placed by its centre point
 	DrawCircle Name = "draw-circle"
 
+	// DrawEllipse: an ellipse with its centre marked
+	DrawEllipse Name = "draw-ellipse"
+
 	// DrawLine: a straight segment between two picked points
 	DrawLine Name = "draw-line"
 
-	// DrawPolyline: a connected chain of segments with corners you pick one by one
+	// DrawPolygon: a regular polygon, drawn as a hexagon
+	DrawPolygon Name = "draw-polygon"
+
+	// DrawPolyline: a connected chain of segments, one of them an arc, with a grip at every picked vertex
 	DrawPolyline Name = "draw-polyline"
 
 	// DrawRectangle: an axis-aligned rectangle from two opposite corners
@@ -27,13 +33,25 @@ const (
 	// EditUndo: take back the last change
 	EditUndo Name = "edit-undo"
 
-	// LayerCurrent: the layer new geometry goes on
+	// LayerCurrent: the layer new geometry goes on, a stack of sheets
 	LayerCurrent Name = "layer-current"
 
-	// LayerHidden: the layer is hidden
+	// LayerFrozen: the layer is frozen, a snowflake
+	LayerFrozen Name = "layer-frozen"
+
+	// LayerHidden: the layer is off, a dark bulb
 	LayerHidden Name = "layer-hidden"
 
-	// LayerVisible: the layer is shown
+	// LayerLocked: the layer is locked against edits, a closed padlock
+	LayerLocked Name = "layer-locked"
+
+	// LayerThawed: the layer is thawed, a sun
+	LayerThawed Name = "layer-thawed"
+
+	// LayerUnlocked: the layer can be edited, an open padlock
+	LayerUnlocked Name = "layer-unlocked"
+
+	// LayerVisible: the layer is on, a lit bulb
 	LayerVisible Name = "layer-visible"
 
 	// MeasureAngle: the opening between two lines
@@ -51,14 +69,38 @@ const (
 	// MeasureRadius: the radius of a circle or arc
 	MeasureRadius Name = "measure-radius"
 
+	// ModifyBreak: split a line, leaving a gap between two grips
+	ModifyBreak Name = "modify-break"
+
+	// ModifyChamfer: two lines joined by a bevelled corner
+	ModifyChamfer Name = "modify-chamfer"
+
 	// ModifyCopy: duplicate the selection, leaving the original where it is
 	ModifyCopy Name = "modify-copy"
 
 	// ModifyErase: remove the selection from the drawing
 	ModifyErase Name = "modify-erase"
 
+	// ModifyExplode: a polyline falls apart into separate segments
+	ModifyExplode Name = "modify-explode"
+
+	// ModifyExtend: lengthen a line up to a boundary edge, the new part dotted
+	ModifyExtend Name = "modify-extend"
+
+	// ModifyFillet: two lines joined by a rounded corner
+	ModifyFillet Name = "modify-fillet"
+
+	// ModifyJoin: two segments merge into one
+	ModifyJoin Name = "modify-join"
+
+	// ModifyMirror: reflect the selection across an axis, shown as a dashed line
+	ModifyMirror Name = "modify-mirror"
+
 	// ModifyMove: shift the selection to another place without changing it
 	ModifyMove Name = "modify-move"
+
+	// ModifyOffset: a parallel copy of a curve at a set distance
+	ModifyOffset Name = "modify-offset"
 
 	// ModifyRotate: turn the selection around a base point
 	ModifyRotate Name = "modify-rotate"
@@ -66,17 +108,41 @@ const (
 	// ModifyScale: make the selection bigger or smaller about a base point
 	ModifyScale Name = "modify-scale"
 
+	// ModifyStretch: pull the part of the geometry inside a crossing window
+	ModifyStretch Name = "modify-stretch"
+
+	// ModifyTrim: cut a line back to a cutting edge, the removed part dotted
+	ModifyTrim Name = "modify-trim"
+
+	// SnapDyn: values appear in a box beside the pointer for typing
+	SnapDyn Name = "snap-dyn"
+
+	// SnapGrid: the pointer jumps from grid point to grid point
+	SnapGrid Name = "snap-grid"
+
+	// SnapLwt: lines are shown with their weight, thin to thick
+	SnapLwt Name = "snap-lwt"
+
 	// SnapOrtho: movement is held to right angles, horizontal and vertical only
 	SnapOrtho Name = "snap-ortho"
 
 	// SnapOsnap: the pointer locks onto exact points of existing geometry
 	SnapOsnap Name = "snap-osnap"
 
+	// SnapOtrack: dotted tracking lines run from acquired points to the pointer
+	SnapOtrack Name = "snap-otrack"
+
+	// SnapPolar: movement locks to angle increments around the start point
+	SnapPolar Name = "snap-polar"
+
 	// ViewGrid: the background grid, shown or hidden
 	ViewGrid Name = "view-grid"
 
 	// ViewPan: slide the view around without changing the drawing
 	ViewPan Name = "view-pan"
+
+	// ViewZoom: change the magnification of the view
+	ViewZoom Name = "view-zoom"
 
 	// ViewZoomExtents: fit the whole drawing in the window
 	ViewZoomExtents Name = "view-zoom-extents"
@@ -90,28 +156,50 @@ var All = []Name{
 	AppSettings,
 	DrawArc,
 	DrawCircle,
+	DrawEllipse,
 	DrawLine,
+	DrawPolygon,
 	DrawPolyline,
 	DrawRectangle,
 	EditRedo,
 	EditUndo,
 	LayerCurrent,
+	LayerFrozen,
 	LayerHidden,
+	LayerLocked,
+	LayerThawed,
+	LayerUnlocked,
 	LayerVisible,
 	MeasureAngle,
 	MeasureArea,
 	MeasureDistance,
 	MeasureIdPoint,
 	MeasureRadius,
+	ModifyBreak,
+	ModifyChamfer,
 	ModifyCopy,
 	ModifyErase,
+	ModifyExplode,
+	ModifyExtend,
+	ModifyFillet,
+	ModifyJoin,
+	ModifyMirror,
 	ModifyMove,
+	ModifyOffset,
 	ModifyRotate,
 	ModifyScale,
+	ModifyStretch,
+	ModifyTrim,
+	SnapDyn,
+	SnapGrid,
+	SnapLwt,
 	SnapOrtho,
 	SnapOsnap,
+	SnapOtrack,
+	SnapPolar,
 	ViewGrid,
 	ViewPan,
+	ViewZoom,
 	ViewZoomExtents,
 	ViewZoomWindow,
 }
