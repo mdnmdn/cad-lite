@@ -1,0 +1,132 @@
+# Every icon go-draw draws.
+#
+# A key is the file name (`assets/icons/<key>.svg`), the icon's name in the registry and the Go
+# constant in names_gen.go — one spelling, kebab-case `<category>-<thing>`, no synonyms. The value
+# is the icon's *goal*: what a reader has to understand from it, in one line. Write the goal
+# before drawing anything; a goal you cannot state in a line is a concept that is not settled.
+#
+# Longer entries take a mapping instead of the bare string:
+#   source:   `custom` (the default) — we drew it.
+#             `adopted:<lucide-name>` — started as a Lucide icon (ISC, see LICENSE-lucide) and now
+#             lives here, rewritten on our root by `just icons-adopt`. The provenance stays in the
+#             row. Adopted geometry is exempt from the shape-count, ink-envelope and decimals
+#             rules, because it is coherent by construction.
+#   keywords: what someone would search for. Grep these before drawing a new icon; a hit means
+#             the icon exists under another name.
+#
+# `canon` is the frozen reference strip: approved, never redrawn. Every review sheet carries it
+# so a new icon is judged against a fixed point, not against the last batch.
+#
+# `just icons-check` keeps this file, the directory and names_gen.go honest. A row with no file
+# yet is a worklist entry, not a failure.
+
+canon: [draw-line, draw-circle, draw-rectangle, snap-ortho]
+
+categories:
+  draw:
+    draw-line:
+      goal: a straight segment between two picked points
+      keywords: [line, segment, stroke]
+    draw-polyline:
+      goal: a connected chain of segments with corners you pick one by one
+      keywords: [pline, polyline, path, zigzag]
+    draw-circle:
+      goal: a circle placed by its centre point
+      keywords: [circle, ring, round]
+    draw-arc:
+      goal: a curved piece of a circle with its two end points
+      keywords: [arc, curve, bend]
+    draw-rectangle:
+      goal: an axis-aligned rectangle from two opposite corners
+      keywords: [rectang, rect, box, square]
+
+  modify:
+    modify-move:
+      goal: shift the selection to another place without changing it
+      source: adopted:move
+      keywords: [move, translate, shift, four arrows]
+    modify-copy:
+      goal: duplicate the selection, leaving the original where it is
+      source: adopted:copy
+      keywords: [copy, duplicate, clone]
+    modify-rotate:
+      goal: turn the selection around a base point
+      source: adopted:rotate-cw
+      keywords: [rotate, turn, spin]
+    modify-scale:
+      goal: make the selection bigger or smaller about a base point
+      source: adopted:scaling
+      keywords: [scale, resize, grow, shrink]
+    modify-erase:
+      goal: remove the selection from the drawing
+      source: adopted:eraser
+      keywords: [erase, delete, remove, rubber]
+
+  edit:
+    edit-undo:
+      goal: take back the last change
+      source: adopted:undo-2
+      keywords: [undo, back, revert]
+    edit-redo:
+      goal: bring back the change that was just taken back
+      source: adopted:redo-2
+      keywords: [redo, forward, reapply]
+
+  view:
+    view-zoom-extents:
+      goal: fit the whole drawing in the window
+      source: adopted:maximize
+      keywords: [zoom extents, fit, all, maximize]
+    view-zoom-window:
+      goal: zoom into a window the reader picks
+      source: adopted:scan-search
+      keywords: [zoom, magnifier, window, search]
+    view-pan:
+      goal: slide the view around without changing the drawing
+      source: adopted:hand
+      keywords: [pan, hand, drag view]
+    view-grid:
+      goal: the background grid, shown or hidden
+      source: adopted:grid-3x3
+      keywords: [grid, snap grid, lattice]
+
+  snap:
+    snap-osnap:
+      goal: the pointer locks onto exact points of existing geometry
+      keywords: [osnap, object snap, endpoint, marker]
+    snap-ortho:
+      goal: movement is held to right angles, horizontal and vertical only
+      keywords: [ortho, orthogonal, right angle, perpendicular]
+
+  measure:
+    measure-distance:
+      goal: the length between two picked points, as a dimension line
+      keywords: [dist, distance, length, dimension]
+    measure-area:
+      goal: the surface enclosed by a closed outline
+      keywords: [area, surface, hatch, polygon]
+    measure-angle:
+      goal: the opening between two lines
+      source: adopted:angle
+      keywords: [angle, degrees, corner]
+    measure-radius:
+      goal: the radius of a circle or arc
+      keywords: [radius, circle, diameter]
+    measure-id-point:
+      goal: report the coordinates of a picked point
+      source: adopted:crosshair
+      keywords: [id, point, coordinates, crosshair, locate]
+
+  layer:
+    layer-visible:
+      goal: the layer is shown
+      source: adopted:eye
+      keywords: [visible, show, on, eye]
+    layer-hidden:
+      goal: the layer is hidden
+      source: adopted:eye-off
+      keywords: [hidden, hide, off, frozen]
+    layer-current:
+      goal: the layer new geometry goes on
+      source: adopted:layers
+      keywords: [layer, current, stack]

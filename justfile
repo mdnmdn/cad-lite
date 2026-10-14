@@ -33,3 +33,31 @@ docs-drift:
 # regenerate the INDEX.md catalogue and tech/code-map.md
 docs-index:
     go run ./tools/docs index
+
+# lint the icon registry and SVGs, and fail if names_gen.go is stale
+icons-check:
+    uv run tools/icons/icons.py check
+
+# regenerate assets/icons/names_gen.go from the registry
+icons-gen:
+    uv run tools/icons/icons.py codegen
+
+# a review sheet: `just icons-sheet draw-line`, or `just icons-sheet --category draw`
+icons-sheet *ARGS:
+    uv run tools/icons/icons.py sheet {{ARGS}}
+
+# copy Lucide icons in as `adopted:` rows: `just icons-adopt` (all unfilled) or by name
+icons-adopt *ARGS:
+    uv run tools/icons/icons.py adopt {{ARGS}}
+
+# compare the competing takes in assets/icons/variants/: `just icons-variants --category draw`
+icons-variants *ARGS:
+    uv run tools/icons/icons.py variants {{ARGS}}
+
+# one contact sheet per category: which icon breaks the family?
+icons-audit *ARGS:
+    uv run tools/icons/icons.py audit {{ARGS}}
+
+# pairs of icons that look alike
+icons-dupes:
+    uv run tools/icons/icons.py dupes

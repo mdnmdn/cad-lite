@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"go-draw/assets/icons"
 	"go-draw/cmdsys"
 	"go-draw/cmdsys/commands"
 	"go-draw/doc"
@@ -139,38 +140,44 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		)
 }
 
-func (ws *Workspace) button(id, label, command string) *gpui.Div {
+// toolIconSize is the toolbar icon edge in logical pixels.
+const toolIconSize = 18
+
+func (ws *Workspace) button(id, label, command string, icon icons.Name) *gpui.Div {
 	active := ws.session.Active() == command
-	b := gpui.NewDiv().ID("tool-" + id).Px_(10).Py_(5).Rounded(4).
+	b := gpui.NewDiv().ID("tool-"+id).FlexCol().ItemsCenter().Gap(2).Px_(6).Py_(4).Rounded(4).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.run(command, w) }).
-		Child(gpui.NewText(label))
+		Child(NewIcon(icon, toolIconSize, uiText), gpui.NewText(label).TextSize(10))
 	if active {
 		b.Bg(uiAccent)
 	}
 	return b
 }
 
-func separator() *gpui.Div { return gpui.NewDiv().SizeWH(1, 18).Bg(uiBorder).Mx(4) }
+func separator() *gpui.Div { return gpui.NewDiv().SizeWH(1, 28).Bg(uiBorder).Mx(4) }
 
 func (ws *Workspace) toolbar() *gpui.Div {
 	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Px_(8).Py_(4).Bg(uiPanel).Child(
 		gpui.NewText("go-draw").FontWeight(700).TextColor(uiOn).Pr(10),
-		ws.button("line", "Line", "LINE"),
-		ws.button("pline", "Polyline", "PLINE"),
-		ws.button("circle", "Circle", "CIRCLE"),
-		ws.button("arc", "Arc", "ARC"),
-		ws.button("rect", "Rectangle", "RECTANG"),
+		ws.button("line", "Line", "LINE", icons.DrawLine),
+		ws.button("pline", "Polyline", "PLINE", icons.DrawPolyline),
+		ws.button("circle", "Circle", "CIRCLE", icons.DrawCircle),
+		ws.button("arc", "Arc", "ARC", icons.DrawArc),
+		ws.button("rect", "Rect", "RECTANG", icons.DrawRectangle),
 		separator(),
-		ws.button("move", "Move", "MOVE"),
-		ws.button("copy", "Copy", "COPY"),
-		ws.button("rotate", "Rotate", "ROTATE"),
-		ws.button("scale", "Scale", "SCALE"),
-		ws.button("erase", "Erase", "ERASE"),
+		ws.button("move", "Move", "MOVE", icons.ModifyMove),
+		ws.button("copy", "Copy", "COPY", icons.ModifyCopy),
+		ws.button("rotate", "Rotate", "ROTATE", icons.ModifyRotate),
+		ws.button("scale", "Scale", "SCALE", icons.ModifyScale),
+		ws.button("erase", "Erase", "ERASE", icons.ModifyErase),
 		separator(),
-		ws.button("undo", "Undo", "UNDO"),
-		ws.button("redo", "Redo", "REDO"),
-		ws.button("zoom", "Zoom", "ZOOM"),
+		ws.button("dist", "Dist", "DIST", icons.MeasureDistance),
+		ws.button("area", "Area", "AREA", icons.MeasureArea),
+		separator(),
+		ws.button("undo", "Undo", "UNDO", icons.EditUndo),
+		ws.button("redo", "Redo", "REDO", icons.EditRedo),
+		ws.button("zoom", "Zoom", "ZOOM", icons.ViewZoomWindow),
 	)
 }
 
@@ -256,21 +263,21 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement) *gpui.Div {
 func (ws *Workspace) statusBar() *gpui.Div {
 	s := ws.session
 	cur := s.Cursor()
-	flag := func(id, label string, on bool, f func()) *gpui.Div {
+	flag := func(id, label string, icon icons.Name, on bool, f func()) *gpui.Div {
 		c := uiMuted
 		if on {
 			c = uiOn
 		}
-		return gpui.NewDiv().ID("status-" + id).Px_(8).Py_(2).Rounded(3).
+		return gpui.NewDiv().ID("status-"+id).FlexRow().ItemsCenter().Gap(4).Px_(8).Py_(2).Rounded(3).
 			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(); w.Refresh() }).
-			Child(gpui.NewText(label).FontWeight(700).TextColor(c))
+			Child(NewIcon(icon, 14, c), gpui.NewText(label).FontWeight(700).TextColor(c))
 	}
 	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
 		gpui.NewText(fmt.Sprintf("%s, %s", cmdsys.FormatNumber(cur.X), cmdsys.FormatNumber(cur.Y))).SizeW(170),
-		flag("grid", "GRID", ws.Grid, func() { ws.Grid = !ws.Grid }),
-		flag("snap", "OSNAP", s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
-		flag("ortho", "ORTHO", s.Ortho, func() { s.Ortho = !s.Ortho }),
+		flag("grid", "GRID", icons.ViewGrid, ws.Grid, func() { ws.Grid = !ws.Grid }),
+		flag("snap", "OSNAP", icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
+		flag("ortho", "ORTHO", icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
 		gpui.NewDiv().Flex1(),
 		gpui.NewText(fmt.Sprintf("Layer %s   ·   %d entities   ·   1 px = %s units", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted),
 	)
