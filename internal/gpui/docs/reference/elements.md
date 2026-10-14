@@ -147,6 +147,7 @@ struct and call `Render` every frame. Setters that mutate it call
 | `SetText(s string)` | Replace the value; caret moves to end, cancels selection capture and refreshes if rendered. |
 | `OnChange(f func(string, *Window, *App)) *TextInput` | Called on every edit made through input dispatch. |
 | `OnSubmit(f func(string, *Window, *App)) *TextInput` | Called with the text on Enter while focused. |
+| `OnEscape(f func(*Window, *App)) *TextInput` | Called on Escape while focused. With any callback registered the field keeps focus; without one, Escape blurs it. |
 | `FocusHandle() *FocusHandle` | The field's handle; valid only after `Render` has run once. |
 
 It also implements `PlatformInputHandler`

@@ -79,6 +79,22 @@ func TestTextInputEscapeBlurs(t *testing.T) {
 	}
 }
 
+func TestTextInputOnEscapeKeepsFocus(t *testing.T) {
+	ti := gpui.NewTextInput("")
+	escapes := 0
+	ti.OnEscape(func(*gpui.Window, *gpui.App) { escapes++ })
+	app, win := openInputApp(t, ti)
+	focusInput(t, app, win, ti)
+
+	win.DispatchEvent(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "escape"}}, app)
+	if escapes != 1 {
+		t.Errorf("OnEscape calls = %d, want 1", escapes)
+	}
+	if !ti.FocusHandle().IsFocused(win) {
+		t.Error("escape blurred an input that has an OnEscape handler")
+	}
+}
+
 func TestTextInputBackspaceThroughDispatch(t *testing.T) {
 	ti := gpui.NewTextInput("")
 	ti.SetText("abc")

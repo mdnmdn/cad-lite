@@ -38,6 +38,7 @@ type TextInput struct {
 
 	onSubmit []func(string, *Window, *App)
 	onChange []func(string, *Window, *App)
+	onEscape []func(*Window, *App)
 }
 
 // NewTextInput returns an empty single-line text field showing placeholder
@@ -68,6 +69,14 @@ func (t *TextInput) FocusHandle() *FocusHandle { return t.focus }
 // presses Enter while the field is focused.
 func (t *TextInput) OnSubmit(f func(string, *Window, *App)) *TextInput {
 	t.onSubmit = append(t.onSubmit, f)
+	return t
+}
+
+// OnEscape registers a callback invoked when the user presses Escape while
+// the field is focused. While any is registered Escape keeps focus instead
+// of blurring the field (a command line stays focused, for instance).
+func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput {
+	t.onEscape = append(t.onEscape, f)
 	return t
 }
 
@@ -451,7 +460,12 @@ func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 		}
 		w.StopPropagation()
 	case "escape":
-		t.focus.Blur(w)
+		if len(t.onEscape) == 0 {
+			t.focus.Blur(w)
+		}
+		for _, f := range t.onEscape {
+			f(w, cx)
+		}
 		w.StopPropagation()
 	case "backspace":
 		if t.sel.Range.Start != t.sel.Range.End {

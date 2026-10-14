@@ -1282,6 +1282,9 @@ func (t *TextInput) FocusHandle() *FocusHandle
 func (t *TextInput) Render(w *Window, cx *App) IntoElement
 func (t *TextInput) OnSubmit(f func(string, *Window, *App)) *TextInput
 func (t *TextInput) OnChange(f func(string, *Window, *App)) *TextInput
+// OnEscape replaces Escape's default (blur) while any callback is registered:
+// the callbacks run and the field keeps focus.
+func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput
 ```
 
 `TextInput` implements `PlatformInputHandler` internally. It is **not** an
