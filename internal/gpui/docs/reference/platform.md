@@ -124,19 +124,21 @@ type Scene struct {
     Shadows    []Shadow
     Sprites    []GlyphSprite
     Underlines []Underline
+    Strokes    []Stroke
 }
 func (s *Scene) InsertQuad(q Quad)
 func (s *Scene) InsertShadow(sh Shadow)
 func (s *Scene) InsertSprite(g GlyphSprite)
 func (s *Scene) InsertUnderline(u Underline)
+func (s *Scene) InsertStroke(st Stroke)
 func (s *Scene) PushLayer()            // everything inserted afterwards paints above everything before
 func (s *Scene) PrimitiveCount() int
 func (s *Scene) Clear()
 ```
 
 Primitives with `Order == 0` get the scene's next auto order, so order is
-paint (tree) order across all four kinds; on equal order the kinds draw
-shadow, quad, underline, sprite.
+paint (tree) order across all five kinds; on equal order the kinds draw
+shadow, quad, stroke, underline, sprite.
 
 | Primitive | Fields |
 |---|---|
@@ -144,6 +146,7 @@ shadow, quad, underline, sprite.
 | `Shadow` | `Order`, `Bounds` (shape before blur), `CornerRadii`, `ContentMask`, `Color`, `BlurRadius`, `Inset bool`, `Clip Bounds`, `ClipRadii Corners` (the element shape an inset shadow is drawn in) |
 | `GlyphSprite` | `Order`, `Bounds`, `ContentMask`, `Mask *GlyphMask`, `Color Rgba` |
 | `Underline` | `Order`, `Bounds`, `ContentMask`, `Color`, `Thickness Pixels` (a rule drawn at the bottom of `Bounds`) |
+| `Stroke` | `Order`, `ContentMask`, `Points []Point`, `Closed bool`, `Width Pixels`, `Color`: an anti-aliased polyline with round joins and caps; `Width` 0 is a one-device-pixel hairline. Do not mutate `Points` before the frame is presented. |
 | `ContentMask` | `Bounds Bounds`, `CornerRadii Corners`. The zero value clips everything away; use `InfiniteContentMask()` for "unclipped". |
 
 ```text

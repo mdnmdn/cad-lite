@@ -188,6 +188,11 @@ type Scene struct {
 	Sprites []GlyphSprite
 	// Underlines are the accumulated underline commands.
 	Underlines []Underline
+	// Strokes are the accumulated polyline stroke commands.
+	Strokes []Stroke
+
+	// points backs the scaled copies of stroke points made by scaleScene.
+	points []Point
 
 	nextOrder uint32
 }
@@ -202,6 +207,8 @@ func (s *Scene) Clear() {
 	s.Shadows = s.Shadows[:0]
 	s.Sprites = s.Sprites[:0]
 	s.Underlines = s.Underlines[:0]
+	s.Strokes = s.Strokes[:0]
+	s.points = s.points[:0]
 	s.nextOrder = 0
 }
 
@@ -236,10 +243,10 @@ func (s *Scene) PushLayer() {
 	s.nextOrder += layerStride
 }
 
-// PrimitiveCount returns the total number of quads, shadows, sprites and
-// underlines.
+// PrimitiveCount returns the total number of quads, shadows, sprites,
+// underlines and strokes.
 func (s *Scene) PrimitiveCount() int {
-	return len(s.Quads) + len(s.Shadows) + len(s.Sprites) + len(s.Underlines)
+	return len(s.Quads) + len(s.Shadows) + len(s.Sprites) + len(s.Underlines) + len(s.Strokes)
 }
 
 // takeOrder resolves a primitive's order: 0 becomes the next auto order, and

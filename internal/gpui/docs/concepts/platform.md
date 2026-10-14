@@ -159,7 +159,7 @@ immediately; `SetBackgroundColor` and `SetScaleFactor` affect windows opened
 afterwards.
 
 Inspecting the scene is also useful for assertions: `win.Scene()` exposes the
-`Quads`, `Shadows`, `Sprites` and `Underlines` of the last frame. The
+`Quads`, `Shadows`, `Sprites`, `Underlines` and `Strokes` of the last frame. The
 rasterizer draws them merged by `Order` (scene order, across kinds), so a
 later quad covers earlier text; each primitive's `ContentMask` may carry
 `CornerRadii` (a rounded `OverflowHidden` ancestor), which the rasterizer

@@ -71,12 +71,14 @@ Elements:
 | `input.go` | `TextInput` single-line field, rune-safe UTF-16 selection and internal capture (`PlatformInputHandler`) |
 | `uniform_list.go` | virtualized equal-height `UniformList` |
 | `scroll.go` | `ScrollHandle`, scroll requests, scrollbar geometry, capture and paging |
+| `canvas.go` | `Canvas`: leaf element painting through a callback (GPUI `canvas()`) |
 
 Painting:
 
 | File | Responsibility |
 |------|----------------|
 | `scene.go` | `Scene` primitives (quads, shadows, glyph sprites, underlines), content masks |
+| `stroke.go` | `Stroke` polyline primitive, `Window.PaintStroke`, its rasterization |
 | `raster.go` | CPU `Rasterizer`: Scene to premultiplied RGBA |
 
 Window, events and application:

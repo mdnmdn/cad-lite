@@ -208,6 +208,20 @@ func (h *ScrollHandle) ScrollToItem(ix int)    // minimum scroll to fully reveal
 Bind it with `Div.TrackScroll` or `UniformList.TrackScroll`; one handle should
 track one container at a time.
 
+## Canvas
+
+```text
+func NewCanvas(paint func(bounds Bounds, w *Window, cx *App)) *Canvas
+func (c *Canvas) IntoElement() Element
+```
+
+The port of GPUI's `canvas()`: a leaf that embeds `StyledMixin` (it fills its
+parent by default; any size builder overrides that) and calls `paint` with its
+laid-out bounds during the paint phase. Emit primitives from the callback with
+the `Window.Paint*` methods. A canvas does not clip; push a clip in the
+callback when the drawing may overflow. It has no hitbox of its own: wrap it in
+a `Div` for mouse listeners.
+
 ## Custom elements
 
 Implement `IntoElement` on your builder type and return a small adapter that
@@ -258,4 +272,4 @@ layout (see [testing](../guides/testing.md)).
 
 `Quad`, `Shadow`, `GlyphSprite`, `Underline` and `ContentMask` are described
 in [platform.md](platform.md#scene-and-rasterizer); emit them with
-`Window.PaintQuad`, `PaintShadow`, `PaintGlyph`, `PaintUnderline`.
+`Window.PaintQuad`, `PaintShadow`, `PaintGlyph`, `PaintUnderline`, `PaintStroke`.

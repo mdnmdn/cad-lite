@@ -573,7 +573,17 @@ Semantics (from the CSS flexbox spec + Taffy's `flexbox.rs`):
   at its laid-out content width (`bounds.W - horizontal padding`), so paint and
   layout agree.
 
-## 5. `element.go`, `div.go`, `text_elem.go`
+## 5. `element.go`, `div.go`, `text_elem.go`, `canvas.go`
+
+`canvas.go` — the port of GPUI's `canvas()`: a leaf that paints through a
+callback with its laid-out bounds. It embeds `StyledMixin` (SizeFull by
+default) and does not clip.
+
+```go
+type Canvas struct{ StyledMixin /* paint callback */ }
+func NewCanvas(paint func(bounds Bounds, w *Window, cx *App)) *Canvas
+func (c *Canvas) IntoElement() Element
+```
 
 ```go
 // Element is the per-frame UI node. Everything is rebuilt each frame.
@@ -946,13 +956,30 @@ type Underline struct {
     Thickness   Pixels
 }
 
+// Stroke is an anti-aliased constant-width polyline with round joins and
+// caps. Coverage is the union of the segment capsules (max per pixel), so
+// joints and self-crossings blend once. Width < 1 device px draws a 1 device
+// px line with alpha scaled by the width; Width 0 is a full-alpha hairline.
+// Points are window-space logical px, read at raster time (do not mutate
+// them before the frame is presented).
+type Stroke struct {
+    Order       uint32
+    ContentMask ContentMask
+    Points      []Point
+    Closed      bool
+    Width       Pixels
+    Color       Rgba
+}
+
 type Scene struct {
     Quads   []Quad
     Shadows []Shadow
     Sprites []GlyphSprite
     Underlines []Underline
+    Strokes []Stroke
 }
 func (s *Scene) InsertShadow(sh Shadow)
+func (s *Scene) InsertStroke(st Stroke)
 
 func (s *Scene) Clear()
 func (s *Scene) InsertQuad(q Quad)
@@ -979,9 +1006,9 @@ func (r *Rasterizer) Render(s *Scene)           // draw all primitives in Order
 func (r *Rasterizer) Image() *image.NRGBA       // non-premultiplied copy (for png.Encode)
 ```
 
-`Render` draws every primitive in scene order: quads, shadows, underlines
-and sprites are merged by `Order` (each kind stably sorted; on equal
-`Order`, shadow < quad < underline < sprite). Since Paint* hand out
+`Render` draws every primitive in scene order: quads, shadows, strokes,
+underlines and sprites are merged by `Order` (each kind stably sorted; on equal
+`Order`, shadow < quad < stroke < underline < sprite). Since Paint* hand out
 increasing auto orders and `PushLayer` jumps the counter, a later
 background (an overlay, a layer) covers earlier text, as in GPUI. Shadow coverage is an analytic approximation:
 `min(Φ(−sdf/σ), separable box blur)` with σ = BlurRadius/2 (exact for
@@ -1490,6 +1517,7 @@ func (w *Window) PaintQuad(q Quad)
 func (w *Window) PaintUnderline(u Underline)
 func (w *Window) PaintGlyph(g GlyphSprite)
 func (w *Window) PaintShadow(s Shadow)
+func (w *Window) PaintStroke(s Stroke)    // unset ContentMask = current clip; opacity applied
 // FocusNext / FocusPrev move focus along the rendered frame's tab stops,
 // ordered by tab index (ties: tree order), wrapping. With no focused stop,
 // Next goes to the first and Prev to the last. They do not bind Tab: apps

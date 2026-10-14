@@ -17,6 +17,10 @@ type Rasterizer struct {
 	shadows    []Shadow
 	underlines []Underline
 	sprites    []GlyphSprite
+	strokes    []Stroke
+
+	// stroke accumulates the coverage of the stroke being drawn.
+	stroke strokeBuf
 
 	// lut and rowBuf are scratch space for gradient and shadow fills.
 	lut    gradientLUT
@@ -67,10 +71,10 @@ func (r *Rasterizer) Reset(clear Rgba) {
 }
 
 // Render draws every primitive in scene order: each kind is stably sorted by
-// Order and the four lists are merged, so a later background covers earlier
+// Order and the five lists are merged, so a later background covers earlier
 // text (GPUI paints by draw order, not by primitive kind). On equal Order a
-// shadow paints before a quad, a quad before an underline, an underline
-// before a sprite.
+// shadow paints before a quad, a quad before a stroke, a stroke before an
+// underline, an underline before a sprite.
 func (r *Rasterizer) Render(s *Scene) {
 	if s == nil {
 		return
@@ -79,8 +83,9 @@ func (r *Rasterizer) Render(s *Scene) {
 	r.shadows = sortByOrder(append(r.shadows[:0], s.Shadows...), func(sh Shadow) uint32 { return sh.Order })
 	r.underlines = sortByOrder(append(r.underlines[:0], s.Underlines...), func(u Underline) uint32 { return u.Order })
 	r.sprites = sortByOrder(append(r.sprites[:0], s.Sprites...), func(g GlyphSprite) uint32 { return g.Order })
-	qs, shs, us, gs := r.quads, r.shadows, r.underlines, r.sprites
-	var qi, si, ui, gi int
+	r.strokes = sortByOrder(append(r.strokes[:0], s.Strokes...), func(st Stroke) uint32 { return st.Order })
+	qs, shs, us, gs, sts := r.quads, r.shadows, r.underlines, r.sprites, r.strokes
+	var qi, si, ui, gi, ti int
 	for {
 		const none = math.MaxUint32 + 1
 		next, kind := uint64(none), -1
@@ -89,6 +94,9 @@ func (r *Rasterizer) Render(s *Scene) {
 		}
 		if qi < len(qs) && uint64(qs[qi].Order) < next {
 			next, kind = uint64(qs[qi].Order), 1
+		}
+		if ti < len(sts) && uint64(sts[ti].Order) < next {
+			next, kind = uint64(sts[ti].Order), 4
 		}
 		if ui < len(us) && uint64(us[ui].Order) < next {
 			next, kind = uint64(us[ui].Order), 2
@@ -113,6 +121,10 @@ func (r *Rasterizer) Render(s *Scene) {
 			r.setMask(gs[gi].ContentMask)
 			r.drawSprite(gs[gi])
 			gi++
+		case 4:
+			r.setMask(sts[ti].ContentMask)
+			r.drawStroke(sts[ti])
+			ti++
 		default:
 			r.masked = false
 			return
@@ -632,6 +644,16 @@ func scaleScene(s *Scene, scale float32, out *Scene) *Scene {
 		g.Bounds = sb(g.Bounds)
 		g.ContentMask = sm(g.ContentMask)
 		out.Sprites = append(out.Sprites, g)
+	}
+	for _, st := range s.Strokes {
+		start := len(out.points)
+		for _, p := range st.Points {
+			out.points = append(out.points, Point{X: p.X * k, Y: p.Y * k})
+		}
+		st.Points = out.points[start:len(out.points):len(out.points)]
+		st.ContentMask = sm(st.ContentMask)
+		st.Width *= k
+		out.Strokes = append(out.Strokes, st)
 	}
 	return out
 }
