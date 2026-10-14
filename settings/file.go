@@ -107,6 +107,7 @@ var tables = map[string]map[string]bool{
 	"window":     {"width": true, "height": true},
 	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
 		"side_collapsed": true, "layers_collapsed": true, "properties_collapsed": true, "history_collapsed": true, "ribbon_collapsed": true},
+	"recent": {"files": true, "folders": true},
 }
 
 // Parse decodes TOML text into Settings: absent keys keep their defaults,
@@ -252,6 +253,17 @@ func Parse(data []byte) (Settings, []string, error) {
 				default:
 					s.Layout.RibbonCollapsed = x
 				}
+			case "recent.files", "recent.folders":
+				paths, ok := parsePaths(v)
+				if !ok {
+					bad(full, "an array of strings", v)
+					break
+				}
+				if k == "files" {
+					s.Recent.Files = paths
+				} else {
+					s.Recent.Folders = paths
+				}
 			case "window.width", "window.height":
 				x, ok := v.(int64)
 				if !ok {
@@ -348,6 +360,9 @@ func Marshal(s Settings) []byte {
 		"properties_collapsed = "+strconv.FormatBool(l.PropsCollapsed),
 		"history_collapsed = "+strconv.FormatBool(l.HistoryCollapsed),
 		"ribbon_collapsed = "+strconv.FormatBool(l.RibbonCollapsed))
+	section("recent", "drawings opened or saved lately and the folders used, newest first (written by the app).",
+		marshalPaths("files", s.Recent.Files),
+		marshalPaths("folders", s.Recent.Folders))
 	return append(bytes.TrimRight(b.Bytes(), "\n"), '\n')
 }
 

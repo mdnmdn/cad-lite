@@ -121,6 +121,9 @@ type Settings struct {
 	Window Window
 	// Layout is the arrangement of the workspace panels.
 	Layout Layout
+	// Recent is the drawings and folders used lately, for the Open menu and
+	// the start panel.
+	Recent Recent
 	// Extra round-trips keys this version does not know. Top-level keys are
 	// stored under their name, keys inside a known table as "table.key".
 	Extra map[string]any
@@ -197,6 +200,7 @@ func (s *Settings) Normalize() []string {
 		}
 	}
 	s.AgentBinaries = cleanBinaries(s.AgentBinaries)
+	s.Recent.normalize()
 	return w
 }
 
@@ -240,5 +244,6 @@ func (s Settings) Clone() Settings {
 		}
 		s.Extra = e
 	}
+	s.Recent = s.Recent.clone()
 	return s
 }

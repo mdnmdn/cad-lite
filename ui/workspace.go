@@ -51,6 +51,8 @@ type Workspace struct {
 	cmd cmdAreaState
 	// lay is the panel layout: sizes, collapsed panels and the splitter drag in progress.
 	lay layoutState
+	// recent is the Open menu and start panel state; the lists are in the settings.
+	recent recentState
 }
 
 // NewWorkspace returns a workspace editing d. files may be nil, which
@@ -64,6 +66,7 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	ws.attach(d)
 	ws.session.OnDrawing(ws.attach)
 	ws.session.OnFilePath(ws.pathChanged)
+	ws.session.OnFilePath(ws.noteRecentFile)
 	ws.session.SetAgentHandler(ws.agentCommand)
 	ws.session.SetSettingsHandler(func() {
 		if ws.win != nil {
@@ -74,6 +77,9 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
 	ws.input.OnChange(func(text string, w *gpui.Window, _ *gpui.App) {
+		if text != "" {
+			ws.dismissStart()
+		}
 		// Space is Enter, as in AutoCAD, except where the prompt takes text.
 		if strings.HasSuffix(text, " ") && !ws.acceptsText() {
 			ws.submit(strings.TrimSuffix(text, " "), w)
@@ -110,6 +116,8 @@ func (ws *Workspace) submit(text string, w *gpui.Window) {
 
 func (ws *Workspace) escape(w *gpui.Window) {
 	ws.cmd.open = false
+	ws.recent.menu = false
+	ws.dismissStart()
 	ws.input.SetText("")
 	ws.session.Escape()
 	w.Refresh()
@@ -213,7 +221,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 			ws.endDrag(w)
 		}).
 		Child(ws.chrome(win, sideW, agentW, cmdline, w, cx)...).
-		Child(ws.statusBar()))
+		Child(ws.statusBar(), ws.openMenuOverlay()))
 }
 
 // chrome returns the window's rows above the status bar: the title bar, the ribbon unless it is

@@ -3,11 +3,11 @@ id: feat-dxf-files
 title: DXF files
 kind: feature
 status: current
-summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
-read_when: you are changing OPEN, SAVE, the Open and Save buttons, the file dialogs or the -open flag, which file types they accept, how file problems are reported to the user, or the Windows file associations
+summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
+read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs or the -open flag, which file types they accept, how file problems are reported to the user, or the Windows file associations
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+code_anchors: [packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -37,6 +37,20 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   Save as, show the system save dialog (the current name, or `drawing`, pre-filled) and run SAVEAS with
   the chosen path. Cancelling the dialog does nothing. One dialog is open at a time; the window stays
   usable behind it.
+- **Recent files and folders.** Every drawing a successful OPEN or SAVE, SAVEAS or QSAVE names (typed, from the
+  buttons, the dialogs, the recent menu or `-open`) moves to the front of the recent files, and its folder to the
+  front of the recent folders; choosing a folder in the menu moves it to the front too. Paths are absolute and
+  cleaned, duplicates are dropped (ignoring case on Windows and macOS), and each list keeps 10. NEW and CLOSE add
+  nothing. The lists are saved in the settings file at once (`recent` table, see [Settings](settings.md)).
+- **Open menu.** The chevron beside Open lists `Recent files` (format, name, folder; the tooltip has the full path)
+  and `Recent folders`, then `Clear recent`, which empties both. A file opens through the same path as the Open
+  dialog's answer, so the `Save changes` question applies. A folder shows the Open dialog starting in it (without
+  a dialog, OPEN prompts on the command line). A file or folder that was not found when the menu opened is greyed
+  but kept: clicking a missing file runs OPEN anyway, which fails with the usual history line, and then drops it
+  from the list; a missing folder is dropped and the dialog starts where it otherwise would. The same file rows
+  appear in the start panel over an empty canvas at startup (see [Drawing canvas](canvas.md)).
+- **Dialog start folder.** The dialogs start in the drawing's folder; an untitled drawing's start in the most
+  recent folder, else the working directory.
 - **Dialog file types.** Open lists `All supported files` (every extension a registered reader reads),
   one entry per extension (`DXF drawing`) and `All files`; a reader added to the registry (DWG) appears
   with no UI change. Save lists one entry per extension a writer writes, and a name typed without an
@@ -153,9 +167,14 @@ builds the registry, opens `-open` before creating the workspace and calls
 `ui/filedialog.go` holds the button wiring: `Workspace.openFile`, `saveFile` and `saveFileAs` call
 `startDialog`, which runs the `ui.FileDialog` on a goroutine and polls its answer with a `gpui.Window.After`
 timer, so no gpui state is touched off the UI goroutine (the pattern of the agent discovery probe).
-`pollDialog` then runs OPEN or SAVEAS and submits the path, or falls back to the command on any error
+`pollDialog` then opens the chosen file through `Workspace.openFilePath`, the one function every "open this
+path" in the UI goes through (it runs OPEN and submits the path), or runs SAVEAS and submits the path, or falls back to the command on any error
 other than `filedialog.ErrCancelled`. `openFilters` and `saveFilters` build the type lists from the
-registry. The `filedialog` package (core, no gpui) builds one helper command per system, as pure
+registry. `ui/recent.go` holds the recent lists' UI: `Workspace.noteRecentFile` is a `Session.OnFilePath`
+listener, the single place a successful open or save is reported (`Context.SetFilePath`), and
+`LoadSettingsFrom` passes it the file opened before the settings were read; `openButtons`, `openMenuOverlay`,
+`openRecentFile`, `openRecentFolder` and `startPanel` build the menu and the start panel. The lists are
+`settings.Recent` (`settings/recent.go`). The `filedialog` package (core, no gpui) builds one helper command per system, as pure
 functions tested on any OS, and runs it without cgo: `osascript` (`choose file`, `choose file name`) on
 macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs on Windows, `zenity
 --file-selection`, else `kdialog --getopenfilename`, on Linux and the BSDs when `DISPLAY` or
@@ -184,3 +203,4 @@ macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs o
 - Write newer DXF versions so unknown entities of classes R12 lacks survive a save.
 - Write DWG, and read more DWG entities (TEXT, INSERT and blocks first).
 - Browser file access through the browser's own APIs.
+- Pin a recent drawing so it stays at the top of the list.

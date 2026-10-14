@@ -794,6 +794,20 @@ filter_all_supported = "Tutti i file supportati"
 filter_all = "Tutti i file"
 filter_ext = "Disegno %s"
 
+[ui.recent]
+menu_tip = "Recenti — i disegni e le cartelle usati di recente; scegli un file per aprirlo o una cartella per sfogliarla"
+files = "File recenti"
+folders = "Cartelle recenti"
+none = "Ancora nessun disegno recente"
+file_tip = "%s — clic per aprirlo"
+folder_tip = "%s — clic per scegliere un disegno in questa cartella"
+missing_tip = "%s — non trovato; il clic lo riprova e lo toglie dall'elenco"
+clear = "Svuota recenti"
+clear_tip = "Dimentica i file e le cartelle recenti"
+start_title = "Disegni recenti"
+start_hint = "Clic su uno per aprirlo, oppure inizia a disegnare."
+start_open = "Apri un altro disegno…"
+
 [ui.panel]
 layers = "Layer"
 properties = "Proprietà"

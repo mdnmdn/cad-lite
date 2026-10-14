@@ -118,6 +118,9 @@ func (ws *Workspace) LoadSettingsFrom(path string) error {
 	s, warn, err := settings.LoadWarn(path)
 	p.warnings, p.err = warn, err
 	ws.applySettings(s, nil)
+	// A file opened before the settings were read (-open) joins the recent list now.
+	ws.noteRecentFile(ws.session.FilePath())
+	ws.armStart()
 	return err
 }
 

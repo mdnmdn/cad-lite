@@ -793,6 +793,20 @@ filter_all_supported = "All supported files"
 filter_all = "All files"
 filter_ext = "%s drawing"
 
+[ui.recent]
+menu_tip = "Recent — the drawings and folders you used lately; pick a file to open it or a folder to browse it"
+files = "Recent files"
+folders = "Recent folders"
+none = "No recent drawings yet"
+file_tip = "%s — click to open it"
+folder_tip = "%s — click to choose a drawing in this folder"
+missing_tip = "%s — not found; clicking tries it once more and drops it from the list"
+clear = "Clear recent"
+clear_tip = "Forget the recent files and folders"
+start_title = "Recent drawings"
+start_hint = "Click one to open it, or just start drawing."
+start_open = "Open another drawing…"
+
 [ui.panel]
 layers = "Layers"
 properties = "Properties"

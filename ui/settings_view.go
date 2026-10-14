@@ -334,6 +334,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
 				d.Extra, d.Window, d.Layout, d.LastUpdateCheck = s.Extra, s.Window, s.Layout, s.LastUpdateCheck
+				d.Recent = s.Recent
 				*s = d
 			})
 		}).Px_(12),

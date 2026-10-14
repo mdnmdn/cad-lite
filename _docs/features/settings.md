@@ -7,7 +7,7 @@ summary: The settings panel (theme, UI scale, drawing defaults, mouse wheel, def
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
+code_anchors: [settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
@@ -77,11 +77,15 @@ behaviour and the default agent and where agents are found. Changes show at once
   line, *Check for updates* and, when a release waits, *Update*. Everything about it is in [Updates](updates.md).
 - **Saving.** Every change is written about half a second after the last one, and on close, with the
   window's size. The panel footer shows where the file is, or that settings are kept in memory.
-  `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout and the last update check.
+  `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout, the recent lists and the last update check.
 - **Loading.** The file is read at startup. A missing file gives the defaults. A value of the wrong
   type or out of range is replaced (the UI scale is clamped to 0.75 to 2.0 and snapped to 0.05, window
   sides to 320 to 16384, panel sizes to 0 to 4096) and one warning per value shows in the panel footer. An unknown theme name falls back to `dark`.
-  Keys this version does not know are kept and written back.
+  Keys this version does not know are kept and written back. A file without the `recent` table gives empty recent
+  lists; recent entries that are not strings, empty or duplicated are dropped, and each list is cut to 10, without a warning.
+- **Recent drawings.** The `recent` table is written by the app, not the panel: the drawings opened or saved
+  lately and their folders, which the Open menu and the start panel list. What records an entry and what a
+  click does are in [DXF files](dxf-files.md).
 
 ## Contract
 
@@ -101,13 +105,15 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 | `update.last_check` | timestamp, written by the app | unset |
 | `window.width`, `window.height` | logical pixels, 0 for unset | 1280, 800 |
 | `layout.side_width`, `layout.agent_width`, `layout.layers_height`, `layout.history_height` | logical pixels, 0 for automatic, at most 4096 | 0 |
+| `recent.files`, `recent.folders` | arrays of absolute paths, newest first, at most 10 each, written by the app | empty |
 | `layout.side_collapsed`, `layout.layers_collapsed`, `layout.properties_collapsed`, `layout.history_collapsed`, `layout.ribbon_collapsed` | boolean | false |
 
 The `layout` table is the arrangement of the workspace panels, written by the app when the user drags a
 splitter or folds a panel (see [Drawing canvas](canvas.md)); a size of 0 is automatic, and a saved size is
 kept even when a smaller window cannot show it. The file starts with a comment header and a comment per table; comments a user adds are not kept.
 API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Parse`, `Marshal`, `Save`,
-`ClampUIScale`); `Workspace.EnableAgentDiscovery`, `AgentDiscovery`, `SetAgentDiscoveryProbe`, `SetTerminalOpener`, `ui.OpenTerminal`; `settings.Layout`; `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
+`ClampUIScale`, `Recent` with `AddFile`, `AddFolder`, `RemoveFile`, `RemoveFolder`, `Clear`, `CleanPath`);
+`Workspace.RecentFiles`, `RecentFolders`, `ClearRecent`, `OpenMenuShown`, `StartPanelShown`; `Workspace.EnableAgentDiscovery`, `AgentDiscovery`, `SetAgentDiscoveryProbe`, `SetTerminalOpener`, `ui.OpenTerminal`; `settings.Layout`; `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
 `SaveSettings`, `SetLanguageHandler`, `Language`, `OpenSettings`, `CloseSettings`, `ToggleSettings`, `WheelMode`; theme registry
 `ui.Themes`, `ThemeByName`, `ApplyTheme`; element `ui.NewSlider` with `SliderState`; action
 `cad-settings`.
@@ -115,7 +121,8 @@ API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Par
 ## Implementation
 
 `settings/settings.go` defines the values and `Normalize`; `settings/file.go` holds `Path`, `Parse`
-(into `Settings`, unknown keys into `Extra`), `Marshal` and the atomic `Save` (temporary file in the
+(into `Settings`, unknown keys into `Extra`), `Marshal` and the atomic `Save`; `settings/recent.go` holds `Recent`
+and its list rules (temporary file in the
 same directory, mode 0600, directory 0700, then rename). `ui/settings.go` keeps the workspace's
 settings state, `applySettings` (theme, scale, drawing defaults, agent and its executables), the debounced save through
 `Window.After` and the hook `withSettings`, which `Workspace.Render` calls to mount the panel and the

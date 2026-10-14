@@ -73,6 +73,7 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 	c := &ws.canvas
 	return gpui.NewDiv().ID("canvas").Relative().Flex1().MinW(0).MinH(0).OverflowHidden().
 		OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
+			ws.dismissStart()
 			if fh := ws.input.FocusHandle(); fh != nil {
 				w.RequestFocus(fh)
 			}
@@ -132,7 +133,7 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
-		Child(gpui.NewCanvas(ws.paintCanvas), ws.viewportLabel(), ws.zoomPill(), ws.ucsLabels())
+		Child(gpui.NewCanvas(ws.paintCanvas), ws.viewportLabel(), ws.zoomPill(), ws.ucsLabels(), ws.startPanel())
 }
 
 // Overlay metrics, in logical pixels from the canvas's edges.
