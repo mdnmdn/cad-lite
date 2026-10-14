@@ -124,6 +124,12 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
+		OnPinch(func(e *gpui.PinchEvent, w *gpui.Window, _ *gpui.App) {
+			x, y := ws.local(e.Position)
+			ws.view.ZoomAt(x, y, 1+float64(e.Delta))
+			ws.pointerMoved(e.Position)
+			w.Refresh()
+		}).
 		Child(gpui.NewCanvas(ws.paintCanvas))
 }
 
@@ -241,6 +247,16 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 		ws.cursorItems(dl)
 	}
 	gpuirender.Painter{Origin: b.Origin, View: *v}.Paint(w, dl)
+	paintFrame(w, b)
+}
+
+// paintFrame draws the canvas's 1 px border in the theme's border colour,
+// inside b and over the drawing, so the viewport reads as framed.
+func paintFrame(w *gpui.Window, b gpui.Bounds) {
+	x, y, bw, bh := float32(b.Origin.X), float32(b.Origin.Y), float32(b.Size.W), float32(b.Size.H)
+	for _, r := range [4][4]float32{{x, y, bw, 1}, {x, y + bh - 1, bw, 1}, {x, y, 1, bh}, {x + bw - 1, y, 1, bh}} {
+		w.PaintQuad(gpui.Quad{Bounds: gpui.NewBounds(r[0], r[1], r[2], r[3]), Background: gpui.BackgroundSolid, Fill: uiBorder})
+	}
 }
 
 // resizeView sizes the view to the canvas. When the size of a canvas that

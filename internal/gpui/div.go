@@ -23,6 +23,7 @@ type Div struct {
 	onMouseMove   func(*MouseMoveEvent, *Window, *App)
 	onClick       func(*ClickEvent, *Window, *App)
 	onScrollWheel func(*ScrollWheelEvent, *Window, *App)
+	onPinch       func(*PinchEvent, *Window, *App)
 	onKeyDown     func(*KeyDownEvent, *Window, *App)
 	onKeyUp       func(*KeyUpEvent, *Window, *App)
 	onHoverStart  func(*Window, *App)
@@ -126,6 +127,13 @@ func (d *Div) OnClick(f func(*ClickEvent, *Window, *App)) *Div {
 // OnScrollWheel registers a scroll listener.
 func (d *Div) OnScrollWheel(f func(*ScrollWheelEvent, *Window, *App)) *Div {
 	d.onScrollWheel = f
+	return d
+}
+
+// OnPinch registers a trackpad pinch listener. It runs along the hit path like
+// OnScrollWheel (innermost first); Window.StopPropagation halts the traversal.
+func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div {
+	d.onPinch = f
 	return d
 }
 
@@ -594,6 +602,7 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	ml.OnMouseMove = d.onMouseMove
 	ml.OnClick = d.onClick
 	ml.OnScrollWheel = d.onScrollWheel
+	ml.OnPinch = d.onPinch
 	ml.OnHoverStart = d.onHoverStart
 	ml.OnHoverEnd = d.onHoverEnd
 	ml.tooltip = d.tooltip

@@ -69,6 +69,7 @@ Each setter holds one handler; a second call replaces the first.
 | `OnMouseMove(f)` | `func(*MouseMoveEvent, *Window, *App)` |
 | `OnClick(f)` | `func(*ClickEvent, *Window, *App)` |
 | `OnScrollWheel(f)` | `func(*ScrollWheelEvent, *Window, *App)` |
+| `OnPinch(f)` | `func(*PinchEvent, *Window, *App)` |
 | `OnHoverStart(f)` | `func(*Window, *App)` |
 | `OnHoverEnd(f)` | `func(*Window, *App)` |
 | `OnKeyDown(f)` | `func(*KeyDownEvent, *Window, *App)` |

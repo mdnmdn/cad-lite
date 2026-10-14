@@ -267,3 +267,20 @@ func TestWheelModeAutoKeepsHeuristics(t *testing.T) {
 		t.Fatalf("auto: notch should zoom, %v -> %v", s0, v.Scale)
 	}
 }
+
+func TestPinchZoomsAboutPointer(t *testing.T) {
+	h := open(t)
+	v := h.ws.View()
+	m := v.ToModel(200, 150)
+	p := h.at(m)
+	for _, d := range []float32{0.25, -0.2} {
+		s0 := v.Scale
+		h.hw.Dispatch(gpui.PinchEvent{Position: p, Delta: d})
+		if !near(v.Scale/s0, 1+float64(d), 1e-6) {
+			t.Fatalf("pinch %v: scale %v -> %v", d, s0, v.Scale)
+		}
+		if got := h.at(m); abs(got.X-p.X) > 0.01 || abs(got.Y-p.Y) > 0.01 {
+			t.Fatalf("point under pointer moved %v -> %v", p, got)
+		}
+	}
+}

@@ -99,6 +99,7 @@ func main() {
 	}
 	if *png == "" {
 		ws.EnableUpdates()
+		ws.EnableAgentDiscovery()
 		if err := ws.LoadSettings(); err != nil {
 			log.Printf("settings: %v", err)
 		}

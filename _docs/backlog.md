@@ -98,7 +98,6 @@ New lines are appended below this heading.
 | G57 | Updates: a real install and relaunch on Windows and macOS is untested (tests simulate the layouts on Linux); macOS in `/Applications` for a non-admin user falls back to the release page | [Updates](features/updates.md) |
 | G58 | Codex: a withdrawn permission request (`serverRequest/resolved`) is dropped silently; the agent panel keeps showing the prompt until it is answered and the answer fails. Emit a withdrawal event and remove the prompt | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
 | G59 | The window's close button quits without the "Save changes" question: gpui has no close-request callback the app can veto; add one to `Platform`/`PlatformWindow` and ask when `Session.Dirty()` | [DXF files](features/dxf-files.md), [UI framework](tech/ui-framework.md) |
-| G60 | The settings panel is taller than an 800-pixel window, so its footer (Reset to defaults) is cut off; the panel needs a scrolling body | [Settings](features/settings.md) |
 
 ## Next features
 

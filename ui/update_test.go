@@ -92,7 +92,7 @@ func updHarness(t *testing.T, version string, edit bool) (*sHarness, *updRig) {
 	}
 	ws.SetVersion(version)
 	ws.SetUpdateClient(rig.client)
-	h := openSettingsWS(t, ws, 900, 1000, 1)
+	h := openSettingsWS(t, ws, 900, 2000, 1) // tall enough that the whole panel shows
 	return h, rig
 }
 

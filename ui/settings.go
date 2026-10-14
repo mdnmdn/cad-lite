@@ -50,6 +50,9 @@ type prefsState struct {
 	focusWanted bool
 	scale       SliderState
 	saveTimer   *gpui.Timer
+	// bodyScroll is the scroll state of the panel's body, between the fixed
+	// title bar and footer.
+	bodyScroll *gpui.ScrollHandle
 }
 
 var prefsTable = struct {
@@ -66,7 +69,7 @@ func (ws *Workspace) prefs() *prefsState {
 	if p, ok := prefsTable.m[key]; ok {
 		return p
 	}
-	p := &prefsState{cur: settings.Default(), pendingScale: false}
+	p := &prefsState{cur: settings.Default(), pendingScale: false, bodyScroll: gpui.NewScrollHandle()}
 	prefsTable.m[key] = p
 	runtime.AddCleanup(ws, func(k weak.Pointer[Workspace]) {
 		prefsTable.Lock()
@@ -271,6 +274,7 @@ func (ws *Workspace) SettingsOpen() bool { return ws.prefs().open }
 func (ws *Workspace) OpenSettings(w *gpui.Window) {
 	p := ws.prefs()
 	p.open, p.focusWanted = true, true
+	p.bodyScroll.ScrollToTop()
 	w.Refresh()
 }
 
@@ -315,6 +319,7 @@ func (ws *Workspace) mountSettings(cx *gpui.App, root *gpui.Div) *gpui.Div {
 		p.pendingScale = false
 	}
 	ws.startUpdates(ws.win)
+	ws.startDiscovery(ws.win)
 	return root.Relative().
 		OnAction(actionSettings, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.ToggleSettings(w) }).
 		Child(ws.settingsOverlay(cx), ws.updateOverlay())

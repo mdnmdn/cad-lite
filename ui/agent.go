@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -235,8 +236,22 @@ func (p *AgentPanel) probe() {
 		return
 	}
 	p.probed = true
-	for _, h := range []agentmanager.Harness{agentmanager.OpenCode, agentmanager.Claude, agentmanager.Codex} {
-		if _, ok := harnesses.Available(h); ok {
+	p.addFound()
+}
+
+// reprobe adds the harnesses that appeared on the effective PATH since the
+// first probe (the login shell's PATH arrives in the background). It never
+// removes a choice and does nothing for a panel that was never created.
+func (p *AgentPanel) reprobe() {
+	if p == nil || !p.probed {
+		return
+	}
+	p.addFound()
+}
+
+func (p *AgentPanel) addFound() {
+	for _, h := range harnesses.All {
+		if _, ok := harnesses.Available(h); ok && !slices.Contains(p.choices, h) {
 			p.choices = append(p.choices, h)
 		}
 	}

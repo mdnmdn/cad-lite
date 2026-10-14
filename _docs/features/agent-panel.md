@@ -7,7 +7,7 @@ summary: The on-demand docked chat panel that runs AI coding agents (opencode, C
 read_when: you are changing the agent panel, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -52,8 +52,8 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   file in another directory closes every live session, keeps their records and switches to that project's
   tabs.
 - **Default harness.** The `agent.default` [setting](settings.md) selects the harness at startup and when
-  changed in the settings panel (`AgentPanel.Configure`); empty leaves the choice to `PATH`.
-- **Harness chips.** One chip per agent CLI found on `PATH` (`opencode`, `claude`, `codex`). The chips lock
+  changed in the settings panel (`AgentPanel.Configure`); empty picks the first agent found (see PATH below).
+- **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. The chips lock
   while the tab has a session or a stored conversation. With none found the panel says so; `-agent` with `-agent-cmd` offers the
   named harness regardless of `PATH`.
 - **Start and Stop.** Start launches the selected agent with the drawing's MCP server attached and

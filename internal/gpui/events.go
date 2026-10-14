@@ -97,6 +97,19 @@ type ScrollWheelEvent struct {
 
 func (e ScrollWheelEvent) isPlatformInput() {}
 
+// PinchEvent is a trackpad pinch (magnify) gesture step at Position. Delta is
+// the magnification of this step as a fraction: +0.1 means 10% bigger (zoom
+// in), -0.1 shrinks, and the scale factor of the step is 1+Delta. Backends
+// that cannot see pinch gestures never send it; a browser pinch arrives as a
+// Ctrl+ScrollWheelEvent instead.
+type PinchEvent struct {
+	Position  Point
+	Delta     float32
+	Modifiers Modifiers
+}
+
+func (e PinchEvent) isPlatformInput() {}
+
 // ClickEvent is a completed click (a press-release pair on the same target).
 type ClickEvent struct {
 	Up *MouseUpEvent
