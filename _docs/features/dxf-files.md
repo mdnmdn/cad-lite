@@ -3,11 +3,11 @@ id: feat-dxf-files
 title: DXF files
 kind: feature
 status: current
-summary: Opening and saving DXF drawings from the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
-read_when: you are changing OPEN, SAVE or the -open flag, or how file problems are reported to the user
+summary: Opening DXF and DWG drawings and saving DXF from the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
+read_when: you are changing OPEN, SAVE or the -open flag, which file types they accept, or how file problems are reported to the user
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go]
+code_anchors: [cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -16,17 +16,20 @@ review_cycle: quarterly
 
 ## Purpose
 
-The drafter opens a DXF drawing, edits it and saves it back to DXF. Anything Cad-lite cannot read is
-reported rather than hidden, so the drafter knows what the opened drawing lacks.
+The drafter opens a DXF or DWG drawing, edits it and saves it as DXF. Anything Cad-lite cannot read
+is reported rather than hidden, so the drafter knows what the opened drawing lacks.
 
 ## Behaviour
 
-- **OPEN** asks `Enter path of drawing to open`. On success the open drawing is replaced, the view
+- **OPEN** asks `Enter path of drawing to open (.dxf or .dwg)`. On success the open drawing is replaced, the view
   zooms to its extents and the history reads `Opened <path> (<n> entities).`
-- **SAVE** asks `Enter path of drawing to save` and writes the current drawing; the history reads
-  `Saved <path> (<n> entities).`
+- **SAVE** asks `Enter path of drawing to save` and writes the current drawing as DXF; the history
+  reads `Saved <path> (<n> entities).`
 - **QSAVE** (Ctrl+S) saves silently under the current path and asks for one only when the drawing
   has none. **SAVEAS** (Ctrl+Shift+S) and **SAVE** ask for the path, offering the current one as the default.
+- **A drawing opened from a DWG** has the `.dwg` path, which cannot be written (see below), so QSAVE
+  asks for a path instead of failing, and SAVE, SAVEAS and the `Save changes` question offer the same
+  name with `.dxf` as the default.
 - **NEW** discards the drawing for an empty one, forgets the path and does not touch files. **CLOSE** does
   the same (Cad-lite has one drawing).
 - **Unsaved changes.** The session keeps a modified counter: every committed command, undo and redo adds
@@ -44,12 +47,19 @@ reported rather than hidden, so the drafter knows what the opened drawing lacks.
 - **SAVE is atomic.** The file is written beside the target and renamed over it, so a failed save
   (full disk, write error) leaves the previous file intact.
 - The path is typed text, so Space does not submit it. The file format is chosen by the extension,
-  case-insensitively; `.dxf` is the only one.
+  case-insensitively: `.dxf` is read and written, `.dwg` is read only.
 - `-open PATH` on the command line opens a file at startup and zooms to its extents.
 - Opening replaces the drawing, its undo history and the selection; the previous drawing is saved only if the user answers Yes to `Save changes`.
 - Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC` and
   polylines. What else is read, what is kept and which DXF version is written are owned by
   [File I/O](../tech/file-io.md).
+- **DWG** (R14, R2000, R2004, R2007, R2010, R2013 and R2018) opens with its layers, units and the
+  `LINE`, `CIRCLE`, `ARC`, `LWPOLYLINE` and 2D polyline entities of model space. Every other entity
+  is skipped, not kept: the history shows one warning such as `skipped 29 TEXT, 15 MULTILEADER, 11
+  DIMENSION, ... (not read from DWG files; the DXF reader keeps them)`, and paper space is counted in a
+  second. Saving to a `.dwg` path fails with `Save failed: DWG writing is not supported; save as
+  .dxf`; the drawing stays as it was. Agents see the opened drawing like any other; they cannot run
+  OPEN themselves.
 - **Unknown entities.** An entity of a class Cad-lite does not model opens without error. It is not
   shown and cannot be selected, snapped to or edited, but it stays in the drawing and SAVE writes it
   again when R12 has its class. Entities of classes R12 lacks (SPLINE, MTEXT, HATCH, ELLIPSE and
@@ -76,8 +86,11 @@ A failure ends the command and leaves the drawing as it was:
 |---|---|
 | File missing or unreadable | `Open failed: <operating system message>` |
 | Malformed or binary DXF | `Open failed: dxf: line N: ...` |
+| DWG of a version before R14 | `Open failed: DWG version AC1009 (R11/R12) is not supported; open the drawing in a CAD application and save it as DXF` |
+| A `.dwg` that is not DWG, or is damaged | `Open failed: not a DWG file`, or `Open failed: DWG file is damaged or truncated: ...` (a damaged object inside an otherwise sound file only counts in a warning) |
 | Truncated DXF (a section without `ENDSEC`) | `Open failed: dxf: section "ENTITIES" has no ENDSEC (truncated file?)` |
-| Extension with no reader or writer | `Open failed: no reader for ".dwg" files`, or `Save failed: no writer for ...` |
+| Extension with no reader or writer | `Open failed: no reader for ".xyz" files`, or `Save failed: no writer for ".xyz" files` |
+| Save to a `.dwg` path | `Save failed: DWG writing is not supported; save as .dxf` |
 | Path not writable | `Save failed: <operating system message>` |
 
 With `-open`, a failure prints the error and exits with a non-zero status. In a build with no file
@@ -87,7 +100,8 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
 
 - Commands: OPEN, SAVE, NEW, registered in `cmdsys/commands`; prompt kind `InputText`.
 - Interface: `cmdsys.FileHandler` (`Open`, `Save`), implemented by `fileio.Registry`; the session
-  receives it through `Session.SetFiles`.
+  receives it through `Session.SetFiles`. A handler that also has `WritablePath(path) string`
+  (`Registry` does) tells the file commands which name a read-only format can be saved under.
 - Document: a successful open calls `Context.ReplaceDrawing`, which cancels the running command and clears the selection.
 
 ## Implementation
@@ -95,7 +109,9 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
 `fileCmd` in `cmdsys/commands/files.go` serves OPEN and SAVE: `Start` checks for a handler and
 prompts, `Input` calls `Files.Open` or `Files.Save`, prints the warnings through `printWarnings`
 (the limit of five) and the result line, and `ZoomExtents` frames the new drawing. `fileio.Registry`
-in `fileio/format.go` picks the codec by extension; `fileio/dxf.Codec` reads and writes. `cmd/cad`
+in `fileio/format.go` picks the codec by extension; `fileio/dxf.Codec` reads and writes and
+`fileio/dwg.Codec` reads. `writablePath` in `cmdsys/commands/files.go` swaps a `.dwg` default for
+`.dxf`. `cmd/cad`
 builds the registry, opens `-open` before creating the workspace and calls
 `Workspace.FitOnFirstFrame`.
 
@@ -105,18 +121,21 @@ builds the registry, opens `-open` before creating the workspace and calls
 - Saving writes unknown entities of R12 classes and the preserved tables and blocks. Unknown
   entities of other classes are absent from the saved file, each with a warning, so a round trip of
   a file that has them is lossy.
+- A DWG that cannot be read to the end opens with what could be: a damaged or CRC-failing object is
+  counted in a warning and left out; an unreadable file header or section map is an error.
 - The reader rejects binary DXF, files that end inside a group-code pair and sections without `ENDSEC`.
   A file without the `EOF` marker opens with a warning, and non-finite numbers (`nan`, `inf`) are read as
   0 with a warning.
 
 ## Related docs
 
-- [File I/O](../tech/file-io.md) — the codec, the supported entities and the DXF version written
+- [File I/O](../tech/file-io.md) — the codecs, the supported entities, the DXF version written and the DWG versions read
 - [Drawing and editing commands](drawing-and-editing.md) — the command list that names OPEN and SAVE
 - [Backlog](../backlog.md) — unknown objects that cannot be saved, newer DXF versions and binary DXF
 
 ## Next steps
 
 - Write newer DXF versions so unknown entities of classes R12 lacks survive a save.
+- Write DWG, and read more DWG entities (TEXT, INSERT and blocks first).
 - A native open and save dialog.
 - Browser file access through the browser's own APIs.

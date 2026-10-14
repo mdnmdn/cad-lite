@@ -702,7 +702,7 @@ quit_unavailable = "Quitting is not available on this platform."
 untitled = "Untitled"
 
 [cmd.file.prompt]
-open_path = "Enter path of drawing to open"
+open_path = "Enter path of drawing to open (.dxf or .dwg)"
 save_path = "Enter path of drawing to save"
 save_changes = "Save changes to %s?"
 
@@ -726,10 +726,23 @@ no_value = "dxf: line %d: group code %q has no value"
 bad_group_code = "dxf: line %d: bad group code %q (binary DXF is not supported)"
 no_endsec = "dxf: section %q has no ENDSEC (truncated file?)"
 
+[dwg.warn]
+skipped = "skipped %s (not read from DWG files; the DXF reader keeps them)"
+paper_space = "%d paper space entities were not read (only model space is imported)"
+unreadable = "%d DWG objects could not be read and were skipped"
+crc = "%d DWG objects failed their CRC check and were skipped"
+
+[dwg.err]
+unsupported = "DWG version %s (%s) is not supported; open the drawing in a CAD application and save it as DXF"
+not_dwg = "not a DWG file"
+corrupt = "DWG file is damaged or truncated: %s"
+too_big = "DWG file is too large to read"
+
 [fileio.err]
 no_reader = "no reader for %q files"
 no_writer = "no writer for %q files"
 not_regular = "%s is not a regular file"
+read_only = "%s writing is not supported; save as %s"
 
 [settings.warn]
 wrong_type = "%s must be %s, got %v; using the default"

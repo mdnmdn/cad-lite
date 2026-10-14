@@ -1,10 +1,6 @@
 package render
 
-import (
-	"math"
-
-	"cad-lite/doc"
-)
+import "cad-lite/doc"
 
 // Builder turns entities into display items, caching each entity's
 // tessellation per zoom band. Feed it every change set (Invalidate) so the
@@ -96,61 +92,8 @@ func luminance(c Color) float64 {
 	return (0.2126*float64(c.R) + 0.7152*float64(c.G) + 0.0722*float64(c.B)) / 255
 }
 
-// ACI returns the RGB of an AutoCAD Color Index. 1–9 and the grays 250–255
-// are the standard values; 10–249 are generated from the palette's
-// hue/shade layout and match AutoCAD closely but not exactly.
+// ACI returns the RGB of an AutoCAD Color Index; see doc.ACIRGB for the palette.
 func ACI(i int) Color {
-	switch {
-	case i >= 1 && i <= 9:
-		return aciBase[i]
-	case i >= 250 && i <= 255:
-		g := [6]uint8{51, 91, 132, 173, 214, 255}[i-250]
-		return Color{g, g, g, 255}
-	case i >= 10 && i <= 249:
-		hue := float64((i-10)/10) * 15
-		shade := (i - 10) % 10
-		v := [5]float64{1, 0.8, 0.6, 0.5, 0.3}[shade/2]
-		s := 1.0
-		if shade%2 == 1 {
-			s = 0.5
-		}
-		return hsv(hue, s, v)
-	}
-	return Color{255, 255, 255, 255}
-}
-
-var aciBase = [10]Color{
-	{0, 0, 0, 255},
-	{255, 0, 0, 255},
-	{255, 255, 0, 255},
-	{0, 255, 0, 255},
-	{0, 255, 255, 255},
-	{0, 0, 255, 255},
-	{255, 0, 255, 255},
-	{255, 255, 255, 255},
-	{128, 128, 128, 255},
-	{192, 192, 192, 255},
-}
-
-func hsv(h, s, v float64) Color {
-	c := v * s
-	x := c * (1 - math.Abs(math.Mod(h/60, 2)-1))
-	m := v - c
-	var r, g, b float64
-	switch {
-	case h < 60:
-		r, g = c, x
-	case h < 120:
-		r, g = x, c
-	case h < 180:
-		g, b = c, x
-	case h < 240:
-		g, b = x, c
-	case h < 300:
-		r, b = x, c
-	default:
-		r, b = c, x
-	}
-	f := func(u float64) uint8 { return uint8(math.Round((u + m) * 255)) }
-	return Color{f(r), f(g), f(b), 255}
+	r, g, b := doc.ACIRGB(i)
+	return Color{r, g, b, 255}
 }

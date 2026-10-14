@@ -31,7 +31,7 @@ UI shell and one rendering adapter touch the graphics stack.
 │ Document database (doc/)  entities · layers · handles        │
 │                           transactions · undo journal        │
 ├─────────────────────────────────────────────────────────────┤
-│ File I/O plugins (fileio/)   DXF                              │
+│ File I/O plugins (fileio/)   DXF · DWG (read)                 │
 ├──────────────────────────────┬──────────────────────────────┤
 │ Geometry kernel (geom/)      │ Spatial index (spatial/)      │
 └──────────────────────────────┴──────────────────────────────┘
@@ -69,8 +69,8 @@ window that renders one frame to PNG. Every package's purpose is listed in the
    `assets/icons` is a data package (embedded SVGs, imports only `embed`) that only `ui` imports,
    together with the SVG rasterizer; see [UI framework](ui-framework.md).
 3. **No cgo in the default build.** Everything that builds without tags is pure Go, so the
-   application compiles for `js/wasm`. A future cgo dependency (a DWG library) lives behind a build
-   tag in its own `fileio` plugin.
+   application compiles for `js/wasm`; DWG is read by pure Go code (`fileio/dwg`, decision D24). A
+   future cgo dependency would live behind a build tag in its own `fileio` plugin.
 4. **Model space is `float64`.** No `float32` in `geom`, `doc`, `spatial` or `cmdsys`. Narrowing to
    `float32` happens once, in `render/gpuirender`, after the camera-relative transform.
 5. **The document changes only inside a transaction.** Commands never mutate entities directly;

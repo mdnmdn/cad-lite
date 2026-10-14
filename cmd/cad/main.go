@@ -23,6 +23,7 @@ import (
 	"cad-lite/assets/appicon"
 	"cad-lite/doc"
 	"cad-lite/fileio"
+	"cad-lite/fileio/dwg"
 	"cad-lite/fileio/dxf"
 	"cad-lite/geom"
 	"cad-lite/i18n"
@@ -68,6 +69,7 @@ func main() {
 
 	files := &fileio.Registry{}
 	files.AddReader(dxf.Codec{})
+	files.AddReader(dwg.Codec{})
 	files.AddWriter(dxf.Codec{})
 
 	d := doc.New()

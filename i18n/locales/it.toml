@@ -703,7 +703,7 @@ quit_unavailable = "Uscire non è disponibile su questa piattaforma."
 untitled = "Senza titolo"
 
 [cmd.file.prompt]
-open_path = "Immettere il percorso del disegno da aprire"
+open_path = "Immettere il percorso del disegno da aprire (.dxf o .dwg)"
 save_path = "Immettere il percorso in cui salvare il disegno"
 save_changes = "Salvare le modifiche a %s?"
 
@@ -727,10 +727,23 @@ no_value = "dxf: riga %d: il codice di gruppo %q non ha valore"
 bad_group_code = "dxf: riga %d: codice di gruppo %q non valido (il DXF binario non è supportato)"
 no_endsec = "dxf: la sezione %q non ha ENDSEC (file troncato?)"
 
+[dwg.warn]
+skipped = "ignorate %s (non lette dai file DWG; il lettore DXF le mantiene)"
+paper_space = "%d entità dello spazio carta non lette (si importa solo lo spazio modello)"
+unreadable = "%d oggetti DWG non si sono potuti leggere e sono stati ignorati"
+crc = "%d oggetti DWG non hanno superato il controllo CRC e sono stati ignorati"
+
+[dwg.err]
+unsupported = "La versione DWG %s (%s) non è supportata; aprire il disegno in un'applicazione CAD e salvarlo come DXF"
+not_dwg = "non è un file DWG"
+corrupt = "il file DWG è danneggiato o troncato: %s"
+too_big = "il file DWG è troppo grande per essere letto"
+
 [fileio.err]
 no_reader = "nessun lettore per i file %q"
 no_writer = "nessun writer per i file %q"
 not_regular = "%s non è un file regolare"
+read_only = "La scrittura %s non è supportata; salvare come %s"
 
 [settings.warn]
 wrong_type = "%s deve essere %s, trovato %v; uso il valore predefinito"

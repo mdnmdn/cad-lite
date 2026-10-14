@@ -49,7 +49,7 @@ func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 			ctx.Say("cmd.file.msg.unavailable")
 			return nil
 		}
-		if c.name == "QSAVE" && ctx.FilePath() != "" {
+		if c.name == "QSAVE" && ctx.FilePath() != "" && writablePath(ctx, ctx.FilePath()) == ctx.FilePath() {
 			saveTo(ctx, ctx.FilePath())
 			return nil
 		}
@@ -74,9 +74,18 @@ func (c *fileCmd) savePathPrompt(ctx *cmdsys.Context, stage int) *cmdsys.Prompt 
 	c.stage = stage
 	p := &cmdsys.Prompt{Message: ctx.T("cmd.file.prompt.save_path"), Accepts: cmdsys.InputText}
 	if path := ctx.FilePath(); path != "" {
-		p.Default = &cmdsys.Input{Kind: cmdsys.InputText, Text: path}
+		p.Default = &cmdsys.Input{Kind: cmdsys.InputText, Text: writablePath(ctx, path)}
 	}
 	return p
+}
+
+// writablePath is path, or, when the file handler cannot write its format (a DWG the drawing was
+// opened from), the same name with an extension it can write.
+func writablePath(ctx *cmdsys.Context, path string) string {
+	if w, ok := ctx.Files.(interface{ WritablePath(string) string }); ok {
+		return w.WritablePath(path)
+	}
+	return path
 }
 
 // discard runs then, after asking about unsaved changes when there are some and a way to save.
@@ -119,7 +128,7 @@ func (c *fileCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			c.then(ctx)
 			return nil
 		}
-		if path := ctx.FilePath(); path != "" {
+		if path := ctx.FilePath(); path != "" && writablePath(ctx, path) == path {
 			if saveTo(ctx, path) {
 				c.then(ctx)
 			}

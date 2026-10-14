@@ -27,8 +27,10 @@ output (renders, binaries, experiments) goes in `_tmp/`, which is gitignored and
 | Verify a change | `gofmt -l .` (must print nothing), `go vet ./...`, `go test ./...` | `just check` |
 | Verify the nested `agentmanager` module (not covered by `./...`) | `cd agentmanager && gofmt -l . && go vet ./... && go test ./...` | `just check-agentmanager` |
 | Run the desktop app | `go run ./cmd/cad` | `just run` |
-| Run with a drawing | `go run ./cmd/cad -open plan.dxf` | `just run -open plan.dxf` |
+| Run with a drawing (DXF or DWG) | `go run ./cmd/cad -open plan.dxf` | `just run -open plan.dxf` |
 | Render headlessly | `go run ./cmd/cad -png _tmp/cad.png` | `just png` |
+| Fuzz the DWG reader (seeded with the fixtures; a stall of tens of seconds is the fuzzer minimizing an input) | `go test ./fileio/dwg -run XXX -fuzz FuzzRead -fuzztime 60s -fuzzminimizetime 3s` | |
+| Compare every DWG sample entity with ACadSharp's DXF export | `DWG_PARITY_DIR=…/ACadSharp/samples go test ./fileio/dwg -run TestParityWithDXF` | |
 | Build for the browser | `GOOS=js GOARCH=wasm go build -o _tmp/cad.wasm ./cmd/cad` | `just wasm` |
 | Run real-window scenarios under Xvfb (`just gui-run tools/gui/scenarios/line.gui`; `-video` records) | `go run ./tools/gui scenario.gui…` | `just gui-run` |
 | Run every real-window scenario; fails on any assertion; output in `_tmp/gui/out` | `CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui` | `just gui-test` |
@@ -61,7 +63,7 @@ Run `go mod tidy` after adding an import.
 
 | Flag | Meaning |
 |---|---|
-| `-open PATH` | Open a DXF file at startup |
+| `-open PATH` | Open a DXF or DWG file at startup |
 | `-script TEXT` | Run a command script after opening (AutoCAD script rules) |
 | `-demo` | Draw the demo plate at startup |
 | `-png PATH` | Render one frame headlessly and exit; draws the demo plate unless `-open` or `-script` is given |
