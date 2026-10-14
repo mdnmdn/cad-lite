@@ -47,7 +47,10 @@ reached for an entity as `Drawing.EntityVisible` and `EntityEditable`; render, s
 call them, so a new layer flag is honoured by changing that file. `Drawing.RemoveLayer` deletes an
 unreferenced layer (never "0" or the current one). Layer "0"
 always exists. `Drawing.CurrentLayer` is the layer new entities go on. Layer table edits are direct
-and not journalled.
+and not journalled. `Drawing.Layer` matches a name exactly (case-sensitive) through a name-keyed index
+that `New`, `AddLayer` and `RemoveLayer` keep in step with the table, so render, snap and selection
+can look a layer up per entity per frame. A layer's `Name` must not change while it is in the table;
+a lookup that finds a renamed record rebuilds the index rather than return it under its old name.
 
 **Header.** `doc.Header` holds `HandSeed`, `InsUnits` and, in `Extra`, every header variable the
 reader does not model, kept as read.
@@ -63,7 +66,9 @@ creates one. `Drawing.Preserved` holds the table records and blocks the document
 keeps and writes.
 
 **Draw order.** `Drawing.Handles` returns entity handles in ascending order, so newer entities draw
-on top.
+on top. Erasing is O(1): it leaves the handle in the order slice as a tombstone, and `Handles` sorts
+and drops tombstones and duplicates on its next call (or the drawing compacts once tombstones
+outnumber live entities). The slice `Handles` returns is shared and valid until the next edit.
 
 ## The edit contract
 

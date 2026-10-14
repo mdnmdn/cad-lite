@@ -103,7 +103,7 @@ func (t *Txn) Commit() ChangeSet {
 	}
 	t.done = true
 	t.d.open = nil
-	step := JournalStep{Before: map[Handle]Entity{}, After: map[Handle]Entity{}}
+	step := JournalStep{Before: make(map[Handle]Entity, len(t.order)), After: make(map[Handle]Entity, len(t.order))}
 	var cs ChangeSet
 	for _, h := range t.order {
 		b, a := t.before[h], t.d.entities[h]

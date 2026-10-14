@@ -29,6 +29,7 @@ func (d *Drawing) RemoveLayer(name string) bool {
 	for i, l := range d.layers {
 		if l.Name == name {
 			d.layers = append(d.layers[:i], d.layers[i+1:]...)
+			d.reindexLayers()
 			return true
 		}
 	}
