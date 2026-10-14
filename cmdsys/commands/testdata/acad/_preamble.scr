@@ -1,0 +1,47 @@
+; Preamble: run this in AutoCAD before every corpus script, in a new drawing from acadiso.dwt.
+; It puts the system variables the corpus depends on into a known state. The Cad-lite harness does
+; not run it; it sets SnapOn=false and Ortho=false on a fresh session instead (README.md).
+; Lines marked (verify) name variables to be confirmed in a real install.
+; no dialogs: file and command prompts come to the command line
+FILEDIA
+0
+CMDDIA
+0
+; dynamic input off: typed coordinates are absolute, no tooltips take the input
+DYNMODE
+0
+OSMODE
+0
+ORTHOMODE
+0
+SNAPMODE
+0
+GRIDMODE
+0
+POLARMODE
+0
+PICKFIRST
+1
+PICKADD
+2
+FILLETRAD
+0
+CHAMFERA
+0
+CHAMFERB
+0
+CIRCLERAD
+0
+OFFSETDIST
+-1
+COPYMODE
+0
+PLINEWID
+0
+; Standard TRIM and EXTEND: ask for cutting edges and boundaries first (2021+ default is Quick) (verify name)
+TRIMEXTENDMODE
+0
+TRIMMODE
+1
+CECOLOR
+BYLAYER

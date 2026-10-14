@@ -1,0 +1,9 @@
+# F2 toggles the agent panel (no agent is started).
+app -demo
+shot closed
+key F2
+shot open
+key F2
+shot closed_again
+expect-diff closed open
+expect-same closed closed_again

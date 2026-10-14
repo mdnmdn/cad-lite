@@ -1,0 +1,13 @@
+# _ and . prefixes, keyword spellings
+# Expected state after running 31_prefixes_and_keywords.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 0,0 10,0
+line 0,5 10,5
+line 0,10 10,10
+circle 50,0 4
+circle 100,0 4
+line 0,20 10,20
+line 10,20 10,30
+line 10,30 0,20
+count 8

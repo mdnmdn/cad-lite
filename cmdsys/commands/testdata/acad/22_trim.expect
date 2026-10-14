@@ -1,0 +1,11 @@
+# TRIM: select-all edges, Fence
+# Expected state after running 22_trim.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line -50,0 50,0
+line 50,-10 50,10
+line 0,100 50,100
+line 0,110 50,110
+line 0,120 50,120
+line 50,90 50,130
+count 6

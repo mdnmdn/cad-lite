@@ -1,0 +1,21 @@
+; MIRROR: keep and erase source
+LINE
+10,0
+20,10
+
+MIRROR
+L
+
+0,0
+0,10
+N
+LINE
+110,0
+120,10
+
+MIRROR
+L
+
+100,0
+100,10
+Y

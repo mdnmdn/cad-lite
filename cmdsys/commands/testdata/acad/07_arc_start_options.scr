@@ -1,0 +1,32 @@
+; three points on the arc
+ARC
+0,0
+5,5
+10,0
+; start, centre, end
+ARC
+110,0
+C
+100,0
+100,10
+; start, centre, angle (positive = counterclockwise)
+ARC
+210,0
+C
+200,0
+A
+90
+; negative angle = clockwise
+ARC
+310,0
+C
+300,0
+A
+-90
+; start, centre, chord length
+ARC
+410,0
+C
+400,0
+L
+10

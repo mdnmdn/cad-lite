@@ -1,0 +1,45 @@
+; Selection: L, P, ALL+R, F, SI
+LINE
+0,0
+10,0
+
+LINE
+0,50
+10,50
+
+; Last, then Previous reuses it
+MOVE
+L
+
+0,0
+0,10
+MOVE
+P
+
+0,0
+0,10
+; ALL, then Remove by picking the second line, leaves only the first selected
+ERASE
+ALL
+R
+5,70
+
+LINE
+100,0
+110,0
+
+LINE
+105,-10
+105,10
+
+; Fence crosses only the vertical line
+ERASE
+F
+100,5
+110,5
+
+
+; Single ends the selection after one pick
+ERASE
+SI
+105,0

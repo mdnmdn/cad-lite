@@ -2,3 +2,10 @@
 /bin/
 .DS_Store
 /_tmp/
+/assets/icons/preview/
+/assets/icons/variants/
+/assets/appicon/preview/
+!/assets/appicon/*.png
+/.cad-lite/
+/.go-draw/
+/cmd/cad/rsrc_windows_*.syso

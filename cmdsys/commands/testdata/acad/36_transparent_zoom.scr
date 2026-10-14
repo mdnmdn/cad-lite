@@ -1,0 +1,10 @@
+; Transparent 'ZOOM inside LINE
+LINE
+0,0
+; a transparent command runs at the next-point prompt, then LINE resumes
+'ZOOM
+W
+-10,-10
+110,110
+50,0
+

@@ -1,0 +1,22 @@
+; start, end, radius (positive = minor arc, counterclockwise)
+ARC
+10,0
+E
+0,10
+R
+10
+; start, end, tangent direction at the start
+ARC
+110,0
+E
+100,10
+D
+90
+; continue from the end of the last line, tangent to it
+LINE
+200,0
+210,0
+
+ARC
+
+220,10

@@ -1,0 +1,9 @@
+; Enter at the first-point prompt continues from the last point of the last line
+LINE
+0,0
+50,0
+
+LINE
+
+50,50
+

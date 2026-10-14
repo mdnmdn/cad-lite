@@ -1,0 +1,7 @@
+# UNDO Mark and Back
+# Expected state after running 34_undo_mark_back.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 0,0 10,0
+count 1
+active none

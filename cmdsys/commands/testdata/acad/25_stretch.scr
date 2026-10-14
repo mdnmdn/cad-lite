@@ -1,0 +1,16 @@
+; STRETCH: crossing window
+REC
+0,0
+10,10
+LINE
+6,2
+9,2
+
+; objects crossing the window are stretched, objects inside are moved
+STRETCH
+C
+5,-5
+15,15
+
+0,0
+5,0

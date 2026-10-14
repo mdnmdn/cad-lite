@@ -1,0 +1,33 @@
+; ROTATE: angle, Copy, Reference
+LINE
+0,0
+10,0
+
+ROTATE
+L
+
+0,0
+90
+; Copy keeps the original
+LINE
+100,0
+110,0
+
+ROTATE
+L
+
+100,0
+C
+90
+; Reference: the rotation is new angle minus reference angle
+LINE
+200,0
+210,10
+
+ROTATE
+L
+
+200,0
+R
+45
+90

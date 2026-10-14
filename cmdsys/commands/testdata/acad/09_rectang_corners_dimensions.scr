@@ -1,0 +1,11 @@
+; RECTANG: two corners, Dimensions
+REC
+0,0
+100,50
+; Dimensions: length, width, then a point that picks the quadrant
+REC
+200,0
+D
+100
+50
+210,10

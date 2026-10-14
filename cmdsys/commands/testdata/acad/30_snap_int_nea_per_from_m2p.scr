@@ -1,0 +1,35 @@
+; Typed snaps INT NEA PER FROM M2P NON
+LINE
+0,0
+100,100
+
+LINE
+0,100
+100,0
+
+LINE
+INT
+50,50
+@100,0
+
+LINE
+NEA
+25,25
+@0,10
+
+LINE
+60,0
+PER
+80,80
+
+; FROM base, offset; M2P two points; NON ignores running snaps
+LINE
+FROM
+10,10
+@5,5
+M2P
+0,0
+10,20
+NON
+7,7
+

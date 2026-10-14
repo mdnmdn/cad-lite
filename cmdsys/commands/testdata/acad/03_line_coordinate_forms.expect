@@ -1,0 +1,12 @@
+# Point input forms: absolute, relative, polar, #
+# Expected state after running 03_line_coordinate_forms.scr in AutoCAD 2024/2025 from the preamble state.
+# (verify) # at a point prompt with DYNMODE 0
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 10,10 53.3012701892,35
+line 53.3012701892,35 63.3012701892,17.6794919243
+line 63.3012701892,17.6794919243 100,100
+line 100,100 0,120
+line 0,120 5,200
+line 5,200 5,210
+count 6

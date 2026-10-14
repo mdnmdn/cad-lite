@@ -1,0 +1,34 @@
+; OFFSET: distance, Through, Erase
+LINE
+0,0
+100,0
+
+; distance, object (pick on it), side (pick)
+OFFSET
+10
+50,0
+50,5
+
+CIRCLE
+200,0
+20
+; Through: the new circle passes through the point
+OFFSET
+T
+220,0
+230,0
+
+; Erase source object, then a distance
+OFFSET
+E
+Y
+5
+230,0
+235,0
+
+; restore the Erase setting
+OFFSET
+E
+N
+
+

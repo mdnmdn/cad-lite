@@ -1,0 +1,12 @@
+# Typed snaps INT NEA PER FROM M2P NON
+# Expected state after running 30_snap_int_nea_per_from_m2p.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 0,0 100,100
+line 0,100 100,0
+line 50,50 150,50
+line 25,25 25,35
+line 60,0 30,30
+line 15,15 5,10
+line 5,10 7,7
+count 7

@@ -1,91 +1,54 @@
-# go-gpui
+# Cad-lite
 
-A proof-of-concept port of [Zed's GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui)
-UI framework to Go. Retained entities, per-frame element trees, a flexbox
-layout engine, a keymap/action system and a text stack, all drawn by a **CPU
-rasterizer** - no GPU and no cgo. The same view renders to an ebiten window or
-straight to a PNG, which makes UI snapshots and headless tests cheap.
+Cad-lite is a 2D drafting application in the spirit of AutoCAD, written in Go. A drafter works from
+a command line with typed coordinates and object snaps, on drawings in real units with double
+precision, organised in layers, and exchanges them as DXF. The UI runs on an internal Go port of
+Zed's GPUI, which rasterises on the CPU, so the application needs no cgo.
 
-Status: POC. The core (`gpui/`) is covered by tests and 17 examples render
-headless; the interactive ebiten window has not been exercised in the agent
-CI environment (no Metal device). See [_docs/roadmap.md](_docs/roadmap.md).
+**Status: spike.** It implements a slice of the specification: the kernel, the document model, the
+core drawing and editing commands, snaps and selection, and DXF read and write. The gaps are
+listed in [`_docs/backlog.md`](_docs/backlog.md).
 
 ## Quick start
 
 ```
-go run ./examples/todo                 # interactive window
-go run ./examples/todo -png todo.png   # headless: render one frame and exit
+go run ./cmd/cad                            # desktop window
+go run ./cmd/cad -open plan.dxf             # open a DXF file
+go run ./cmd/cad -demo                      # draw the demo plate
+go run ./cmd/cad -script "LINE 0,0 100,50"  # run a command script
+go run ./cmd/cad -png _tmp/cad.png          # render one frame headlessly
+GOOS=js GOARCH=wasm go build -o _tmp/cad.wasm ./cmd/cad
 ```
 
-Every example takes `-png PATH`, `-width`, `-height`, `-smoke MS`. In a running
-window, `cmd-shift-s` (macOS) / `ctrl-shift-s` saves the current frame as
-`snapshot-YYYYMMDD-HHMMSS.png`.
+The desktop window needs a display and a GPU-capable backend. All flags and the test and lint
+commands are in [`_docs/tech/operations.md`](_docs/tech/operations.md).
 
-## Hello world
+## What works
 
-```go
-package main
+- Commands LINE, PLINE, CIRCLE, ARC, RECTANG, MOVE, COPY, ROTATE, SCALE, ERASE, UNDO, REDO, ZOOM,
+  LAYER, DIST, ID, LIST, NEW, OPEN and SAVE, with AutoCAD's aliases and prompts.
+- Typed points (absolute, relative, polar), direct distance entry, ortho, and the endpoint,
+  midpoint, centre, quadrant and intersection object snaps.
+- Pick, window and crossing selection; every command undoes as one step.
+- Pan, zoom, grid, layers panel and status bar.
+- DXF read and write, with warnings for what is not supported.
 
-import (
-	"log"
+## Repository layout
 
-	"go-gpui/gpui"
-	"go-gpui/gpui/ebitenplatform"
-)
+| Path | Purpose |
+|---|---|
+| `geom/` | Geometry kernel: vectors, boxes, lines, arcs, circles, polylines and their operations |
+| `doc/` | Document database: handles, entities, layers, transactions and undo |
+| `spatial/` | Spatial index for culling, picking and snapping |
+| `fileio/` | File format plugins; `fileio/dxf` is the DXF codec |
+| `render/` | Backend-neutral view, display list and tessellation; `render/gpuirender` draws it with gpui |
+| `cmdsys/` | Command session, input parsing, snaps and selection; `cmdsys/commands` holds the commands |
+| `agentmanager/` | Nested module: launches opencode, Claude Code and Codex and speaks to them; imports nothing from Cad-lite, has its own docs |
+| `cadmcp/` | The drawing as MCP tools for those agents ([`_docs/tech/agent-integration.md`](_docs/tech/agent-integration.md)) |
+| `ui/` | Application shell: toolbar, canvas, panels, command line, status bar |
+| `cmd/cad/` | The executable |
+| `internal/gpui/` | The UI framework, with its own docs ([`internal/gpui/README.md`](internal/gpui/README.md)) |
+| `_docs/` | The documentation library, starting at [`_docs/INDEX.md`](_docs/INDEX.md) |
+| `tools/docs/` | Lints and indexes `_docs/` |
 
-func main() {
-	hello := gpui.RenderFunc(func(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
-		return gpui.NewDiv().SizeFull().Bg(gpui.Gray50).ItemsCenter().JustifyCenter().
-			Child(gpui.NewText("Hello, GPUI").TextSize(32).FontWeight(700))
-	})
-	err := ebitenplatform.New().Run(func(cx *gpui.App) {
-		opts := gpui.WindowOptions{Width: 400, Height: 200, Title: "Hello", Resizable: true}
-		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return hello }); err != nil {
-			log.Fatal(err)
-		}
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-## Features
-
-Supported: flexbox (wrapping, grow/shrink/basis, margins incl. auto, row/column gaps, min/max),
-absolute positioning,
-`Div`/`Text`/`StyledText`/`TextInput` (mouse selection and Shift navigation), `UniformList`, scroll containers and
-scrollbars with thumb dragging and track paging, borders, rounded corners and clips, linear gradients (sRGB/Oklab),
-box shadows (outset/inset), opacity, hover/focus/focus-visible/active styles, text
-style inheritance, font family with system fallback, HarfBuzz shaping and
-wrapping, mouse/keyboard events, actions and key contexts, tab order, clipboard,
-entities with observe/emit, headless rendering and input injection.
-
-Not supported yet: animation API (examples step state in `Render`), images and
-SVG, CSS grid, colour
-emoji, IME composition UI, multiple windows in the ebiten backend, italic and
-intermediate font weights, drag and drop, key chords. The full list is in
-`_docs/roadmap.md` (section 3, "Open work").
-
-## Layout of the repo
-
-```
-gpui/                core package (stdlib + x/image + go-text/typesetting)
-gpui/ebitenplatform/ ebiten window backend, clipboard, snapshot key
-examples/            17 runnable programs (docs/examples.md)
-docs/                user documentation
-_docs/               internal index, contract, roadmap, project structure
-AGENTS.md            rules for AI agents working in the repo
-```
-
-## Documentation
-
-- [docs/getting-started.md](docs/getting-started.md) - tutorial from first
-  window to headless tests.
-- [docs/examples.md](docs/examples.md) - the 17 examples and what each shows.
-- [docs/README.md](docs/README.md) - index: architecture and per-subsystem
-  concept pages.
-- [_docs/index.md](_docs/index.md) - entry point for internal docs: API
-  contract, roadmap, project structure.
-
-Verify a checkout with `gofmt -l .`, `go vet ./...`, `go test ./...`.
+Contributors and agents: read [`AGENTS.md`](AGENTS.md).

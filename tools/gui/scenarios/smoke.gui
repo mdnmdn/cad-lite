@@ -1,0 +1,5 @@
+# Launch the demo plate and look at it.
+app -demo
+shot smoke
+expect-count LINE 2
+expect-count CIRCLE 5

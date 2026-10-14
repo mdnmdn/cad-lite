@@ -1,0 +1,7 @@
+# LINE Enter continues from the last endpoint
+# Expected state after running 02_line_continue.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 0,0 50,0
+line 50,0 50,50
+count 2

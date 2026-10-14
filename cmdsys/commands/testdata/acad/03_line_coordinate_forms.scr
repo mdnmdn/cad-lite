@@ -1,0 +1,10 @@
+; absolute, relative polar (@d<a), absolute, absolute polar (d<a), # absolute, relative
+LINE
+10,10
+@50<30
+@20<-60
+100,100
+120<90
+#5,200
+@0,10
+

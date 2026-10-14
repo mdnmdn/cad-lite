@@ -1,0 +1,55 @@
+; Selection: W, C, WP, CP
+LINE
+0,0
+10,0
+
+LINE
+20,0
+30,0
+
+LINE
+0,20
+40,20
+
+; Window: only objects entirely inside (the second line)
+ERASE
+W
+5,-5
+35,5
+
+; Crossing: objects inside or touching (the first line)
+ERASE
+C
+5,-5
+12,5
+
+LINE
+100,0
+108,0
+
+LINE
+150,0
+160,0
+
+LINE
+100,50
+110,50
+
+; WPolygon: first Enter closes the polygon, second ends the selection
+ERASE
+WP
+95,-5
+120,-5
+120,5
+95,5
+
+
+; CPolygon
+ERASE
+CP
+155,-5
+170,-5
+170,5
+155,5
+
+

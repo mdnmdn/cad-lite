@@ -1,0 +1,14 @@
+# MOVE and COPY with Displacement, Multiple, mOde
+# Expected state after running 15_move_copy.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 5,5 15,5
+line 3,24 13,24
+line 0,30 10,30
+line 0,100 10,100
+line 0,110 10,110
+line 0,120 10,120
+line 0,200 10,200
+line 0,210 10,210
+count 8
+active none

@@ -1,0 +1,38 @@
+; SETVAR and typed variable names feed command defaults
+SETVAR
+CIRCLERAD
+7.5
+; a variable typed by name at the Command: prompt
+FILLETRAD
+3
+SETVAR
+OFFSETDIST
+4
+ORTHOMODE
+1
+; Enter accepts the default radius
+CIRCLE
+0,0
+
+; default offset distance
+LINE
+100,0
+200,0
+
+OFFSET
+
+150,0
+150,1
+
+; default fillet radius
+LINE
+300,0
+400,0
+
+LINE
+300,0
+300,100
+
+FILLET
+350,0
+300,50

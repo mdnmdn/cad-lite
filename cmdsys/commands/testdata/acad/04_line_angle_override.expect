@@ -1,0 +1,8 @@
+# Angle override <angle then a distance
+# Expected state after running 04_line_angle_override.scr in AutoCAD 2024/2025 from the preamble state.
+# (verify) angle override followed by a bare distance in a script
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 0,0 21.2132034356,21.2132034356
+line 21.2132034356,21.2132034356 7.0710678119,35.3553390593
+count 2

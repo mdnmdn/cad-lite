@@ -1,0 +1,17 @@
+; UNDO Mark and Back
+LINE
+0,0
+10,0
+
+UNDO
+M
+LINE
+0,10
+10,10
+
+CIRCLE
+5,5
+2
+; Back undoes to the mark, with no confirmation when a mark exists
+UNDO
+B

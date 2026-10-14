@@ -1,0 +1,10 @@
+# ORTHO GRID SNAP -OSNAP commands, typed points unaffected
+# Expected state after running 37_drafting_aids.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+var ORTHOMODE 1
+var GRIDMODE 0
+var SNAPMODE 1
+var OSMODE 3
+line 0,0 10,7
+count 1

@@ -1,0 +1,92 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            agentmanager/go.sum
+      # ebiten on Linux needs cgo: its glfw backend uses pkg-config x11 xrandr xinerama xi xrender
+      # xcursor, plus GL and XF86VidMode. No ALSA: Cad-lite does not use ebiten audio (oto).
+      - name: Install ebiten build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libc6-dev libgl1-mesa-dev libx11-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - name: agentmanager (nested module)
+        working-directory: agentmanager
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          go test -race ./...
+      - run: go run ./tools/docs lint
+      - name: Build the desktop app with a stamped version
+        run: |
+          go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
+          test "$("$RUNNER_TEMP/cad-lite" -version)" = "cad-lite 0.0.0-ci+${GITHUB_SHA::7}"
+      - name: Build for the browser
+        run: GOOS=js GOARCH=wasm go build -o "$RUNNER_TEMP/cad.wasm" ./cmd/cad
+
+  gui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libc6-dev libgl1-mesa-dev libx11-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config \
+            xvfb xdotool x11-utils imagemagick libgl1-mesa-dri
+      - name: Real-window scenarios under Xvfb
+        run: CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gui-output
+          path: _tmp/gui/out
+          if-no-files-found: ignore
+
+  cross:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the app
+        shell: bash
+        run: go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
+      # Only packages that need no window; the UI tests render with the real gpui stack.
+      - name: Test pure packages
+        run: go test ./geom/... ./doc/... ./spatial/... ./fileio/... ./cmdsys/... ./render

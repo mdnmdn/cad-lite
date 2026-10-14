@@ -1,0 +1,9 @@
+# Middle-drag pans; the wheel zooms.
+app -demo
+shot view0
+drag 500 300 600 350 middle
+shot panned
+wheel -3 535 421
+shot zoomed
+expect-diff view0 panned
+expect-diff panned zoomed

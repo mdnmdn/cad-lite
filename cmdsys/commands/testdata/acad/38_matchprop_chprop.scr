@@ -1,0 +1,33 @@
+; MATCHPROP and CHPROP
+-LAYER
+N
+A,B,X
+M
+A
+
+LINE
+0,0
+10,0
+
+-LAYER
+M
+B
+
+LINE
+0,5
+10,5
+
+; source object, then destination
+MATCHPROP
+5,0
+5,5
+
+; change layer and colour of the object picked at 5,0
+CHPROP
+5,0
+
+LA
+X
+C
+1
+

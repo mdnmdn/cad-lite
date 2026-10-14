@@ -1,0 +1,15 @@
+; CIRCLE TTR tangent to two lines
+LINE
+0,0
+100,0
+
+LINE
+0,0
+0,100
+
+; TTR: pick a point on each line, then the radius
+CIRCLE
+TTR
+50,0
+0,50
+10

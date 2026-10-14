@@ -1,0 +1,9 @@
+# ROTATE: angle, Copy, Reference
+# Expected state after running 16_rotate.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+cad-lite: pass
+line 0,0 0,10
+line 100,0 110,0
+line 100,0 100,10
+line 200,0 200,14.1421356237
+count 4

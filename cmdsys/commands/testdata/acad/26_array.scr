@@ -1,0 +1,27 @@
+; -ARRAY: rectangular and polar
+LINE
+0,0
+1,0
+
+; rows, columns, row distance, column distance
+-ARRAY
+L
+
+R
+2
+3
+10
+20
+LINE
+10,100
+11,100
+
+; polar: centre, number of items, angle to fill, rotate items
+-ARRAY
+L
+
+P
+0,100
+4
+360
+Y

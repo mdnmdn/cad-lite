@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cad-lite
+Comment=2D drafting application
+Exec=cad-lite %f
+Icon=cad-lite
+Terminal=false
+Categories=Graphics;2DGraphics;Engineering;
+MimeType=image/vnd.dxf;image/x-dxf;
+StartupWMClass=cad-lite

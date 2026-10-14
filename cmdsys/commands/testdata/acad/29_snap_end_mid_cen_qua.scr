@@ -1,0 +1,22 @@
+; Typed object snaps END MID CEN QUA
+LINE
+0,0
+100,0
+
+CIRCLE
+200,0
+20
+; a typed snap takes the next pick: the pick only has to be on the object
+LINE
+MID
+70,0
+CEN
+220,0
+QUA
+200,20
+
+LINE
+END
+95,0
+@0,30
+
