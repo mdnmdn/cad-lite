@@ -112,7 +112,7 @@ func (ws *Workspace) updateSection() *gpui.Div {
 	if ver == "dev" {
 		ver = i18n.T("ui.update.version_dev", ver)
 	}
-	sec := gpui.NewDiv().FlexCol().Gap(settingsRowGap).Child(
+	sec := gpui.NewDiv().ID("settings-sec-updates").FlexCol().Gap(settingsRowGap).Child(
 		sectionTitle(i18n.T("ui.update.section")),
 		settingRow(i18n.T("ui.update.version"), i18n.T("ui.update.version_tip"), gpui.NewText(ver).FontWeight(700)),
 	)

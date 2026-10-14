@@ -63,8 +63,14 @@ func dirtyVars(s *Session, v *Vars) {
 }
 
 // Modified returns the number of changes made to the drawing since it was created, opened or
-// saved: every committed transaction, undo and redo adds one. It is zero for a clean drawing.
+// saved: every committed transaction, undo, redo and MarkModified call adds one. It is zero for
+// a clean drawing.
 func (s *Session) Modified() int { return s.files.mods }
+
+// MarkModified records one host change to drawing metadata outside the entity journal, such as
+// a layer property. Call it only when metadata actually changes. It marks the session dirty
+// without adding an undo step; MarkSaved and SetDrawing clear the count.
+func (s *Session) MarkModified() { s.files.mods++ }
 
 // Dirty reports whether the drawing has unsaved changes. The host shows it as "*" and asks before
 // discarding the drawing.

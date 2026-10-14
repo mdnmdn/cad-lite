@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: Several drawings open at once, one tab each above the canvas, each with its own session, undo history, view and agent conversations; how OPEN, NEW, CLOSE, QUIT and files from the OS choose a tab, and what follows the active tab.
 read_when: you are changing the document tab strip, which tab a file opens in, closing or quitting with several drawings, or what is per drawing and what the window shares
-updated: 2026-10-14
-verified: 2026-10-14
+updated: 2026-10-15
+verified: 2026-10-15
 code_anchors: [ui/doctabs.go, ui/workspace.go, ui/openpaths.go, ui/agent.go, ui/agent_store.go, cmdsys/dirty.go, cmdsys/commands/files.go, cmd/cad/main.go]
 depends_on: [feat-dxf-files, feat-canvas, feat-agent-panel, tech-command-system]
 review_cycle: monthly
@@ -28,6 +28,9 @@ command line field) is shared and shows the active tab.
   changes and an `x`; the active tab is filled with the panel colour, the others are muted. The
   tooltip gives the path (or says the drawing is untitled), the unsaved-changes note and the keys.
   `+` after the tabs runs NEW. There is always at least one tab; the strip shows with one.
+- **Unsaved changes.** Each tab's session tracks entity commits, undo and redo and host-recorded
+  metadata edits. A layer property changed in the UI marks that tab unsaved without adding an entity
+  undo step; saving clears the marker and replacing the drawing resets it.
 - **Switching.** Clicking a tab, Ctrl+Tab (next) and Ctrl+Shift+Tab (previous; both wrap) make a tab
   active. The canvas, the command history and prompt, the status bar, the layers and properties
   panels, the title bar's document chip and the agent panel then show that drawing. A command running
@@ -83,6 +86,8 @@ the strip (`tabStrip`, `docTabElement`) are there too. In `cmdsys/commands/files
 `ShowOpen` before reading and `OpenNew` after, and prints to the session it returns; NEW asks `New`; CLOSE
 calls `Close` after the unsaved-changes question. `Workspace.submit` and `run` hold the tab they started
 in, since the answer may close it.
+`cmdsys/dirty.go`, `Session.MarkModified` records host metadata edits in that session's modified
+counter; `Dirty` drives the tab marker and the file commands' save question.
 
 The agent panel (`ui/agent.go`) embeds the active tab's `agentSet` (conversation tabs, history state, and
 the set's own cad MCP server, whose `cadmcp.Env.Session` returns that tab's session); `pump` drains every

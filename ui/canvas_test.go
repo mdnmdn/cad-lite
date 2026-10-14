@@ -2,8 +2,10 @@ package ui_test
 
 import (
 	"math"
+	"strings"
 	"testing"
 
+	"cad-lite/cmdsys"
 	"cad-lite/geom"
 	"cad-lite/internal/gpui"
 	"cad-lite/settings"
@@ -281,6 +283,109 @@ func TestPinchZoomsAboutPointer(t *testing.T) {
 		}
 		if got := h.at(m); abs(got.X-p.X) > 0.01 || abs(got.Y-p.Y) > 0.01 {
 			t.Fatalf("point under pointer moved %v -> %v", p, got)
+		}
+	}
+}
+
+// strokeBetween reports whether the frame holds a two-point stroke from a to b (either way),
+// within a pixel.
+func strokeBetween(h *harness, a, b gpui.Point) bool {
+	close := func(p, q gpui.Point) bool { return abs(p.X-q.X) <= 1 && abs(p.Y-q.Y) <= 1 }
+	for _, s := range h.hw.Window().Scene().Strokes {
+		if len(s.Points) == 2 && (close(s.Points[0], a) && close(s.Points[1], b) || close(s.Points[0], b) && close(s.Points[1], a)) {
+			return true
+		}
+	}
+	return false
+}
+
+// The segments LINE placed draw while LINE still runs, as in AutoCAD, and the snap marker shows
+// on them.
+func TestCanvasDrawsSegmentsOfTheRunningLine(t *testing.T) {
+	h := open(t)
+	s := h.ws.Session()
+	s.Script("LINE 3,7 43,7 43,27")
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: h.at(geom.V(13, 37))})
+	if s.Active() != "LINE" {
+		t.Fatalf("LINE ended: %q", s.Active())
+	}
+	for _, seg := range [][2]geom.Vec2{{geom.V(3, 7), geom.V(43, 7)}, {geom.V(43, 7), geom.V(43, 27)}} {
+		if !strokeBetween(h, h.at(seg[0]), h.at(seg[1])) {
+			t.Fatalf("segment %v-%v is not drawn mid-command", seg[0], seg[1])
+		}
+	}
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: h.at(geom.V(23.3, 7.2))})
+	if hit, ok := s.Snap(); !ok || hit.Point != geom.V(23, 7) {
+		t.Fatalf("no midpoint snap on the placed segment: %+v %v", hit, ok)
+	}
+	s.Submit("U")
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: h.at(geom.V(13, 37))})
+	if strokeBetween(h, h.at(geom.V(43, 7)), h.at(geom.V(43, 27))) {
+		t.Fatal("the undone segment is still drawn")
+	}
+	if !strokeBetween(h, h.at(geom.V(3, 7)), h.at(geom.V(43, 7))) {
+		t.Fatal("Undo took the first segment off the canvas too")
+	}
+}
+
+// pickbox reports whether the frame holds the closed square pickbox centred on p.
+func pickbox(h *harness, p gpui.Point) bool {
+	for _, s := range h.hw.Window().Scene().Strokes {
+		// An axis-aligned square: the quadrant marker is a diamond.
+		if !s.Closed || len(s.Points) != 4 || abs(s.Points[0].Y-s.Points[1].Y) > 0.01 {
+			continue
+		}
+		c := gpui.Point{X: (s.Points[0].X + s.Points[2].X) / 2, Y: (s.Points[0].Y + s.Points[2].Y) / 2}
+		if abs(c.X-p.X) <= 1 && abs(c.Y-p.Y) <= 1 {
+			return true
+		}
+	}
+	return false
+}
+
+// AREA's "Select object:" picks an object, so the cursor shows AutoCAD's pickbox there and no
+// snap marker, while its corner prompts show the crosshair alone and snap.
+func TestCanvasPickboxAtObjectPickPrompts(t *testing.T) {
+	h := open(t)
+	s := h.ws.Session()
+	s.Script("CIRCLE 0,0 40")
+	s.Script("AREA O")
+	p := h.at(geom.V(40.5, 0.5))
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: p})
+	if _, ok := s.Snap(); ok || !pickbox(h, p) {
+		t.Fatalf("Select object: snapped %v, pickbox %v", ok, pickbox(h, p))
+	}
+	s.Escape()
+	s.Script("AREA")
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: p})
+	if hit, ok := s.Snap(); !ok || hit.Point != geom.V(40, 0) || pickbox(h, h.at(hit.Point)) {
+		t.Fatalf("first corner prompt: snap %+v %v", hit, ok)
+	}
+}
+
+// A click on the rulers is a click on the drawing under them: the rulers change no coordinate,
+// and the wheel still zooms about the pointer there.
+func TestRulersKeepClicksAndZoomOnTheModel(t *testing.T) {
+	h := open(t)
+	s := h.ws.Session()
+	if !h.ws.Rulers() {
+		t.Fatal("rulers are off")
+	}
+	h.typ("line")
+	h.key("enter")
+	v := h.ws.View()
+	// A pixel 10 px into the top ruler and one 10 px into the left ruler.
+	for _, px := range [][2]float64{{v.Width / 2, 10}, {10, v.Height / 2}} {
+		m := v.ToModel(px[0], px[1])
+		p := h.at(m)
+		h.click(p, gpui.MouseLeft)
+		got := s.History()[len(s.History())-1]
+		if want := cmdsys.FormatPoint(m); !strings.HasSuffix(got, want) {
+			t.Fatalf("click on the ruler answered %q, want %s", got, want)
+		}
+		h.wheel(gpui.ScrollWheelEvent{Position: p, DeltaY: -notch})
+		if got := h.at(m); abs(got.X-p.X) > 0.01 || abs(got.Y-p.Y) > 0.01 {
+			t.Fatalf("zoom on the ruler moved the point under the pointer: %v -> %v", p, got)
 		}
 	}
 }

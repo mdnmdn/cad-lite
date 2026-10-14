@@ -7,7 +7,7 @@ summary: The format plugin interface and registry, what the DXF codec reads and 
 read_when: you are adding a file format, changing what the DXF codec reads or writes, changing what the DWG reader imports, or asked to write DWG
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go, fileio/dwg/read.go, fileio/dwg/container.go, fileio/dwg/objects.go, fileio/dwg/entities.go, fileio/dwg/import_entities.go, fileio/dwg/header.go, fileio/dwg/read_test.go, doc/aci.go]
+code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, fileio/dxf/text_test.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go, fileio/dwg/read.go, fileio/dwg/container.go, fileio/dwg/objects.go, fileio/dwg/entities.go, fileio/dwg/import_entities.go, fileio/dwg/header.go, fileio/dwg/read_test.go, doc/aci.go]
 depends_on: [tech-document-model]
 review_cycle: quarterly
 ---
@@ -49,7 +49,20 @@ written; DXF tokens inside them (class names, section names, handles) stay as wr
 |---|---|
 | HEADER | `$HANDSEED`, `$INSUNITS`, `$CLAYER`; every other variable is kept in `Header.Extra` |
 | TABLES | `LAYER` records: name, colour (negative means off), the frozen (1) and locked (4) flags, the linetype name (6), and the plot flag (290) and lineweight (370) of newer versions; the `CADLITE_LAYER` extended data (below; `GODRAW_LAYER`, the name before the rename, is still read) |
-| ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, and 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline` |
+| ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline`, `TEXT` and `MTEXT` (below) |
+
+**TEXT** (`readText`) keeps the first and second alignment points (10, 11; without 11 the second is the first),
+height (40), value (1, spaces kept, `\U+XXXX` escapes decoded), rotation (50) and obliquing angle (51) in
+radians, width factor (41, 1 when absent), style name (7, `Standard` when absent), generation flags (71,
+backward and upside down) and justification (72, 73). For a justified text AutoCAD writes group 10 as a
+computed baseline start; the document recomputes it from 11. A text whose extrusion is -Z (230 < 0) is
+converted to world coordinates as upside-down text at the mirrored point, which draws the same; any other
+extrusion is ignored, and thickness and linetype are dropped. **MTEXT** (`readMText`) keeps the insertion
+point (10), height (40), box width (41), attachment (71), rotation (50, or the direction vector 11), line
+spacing factor (44), style (7) and the value, the group 3 chunks followed by group 1, format codes included;
+its extrusion (210), drawing direction (72), line spacing style (73), columns and background mask are dropped,
+and one warning counts the MTEXT whose extrusion is not +Z or whose direction is top to bottom, which draw
+differently here.
 
 Entity handles (code 5), layers (8) and colours (62) are kept. Every other entity class, and 3D
 polylines and meshes, is kept as a `doc.Unknown` holding its raw group list and the sub-records it
@@ -71,10 +84,21 @@ tables, the preserved blocks, and the entities with their handles. An `LWPolylin
 seed, which are not part of the document. Header variables the document does not model are not
 written.
 
-An `Unknown` whose class R12 defines (POINT, TRACE, SOLID, TEXT, SHAPE, INSERT, ATTDEF, POLYLINE,
+A `Text` is written as `TEXT` the way AutoCAD writes it: group 10 is the computed baseline start, 11
+the alignment point when the justification is not left-baseline, and 40, 50 and 41 the height,
+rotation and width factor in effect (Aligned derives the height and Fit the width factor from the two
+points); characters outside ASCII are written as `\U+XXXX` (the writer writes no `$DWGCODEPAGE` and every other
+string as UTF-8, so an escape is the one portable form): AutoCAD from R13 on, ezdxf and this reader decode it,
+while a strict R12 reader shows the escape literally. TEXT's `%%` codes are written as typed. The STYLE table is the preserved records plus a `txt` record for `Standard` and for every style a
+text names that the file lacked. R12 has no MTEXT, so an `MText` is written as one left-justified `TEXT`
+per line of its layout (wrapped, format codes gone) at the line's baseline start, the first with the
+MTEXT's handle and the others with handles above the seed, and one warning counts the MTEXT objects
+written this way (their box, wrapping width, attachment and line spacing are lost; positions are kept): reading the file back gives those TEXT lines, not an MTEXT (backlog G2).
+
+An `Unknown` whose class R12 defines (POINT, TRACE, SOLID, SHAPE, INSERT, ATTDEF, POLYLINE,
 3DLINE, 3DFACE, VIEWPORT, DIMENSION) is written group for group, minus the groups that exist only
 from R13 on: 100, 102, 330 and 360. A strict R12 reader such as ezdxf rejects them; a file written
-this way passes an ezdxf 1.4.4 audit clean. An `Unknown` of any other class (SPLINE, MTEXT, HATCH,
+this way passes an ezdxf 1.4.4 audit clean. An `Unknown` of any other class (SPLINE, HATCH,
 ELLIPSE, custom classes) is skipped with a warning, as is a non-R12 entity inside a preserved block.
 
 A written file reads back with the same handles, layers, colours and geometry; the round-trip test
@@ -108,8 +132,10 @@ Reed-Solomon data of R2007 is de-interleaved; its parity bytes are ignored, so e
 **What is imported.** The header's units (`$INSUNITS`, from R2000), handle seed and current layer;
 the layer table (name, colour, off, frozen, locked, plot flag, lineweight and linetype name; R14 has
 no plot flag or lineweight); and the model space entities `LINE`, `CIRCLE`, `ARC`, `LWPOLYLINE`
-(bulges and widths) and 2D `POLYLINE` with its vertices, as an `LWPolyline` (3D polylines and
-meshes are skipped; a vertex that is a spline frame control point is left out). Each entity keeps its
+(bulges and widths), 2D `POLYLINE` with its vertices, as an `LWPolyline` (3D polylines and
+meshes are skipped; a vertex that is a spline frame control point is left out), and `TEXT`
+(`readText`, R14 and the R2000 data-flag layout: the fields the DXF reader keeps, the style name
+resolved through the STYLE records, which `run` reads for their names). Each entity keeps its
 handle, layer and colour: an ACI index, with by-block and by-layer as `ByLayer`; a true colour or
 colour-book colour keeps the nearest index AutoCAD stored beside it, and a true-colour layer takes
 `doc.NearestACI` of its RGB. Entity linetype, lineweight, thickness and elevation are not kept. An
@@ -119,9 +145,9 @@ the DXF reader ignores code 210.
 Model space is the entities whose entity mode says so, or whose owner is the `*Model_Space` block
 record. Paper space, block definitions and `INSERT` contents are not read.
 
-**What is skipped.** Every other entity (TEXT, MTEXT, POINT, INSERT, HATCH, SPLINE, ELLIPSE,
+**What is skipped.** Every other entity (MTEXT, POINT, INSERT, HATCH, SPLINE, ELLIPSE,
 DIMENSION, MULTILEADER and the rest) is skipped, not kept as `doc.Unknown`, and counted in one
-warning, `skipped 29 TEXT, 15 MULTILEADER, 11 DIMENSION, ... (not read from DWG files; the DXF
+warning, `skipped 15 MULTILEADER, 11 DIMENSION, 8 HATCH, ... (not read from DWG files; the DXF
 reader keeps them)`, by DXF class name, most frequent first. A second warning counts the paper space
 entities. Tables other than layers, blocks, dictionaries, layouts and extended data are not read.
 

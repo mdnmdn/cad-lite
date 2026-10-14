@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-process MCP server `cad`, the rule that only the UI goroutine touches the drawing, and the permission policy.
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -119,8 +119,18 @@ session edits the drawing it was started from (decision D32): it
 starts with the tab's first session and closes when its last one stops, exits or quits, so the port and token
 never outlive the chats. Tool calls are serialized by a capacity-one semaphore that honours the request
 context, so a cancelled request neither waits for nor runs after a busy handler. The HTTP server sets a
-header timeout of 10 s and an `IdleTimeout` of 2 minutes; it sets no write timeout and no batch-length
-cap (see the [backlog](../backlog.md)).
+header timeout of 10 s, an `IdleTimeout` of 2 minutes and a 60 s write timeout (handler time counts), caps
+a request body at 4 MB and a JSON-RPC batch array at 100 frames (a longer one is refused whole with
+`-32600` and runs nothing). The 60 s are budgeted from the request's arrival, and the budgets add up:
+a tool call must take the call slot within 30 s, or it is answered with an error and never runs; its
+handler's context expires at 55 s; `Dispatcher.Do` starts the tool body only if it can do so within
+15 s of being asked and at least `cadmcp.RunBudget` (10 s) before that deadline, else it returns
+`ErrUIBusy` and the body never runs; the last 5 s are for writing the reply (30 + 15 + 10 + 5 = 60).
+The body itself cannot be interrupted once it runs on the UI goroutine: one that runs longer than its
+10 s still commits its change, and its reply is then lost to the write timeout, so the agent sees a
+failed call that did take effect. The caps on scripts, polylines and batches keep normal bodies far
+below 10 s; nothing enforces it. The limits are part of the agentmanager API contract. The `batch` tool
+below has caps of its own.
 
 The tools (all coordinates in model units, Y up; one tool call is one undo step):
 
@@ -128,14 +138,128 @@ The tools (all coordinates in model units, Y up; one tool call is one undo step)
 |---|---|
 | `run_script`, `run_command` | Run AutoCAD script text, or one response line to the command line; return the history lines produced |
 | `list_commands` | Command names the script accepts |
-| `get_drawing`, `list_entities` | Layers, counts, extents, undo state; paginated entity list with geometry |
+| `get_drawing`, `list_entities` | Layers, counts, extents, undo state; paginated entity list with geometry, filtered by layer, class, box or shown text |
 | `get_selection`, `set_selection` | Read or replace the selection |
-| `add_line`, `add_circle`, `add_arc`, `add_polyline`, `add_rectangle` | Create entities on the current layer |
+| `add_line`, `add_circle`, `add_arc`, `add_polyline`, `add_rectangle`, `add_polygon` | Create entities on the current layer (or `layer`); the shape forms are below |
 | `erase`, `move`, `rotate`, `scale`, `set_entity_layer` | Edit entities by handle |
+| `add_text`, `add_mtext`, `update_text` | Create TEXT and MTEXT; change a text by handle (below) |
+| `batch` | Many add and edit tools above in one call and one undo step, all or nothing (below) |
 | `set_layer`, `create_layer` | Current layer; layer table edits (not undoable) |
 | `undo`, `redo`, `zoom_extents` | History and view |
 | `measure` | Length, perimeter, area, distance |
-| `render_png` | The drawing as a PNG, returned as MCP image content so a vision model can look at it, with a JSON block that maps pixels to model coordinates; views by extents, box, centre and scale, or the user's current view, with optional grid, rulers and selection highlight |
+| `render_png` | The drawing as a PNG, returned as MCP image content so a vision model can look at it, with a JSON block that maps pixels to model coordinates; views by extents, box, centre and scale, or the user's current view, with optional grid, rulers (bottom and left; drawn by `ui/ruler.go`, which the canvas rulers share) and selection highlight |
+
+**Shape forms.** Each `add_*` tool validates and builds its entity in a pure builder in
+`cadmcp/edit.go` (`arcEntity`, `polylineEntity`, `rectEntity` and the rest), which `batch` calls too,
+so every form below works inside a batch. A tool that takes alternative forms accepts exactly one,
+given in full, and names the missing or conflicting arguments otherwise.
+
+- `add_arc`: three points `p1`, `p2`, `p3` (start, a point on the arc, end), or `center`, `radius`,
+  `start_angle`, `end_angle`, AutoCAD's Center form: degrees, counter-clockwise from +X, the arc
+  running counter-clockwise from start to end, as DXF stores it. Equal angles (modulo 360) are an
+  error; a full circle is `add_circle`.
+- `add_polyline`: optional `bulges`, one per point as DXF group 42: the bulge of the segment leaving
+  that point, tan(included angle/4), positive counter-clockwise; the last one counts only when
+  `closed`. All-zero bulges are stored as none.
+- `add_rectangle`: opposite corners `x1`, `y1`, `x2`, `y2`, or `origin` plus a signed `width` (along
+  X) and `height` (along Y); optionally `fillet` (a radius) or `chamfer` (`[d1, d2]`, d1 off the edges
+  along X and d2 off those along Y, as RECTANG applies them), never both. The corners are cut by
+  `geom.CutPolyline` with `geom.FilletCut` or `geom.ChamferCut`, so a rounded corner is a bulged
+  vertex.
+- `add_polygon`: `sides` (3–1024) plus `center` and positive `radius`, or `edge` (two different
+  points). The centre form defaults to `mode: inscribed` (radius to the vertices); `circumscribed`
+  uses the radius to the edge midpoints. At `rotation: 0` the bottom edge is horizontal, as with
+  POLYGON's typed radius; rotation is degrees counter-clockwise. The Edge form places the polygon
+  to the left of the directed edge and takes no mode or rotation. Both forms build a closed
+  LWPOLYLINE through `commands.PolygonFromCenter` and `commands.PolygonFromEdge`.
+
+**Text.** `add_text` places single-line TEXT as AutoCAD's TEXT command does: `point` is the
+insertion point its `justify` refers to (AutoCAD's option names through `doc.ParseJustify`: Left, the
+default, Center, Right, Align, Middle, Fit and TL … BR), or for Align and Fit the baseline start, with
+`second_point` its end; `height` is the capital height, `rotation` degrees counter-clockwise, `style` an
+existing text style (the default style, the STYLE records kept from the file, or one some text
+uses; matched case-insensitively and stored with the drawing's spelling), `width_factor` 0.01–100.
+Align derives the height and Fit the width factor, and both take the rotation from their two points,
+so giving those is an error. The value keeps AutoCAD's `%%` codes and must be one line: a line break is
+an error rather than several TEXT entities, so one call is one entity and one handle (use `add_mtext`, or
+one `add_text` per line at 5/3 of the height apart, as TEXT continues under the last line).
+`add_mtext` places MTEXT by its `attachment` (TL, the default, … BR) at `point`, wrapping at `width` (0
+does not wrap); line breaks become `\P`, and `\`, `{` and `}` are escaped so the text shows as typed,
+unless `raw` is set, which passes MTEXT format codes through. Values are capped at `cadmcp.MaxTextLen`
+(1000 bytes) and `cadmcp.MaxMTextLen` (20000 after escaping), and control characters other than tab are
+refused. `update_text` changes any subset of `value`, `point`, `second_point`, `height`, `rotation`,
+`justify`, `style` and `width_factor` (TEXT) or `width` and `attachment` (MTEXT) of one text by
+`handle`; a field of the other class, or of another justification (rotation on Align text), is an
+error. A new `justify` keeps the insertion point, so the text moves around it, as TEXT's Justify option
+does (`doc.Text.SetJustify`). `update_text` checks the change on a copy first and inside `batch` against
+the text as earlier ops leave it, so a refused update changes nothing. `list_entities` takes `text`, a
+case-insensitive substring of the shown text (`doc.MTextPlain` for MTEXT), and the classes TEXT and
+MTEXT; a text's entry has `value` (for MTEXT the plain text, with the stored value in `raw`), `height`,
+`rotation` (degrees), `justify` or `attachment`, `point` (the insertion point; Align and Fit add
+`second_point`), `style`, `width_factor` or `width`, and `box`, the four corners of the text box
+counter-clockwise. Text deviations: JUSTIFYTEXT (changing the justification without moving the text) has
+no structured form, oblique angles and the backward and upside-down flags cannot be set, and the
+line spacing of MTEXT is always the default.
+The text tools share `doc.MTextEscape`, `doc.FindTextStyle` and `doc.TextStyles` with the command
+system; `cadmcp/text.go`, `styleResolver` caches style lookups within a batch.
+
+Deviations from RECTANG and ARC: a fillet or chamfer that does not fit is an error, where RECTANG
+silently draws square corners; the size form uses signed lengths where RECTANG's Dimensions option
+picks the quadrant with a point; RECTANG's Rotation, Width, Elevation and Thickness options and
+ARC's angle, length and direction variants have no structured form (`run_script` reaches them); and
+RECTANG's fillet or chamfer are not remembered between calls, whereas the command keeps them as
+session settings. `add_polygon` also keeps no session defaults; its rotation takes an angle instead
+of POLYGON's picked radius point.
+
+**Handles.** Every handle-taking tool (`erase`, `move`, `rotate`, `scale`, `set_entity_layer`,
+`update_text`, `set_selection`, `measure`, `render_png`'s `highlight`, and `batch`) returns an error, and changes nothing,
+for a handle that is not hexadecimal, names no entity, or names an entity of a class Cad-lite does not
+model (`doc.Unknown`, reported by `list_entities` with `unknown: true`); `existingHandle` in
+`cadmcp/tools.go` is the one check. An edit also refuses an entity on a locked layer.
+
+**Number ranges.** Every number that places or sizes geometry (coordinates, lengths, radii, offsets,
+angles in degrees, scale factors) must be finite and within ±`cadmcp.MaxCoord` (1e12), and a polyline
+bulge within ±`cadmcp.MaxBulge` (1e6). Inside the transaction each created or changed entity's bounds
+must be finite and within ±`cadmcp.MaxExtent` (1e15), which catches results that in-range inputs can
+still reach (a large scale far from the centre); otherwise the transaction aborts with an error.
+`run_script` is not covered: a command fed huge numbers can still store unencodable geometry.
+
+**The `batch` tool.** `batch` takes `ops`, a list of `{op, id?, args}`. `op` is one of `add_line`,
+`add_circle`, `add_arc`, `add_polyline`, `add_rectangle`, `add_polygon`, `add_text`, `add_mtext`, `erase`, `move`,
+`rotate`, `scale`, `set_entity_layer` and `update_text`, and `args` are exactly that tool's
+arguments (`update_text`'s `handle` may be a `"$<id>"` too). An `add_*` op may carry a client `id`
+(1–64 letters, digits, `_`, `.`, `-`, unique in the call); a later op names the entity it creates as
+`"$<id>"` in its `handles`, beside ordinary hexadecimal handles (which never start with `$`). It runs in
+three stages, each op through the same builder as its single tool (`lineEntity`, `moveEdit` and the rest
+in `cadmcp/edit.go`):
+
+1. `batchArgs.UnmarshalJSON`, on the MCP handler's goroutine, checks what needs no drawing: op names,
+   ids, arguments and numbers, and that every `$id` names an earlier `add_*` op; it builds the entities.
+2. `resolveBatch`, on the UI goroutine, checks layers and existing handles, that no earlier op of
+   the batch erased a target, and that no edit touches an entity on a locked layer, following the
+   layer changes of earlier ops. Only then does the batch cancel a running command, as every tool
+   does, and it checks again if that changed anything.
+3. `runBatch` applies every op in one `doc.Txn`, checking each op's result bounds and, again, locked
+   layers. Any failure aborts the transaction and restores the handle seed (in a deferred call, so a
+   panic restores it too).
+
+A refused batch leaves a running command alone. A failure while applying, which the checks before
+make rare, comes after the command was cancelled. Otherwise a failure at any stage changes nothing (entities, handle seed, undo and redo stacks) and names the
+failing op, as in `ops[3] (move $door1): no entity with handle FFFF; nothing was changed`. Success
+returns `ops`, `handles` (client id to handle), `created` (handle, class, layer, id), `modified` and
+`erased`; the last three are the transaction's `doc.ChangeSet`, so an entity created and then erased
+in the same call appears nowhere. A call holds at most `cadmcp.MaxBatchOps` (500) ops and
+`cadmcp.MaxBatchPoints` (200000) polyline points, under the server's 4 MB body cap. A batch cannot run
+scripts or commands, so NEW, OPEN and SAVE stay out of reach.
+
+A batch mirrors AutoCAD's `UNDO BEGIN` … `UNDO END`: one `UNDO` reverts all of it, and its ops are
+named after the single tools, which mirror LINE, CIRCLE, ARC, PLINE, RECTANG, ERASE, MOVE, ROTATE,
+SCALE and a CHPROP layer change. It differs from AutoCAD in three ways: it is atomic, whereas an
+AutoCAD undo group keeps whatever ran before an error; it is one transaction rather than a journal
+group (`Drawing.BeginGroup`), which is what makes the rollback possible; and a failed batch gives
+its unused handles back (the seed is restored), where AutoCAD never reissues a handle; no handle of
+a failed batch was ever reported, so nothing can refer to one. Client ids live only for the call;
+they are not stored in the drawing.
 
 `render_png` is drawn by `ui.SnapshotImage`, headlessly, from the session; it never captures the window.
 The image holds at most `cadmcp.MaxSnapshotPixels` (2 megapixels, e.g. 2048x1024): a larger
@@ -163,14 +287,18 @@ gpui and `cmdsys.Session` are single threaded and gpui has no cross-goroutine po
 HTTP goroutines, so:
 
 1. Every tool body runs inside `Dispatcher.Do`, which enqueues it in a mutex-guarded mailbox and waits.
-   `Do` fails with `ErrUIBusy` after 15 s or when the dispatcher closes.
+   `Do` fails with `ErrUIBusy`, and the body never runs, when the UI goroutine does not start it within
+   15 s, or within the context's deadline less `RunBudget` (10 s), or when the dispatcher closes.
 2. The UI goroutine drains the mailbox: `AgentPanel.pump` is a `Window.After` timer that calls
    `Dispatcher.Drain`, adopts finished session starts, and folds every tab's event channel into its
    transcript and stored record with non-blocking reads, background tabs included. No goroutine pumps
    events. Concurrent sessions therefore interleave only between timer ticks, and tool calls from all
    of them are serialized by the dispatcher and the server.
-3. The timer re-arms every 16 ms while any session is starting, a turn runs or work is queued, every
-   250 ms while only idle sessions are open (to notice a crashed agent), and not at all with no session.
+3. `ui/agent.go`, `pumpTabs` re-arms the timer every 16 ms while a session starts, a model switch
+   runs, events arrive, dispatcher work is pending or runnable queued prompts remain. A quiet running
+   turn uses 100 ms ticks (10 animation frames per second); idle live sessions use 250 ms ticks to
+   notice a crashed agent. Paused queues do not request busy ticks, and with no live session or
+   pending work the timer stops. Each tick also tries `nextQueued` for ready tabs.
 4. Each session launch (`harnesses.Open`, which spawns a process) runs on its own goroutine and hands
    the result back through a per-tab mutex-guarded slot that the timer reads.
 5. Stopping the last live session closes the dispatcher first, so waiting tool calls fail fast, then
@@ -244,7 +372,9 @@ table itself.
 real `Dispatcher`, against `agentmanager`'s fake agent (built with `go build` from the nested module). The
 fake makes a real MCP `add_line` call; the test pumps the UI timer until the drawing has the line and the
 transcript's tool card is completed. A second test calls `render_png` over HTTP and decodes the PNG. They
-skip on `js` or when `go` is missing. `cadmcp/safety_test.go` holds the agent-safety tests: scripts cannot
+skip on `js` or when `go` is missing. `cadmcp/batch_test.go` proves a mixed batch with client-id references is one undo step and that a
+batch failing at any op, while checking or while applying, leaves the drawing and both undo stacks
+unchanged. `cadmcp/safety_test.go` holds the agent-safety tests: scripts cannot
 reach NEW, OPEN or SAVE, an agent cannot answer a human's file prompt, and a panicking command does not
 brick the drawing. Interactive behaviour in a window has not been run in the agent
 environment (see [Operations](operations.md)).

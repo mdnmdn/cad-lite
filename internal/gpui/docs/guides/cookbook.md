@@ -231,6 +231,30 @@ the list sizes itself to all `count` rows and nothing is virtualized. The
 row `ID`s only need to be unique among the rows being rendered.
 `examples/uniform_list` is the full version.
 
+When rows differ in height (wrapped text, cards, expandable sections), use
+`List` with a `ListState` the view keeps: it builds only the items near the
+viewport and remembers each one's measured height. Give it an `ItemKey` that
+changes with an item's content, so an item that changed while off-screen is
+measured again.
+
+```go
+type Chat struct {
+	msgs   []Msg // Msg{Text string; Rev uint64}
+	state  *gpui.ListState
+	scroll *gpui.ScrollHandle
+}
+
+func (c *Chat) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
+	return gpui.NewList("chat", c.state, len(c.msgs), func(ix int, _ *gpui.Window, _ *gpui.App) gpui.IntoElement {
+		return gpui.NewText(c.msgs[ix].Text)
+	}).ItemKey(func(ix int) uint64 { return c.msgs[ix].Rev }).
+		Gap(8).P(12).Flex1().MinH(0).TrackScroll(c.scroll)
+}
+```
+
+Call `c.scroll.ScrollToBottom()` when a message arrives to follow the tail; the
+list reaches the true end even through items it never measured.
+
 ## Modal overlay with paint order
 
 Paint order is tree order: a later sibling paints on top and wins hit testing.

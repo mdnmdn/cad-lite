@@ -3,11 +3,11 @@ id: feat-canvas
 title: Drawing canvas
 kind: feature
 status: current
-summary: The canvas and the chrome around it — pan and zoom, grid, crosshair and pickbox, highlights, selection boxes, snap markers, the viewport label and zoom buttons, the title bar, the ribbon, the layers and properties panels, resizing and collapsing the panels, and the status bar.
+summary: The canvas and the chrome around it — pan and zoom, grid, rulers, crosshair and pickbox, highlights, selection boxes, snap markers, the viewport label and zoom buttons, the title bar, the ribbon, the layers and properties panels, the layer popover and properties HUD, resizing and collapsing the panels, and the status bar.
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -62,14 +62,20 @@ Later items draw over earlier ones.
 | Item | Rule |
 |---|---|
 | Grid | F7 or the GRID flag toggles it. Lines sit every `GRIDUNIT` (x and y), widened by powers of ten until at least 16 px apart; every `GRIDMAJOR`-th (5) line is stronger. It is omitted when more than 400 lines would show |
-| Entities | Visible entities, on layers that are on, in their layer or entity colour; ACI 7 contrasts with the background. One logical pixel wide, or with the LWT toggle on as wide as the layer's lineweight (1 mm is 3.8 px), never thinner than one pixel |
+| Entities | Visible entities, on layers that are on, in their layer or entity colour; ACI 7 contrasts with the background. One logical pixel wide, or with the LWT toggle on as wide as the layer's lineweight (1 mm is 3.8 px), never thinner than one pixel. TEXT and MTEXT draw in the built-in single-line font whatever their style; text under 3 to 6 pixels high (by zoom band) draws as one line per row |
 | Hover highlight | The entity under the pickbox, in a lighter blue and thicker. Absent while a command asks for a point, while a box is dragged, and for selected entities |
 | Selection highlight | Selected entities, in blue and thicker |
-| Command preview | The rubber band and ghosts of the running command |
+| Command preview | The rubber band and ghosts of the running command. What the command has made so far (LINE's segments, OFFSET's and COPY's copies, TEXT's lines, a TRIM pick) is not preview: it draws as entities, in their colours, from the moment it is made |
 | Selection box | A **window** (left to right) is blue; a **crossing** (right to left) is green. It appears after the pointer moves 4 px from the press |
 | UCS icon | Red X axis pointing right and green Y axis pointing up, each with an arrowhead and a `X` or `Y` letter at its tip, in the bottom-left corner, a fixed 40 px long |
-| Crosshair and pickbox | Full-height and full-width hairlines through the cursor, with a small square pickbox at the cursor when no point is being asked for. While a point is asked for, the crosshair sits on the snapped point and there is no pickbox |
+| Crosshair and pickbox | Full-height and full-width hairlines through the cursor, with a small square pickbox at the cursor when no point is being asked for, and at the prompts that pick an object by a click (`Prompt.Pick`: AREA `Object`, MEASUREGEOM Radius and Angle), which do not snap. While a point is asked for, the crosshair sits on the snapped point and there is no pickbox |
 | Snap marker | While a point is asked for and a snap applies: a square for endpoint, a triangle for midpoint, a circle for centre, a diamond for quadrant, an X for intersection, an hourglass for nearest, a right angle for perpendicular, a circle on a line for tangent |
+| Rulers | On by default. A 20 px ruler along the top edge (X) and one along the left edge (Y, as wide as the labels at the ends of the visible range need, rounded up to three characters, so it keeps its width while panning until the labels gain or lose digits), in model units, on the panel colour with a border-coloured edge toward the drawing. Labelled ticks every 1, 2 or 5 times a power of ten, the smallest at least 80 px apart (X) or 48 px (Y); unlabelled minor ticks split that step into fifths (quarters for a 2) when they are at least 6 px apart. A line in the accent colour marks the cursor's position (the snapped one while a point is asked for) on each ruler. Labels are muted text, 11 px, with the decimals their step needs (five at the deepest zoom, where the Y step is 5e-5), so no two read the same |
+
+The rulers lie over the drawing: the view still spans the whole canvas, so a ruler changes no model
+coordinate, and a click, a snap, a box or the wheel on a ruler acts on the drawing under it. The viewport
+label, the zoom buttons and the UCS icon move inside the rulers while they show. `Workspace.toggleRulers`
+switches them; the choice is not saved.
 
 The crosshair, pickbox and the status-bar coordinates show only while a real pointer position is
 known and over the canvas. Before the pointer first moves in the window, and after it leaves the
@@ -105,14 +111,46 @@ file opened. A press on the card never reaches the canvas. The lists and what cl
 ### Layers panel
 
 The column's top section is headed `Layers` (semibold, normal case, behind a disclosure chevron) with a
-`+` icon button at its right that runs `LAYER` and a chevron that folds the whole column, where `name=colour` creates a layer. Each layer shows its colour swatch, its name and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
-is bold. Clicking a row makes that layer current. Clicking the button toggles the layer off or on;
-entities on an off layer are neither drawn nor selectable.
+`+` icon button at its right that runs `LAYER` and a chevron that folds the whole column, where `name=colour` creates a layer. Each layer shows its colour swatch, its name, a lock switch (an open or closed padlock) and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
+is bold. Clicking a row makes that layer current, except a frozen layer, which cannot be current (as
+`-LAYER Set` refuses it; the row's tooltip says to thaw it). Clicking the button toggles the layer off or on;
+entities on an off layer are neither drawn nor selectable. Clicking the padlock locks or unlocks the layer:
+a locked layer is drawn but its entities cannot be selected. The switches never make their layer current.
+Changing the current layer, visibility or lock marks the drawing modified, so `CLOSE` and `QUIT` ask to save.
+Selecting the current layer again, or trying to select a frozen layer, leaves that state unchanged.
+Layer metadata edits do not create an undo step.
+
+### Layer popover
+
+Pressing `Layer <current>` in the status bar (AutoCAD's Layer drop-down) opens a popover above it: a filter
+field that has the keyboard, the layers whose name contains the filter (ignoring case), at most ten rows
+before the list scrolls, and a `New layer…` row. The rows are the Layers panel's rows (swatch, name, lock,
+visibility), with the same effects, and the two always agree. Typing filters and highlights the first match;
+Up and Down move the highlight; Enter makes the only match current, or else the highlighted one, and closes
+the popover; a click on a row does the same. The switches act without closing it. `New layer…` closes it and
+runs `LAYER` on the command line; with a filter that names no layer, even ignoring case (so `wall` is not
+offered beside `Wall`), it reads `New layer "<filter>"` and creates that layer and makes it current at once,
+marking the drawing modified.
+Enter or a click on a frozen layer does nothing. Escape, a press anywhere outside and a second press on the
+status bar item close it without effect (the press does not reach what is under it), and the keyboard goes
+back to the command line; switching drawing tabs and opening the settings close it too. The popover opens
+with the current layer highlighted.
 
 ### Properties panel
 
 Below a splitter, under a `Properties` heading with its own disclosure chevron, the panel is read-only. With nothing selected it reads `No selection`. Otherwise it shows the count and a line per entity
 class (`LINE × 3`); a single selected entity also shows its layer and handle.
+
+### Properties HUD
+
+The `PROPS` chip in the status bar shows a small read-only panel floating over the canvas at its top right,
+left of and level with the zoom buttons (below the top ruler when the rulers show), with the same lines as the Properties section (`No selection` included) under a
+`Properties` caption. Its fill is the panel colour at 90% opacity, behind its own box only; presses and the
+wheel on it stay on it, and everywhere else the canvas gets them as usual; releases go through, so a splitter or
+slider drag let go over it ends. It is off at start, the same for every document tab, and not saved (the status
+bar toggles are not either). Measured with `ui/hud_bench_test.go` (1280x800 at device scale 2), it adds roughly
+0.5 to 2 ms to a frame, depending on the run; an opaque fill would cost about 0.1 ms. The lines are worked out
+once per selection and drawing change (`selectionSummary`), not per frame.
 
 Both sections scroll when their rows do not fit. The column defaults to a sixth of the window wide, between
 220 and 340 px, on the panel colour; with the agent panel open it sits between the canvas column and the
@@ -178,7 +216,7 @@ before anything else moves.
 Three panels, each with its name (`Draw`, `Modify`, `Utilities`) centred under its buttons in muted
 12 px text and a vertical divider after it; on one row the ribbon is 84 px high. The title bar's ribbon toggle
 hides the panels (the commands stay on the command line) and shows them again. **Draw** has large buttons (icon over label) for Line,
-Polyline, Circle and Arc, and Rectangle as a small one (icon left of label). **Modify** is a grid of small
+Polyline, Circle and Arc, then a column of two small ones (icon left of label), Rectangle over Polygon. **Modify** is a grid of small
 buttons in two rows and seven columns: Move, Rotate, Mirror, Offset, Chamfer, Extend, Join over Copy,
 Scale, Erase, Fillet, Trim, Break, Explode. **Utilities** is two columns of two: Distance, Area and ID point,
 Zoom. Labels are the commands' display names in the interface language; a button runs its command as if typed, shows
@@ -188,8 +226,8 @@ without a button (LAYER, LIST, NEW, MEASUREGEOM) is still reached by typing it.
 The ribbon reflows with the window width: on a wide window the groups share one row, and as the window
 narrows whole groups wrap onto the next row. A group is never split across rows and nothing clips or overlaps. When the
 three groups do not fit one row (`ribbonWidth` estimates the width from the labels), Utilities moves before Modify so
-it sits beside Draw, and the ribbon takes two rows rather than three: at 1100 and 900 px
-wide, Draw and Utilities are the first row and Modify the second.
+it sits beside Draw, and the ribbon takes two rows rather than three. With English labels, the
+groups fit on one row at 1100 px; at 900 px, Draw and Utilities are the first row and Modify the second.
 
 ### Tooltips
 
@@ -201,9 +239,9 @@ lines: the command's display name with its keyboard hint in brackets, then its d
 composed, never written in the catalog: the key comes from the binding in `Bindings` (the Cmd form on
 macOS, the Ctrl form elsewhere) and the typed part is the command's shortest registered alias
 (`Registry.AliasesOf`), or the command itself when no alias is shorter, so a hint always names
-something that works. The agent button, the layer rows (make current), the layer rows (make current), the
+something that works. The agent button, the layer rows (make current), the lock switches, the
 visibility pills and the colour swatches, the document chip, the viewport label, the zoom buttons, the layer `+`,
-the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the Open menu chevron and its rows, the layout tabs, the status bar toggles and the coordinates readout, and
+the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the Open menu chevron and its rows, the layout tabs, the status bar toggles, the layer item and the popover's New layer row, and the coordinates readout, and
 every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
 languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and grows to the wrapped height.
 
@@ -214,8 +252,8 @@ languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and gr
 | Layout tabs | `Model` is the selected tab. `Layout1` and `Layout2` are disabled (paper space is not supported) and say so in their tooltip |
 | Coordinates | The cursor as `x, y, 0.0000` in four decimals, monospace: the snapped point while a point is asked for, otherwise the pointer; dimmed and holding the last position while the pointer is not over the canvas |
 | MODEL | A static label for the space being edited, with a tooltip |
-| GRID, SNAP, ORTHO, POLAR, OSNAP, LWT | Switch chips in monospace capitals (captions follow the language: `GRIGLIA`, `ORTO`, `POLARE`, `SNAP OGG.`, `SPESS` in Italian). Muted when off; the soft accent fill, border and text when on. GRID is F7 (`Session.SetGrid`), SNAP is the snap grid, F9 (`Session.SetSnapGrid`), ORTHO is F8, POLAR is polar tracking, F10 (`Session.SetPolar`: the rubber band locks to multiples of `POLARANG` within 5 degrees; ortho and polar exclude each other), OSNAP is F3 (`Session.SnapOn`), and LWT draws layer lineweights (`LWDISPLAY`). All start as the settings say, with POLAR and LWT off |
-| Right side | `Layer <current>`, the entity count (`10 entities`), the drawing unit from `INSUNITS` (`mm`, or `unitless`; the tooltip gives `1 px = <size> units`), then the zoom slider and the scale as a percentage |
+| GRID, RULER, SNAP, ORTHO, POLAR, OSNAP, LWT, PROPS | Switch chips in monospace capitals (captions follow the language: `GRIGLIA`, `ORTO`, `POLARE`, `SNAP OGG.`, `SPESS`, `PROPR`, `RIGHELLI` in Italian). Muted when off; the soft accent fill, border and text when on. GRID is F7 (`Session.SetGrid`), SNAP is the snap grid, F9 (`Session.SetSnapGrid`), ORTHO is F8, POLAR is polar tracking, F10 (`Session.SetPolar`: the rubber band locks to multiples of `POLARANG` within 5 degrees; ortho and polar exclude each other), OSNAP is F3 (`Session.SnapOn`), and LWT draws layer lineweights (`LWDISPLAY`). All start as the settings say, with POLAR and LWT off. RULER shows or hides the canvas rulers (`Workspace.Rulers`, `toggleRulers`). PROPS shows the properties HUD (above) and starts off |
+| Right side | `Layer <current>` (a press opens the layer popover), the entity count (`10 entities`), the drawing unit from `INSUNITS` (`mm`, or `unitless`; the tooltip gives `1 px = <size> units`), then the zoom slider and the scale as a percentage |
 | Zoom | The slider is logarithmic from 0.1% to 100000% (scale 1e-3 to 1e3; a scale outside pins the thumb to an end), zooms about the canvas centre and updates the view while it is dragged. The thumb and percentage follow wheel, pinch and command zoom. A drag, a key press or a canvas zoom button is one step for ZOOM Previous (100% is one screen pixel per model unit) |
 
 There is no plot scale in Cad-lite, so the unit stands where an AutoCAD status bar shows `1:50`. The status bar is
@@ -230,8 +268,8 @@ line at the right.
   `Session.Aperture`, `Session.SnapOn`, `Session.Ortho`, `Session.Polar`, `Session.Grid`,
   `Session.SnapGrid`, `Session.LineweightDisplay`, `Session.Units`; written through `Session.Click`,
   `Session.SelectBox`, `Session.Hover` and `Session.Submit`.
-- Document: reads layers and entities; the layer panel writes `Layer.Off` and
-  `Drawing.CurrentLayer` directly, outside a transaction.
+- Document: reads layers and entities; the layer panel and the layer popover write `Layer.Off`,
+  `Layer.Locked` and `Drawing.CurrentLayer` directly, outside a transaction.
 
 ## Implementation
 
@@ -247,13 +285,33 @@ buttons around `ui.NewIcon` (`ui/icon.go`) with `Workspace.commandTip` as the to
 a no-shrink `Div` inside a `FlexWrap` row, so gpui wraps between groups only. `ui/chrome.go` holds
 the type scale, `iconButton`, `monoText` and the dividers shared by the chrome; `mix` in `ui/theme.go` derives the soft
 accent fill. `Workspace.fileButton` (`ui/filedialog.go`) builds Open and Save with `openTip` and `saveTip`.
+The rulers are `ui/ruler.go`, one implementation shared with `render_png`: `rulerStyle` places the X ruler at the top
+(`canvasRulers`, theme colours, minor ticks and cursor marker) or at the bottom (`snapshotRulers`, fixed colours, the MCP
+image), `rulerSteps` and `minorStep` choose the steps, `lines` adds bands and ticks to the display list and `labels` the
+tick labels as absolute `Div`s; `ui/ruler_canvas.go` holds the toggle (`Rulers`, `SetRulers`, `toggleRulers`), `rulerInsets`
+for the overlays, and the canvas's `rulerItems` and `rulerLabels`. `rulerFrame` works the canvas rulers' layout
+out once per view and keeps it in `canvasState`, since the overlays, the ticks and the labels all ask for it every
+frame. `exact` in `rulerStyle` (the canvas's) gives labels their step's decimals and the stable left width; without
+it (`render_png`) labels have at most four decimals and the left ruler fits its longest label, which keeps the
+MCP image's pinned pixels.
 `ui/tooltip.go` composes the button tooltips: `commandTip`, `keyHint` (shortcut, then `typedName`),
 `shortcutTable` and `keystrokeLabel` (binding to `Ctrl+Shift+S`), and `commandKeys`, the commands a key
 runs directly, from which `Workspace.Render` also registers the key handlers.
 `Workspace.openButtons` (`ui/recent.go`) adds the chevron and a zero-width marker before Open whose paint callback
 records the button's position, because `openMenuOverlay` is mounted on the root after the chrome (gpui paints in
 tree order and has no z-index) and must hang under it. `startPanel` is the last canvas overlay.
-`toggleChip` and `layoutTab` in `ui/statusbar.go` build the status bar. User-visible text goes through `i18n.T`
+`toggleChip` and `layoutTab` in `ui/statusbar.go` build the status bar. `layerRow` and `propsBody` in
+`ui/sidepanel.go` are the layer row and the Properties lines that the side panel, the layer popover and the HUD
+share. `ui/layerpop.go` holds the status bar's overlay state (`statusState`, beside the workspace like the
+settings state), `layerItem`, `layerPopover` and `statusOverlays`, which hangs the HUD and the popover from the
+status bar as absolute children: gpui gives every div a hitbox over its whole box and delivers a press only to the
+topmost one and its ancestors, so no overlay is larger than what it shows, except the popover's backdrop.
+The state holds the app and session weakly, and the filter callbacks hold the workspace weakly, so an
+opened popover cannot retain its window and drawing. Layer controls call `Session.MarkModified` once
+for an actual persistent metadata change; selecting the unchanged current layer does not call it.
+A zero-size marker records the bar's top and a zero-width one the layer item's position while painting; the
+HUD (`ui/hud.go`) is placed from the canvas's bounds of the previous frame and asks for another frame when
+they moved. User-visible text goes through `i18n.T`
 (`ui.*` keys); `Workspace.Render` installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app
 whenever the theme changes. `ui/brand.go` holds the title bar brand: `Brand`, `BrandForOS`, and a colour bitmap
 element that paints `appicon.Image` as runs of device-pixel quads (gpui has no colour image primitive). `Bindings`

@@ -220,9 +220,6 @@ categories:
     app-history:
       goal: what was done earlier, a clock
       keywords: [history, recent, clock, time, recall]
-    app-prompt:
-      goal: the command line prompt, a chevron over an underscore
-      keywords: [prompt, command line, terminal, console]
     app-chevron-right:
       goal: collapse or move on to the right, a single chevron
       keywords: [chevron, arrow, collapse, next, right]
@@ -241,3 +238,19 @@ categories:
     app-key-enter:
       goal: the Enter key, an arrow that turns back to the left
       keywords: [enter, return, key, keycap, newline]
+    app-copy:
+      goal: copy this text to the clipboard, two overlapping sheets
+      source: adopted:copy
+      keywords: [copy, clipboard, duplicate text]
+    app-check:
+      goal: done or confirmed, a tick
+      source: adopted:check
+      keywords: [check, tick, done, ok, confirmed, copied]
+    app-cancel:
+      goal: cancel what is running, a cross in a circle
+      source: adopted:circle-x
+      keywords: [cancel, abort, interrupt, cross, x]
+    app-stop:
+      goal: end the agent session, a square stop control distinct from cancelling a turn
+      source: adopted:square
+      keywords: [stop, end session, terminate, square]

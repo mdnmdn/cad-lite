@@ -55,7 +55,24 @@ type prefsState struct {
 	// bodyScroll is the scroll state of the panel's body, between the fixed
 	// title bar and footer.
 	bodyScroll *gpui.ScrollHandle
+	// tab is the tab the panel shows; it outlives closing the panel, for the
+	// session only.
+	tab settingsTab
 }
+
+// settingsTab is one tab of the settings panel.
+type settingsTab int
+
+// The tabs of the settings panel, in strip order.
+const (
+	// settingsGeneral is appearance, language, drawing aids and the wheel.
+	settingsGeneral settingsTab = iota
+	// settingsAI is the default agent, the executables, discovery and the OpenCode install.
+	settingsAI
+	// settingsUpdates is the version and the update check.
+	settingsUpdates
+	settingsTabCount
+)
 
 var prefsTable = struct {
 	sync.Mutex
@@ -289,10 +306,33 @@ func (ws *Workspace) SaveSettings() error {
 // SettingsOpen reports whether the settings panel is showing.
 func (ws *Workspace) SettingsOpen() bool { return ws.prefs().open }
 
-// OpenSettings shows the settings panel.
+// OpenSettings shows the settings panel on the tab it showed last, closing the layer popover.
 func (ws *Workspace) OpenSettings(w *gpui.Window) {
+	ws.closeLayerPopover(w)
 	p := ws.prefs()
 	p.open, p.focusWanted = true, true
+	p.bodyScroll.ScrollToTop()
+	w.Refresh()
+}
+
+// openSettingsAt shows the settings panel on tab t, opening it if needed.
+func (ws *Workspace) openSettingsAt(w *gpui.Window, t settingsTab) {
+	ws.setSettingsTab(w, t)
+	if !ws.prefs().open {
+		ws.OpenSettings(w)
+	}
+}
+
+// setSettingsTab switches the panel to tab t, wrapping around at either end,
+// and scrolls its body to the top.
+func (ws *Workspace) setSettingsTab(w *gpui.Window, t settingsTab) {
+	p := ws.prefs()
+	t = (t%settingsTabCount + settingsTabCount) % settingsTabCount
+	if t == p.tab {
+		return
+	}
+	p.tab = t
+	p.scale.End(w)
 	p.bodyScroll.ScrollToTop()
 	w.Refresh()
 }

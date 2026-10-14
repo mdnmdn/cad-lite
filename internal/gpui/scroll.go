@@ -156,6 +156,9 @@ type scrollbarInfo struct {
 	max    Size
 	axes   Axes
 	owner  GlobalElementID
+	// elastic marks a List, whose extent moves while items are measured: a
+	// thumb drag re-bases instead of cancelling when it does.
+	elastic bool
 }
 
 const (
@@ -233,6 +236,7 @@ type scrollbarInput struct {
 	owner    GlobalElementID
 	axis     Axes
 	geometry scrollbarGeometry
+	elastic  bool
 }
 
 type scrollbarDrag struct {
@@ -241,6 +245,9 @@ type scrollbarDrag struct {
 	track                                 Bounds
 	maximum, travel                       Pixels
 	startPointer, startOffset, lastOffset Pixels
+	// lastPointer is the pointer coordinate of the last move, where an
+	// elastic drag re-bases.
+	lastPointer Pixels
 }
 
 func (s *scrollbarInfo) registerInput(w *Window) {
@@ -256,7 +263,7 @@ func (s *scrollbarInfo) registerInput(w *Window) {
 		path := append(append([]ElementPathKey(nil), s.owner.Path...), ElementPathKey{Key: key})
 		w.currentElementID = GlobalElementID{Path: path}
 		hb := w.InsertHitbox(g.track)
-		w.nextFrame.mouseListeners[hb].scrollbar = &scrollbarInput{owner: s.owner, axis: axis, geometry: g}
+		w.nextFrame.mouseListeners[hb].scrollbar = &scrollbarInput{owner: s.owner, axis: axis, geometry: g, elastic: s.elastic}
 	}
 }
 
@@ -317,7 +324,7 @@ func (w *Window) beginScrollbar(pos Point) bool {
 	offset := scrollbarOffset(st, input.axis)
 	if g.thumb.Contains(pos) {
 		if travel := g.travel(input.axis); travel > 0 {
-			w.scrollbarDrag = &scrollbarDrag{ownerKey: globalIDKey(input.owner), axis: input.axis, track: g.track, maximum: g.maximum, travel: travel, startPointer: scrollbarCoordinate(pos, input.axis), startOffset: offset, lastOffset: offset}
+			w.scrollbarDrag = &scrollbarDrag{ownerKey: globalIDKey(input.owner), axis: input.axis, track: g.track, maximum: g.maximum, travel: travel, startPointer: scrollbarCoordinate(pos, input.axis), startOffset: offset, lastOffset: offset, lastPointer: scrollbarCoordinate(pos, input.axis)}
 		}
 	} else {
 		delta := g.viewport
@@ -345,14 +352,25 @@ func (w *Window) reconcileScrollbarDrag(frame *Frame) {
 		return
 	}
 	input := w.scrollbarFor(frame, drag)
-	if input == nil || input.geometry.track != drag.track || input.geometry.maximum != drag.maximum || input.geometry.travel(drag.axis) != drag.travel {
+	if input == nil || input.geometry.track != drag.track {
 		w.scrollbarDrag = nil
 		return
 	}
 	st, ok := w.elementStates[drag.ownerKey].(scrollState)
-	if !ok || (st.handle != nil && st.handle.request != scrollNone) || scrollbarOffset(st, drag.axis) != drag.lastOffset {
+	if !ok || (st.handle != nil && st.handle.request != scrollNone) {
 		w.scrollbarDrag = nil
+		return
 	}
+	travel, offset := input.geometry.travel(drag.axis), scrollbarOffset(st, drag.axis)
+	if input.geometry.maximum == drag.maximum && travel == drag.travel && offset == drag.lastOffset {
+		return
+	}
+	if !input.elastic || travel <= 0 {
+		w.scrollbarDrag = nil
+		return
+	}
+	drag.maximum, drag.travel = input.geometry.maximum, travel
+	drag.startPointer, drag.startOffset, drag.lastOffset = drag.lastPointer, offset, offset
 }
 
 func (w *Window) moveScrollbar(pos Point) {
@@ -362,7 +380,8 @@ func (w *Window) moveScrollbar(pos Point) {
 		return
 	}
 	input := w.scrollbarFor(&w.renderedFrame, drag)
-	value := clampf(drag.startOffset+(scrollbarCoordinate(pos, drag.axis)-drag.startPointer)*drag.maximum/drag.travel, 0, drag.maximum)
+	drag.lastPointer = scrollbarCoordinate(pos, drag.axis)
+	value := clampf(drag.startOffset+(drag.lastPointer-drag.startPointer)*drag.maximum/drag.travel, 0, drag.maximum)
 	if value != drag.lastOffset {
 		drag.lastOffset = value
 		w.setScrollbarOffset(input, value)

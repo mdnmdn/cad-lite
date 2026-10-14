@@ -59,15 +59,15 @@ func TestFixtures(t *testing.T) {
 			if strings.Join(names, "|") != strings.Join(fx.layers, "|") {
 				t.Errorf("layers = %q, want %q", names, fx.layers)
 			}
-			want := map[string]int{"LINE": 26, "CIRCLE": 8, "ARC": 1, "LWPOLYLINE": 21}
+			want := map[string]int{"LINE": 26, "CIRCLE": 8, "ARC": 1, "LWPOLYLINE": 21, "TEXT": 29}
 			got := classCounts(d)
 			for c, n := range want {
 				if got[c] != n {
 					t.Errorf("%s: %d entities, want %d", c, got[c], n)
 				}
 			}
-			if d.Len() != 56 {
-				t.Errorf("%d entities, want 56", d.Len())
+			if d.Len() != 85 {
+				t.Errorf("%d entities, want 85", d.Len())
 			}
 			if d.Header.InsUnits != fx.insUnits {
 				t.Errorf("InsUnits = %d, want %d", d.Header.InsUnits, fx.insUnits)
@@ -77,7 +77,7 @@ func TestFixtures(t *testing.T) {
 			}
 			// The warning summary names what the DXF reader keeps as unknown objects.
 			all := strings.Join(warns, "\n")
-			for _, s := range []string{"29 TEXT", "15 MULTILEADER", "11 DIMENSION", "8 HATCH", "6 INSERT", "5 MTEXT", "2 SPLINE", "1 ELLIPSE"} {
+			for _, s := range []string{"15 MULTILEADER", "11 DIMENSION", "8 HATCH", "6 INSERT", "5 MTEXT", "2 SPLINE", "1 ELLIPSE"} {
 				if !strings.Contains(all, s) {
 					t.Errorf("warnings lack %q:\n%s", s, all)
 				}
@@ -89,7 +89,7 @@ func TestFixtures(t *testing.T) {
 			for _, part := range strings.Split(list, ", ") {
 				name := part[strings.Index(part, " ")+1:]
 				switch name {
-				case "LINE", "CIRCLE", "ARC", "LWPOLYLINE":
+				case "LINE", "CIRCLE", "ARC", "LWPOLYLINE", "TEXT":
 					t.Errorf("an imported class is listed as skipped: %s", part)
 				}
 			}
@@ -276,7 +276,7 @@ func TestR14MatchesR2000(t *testing.T) {
 		m := map[string]int{}
 		for _, h := range d.Handles() {
 			e := d.Entity(h)
-			m[strings.ToUpper(e.Common().Layer)+"|"+geometrySignature(e)]++
+			m[strings.ToUpper(strings.ReplaceAll(e.Common().Layer, " @ ", "___"))+"|"+geometrySignature(e)]++
 		}
 		return m
 	}
@@ -307,7 +307,7 @@ func TestR14(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := classCounts(d)
-	for c, n := range map[string]int{"LINE": 26, "CIRCLE": 8, "ARC": 1, "LWPOLYLINE": 21} {
+	for c, n := range map[string]int{"LINE": 26, "CIRCLE": 8, "ARC": 1, "LWPOLYLINE": 21, "TEXT": 29} {
 		if got[c] != n {
 			t.Errorf("%s: %d entities, want %d", c, got[c], n)
 		}
@@ -319,7 +319,7 @@ func TestR14(t *testing.T) {
 	if d.Header.InsUnits != 4 || d.Layers()[8].Lineweight != 0 || d.Layers()[5].NoPlot {
 		t.Errorf("units %d, lineweight %d, no-plot %v", d.Header.InsUnits, d.Layers()[8].Lineweight, d.Layers()[5].NoPlot)
 	}
-	if !strings.Contains(strings.Join(warns, "\n"), "29 TEXT") {
+	if all := strings.Join(warns, "\n"); strings.Contains(all, " TEXT") || !strings.Contains(all, "5 MTEXT") {
 		t.Errorf("warnings = %q", warns)
 	}
 }

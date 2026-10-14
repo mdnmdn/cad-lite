@@ -19,11 +19,11 @@ Start at `_docs/index.md`. Contract: `_docs/api-contract.md`. Status, open work
 and process: `_docs/roadmap.md`. Repo map and where to add things:
 `_docs/project-structure.md`. User docs: `docs/README.md`.
 
-## Current status (2026-10-12)
+## Current status (2026-10-14)
 
 - **Works:**
   - Flexbox layout with wrapping and absolute positioning, including margins (auto margins too), gaps, min/max and grow/shrink/basis.
-  - Elements: `Div`, `Text`, `StyledText`, `TextInput` (single- or multi-line) with selection and Shift navigation, the virtualized `UniformList`, scroll containers with thumb dragging and track paging, `Canvas` with `Stroke` polylines.
+  - Elements: `Div`, `Text`, `StyledText`, `TextInput` (single- or multi-line) with selection and Shift navigation, the virtualized `UniformList` and variable-height `List`, scroll containers with thumb dragging and track paging, `Canvas` with `Stroke` polylines.
   - Styling: borders, rounded corners and clips, gradients, box shadows, opacity, hover/focus/focus-visible/active styles.
   - Text: style inheritance, font family lookup with system fallback, HarfBuzz shaping and wrapping.
   - Entities with observe, emit and release; keymap, actions, key contexts, tab order.
@@ -101,7 +101,7 @@ and process: `_docs/roadmap.md`. Repo map and where to add things:
 
 ## Layout
 
-- `internal/gpui/` (this directory): the core. Geometry, colour, style, layout, elements (div, text, uniform list, text input), background/shadow, scroll, scene, raster, events, keymap, focus, entity/context/app, window pipeline, font/text shaper, platform interfaces plus a stub, headless platform, clipboard, and `bench_test.go`.
+- `internal/gpui/` (this directory): the core. Geometry, colour, style, layout, elements (div, text, uniform list, list, text input), background/shadow, scroll, scene, raster, events, keymap, focus, entity/context/app, window pipeline, font/text shaper, platform interfaces plus a stub, headless platform, clipboard, and `bench_test.go`.
 - `ebitenplatform/`: the ebiten backend implementing `gpui.Platform`, with input mapping, clipboard on a goroutine, and the snapshot key.
 - `examples/`: 17 runnable apps, each `examples/<name>/main.go`, listed below. Index: `docs/examples.md`.
   - **Original:** counter, gallery, todo.

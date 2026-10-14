@@ -71,6 +71,7 @@ Elements:
 | `input.go` | `TextInput` single-line field, rune-safe UTF-16 selection and internal capture (`PlatformInputHandler`) |
 | `input_multiline.go` | `TextInput.Multiline`: visual rows (hard and soft breaks), vertical navigation, growth up to a line cap and vertical scrolling |
 | `uniform_list.go` | virtualized equal-height `UniformList` |
+| `list.go` | virtualized variable-height `List` and its retained `ListState` (height cache, scroll anchor) |
 | `scroll.go` | `ScrollHandle`, scroll requests, scrollbar geometry, capture and paging |
 | `canvas.go` | `Canvas`: leaf element painting through a callback (GPUI `canvas()`) |
 

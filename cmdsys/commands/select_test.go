@@ -180,3 +180,24 @@ func TestSelectClickInsideCorner(t *testing.T) {
 		t.Errorf("clicks reach the corner prompt: %d selected", s.Selection().Len())
 	}
 }
+
+// A crossing window or polygon that lies inside a text's box selects the text, as AutoCAD selects
+// text by its box: inside an O, or between two letters, no glyph stroke is touched.
+func TestCrossingInsideTextBoxSelectsIt(t *testing.T) {
+	s := newSession(t)
+	txt := doc.NewText(geom.V(0, 0), 10, 0, "O O")
+	addEntities(t, s, txt)
+	b := txt.Box()
+	mid := b[0].Lerp(b[2], 0.5) // the space between the two Os
+	s.SelectBox(mid.Add(geom.V(0.3, 0.3)), mid.Add(geom.V(-0.3, -0.3)), false)
+	if s.Selection().Len() != 1 {
+		t.Fatal("a crossing window between the letters did not select the text")
+	}
+	s.Selection().Clear()
+	s.Run("SELECT")
+	s.Script("CP " + cmdsys.FormatPoint(mid.Add(geom.V(-0.3, -0.3))) + " " + cmdsys.FormatPoint(mid.Add(geom.V(0.3, -0.3))) + " " +
+		cmdsys.FormatPoint(mid.Add(geom.V(0, 0.3))) + "  ")
+	if !historyHas(s, "1 found") {
+		t.Fatalf("a crossing polygon inside the text box did not select it:\n%s", history(s))
+	}
+}

@@ -93,7 +93,7 @@ func classifyOverride(t string) (w ovWord, mode SnapMode, canon string) {
 		switch {
 		case n.name == "NONE":
 			return wordNon, 0, canon
-		case n.mode&(SnapQuick|SnapApparent|SnapExtension|SnapParallel|SnapNode|SnapInsertion) != 0:
+		case n.mode&(SnapQuick|SnapApparent|SnapExtension|SnapParallel|SnapNode) != 0:
 			return wordUnsupported, n.mode, canon
 		}
 		return wordSnap, n.mode, canon
@@ -119,7 +119,8 @@ func (s *Session) overrideLive() bool {
 // overrideText is the order-30 text handler.
 func overrideText(s *Session, text string) bool {
 	live := s.overrideLive()
-	if !s.pointPrompt() {
+	// An object-pick prompt takes the raw click (Prompt.Pick): a snap override does not apply.
+	if !s.pointPrompt() || s.prompt.Pick {
 		return false
 	}
 	t := strings.TrimSpace(text)

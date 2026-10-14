@@ -15,18 +15,6 @@ import (
 	"cad-lite/render/gpuirender"
 )
 
-const (
-	rulerBand  = 20
-	rulerTick  = 6
-	rulerLabel = 11
-)
-
-var (
-	colRulerBand = render.Color{R: 18, G: 22, B: 27, A: 215}
-	colRulerTick = render.Color{R: 200, G: 206, B: 214, A: 255}
-	uiRulerText  = gpui.RgbaOf(215, 220, 226, 255)
-)
-
 // Snapshot renders only the drawing of s as a PNG; see SnapshotImage.
 func Snapshot(s *cmdsys.Session, req cadmcp.SnapshotRequest) ([]byte, error) {
 	img, err := SnapshotImage(s, req)
@@ -74,7 +62,7 @@ func SnapshotImage(s *cmdsys.Session, req cadmcp.SnapshotRequest) (image.Image, 
 			}
 		}
 		if req.Rulers {
-			rulerLines(&dl, v)
+			snapshotRulers().lines(&dl, v, nil)
 		}
 		gpuirender.Painter{Origin: b.Origin, View: v}.Paint(w, &dl)
 	}
@@ -82,7 +70,7 @@ func SnapshotImage(s *cmdsys.Session, req cadmcp.SnapshotRequest) (image.Image, 
 	root := gpui.RenderFunc(func(*gpui.Window, *gpui.App) gpui.IntoElement {
 		r := gpui.NewDiv().SizeFull().Relative().Child(gpui.NewCanvas(paint))
 		if req.Rulers {
-			rulerLabels(r, v)
+			snapshotRulers().labels(r, v)
 		}
 		return r
 	})
@@ -114,89 +102,5 @@ func gridLines(dl *render.DisplayList, v render.View) {
 	}
 	for j := y0; j <= y1; j++ {
 		dl.Polyline([]geom.Vec2{{X: vis.Min.X, Y: j * step}, {X: vis.Max.X, Y: j * step}}, col(j), 0, false)
-	}
-}
-
-// niceStep returns the smallest 1, 2 or 5 times a power of ten that is at
-// least minPx pixels at scale.
-func niceStep(scale, minPx float64) float64 {
-	raw := minPx / scale
-	p := math.Pow(10, math.Floor(math.Log10(raw)))
-	for _, m := range []float64{1, 2, 5, 10} {
-		if m*p >= raw {
-			return m * p
-		}
-	}
-	return 10 * p
-}
-
-type tick struct {
-	px    float64
-	value float64
-}
-
-// rulerTicks returns the tick positions along the bottom (x) and left (y)
-// rulers.
-func rulerTicks(v render.View) (xs, ys []tick) {
-	vis := v.Visible()
-	sx, sy := niceStep(v.Scale, 80), niceStep(v.Scale, 48)
-	for i := math.Ceil(vis.Min.X / sx); i*sx <= vis.Max.X && len(xs) < 200; i++ {
-		px, _ := v.ToScreen(geom.V(i*sx, 0))
-		xs = append(xs, tick{px, i * sx})
-	}
-	for j := math.Ceil(vis.Min.Y / sy); j*sy <= vis.Max.Y && len(ys) < 200; j++ {
-		_, py := v.ToScreen(geom.V(0, j*sy))
-		ys = append(ys, tick{py, j * sy})
-	}
-	return
-}
-
-func (t tick) label() string { return cmdsys.FormatNumber(t.value) }
-
-// leftBand is the width of the left ruler, wide enough for its longest label.
-func leftBand(ys []tick) float64 {
-	n := 0
-	for _, t := range ys {
-		n = max(n, len(t.label()))
-	}
-	return float64(n)*6.4 + 12
-}
-
-func rulerLines(dl *render.DisplayList, v render.View) {
-	xs, ys := rulerTicks(v)
-	lb := leftBand(ys)
-	at := func(x, y float64) geom.Vec2 { return v.ToModel(x, y) }
-	dl.Rect(at(0, v.Height-rulerBand), at(v.Width, v.Height), colRulerBand, render.Color{}, 0)
-	dl.Rect(at(0, 0), at(lb, v.Height-rulerBand), colRulerBand, render.Color{}, 0)
-	for _, t := range xs {
-		if t.px < lb {
-			continue
-		}
-		dl.Polyline([]geom.Vec2{at(t.px, v.Height-rulerTick), at(t.px, v.Height)}, colRulerTick, 1, false)
-	}
-	for _, t := range ys {
-		if t.px > v.Height-rulerBand {
-			continue
-		}
-		dl.Polyline([]geom.Vec2{at(lb-rulerTick, t.px), at(lb, t.px)}, colRulerTick, 1, false)
-	}
-}
-
-func rulerLabels(root *gpui.Div, v render.View) {
-	xs, ys := rulerTicks(v)
-	lb := leftBand(ys)
-	for _, t := range xs {
-		if t.px < lb {
-			continue
-		}
-		root.Child(gpui.NewDiv().Absolute().Left(float32(t.px) + 3).Top(float32(v.Height) - rulerBand + 3).
-			TextSize(rulerLabel).TextColor(uiRulerText).Child(gpui.NewText(t.label())))
-	}
-	for _, t := range ys {
-		if t.px > v.Height-rulerBand {
-			continue
-		}
-		root.Child(gpui.NewDiv().Absolute().Left(4).Top(float32(t.px) - rulerLabel - 4).
-			TextSize(rulerLabel).TextColor(uiRulerText).Child(gpui.NewText(t.label())))
 	}
 }

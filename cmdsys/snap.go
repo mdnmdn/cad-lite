@@ -26,7 +26,7 @@ const (
 	SnapQuadrant
 	// SnapIntersection snaps to where two curves cross.
 	SnapIntersection
-	// SnapInsertion snaps to block and text insertion points (no such objects yet).
+	// SnapInsertion snaps to the insertion point of TEXT and MTEXT; blocks do not exist yet.
 	SnapInsertion
 	// SnapPerpendicular snaps to the foot of the perpendicular from the previous point.
 	SnapPerpendicular
@@ -127,6 +127,7 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 		return SnapHit{}, false
 	}
 	var curves []geom.Curve
+	var inserts []geom.Vec2
 	n := 0
 	for _, h := range q.ix.Near(p, aperture) {
 		e := q.d.Entity(h)
@@ -137,6 +138,14 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 			break
 		}
 		n++
+		if t, ok := e.(doc.Annotation); ok {
+			// Text offers only its insertion point, as in AutoCAD: its strokes are glyphs, not
+			// edges to snap to.
+			if !q.typed || t.HitBox(p) || t.Anchor().Dist(p) <= aperture {
+				inserts = append(inserts, t.Anchor())
+			}
+			continue
+		}
 		for _, c := range e.Geometry() {
 			for _, pc := range geom.Primitives(c) {
 				if q.typed && geom.Closest(pc, p).Dist(p) > aperture {
@@ -158,6 +167,9 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 		if dd < bestD-1e-12 || (math.Abs(dd-bestD) <= 1e-12 && m < best.Mode) {
 			best, bestD, found = SnapHit{Point: pt, Mode: m}, dd, true
 		}
+	}
+	for _, pt := range inserts {
+		consider(pt, SnapInsertion)
 	}
 	for _, c := range curves {
 		switch c := c.(type) {
@@ -299,6 +311,14 @@ func Pick(d *doc.Drawing, ix *spatial.Index, p geom.Vec2, aperture float64) (doc
 		if e == nil || isUnknown(e) || layerLocked(d, e) {
 			continue
 		}
+		if t, ok := e.(doc.Annotation); ok && t.HitBox(p) {
+			// A point inside a text's box picks it, as AutoCAD does, ranked as a stroke at the
+			// edge of the aperture so that a stroke nearer the cursor wins.
+			if aperture <= bestD {
+				best, bestD = h, aperture
+			}
+			continue
+		}
 		for _, c := range e.Geometry() {
 			if dd := geom.Closest(c, p).Dist(p); dd <= aperture && dd <= bestD {
 				best, bestD = h, dd
@@ -321,8 +341,7 @@ func SelectBox(d *doc.Drawing, ix *spatial.Index, a, b geom.Vec2, tol float64) [
 		if e == nil || isUnknown(e) || layerLocked(d, e) {
 			continue
 		}
-		eb := e.Bounds()
-		if box.ContainsBox(eb) {
+		if box.ContainsBox(selectBounds(e)) {
 			out = append(out, h)
 			continue
 		}
@@ -333,7 +352,28 @@ func SelectBox(d *doc.Drawing, ix *spatial.Index, a, b geom.Vec2, tol float64) [
 	return out
 }
 
+// selectBounds is the box a window must contain to select e: its bounds, or for a text the
+// corners of its text box, as AutoCAD selects text by its box.
+func selectBounds(e doc.Entity) geom.Box2 {
+	if t, ok := e.(doc.Annotation); ok {
+		q := t.Box()
+		return geom.BoxOf(q[0], q[1]).Extend(q[2]).Extend(q[3])
+	}
+	return e.Bounds()
+}
+
+// touchesBox reports whether e meets box: a curve of it crosses or lies in box, or, for a text,
+// its text box overlaps box (a crossing window between two letters or inside an O selects it).
 func touchesBox(e doc.Entity, box geom.Box2, tol float64) bool {
+	if t, ok := e.(doc.Annotation); ok {
+		q := t.Box()
+		for i := range 4 {
+			if geom.SegmentIntersectsBox(q[i], q[(i+1)%4], box) {
+				return true
+			}
+		}
+		return t.HitBox(box.Min)
+	}
 	for _, c := range e.Geometry() {
 		pts := c.Tessellate(tol, nil)
 		for i := 1; i < len(pts); i++ {

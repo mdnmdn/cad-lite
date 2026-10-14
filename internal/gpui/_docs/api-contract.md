@@ -325,7 +325,7 @@ Per-axis overflow follows CSS: when one axis scrolls the other is clipped
 too (`visible` computes to `auto`), so a single `Overflow` kind drives
 clipping and layout and `ScrollAxes` restricts which axes scroll: wheel
 input and programmatic offsets (`ScrollHandle`, `Window.SetScrollOffset`)
-are clamped to 0 on the other axis (`OverflowHidden` scrolls on neither). *Div, *Text and *UniformList forward the common methods so a chain
+are clamped to 0 on the other axis (`OverflowHidden` scrolls on neither). *Div, *Text, *UniformList and *List forward the common methods so a chain
 keeps its concrete type.
 
 ## 3b. `background.go`, `shadow.go` — fills, gradients, shadows, opacity
@@ -836,7 +836,7 @@ func (h *ScrollHandle) Offset() Point
 func (h *ScrollHandle) SetOffset(p Point)      // clamped at the next frame; caller refreshes
 func (h *ScrollHandle) MaxOffset() Size        // as of the last frame
 func (h *ScrollHandle) Bounds() Bounds         // container border box, last frame
-func (h *ScrollHandle) ScrollToItem(ix int)    // child ix (Div) / item ix (UniformList), next frame
+func (h *ScrollHandle) ScrollToItem(ix int)    // child ix (Div) / item ix (UniformList, List), next frame
 func (h *ScrollHandle) ScrollToTop()
 func (h *ScrollHandle) ScrollToBottom()
 ```
@@ -888,6 +888,9 @@ across redraws; capture cancels if the owner/scrollbar disappears, its track
 is fully clipped, geometry/max changes, or programmatic scrolling changes the
 tracked offset. Geometry changes cancel rather than retarget the drag. Div
 and UniformList share this behavior; no generic drag/drop API is introduced.
+A `List` is the exception: its extent moves while items are measured, so with
+an unchanged track its drag re-bases (pointer, offset, maximum) instead of
+cancelling.
 
 ### Pressed interaction style
 
@@ -937,6 +940,89 @@ scrolling) and are laid out with `Definite(contentWidth, rowHeight)`. With an
 `Auto` height the list sizes to `count * rowHeight` (+ padding). Overflow is
 Scroll on Y; padding is honoured. Item 0's measurement and the rows inherit
 the text style enclosing the list, refined by the list's own text fields.
+
+### `list.go`
+
+```go
+// ListState is the retained state of one virtualized List (GPUI's
+// ListState): the measured height of each item at the list's content
+// width, the scroll anchor and the item keys. The view owns it across
+// frames; one state backs one list.
+type ListState struct{ /* unexported */ }
+func NewListState() *ListState
+func (s *ListState) Invalidate(ix int)                  // forget item ix's height; re-measured when next built
+func (s *ListState) InvalidateAll()                     // forget every height (font or theme change); keeps the anchor
+func (s *ListState) MeasuredHeight(ix int) (Pixels, bool) // border-box height, ok false while unmeasured
+func (s *ListState) ContentHeight() Pixels              // items + gaps + padding as of the last frame, estimates included
+func (s *ListState) VisibleRange() (start, end int)     // items built in the last frame, [start, end)
+
+// List is a virtualized, vertically scrolling list of items of varying
+// height (GPUI's list). Each frame only the items intersecting the
+// viewport (plus the overdraw margin) are rendered, laid out, prepainted
+// and painted; every other item is represented by its cached height, or by
+// the estimate while it was never measured.
+type List struct {
+    StyledMixin
+    // unexported
+}
+func NewList(id string, state *ListState, count int, render func(ix int, w *Window, cx *App) IntoElement) *List
+func (l *List) ItemKey(key func(ix int) uint64) *List   // a changed key drops ix's cached height
+func (l *List) EstimatedItemHeight(px float32) *List    // estimate before any item is measured (default 24)
+func (l *List) Overdraw(px float32) *List               // extra build margin above and below the viewport (default 100)
+func (l *List) TrackScroll(h *ScrollHandle) *List
+func (l *List) ShowScrollbar() *List
+func (l *List) IntoElement() Element
+```
+
+*List forwards Gap, SizeFull, SizeWH, SizeW, SizeH, Flex1, MinH, MaxH, P,
+Px_, Py_, Bg, Rounded, Border, Opacity, TextColor to keep the chain typed.
+
+Measurement and caching:
+
+- An item is measured by building it (`render(ix)`), running its
+  `RequestLayout` and laying it out with `UnboundedHeight(contentWidth)`; its
+  border-box height is cached under its index. Every built item is
+  re-measured, so a visible item whose content changed corrects itself in the
+  same frame.
+- The cache belongs to one content width: a width change drops every height.
+  A count change keeps the heights of the indices that remain and adds
+  unmeasured ones. With `ItemKey`, an index whose key differs from the key it
+  was measured with is unmeasured again. `Invalidate`/`InvalidateAll` drop
+  heights explicitly.
+- An unmeasured item counts as the (lower) median of the measured heights at this
+  width, or `EstimatedItemHeight` while none is measured. The content height
+  is padding + item heights + `Gap` between items; it sets the scroll extent
+  and, with an `Auto` height, the list's own height. The list has no
+  intrinsic width: give it one or let the parent stretch it.
+- `render` returning nil makes an empty, zero-height item (gaps still apply).
+- An item's own margins are not applied: the item is laid out as a root at
+  the content width. Wrap it in a `Div` with padding to inset it.
+- With more than 32 measured items the median is refreshed every 16 height
+  changes rather than after each, so the estimate may lag slightly.
+
+Scrolling (Y only; the `ScrollHandle` contract above holds):
+
+- The list keeps its position anchored to the first item at the top of the
+  viewport and the distance into it, so items above the viewport that change
+  height (measured for the first time, invalidated, re-measured) do not move
+  the visible content. Wheel, scrollbar and `SetOffset` deltas since the last
+  frame are applied on top of the anchor. A frame with no items drops the
+  anchor; the next frame starts from the stored offset as it is.
+- `ScrollToBottom` reaches the true end even through unmeasured items: the
+  list measures the items the new offset shows and resolves the request again
+  until the heights stop changing (a few passes at most). `ScrollToTop` and
+  `ScrollToItem(ix)` resolve the same way, `ScrollToItem` with the
+  minimum-move rule of a Div child.
+- Items get GlobalElementIDs keyed by their absolute index (or their own id),
+  as UniformList rows, so hover, clicks, tooltips and element state follow an
+  item while it is built. An item outside the built range has no element
+  state, hitbox or focus.
+- The scrollbar thumb reflects the estimated content height. A thumb drag on a
+  List survives extent changes caused by measuring: instead of cancelling,
+  the drag re-bases on the current pointer and offset (Div and UniformList
+  drags still cancel, I1).
+- Items inherit the text style enclosing the list, refined by the list's own
+  text fields, as UniformList rows do.
 
 ### `text_elem.go`
 

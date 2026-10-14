@@ -26,7 +26,7 @@ func TestRegistryOpensDWGByExtension(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Len() != 56 || len(warns) == 0 {
+	if d.Len() != 85 || len(warns) == 0 {
 		t.Errorf("%d entities, %d warnings", d.Len(), len(warns))
 	}
 	// The extension is matched without regard to case.
@@ -36,7 +36,7 @@ func TestRegistryOpensDWGByExtension(t *testing.T) {
 	if err := os.WriteFile(upper, src, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if d, _, err := r.Open(upper); err != nil || d.Len() != 56 {
+	if d, _, err := r.Open(upper); err != nil || d.Len() != 85 {
 		t.Fatalf("PLAN.DWG: %v", err)
 	}
 }

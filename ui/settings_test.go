@@ -60,9 +60,21 @@ func openSettingsApp(t *testing.T) *sHarness {
 }
 
 // find returns the centre, in platform coordinates, of the element with the
-// given id, found by hit-testing the last frame.
+// given id, found by hit-testing the last frame. While the settings panel is
+// open, an id on another tab switches the panel to that tab (see reveal).
 func (h *sHarness) find(id string) gpui.Point {
 	h.t.Helper()
+	h.reveal(id)
+	p, ok := h.locate(id)
+	if !ok {
+		h.t.Fatalf("element %q not found", id)
+	}
+	return p
+}
+
+// locate is find without the tab switch and the failure: whether the last
+// frame hit-tests to id anywhere, and the centre of where it does.
+func (h *sHarness) locate(id string) (gpui.Point, bool) {
 	w := h.hw.Window()
 	b := w.Bounds()
 	var minX, minY, maxX, maxY float32 = 1e9, 1e9, -1, -1
@@ -76,10 +88,41 @@ func (h *sHarness) find(id string) gpui.Point {
 		}
 	}
 	if maxX < 0 {
-		h.t.Fatalf("element %q not found", id)
+		return gpui.Point{}, false
 	}
 	f := w.UIScale()
-	return gpui.Point{X: gpui.Pixels((minX + maxX) / 2 * f), Y: gpui.Pixels((minY + maxY) / 2 * f)}
+	return gpui.Point{X: gpui.Pixels((minX + maxX) / 2 * f), Y: gpui.Pixels((minY + maxY) / 2 * f)}, true
+}
+
+// reveal reports whether id is in the frame. When it is not and the settings
+// panel is open, it tries the panel's other tabs and stays on the one that
+// shows id; when none does, it goes back to the tab (and scroll position) it
+// started from. Tests address a control by id whatever tab it lives on.
+func (h *sHarness) reveal(id string) bool {
+	if _, ok := h.locate(id); ok {
+		return true
+	}
+	p := h.ws.prefs()
+	if !p.open {
+		return false
+	}
+	w := h.hw.Window()
+	start, off := p.tab, p.bodyScroll.Offset()
+	for t := range settingsTabCount {
+		if t == start {
+			continue
+		}
+		h.ws.setSettingsTab(w, t)
+		h.hw.Pixels()
+		if _, ok := h.locate(id); ok {
+			return true
+		}
+	}
+	h.ws.setSettingsTab(w, start)
+	p.bodyScroll.SetOffset(off)
+	w.Refresh()
+	h.hw.Pixels()
+	return false
 }
 
 func (h *sHarness) click(p gpui.Point) {
@@ -97,6 +140,16 @@ func (h *sHarness) openPanel() {
 	h.hw.Pixels()
 	if !h.ws.SettingsOpen() {
 		h.t.Fatal("panel did not open")
+	}
+}
+
+// openPanelAt opens the panel on tab t.
+func (h *sHarness) openPanelAt(t settingsTab) {
+	h.t.Helper()
+	h.ws.openSettingsAt(h.hw.Window(), t)
+	h.hw.Pixels()
+	if !h.ws.SettingsOpen() || h.ws.prefs().tab != t {
+		h.t.Fatalf("panel did not open on tab %d", t)
 	}
 }
 
@@ -169,7 +222,8 @@ func TestThemeSwitchChangesPixelsAndBuilder(t *testing.T) {
 	tx.Commit()
 	canvasPx := func() color.NRGBA {
 		b := h.ws.canvas.bounds
-		return pixel(h, int(b.Origin.X)+20, int(b.Origin.Y)+20)
+		left, top := h.ws.rulerInsets() // clear of the rulers
+		return pixel(h, int(float32(b.Origin.X)+left)+20, int(float32(b.Origin.Y)+top)+20)
 	}
 	if got := canvasPx(); got != (color.NRGBA{33, 40, 48, 255}) {
 		t.Fatalf("dark canvas pixel = %v", got)
@@ -519,7 +573,8 @@ func TestSettingsControlsHaveTooltips(t *testing.T) {
 	h := openSettingsWS(t, NewWorkspace(doc.New(), nil), 900, 1000, 1) // tall: the footer sits below the updates section
 	h.openPanel()
 	for _, id := range []string{"settings-close", "theme-light", "ui-scale-down", "ui-scale-up", "ui-scale-reset",
-		"lang-it", "set-grid", "set-osnap", "set-ortho", "wheel-pan", "agent-claude", "settings-reset"} {
+		"lang-it", "set-grid", "set-osnap", "set-ortho", "wheel-pan", "agent-claude", "settings-reset",
+		"settings-tab-general", "settings-tab-ai", "settings-tab-updates"} {
 		if !h.hoverTip(h.find(id)) {
 			t.Errorf("%s: no tooltip after 600 ms", id)
 		}

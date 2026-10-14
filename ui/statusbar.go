@@ -42,8 +42,10 @@ func staticChip(id, label, tip string) *gpui.Div {
 }
 
 // statusBar is the bottom row: the layout tabs and the cursor coordinates at the left; at the
-// right the MODEL label, the drafting-aid switches, the current layer, the entity count, the
-// drawing unit and the zoom slider. The groups wrap rather than squeeze when the window is narrow.
+// right the MODEL label, the drafting-aid switches and the PROPS switch of the properties HUD, the
+// current layer (a click opens the layer popover), the entity count, the drawing unit and the zoom
+// slider. The groups wrap rather than squeeze when the window is narrow. The layer popover and the
+// HUD hang from it (statusOverlays).
 func (ws *Workspace) statusBar() *gpui.Div {
 	s := ws.session
 	cur := s.Cursor()
@@ -66,20 +68,25 @@ func (ws *Workspace) statusBar() *gpui.Div {
 	chips := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(
 		staticChip("model", i18n.T("ui.status.model_chip"), i18n.T("ui.status.model_chip_tip")),
 		toggleChip("grid", i18n.T("ui.status.grid"), i18n.T("ui.status.grid_tip"), s.Grid(), func() { s.SetGrid(!s.Grid()) }),
+		toggleChip("ruler", i18n.T("ui.status.ruler"), i18n.T("ui.status.ruler_tip"), ws.Rulers(), func() { ws.toggleRulers(nil) }),
 		toggleChip("snapgrid", i18n.T("ui.status.snap"), i18n.T("ui.status.snap_tip"), s.SnapGrid(), func() { s.SetSnapGrid(!s.SnapGrid()) }),
 		toggleChip("ortho", i18n.T("ui.status.ortho"), i18n.T("ui.status.ortho_tip"), s.Ortho, func() { s.SetOrtho(!s.Ortho) }),
 		toggleChip("polar", i18n.T("ui.status.polar"), i18n.T("ui.status.polar_tip", cmdsys.FormatNumber(s.PolarAngle())), s.Polar(), func() { s.SetPolar(!s.Polar()) }),
 		toggleChip("snap", i18n.T("ui.status.osnap"), i18n.T("ui.status.osnap_tip"), s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
 		toggleChip("lwt", i18n.T("ui.status.lwt"), i18n.T("ui.status.lwt_tip"), s.LineweightDisplay(), func() { s.SetLineweightDisplay(!s.LineweightDisplay()) }),
+		toggleChip("props", i18n.T("ui.status.props"), i18n.T("ui.status.props_tip"), ws.PropsHUDShown(), ws.togglePropsHUD),
 	)
 	d := s.Drawing()
 	info := gpui.NewDiv().FlexRow().ItemsCenter().Gap(14).FlexShrink(0).Child(
-		gpui.NewDiv().ID("status-layer").Tooltip(i18n.T("ui.status.layer_tip")).
-			Child(gpui.NewText(i18n.T("ui.status.layer", d.CurrentLayer)).TextSize(fontUI).TextColor(uiText)),
+		ws.layerItem(),
 		gpui.NewText(i18n.Plural("ui.status.entities", d.Len())).TextSize(fontUI).TextColor(uiMuted),
 		gpui.NewDiv().ID("status-units").Tooltip(i18n.T("ui.status.units_tip", units, cmdsys.FormatNumber(ws.view.PixelSize()))).
 			Child(gpui.NewText(units).TextSize(fontUI).TextColor(uiMuted)),
 	)
 	right := gpui.NewDiv().FlexRow().ItemsCenter().Gap(14).FlexShrink(0).MlAuto().Child(chips, info, ws.zoomControls())
-	return gpui.NewDiv().ID("statusbar").FlexRow().FlexWrap().ItemsCenter().Gap(6).Px_(12).Py_(3).MinH(statusBarMinHeight).FlexShrink(0).Bg(uiBg).TextSize(fontUI).Child(left, right)
+	bar := gpui.NewDiv().ID("statusbar").FlexRow().FlexWrap().ItemsCenter().Gap(6).Px_(12).Py_(3).MinH(statusBarMinHeight).FlexShrink(0).Bg(uiBg).TextSize(fontUI).Child(left, right)
+	if ws.win != nil {
+		bar.Relative().Child(ws.statusOverlays(ws.win)...)
+	}
+	return bar
 }

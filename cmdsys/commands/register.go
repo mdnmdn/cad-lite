@@ -28,6 +28,8 @@ func Register(r *cmdsys.Registry) {
 	registerScript(r)    // script.go: CW-G
 	registerSelect(r)    // select.go: WP2
 	registerAids(r)      // aids.go: WP3
+	registerText(r)      // text.go: N9
+	registerMText(r)     // mtext.go: N9
 	registerStretch(r)   // stretch.go: WP4
 	registerAgent(r)     // agent.go: host
 	registerSettings(r)  // settings.go: host

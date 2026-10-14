@@ -1,7 +1,7 @@
 # Reference: elements
 
 Source: `element.go`, `div.go`, `text_elem.go`,
-`uniform_list.go`, `scroll.go`, `input.go`, `layout.go`.
+`uniform_list.go`, `list.go`, `scroll.go`, `input.go`, `layout.go`.
 
 Back to the [reference index](README.md). Concepts:
 [elements](../concepts/elements.md), [layout](../concepts/layout.md).
@@ -11,7 +11,7 @@ payloads in [events.md](events.md).
 ## Core types
 
 ```text
-type IntoElement interface{ IntoElement() Element }   // *Div, *Text, *StyledText, *UniformList, AnyElement, your own
+type IntoElement interface{ IntoElement() Element }   // *Div, *Text, *StyledText, *UniformList, *List, AnyElement, your own
 type Element interface {
     ID() (ElementID, bool)
     RequestLayout(w *Window, cx *App) (LayoutID, any)
@@ -210,6 +210,58 @@ pages one viewport toward the pointer. Geometry/extent changes or programmatic
 offset changes cancel capture. Stable IDs preserve it across ordinary redraws.
 See [scrollbar input](../concepts/events-and-input.md#scrollbar-input).
 
+## List
+
+```text
+func NewListState() *ListState
+func (s *ListState) Invalidate(ix int)
+func (s *ListState) InvalidateAll()
+func (s *ListState) MeasuredHeight(ix int) (Pixels, bool)
+func (s *ListState) ContentHeight() Pixels
+func (s *ListState) VisibleRange() (start, end int)
+
+func NewList(id string, state *ListState, count int,
+    render func(ix int, w *Window, cx *App) IntoElement) *List
+func (l *List) IntoElement() Element
+func (l *List) ItemKey(key func(ix int) uint64) *List
+func (l *List) EstimatedItemHeight(px float32) *List
+func (l *List) Overdraw(px float32) *List
+func (l *List) TrackScroll(h *ScrollHandle) *List
+func (l *List) ShowScrollbar() *List
+```
+
+A virtualised, vertically scrolling list of items of **varying** height (GPUI's
+`list` / `ListState`). Each frame `render(ix)` is called only for the items that
+intersect the viewport plus the `Overdraw` margin (default 100 px above and
+below); each is laid out at the content width and its height is cached in the
+`ListState`, which the view keeps across frames (one per list). Every other item
+counts by its cached height, or by the estimate (the median measured height, so one huge item does not skew it, or
+`EstimatedItemHeight`, default 24, before anything is measured), so the content
+height and scroll extent stay right without building them. `ContentHeight` and
+`VisibleRange` report the last frame.
+
+Heights are dropped when the content width changes, when an item's `ItemKey`
+changes (use a revision of its content), and by `Invalidate`/`InvalidateAll`.
+An item that is built is always re-measured, so a visible item that changed
+corrects itself in the same frame. The scroll position is anchored to the item
+at the top of the viewport: items above it that change height do not move what
+is shown. `ScrollToBottom`, `ScrollToTop` and `ScrollToItem` land exactly even
+through unmeasured items (the list re-resolves after measuring). Items get ids
+keyed by their index (or their own id), so clicks, hover and tooltips work as
+in any `Div`. The chain-preserving builders are `Gap` (space between items),
+`Bg`, `Border`, `Flex1`, `MaxH`, `MinH`, `Opacity`, `P`, `Px_`, `Py_`,
+`Rounded`, `SizeFull`, `SizeH`, `SizeW`, `SizeWH`, `TextColor`. The list has no
+intrinsic width; size it or let its parent stretch it. An item's own margins are
+not applied (it is laid out as a root); inset it with a padded wrapper. A scrollbar thumb drag
+re-bases instead of cancelling when measuring changes the extent.
+
+```go
+state := gpui.NewListState() // kept by the view
+list := gpui.NewList("log", state, len(rows), func(ix int, _ *gpui.Window, _ *gpui.App) gpui.IntoElement {
+    return gpui.NewText(rows[ix].Text)
+}).ItemKey(func(ix int) uint64 { return rows[ix].Rev }).Gap(8).P(12).Flex1().MinH(0).TrackScroll(handle)
+```
+
 ## ScrollHandle
 
 Offsets are **positive** distances scrolled (unlike GPUI's negative offsets).
@@ -222,10 +274,10 @@ func (h *ScrollHandle) MaxOffset() Size        // scrollable extent as of the la
 func (h *ScrollHandle) Bounds() Bounds         // container border box as of the last frame
 func (h *ScrollHandle) ScrollToTop()           // next frame
 func (h *ScrollHandle) ScrollToBottom()        // next frame
-func (h *ScrollHandle) ScrollToItem(ix int)    // minimum scroll to fully reveal child ix of a Div (or row ix of a UniformList)
+func (h *ScrollHandle) ScrollToItem(ix int)    // minimum scroll to fully reveal child ix of a Div (or item ix of a UniformList or List)
 ```
 
-Bind it with `Div.TrackScroll` or `UniformList.TrackScroll`; one handle should
+Bind it with `Div.TrackScroll`, `UniformList.TrackScroll` or `List.TrackScroll`; one handle should
 track one container at a time.
 
 ## Canvas

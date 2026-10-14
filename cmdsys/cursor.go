@@ -22,9 +22,13 @@ func (s *Session) aperture() float64 { return s.Aperture * s.ctx.View.PixelSize(
 
 // Hover updates the cursor from a raw model point. At a point prompt it is, in order: the typed
 // object snap override pending (if any), else the running object snaps, else the snap grid; then
-// ortho relative to the prompt's base constrains what is left.
+// ortho relative to the prompt's base constrains what is left. At a Pick prompt it is p itself.
 func (s *Session) Hover(p geom.Vec2) {
 	s.snapped = false
+	if s.prompt != nil && s.prompt.Pick {
+		s.cursor = p
+		return
+	}
 	if s.wantsPoint() {
 		o := &s.aids.ov
 		live := s.overrideLive()

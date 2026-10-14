@@ -57,19 +57,33 @@ type Note struct{ Level, Text string }
 // PlanUpdate replaces the existing Plan block in place. TurnEnd and Exited stop the running turn and
 // mark still-open permission asks answered, since nobody can answer them any more.
 type T struct {
-	blocks  []Block
+	blocks []Block
+	// revs[i] is the version at which blocks[i] last changed.
+	revs    []uint64
 	version uint64
 	running bool
 }
 
 func (t *T) bump() { t.version++ }
 
+// add appends b; the caller bumps.
+func (t *T) add(b Block) {
+	t.blocks = append(t.blocks, b)
+	t.revs = append(t.revs, t.version+1)
+}
+
+// set replaces block i; the caller bumps.
+func (t *T) set(i int, b Block) {
+	t.blocks[i] = b
+	t.revs[i] = t.version + 1
+}
+
 // AddUser appends a UserMsg and marks a turn as running.
 func (t *T) AddUser(text string) { t.AddUserWith(text, nil) }
 
 // AddUserWith appends a UserMsg with attachments and marks a turn as running.
 func (t *T) AddUserWith(text string, a []Attachment) {
-	t.blocks = append(t.blocks, UserMsg{Text: text, Attachments: a})
+	t.add(UserMsg{Text: text, Attachments: a})
 	t.running = true
 	t.bump()
 }
@@ -80,6 +94,15 @@ func (t *T) Blocks() []Block { return t.blocks }
 // Version increases on every change, for cheap redraw checks.
 func (t *T) Version() uint64 { return t.version }
 
+// Revision returns the Version at which block i was added or last changed, so a view can tell which
+// blocks changed since it last looked; 0 for an index out of range.
+func (t *T) Revision(i int) uint64 {
+	if i < 0 || i >= len(t.revs) {
+		return 0
+	}
+	return t.revs[i]
+}
+
 // Running reports whether a turn is in progress.
 func (t *T) Running() bool { return t.running }
 
@@ -89,7 +112,7 @@ func (t *T) ResolvePermission(requestID string) {
 		if p, ok := b.(PermissionBlock); ok && p.RequestID == requestID {
 			if !p.Answered {
 				p.Answered = true
-				t.blocks[i] = p
+				t.set(i, p)
 				t.bump()
 			}
 			return
@@ -120,7 +143,7 @@ func (t *T) Apply(ev agentmanager.Event) {
 				return
 			}
 		}
-		t.blocks = append(t.blocks, PermissionBlock{
+		t.add(PermissionBlock{
 			RequestID: e.RequestID, Call: e.Call, Options: append([]agentmanager.PermissionOption(nil), e.Options...),
 		})
 		t.bump()
@@ -128,12 +151,12 @@ func (t *T) Apply(ev agentmanager.Event) {
 		plan := Plan{Entries: append([]agentmanager.PlanEntry(nil), e.Entries...)}
 		for i := len(t.blocks) - 1; i >= 0; i-- {
 			if _, ok := t.blocks[i].(Plan); ok {
-				t.blocks[i] = plan
+				t.set(i, plan)
 				t.bump()
 				return
 			}
 		}
-		t.blocks = append(t.blocks, plan)
+		t.add(plan)
 		t.bump()
 	case agentmanager.TurnEnd:
 		t.running = false
@@ -171,14 +194,14 @@ func (t *T) Apply(ev agentmanager.Event) {
 }
 
 func (t *T) note(level, text string) {
-	t.blocks = append(t.blocks, Note{Level: level, Text: text})
+	t.add(Note{Level: level, Text: text})
 }
 
 func (t *T) closePermissions() {
 	for i, b := range t.blocks {
 		if p, ok := b.(PermissionBlock); ok && !p.Answered {
 			p.Answered = true
-			t.blocks[i] = p
+			t.set(i, p)
 		}
 	}
 }
@@ -212,17 +235,17 @@ func (t *T) text(id, s string, thought bool) {
 	}
 	switch {
 	case idx < 0 && thought:
-		t.blocks = append(t.blocks, Thought{ID: id, Text: s})
+		t.add(Thought{ID: id, Text: s})
 	case idx < 0:
-		t.blocks = append(t.blocks, AgentMsg{ID: id, Text: s})
+		t.add(AgentMsg{ID: id, Text: s})
 	case thought:
 		b := t.blocks[idx].(Thought)
 		b.Text += s
-		t.blocks[idx] = b
+		t.set(idx, b)
 	default:
 		b := t.blocks[idx].(AgentMsg)
 		b.Text += s
-		t.blocks[idx] = b
+		t.set(idx, b)
 	}
 	t.bump()
 }
@@ -245,7 +268,7 @@ func (t *T) toolStart(c agentmanager.ToolCall) {
 	}
 	i := t.findTool(c.ID)
 	if i < 0 {
-		t.blocks = append(t.blocks, ToolBlock{Call: c, Status: c.Status})
+		t.add(ToolBlock{Call: c, Status: c.Status})
 		t.bump()
 		return
 	}
@@ -265,7 +288,7 @@ func (t *T) toolStart(c agentmanager.ToolCall) {
 	}
 	b.Call = c
 	b.Status = c.Status
-	t.blocks[i] = b
+	t.set(i, b)
 	t.bump()
 }
 
@@ -295,7 +318,7 @@ func (t *T) toolUpdate(p agentmanager.ToolCallPatch) {
 		b.Call.RawInput = p.RawInput
 	}
 	if i < 0 {
-		t.blocks = append(t.blocks, b)
+		t.add(b)
 		t.bump()
 		return
 	}
@@ -303,6 +326,6 @@ func (t *T) toolUpdate(p agentmanager.ToolCallPatch) {
 		b.Output == old.Output && string(b.Call.RawInput) == string(old.Call.RawInput) {
 		return
 	}
-	t.blocks[i] = b
+	t.set(i, b)
 	t.bump()
 }

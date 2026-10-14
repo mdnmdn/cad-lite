@@ -1,0 +1,140 @@
+CAD-LITE: PRIMITIVES AND API IMPROVEMENT SUGGESTIONS
+Based on creating and editing the furnished Villa Aurea house plan.
+
+PRIORITY 1: BIGGEST GAINS
+
+1. Native TEXT and MTEXT
+   Text content, insertion point, height, rotation, font, alignment, wrapping,
+   and optional background mask. Search and update text by handle.
+   The house plan required about 600 annotation entities because labels
+   had to be drawn as individual letter strokes.
+
+2. Batch entity creation and atomic transactions
+   Create many entities in one structured call and one undo step.
+   Accept client IDs and return a client-ID-to-handle mapping.
+   Validate the complete batch before committing; roll back on failure.
+   Support batch updates, moves, layer assignments, and erasure too.
+
+3. Groups, blocks, and block references
+   Group a WC, door, bed, or other assembly under one selectable ID.
+   Reusable blocks should support insertion, rotation, scale, attributes,
+   and updating a definition across its instances.
+   The spa correction required locating several separate WC entities.
+
+4. Tags and metadata
+   Store entity and assembly attributes such as room=spa, type=wc,
+   assembly=door-01, material, manufacturer, and clearance requirements.
+   Support query, update, and export of these attributes.
+
+5. Associative dimensions and area annotations
+   Linear, aligned, angular, radius, diameter, and chained dimensions.
+   Update automatically when referenced geometry changes.
+   Calculate closed-region areas and distinguish gross footprint, net
+   floor area, rooms, and exterior terraces.
+
+PRIORITY 2: EDITING ACCURACY AND DRAWING QUALITY
+
+6. Structured entity editing
+   Change geometry, text, layer, color, lineweight, linetype, and visibility
+   directly by handle, without erasing and rebuilding the entity.
+   Include polyline vertex insertion, removal, and movement.
+
+7. Hatches, fills, and material patterns
+   Boundary-based wall poche, solid fills, tiled floors, and material
+   patterns with controllable angle and spacing. Associative boundaries.
+
+8. Clearance and collision checks
+   Check door swept areas against fixtures and furniture; report handles,
+   overlap regions, and minimum distances. Support user-defined clearance
+   envelopes for WC access, circulation, and furniture use.
+   Separate physical collisions from ordinary overlapping drawing lines.
+   This would have caught the spa WC inside the door swing.
+
+9. More complete structured geometry tools
+   Ellipses, splines, arcs by center/radius/angles, rounded rectangles,
+   polylines with arc segments, polygons, and boundary regions.
+   Explicitly distinguish width/height arguments from opposite corners.
+
+10. Structured trim, extend, offset, fillet, and chamfer
+    Accept handles and explicit geometric parameters without relying on
+    command-line prompt state. Return resulting and replaced handles.
+
+11. Geometric constraints and snapping
+    Coincident, parallel, perpendicular, tangent, equal, and fixed-distance
+    constraints. Structured endpoint, midpoint, center, and intersection
+    queries. Optional constraint solving for parametric edits.
+
+12. Rooms, walls, doors, and windows as semantic objects
+    Walls with thickness and joins; hosted doors/windows that create real
+    openings; door handing and swing direction; room boundaries and names.
+    These should expose their generated geometry for normal CAD editing.
+
+13. Geometric measurements and validation
+    Distance, minimum separation, angle, length, perimeter, area, point-in-
+    region, and intersections as structured numeric results.
+    Detect open room boundaries, duplicate entities, tiny segments, and
+    self-intersecting polylines. Include units in every measurement.
+
+PRIORITY 3: REVIEW, OUTPUT, AND ROBUST AUTOMATION
+
+14. Reliable save and export
+    Explicit native drawing save, DXF/DWG where supported, PDF, SVG, and
+    PNG export. Destination path, overwrite policy, scale, page size,
+    and a saved-artifact result with path and format.
+    Allow vector PDF export with fonts and lineweights preserved.
+
+15. PNG rendering improvements
+    Existing render_png is useful and already returns the coordinate map.
+    Add file output, transparent/light/dark backgrounds, selected layers
+    or groups, consistent print lineweights, and named camera views.
+    Return the artifact path and pixel-to-model mapping together.
+
+16. Layouts, viewports, and print styles
+    Paper-space sheets, scaled viewports, title blocks, page setup,
+    legends, and monochrome or color plot styles.
+
+17. Stronger spatial and semantic queries
+    Select by containment versus intersection, proximity, tag, group,
+    block, room, or geometry type. Return stable IDs and optional geometry
+    detail levels. Allow querying the complete contents of an assembly.
+
+18. Preview and dry-run operations
+    Show proposed edits and clearance results before committing.
+    Return an entity diff: created, updated, moved, and deleted objects.
+
+19. Drawing revisions and safe recovery
+    Named checkpoints, transaction IDs, undo-to-checkpoint, and revision
+    numbers. Reject stale edits when another user has changed the drawing.
+    Include idempotency keys so retries cannot duplicate geometry.
+
+20. Tool discoverability and consistent schemas
+    A compact capabilities endpoint, supported argument schemas, units,
+    limits, and examples. Consistent response fields for handles, errors,
+    warnings, and drawing revision. Explain partial execution explicitly.
+
+21. Coordinate systems and transformations
+    Named local coordinate systems, transformation matrices, and geometry
+    placement relative to a room, wall, or block origin.
+    This makes rotated or repeated furniture arrangements much simpler.
+
+22. External references and reusable asset libraries
+    Reference drawings or images with known scale and origin; furniture
+    and fixture libraries with dimensions, insertion points, metadata,
+    and clearance envelopes.
+
+23. Layer and style management
+    Layer descriptions, lineweights, linetypes, transparency, print flags,
+    and layer sets. Reusable text, dimension, and hatch styles.
+
+24. Quantity schedules
+    Generate room-area, door/window, furniture, and fixture schedules from
+    tagged objects. Export structured JSON or CSV and update after edits.
+
+RECOMMENDED IMPLEMENTATION ORDER
+
+Native text -> batch transactions -> groups/blocks -> metadata queries ->
+structured entity editing -> dimensions/areas -> clearance checks ->
+semantic architectural objects -> layouts and export.
+
+The first three features would remove the largest amount of repetitive
+work. Metadata and collision checks would make later corrections safer.

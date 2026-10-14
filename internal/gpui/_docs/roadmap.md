@@ -27,7 +27,8 @@ What works today:
   row/column wrapping, axis gaps and align-content),
   parent-relative absolute positioning with pixel offsets and inset,
   `Div`, `Text`, `StyledText`, `TextInput` (selection highlight, drag/word/line
-  selection, rune-safe caret navigation), `UniformList`, scroll containers
+  selection, rune-safe caret navigation), `UniformList`, the variable-height
+  virtualized `List` with its retained `ListState`, scroll containers
   with draggable scrollbar thumbs and track paging, borders, rounded corners and clips, linear
   gradients (sRGB/Oklab), box shadows (outset/inset), opacity, active / hover / focus /
   focus-visible styles, text style inheritance, font families with system
@@ -122,6 +123,11 @@ Verified milestones; later waves also record their commit hashes here.
 | K1 | done, `a59d2f6` (2026-10-13) | [GPUI Kit integration investigation](gpui-kit-integration.md), pinned upstream `c5f8eca4a0759f8c0c7ed624eddfd03f1c93a5f2`; architecture, manifest versions, source paths and licence notices independently checked. Recommends selective native Go controls; package/API/activation decisions remain for contract review. No component integration, dependencies or Rust builds performed. |
 | C1 | done (2026-10-14) | `Stroke` scene primitive (anti-aliased polyline, round joins/caps, union coverage so joints blend once, sub-pixel widths as alpha-scaled hairlines) with `Scene.InsertStroke`, `Window.PaintStroke`, scaling in `scaleScene`, merge in `Rasterizer.Render`; `Canvas` element (GPUI `canvas()`). Added for the go-draw CAD canvas, together with `TextInput.OnEscape` (Escape runs the callbacks and keeps focus, for a command line; regression test `TestTextInputOnEscapeKeepsFocus`). Unit tests for coverage, joints, clip, hairline, scaling, ordering and canvas bounds. Todo, gallery and border renders pixel-identical; todo benchmark within host noise, allocations unchanged. |
 | I2 | done, `4c93e7c` (2026-10-13) | TextInput selection highlight, primary click/drag outside/release, Unicode word double-click and whole-line triple-click, Shift anchors/reversed ranges and Home/End. Rune-safe navigation/deletion and invalid UTF-16 range rejection have failing-before regressions. Capture identity/lifecycle, bubbling, shaping/cache, clip/layer and scale-1/2 pixels tested. Contract and user docs updated; new selection snippet compiles. Independent review found no blocking issues. `gofmt -l .`, `go vet ./...`, `go test ./...`, `git diff --check`, tidy (manifests unchanged) and todo PNG smoke pass. Eight resting renders pixel-identical; selection previews inspected. Long-input preview intentionally changes from wrapped to one clipped line; focused caret aligns to label/full-line advances. Paired isolated benchmarks show no I2 regression established under unstable host timings (Todo2 before/current medians 5.231/4.119 ms, ranges 5.064–5.408/3.584–10.531 ms); Todo allocations 1477→1421, gallery unchanged. No real-window checks available. |
+| E7 | done, uncommitted (2026-10-14) | `List` + `ListState` (`list.go`): variable-height virtualization with a per-index height cache (dropped on width change, `ItemKey` change, `Invalidate`/`InvalidateAll`), unmeasured items at the median measured height (or `EstimatedItemHeight`), build range = viewport + `Overdraw`, offset anchored to the top item, `ScrollToBottom`/`ScrollToItem` re-resolved after measuring; elastic scrollbar drag re-base for lists (`scroll.go`). Headless tests: visible range at top/middle/bottom over 2,000 items, content height = cached sum, bottom through unmeasured items, width/key/explicit invalidation, anchoring, click routing, auto height, drag across unmeasured items (fails without the re-base); regressions for an empty frame shifting the offset by the padding and for an outlier skewing the estimate (median, not mean). `BenchmarkList2000` builds 7 items per frame. Used by the Cad-lite agent transcript. No real-window checks available. |
+
+E7 limits: no intrinsic width; scrollbar thumb follows the estimate, so it can
+shift as items are first measured; no splice API (inserting before measured
+items shifts their cached heights by index until a key or width change).
 
 L1 limits: logical-pixel offsets only; immediate parent border box is the anchor.
 No relative translation, CSS static-position placement, fixed positioning or
@@ -217,7 +223,7 @@ standard verification (section 1) and a contract update when signatures change.
 | E4 | P2 | L | E3 | SVG element (rasterized to image sprites; stdlib-only subset or an approved dependency) | `svg` legacy example renders; dependency decision recorded |
 | E5 | P1 | L | - | Async tasks / executor (`cx.Spawn`, background executor, results back on the main loop) | `async_tasks` port runs; entity safety rules preserved; race-detector test |
 | E6 | P2 | L | L1 | Overlays: popovers, deferred and anchored elements (plain-text `Div.Tooltip` done, 2026-10-14: window-level overlay painted after the tree, no hitboxes; builder-style tooltips and a general deferred layer remain) | Overlay paints above siblings regardless of tree order; anchored to a bounds with edge snapping; hover tooltip example |
-| E7 | P2 | M | - | `List` with variable row heights (virtualized) next to `UniformList` | Measures visible rows only; scroll-to-index; test with mixed heights |
+| E7 | P2 | M | - | `List` with variable row heights (virtualized) next to `UniformList` (done, 2026-10-14: milestone row E7 in section 2) | Measures visible rows only; scroll-to-index; test with mixed heights |
 | E8 | P3 | M | E1 | Blur, corner smoothing, custom drawing (canvas / paint_path) | Per-example acceptance as in 3.6 |
 | E9 | P2 | L | - | Multi-window in the ebiten backend (`OpenWindow` more than once) | Two windows open, receive their own input, close independently; ebiten limits documented; headless already supports it |
 | E10 | P2 | S | - | Headless keyboard-focus seeding `RenderOption` (`WithFocus(id)`, keyboard modality) | `focus_visible` and `tab_stop` drop their `-focus` flag emulation |

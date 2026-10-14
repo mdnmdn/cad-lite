@@ -11,7 +11,7 @@ disagree these pages follow the code.
 |---|---|
 | [geometry-and-color.md](geometry-and-color.md) | `Pixels`, `Point`, `Size`, `Bounds`, `Edges`, `Corners`, `Axes`; `Length` (`Auto`, `Px`, `Flex`) and `Available`; layout enums; `Rgba`, `Hsla`, palette; `Fill`, `Background`, `LinearGradient`, `ColorSpace`; `BoxShadow`. |
 | [style-builders.md](style-builders.md) | Every fluent builder on `*Div`, `*Text`, `StyledMixin` and `*UniformList` with signature and meaning, grouped by layout, sizing, spacing, flex, overflow/scroll, background/border/radius/shadow/opacity, text and interaction styles; `Style` and `StyleRefinement`. |
-| [elements.md](elements.md) | `Element`, `IntoElement`, `AnyElement`, ids; `Div`, `Text`, `StyledText`, `Str`, `TextInput`, `UniformList`, `ScrollHandle`, `Canvas`; custom elements, `LayoutNode` and `Layout`. |
+| [elements.md](elements.md) | `Element`, `IntoElement`, `AnyElement`, ids; `Div`, `Text`, `StyledText`, `Str`, `TextInput`, `UniformList`, `List`, `ListState`, `ScrollHandle`, `Canvas`; custom elements, `LayoutNode` and `Layout`. |
 | [events.md](events.md) | Every input event type and its fields, listener builders, hit testing types; `Keystroke`, `KeyBinding`, `Keymap`, `Action`, `ActionKey`; `FocusHandle` and the window focus API; key dispatch order. |
 | [app-window.md](app-window.md) | `App`, `Entity`, `WeakEntity`, `Context`, `Listener`/`Emit`/`Subscribe`, `Subscription`, `SubscriberSet`, `Task`, `WindowOptions`, and every `Window` method. |
 | [platform.md](platform.md) | `Platform` / `PlatformWindow` / `PlatformInputHandler`; `HeadlessPlatform` and `HeadlessWindow`; `RenderToPNG` / `RenderToImage` and `RenderOption`s; `Scene`, primitives and `Rasterizer`; `ebitenplatform.New` and options; clipboard. |
@@ -21,7 +21,7 @@ disagree these pages follow the code.
 
 | If you are looking for | Page |
 |---|---|
-| `NewDiv`, `NewText`, `NewStyledText`, `NewTextInput`, `NewUniformList`, `NewScrollHandle`, `NewCanvas`, `Str` | [elements](elements.md) |
+| `NewDiv`, `NewText`, `NewStyledText`, `NewTextInput`, `NewUniformList`, `NewList`, `NewListState`, `NewScrollHandle`, `NewCanvas`, `Str` | [elements](elements.md) |
 | `Bg`, `P`, `Gap`, `Flex1`, `Rounded`, `Shadow*`, `Hover`, `TextColor` | [style builders](style-builders.md) |
 | `OnClick`, `OnKeyDown`, `OnAction`, `KeyContext`, `TabIndex`, `TrackFocus` | [elements](elements.md#mouse-and-keyboard-listeners) (builders) and [events](events.md) (payloads) |
 | `NewKeyBinding`, `NewAction`, `ParseKeystroke`, `Keymap` | [events](events.md#keymap-and-bindings) |

@@ -131,6 +131,21 @@ func PathsCrossPolygon(paths [][]geom.Vec2, poly []geom.Vec2) bool {
 	return false
 }
 
+// inTextBox reports whether e is a text and a vertex of pts lies in its text box: a polygon or
+// fence inside the box meets the text without crossing the box's outline.
+func inTextBox(e doc.Entity, pts []geom.Vec2) bool {
+	t, ok := e.(doc.Annotation)
+	if !ok {
+		return false
+	}
+	for _, p := range pts {
+		if t.HitBox(p) {
+			return true
+		}
+	}
+	return false
+}
+
 // PathsCrossFence reports whether any path meets the open polyline fence.
 func PathsCrossFence(paths [][]geom.Vec2, fence []geom.Vec2) bool {
 	for _, p := range paths {
@@ -142,8 +157,12 @@ func PathsCrossFence(paths [][]geom.Vec2, fence []geom.Vec2) bool {
 }
 
 // entityPaths tessellates e's geometry into polylines within tol; an entity without curves is
-// its bounds corner as a single-point path.
+// its bounds corner as a single-point path, and a text is the outline of its text box.
 func entityPaths(e doc.Entity, tol float64) [][]geom.Vec2 {
+	if t, ok := e.(doc.Annotation); ok {
+		q := t.Box()
+		return [][]geom.Vec2{{q[0], q[1], q[2], q[3], q[0]}}
+	}
 	var out [][]geom.Vec2
 	for _, c := range e.Geometry() {
 		if pts := c.Tessellate(tol, nil); len(pts) > 0 {

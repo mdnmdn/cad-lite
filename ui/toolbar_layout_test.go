@@ -71,7 +71,7 @@ func (r *tbRig) boundsIn(id string, y0, y1, step float32) (rect, bool) {
 
 // ribbonGroupButtons are the ribbon's groups and the buttons in each, by id.
 var ribbonGroupButtons = [][]string{
-	{"line", "pline", "circle", "arc", "rect"},
+	{"line", "pline", "circle", "arc", "rect", "polygon"},
 	{"move", "copy", "rotate", "scale", "erase", "mirror", "offset", "fillet", "chamfer", "trim", "extend", "break", "join", "explode"},
 	{"dist", "area", "id", "zoom"},
 }
@@ -85,7 +85,8 @@ func TestRibbonReflowsWithWidth(t *testing.T) {
 		rows  func(n int) bool
 	}{
 		{1600, func(n int) bool { return n == 1 }},
-		{1100, func(n int) bool { return n == 2 }},
+		{1100, func(n int) bool { return n == 1 }},
+		{900, func(n int) bool { return n == 2 }},
 		{800, func(n int) bool { return n >= 2 }},
 	} {
 		t.Run(fmt.Sprint(c.width), func(t *testing.T) {

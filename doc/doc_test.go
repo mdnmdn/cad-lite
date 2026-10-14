@@ -137,3 +137,30 @@ func TestArcFrom3Points(t *testing.T) {
 		t.Fatal("collinear points made an arc")
 	}
 }
+
+func TestTxnTakeEditsListsEditsSinceLastCall(t *testing.T) {
+	d := doc.New()
+	published := 0
+	d.OnChange(func(doc.ChangeSet) { published++ })
+	tx, _ := d.Begin()
+	a := tx.Add(&doc.Line{End: geom.V(1, 0)})
+	b := tx.Add(&doc.Line{End: geom.V(0, 1)})
+	if got := tx.TakeEdits(); !reflect.DeepEqual(got, []doc.Handle{a, b}) {
+		t.Fatalf("first take = %v, want [%v %v]", got, a, b)
+	}
+	tx.Modify(a, func(e doc.Entity) { e.(*doc.Line).End = geom.V(2, 0) })
+	tx.Erase(b)
+	if got := tx.TakeEdits(); !reflect.DeepEqual(got, []doc.Handle{a, b}) {
+		t.Fatalf("second take = %v, want [%v %v]", got, a, b)
+	}
+	if got := tx.TakeEdits(); len(got) != 0 {
+		t.Fatalf("third take = %v, want none", got)
+	}
+	if published != 0 {
+		t.Fatal("TakeEdits published a change set")
+	}
+	cs := tx.Commit()
+	if !reflect.DeepEqual(cs.Added, []doc.Handle{a}) || len(cs.Erased) != 0 || published != 1 {
+		t.Fatalf("commit = %+v after %d publications", cs, published)
+	}
+}

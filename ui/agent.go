@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"agentmanager"
@@ -18,13 +19,17 @@ import (
 	"cad-lite/cmdsys"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
+	"cad-lite/updater"
 )
 
-// Timer periods of the agent pump. The fast period applies while a session
-// is starting, a turn runs or tool calls wait for the UI goroutine; idle
-// open sessions only poll slowly for a crashed agent.
+// Timer periods of the agent pump. Every pump tick redraws the window (a gpui timer refreshes
+// after its callback), so the period is also the redraw rate. The fast period applies while a
+// session is starting, right after events arrived, or while tool calls wait for the UI goroutine;
+// a running turn with nothing arriving polls at the working animation's rate; idle open sessions
+// only poll slowly for a crashed agent.
 const (
 	agentBusyPoll = 16 * time.Millisecond
+	agentTurnPoll = time.Second / agentWorkingFPS
 	agentIdlePoll = 250 * time.Millisecond
 	// agentEventBatch bounds the events folded per tab per timer tick.
 	agentEventBatch = 256
@@ -55,12 +60,31 @@ type agentStart struct {
 // live, an agent session. Only the start result is touched off the UI goroutine.
 type agentTab struct {
 	tr transcript.T
-	// expanded holds the indexes of thought blocks the user opened.
+	// expanded holds the indexes of the thought blocks and tool cards the user opened.
 	expanded map[int]bool
+	// md caches the parsed Markdown of agent messages and thoughts by block index, valid for the
+	// block revision it was parsed at.
+	md map[int]mdCached
+	// copied holds when the copy button of a message (by block index) was last pressed, for its
+	// check-mark feedback.
+	copied map[int]time.Time
+	// queue holds the prompts typed while a turn ran, sent one by one as turns end; queuePaused
+	// holds it after a cancelled turn until the user resumes it or sends.
+	queue         []agentQueued
+	queuePaused   bool
+	queueDraining bool
 	// shownVersion is the transcript version the scroll position follows.
 	shownVersion uint64
 	scroll       *gpui.ScrollHandle
-	queued       string
+	// list holds the transcript's measured block heights, so only the blocks near the viewport are
+	// built each frame.
+	list *gpui.ListState
+	// shown holds the indexes of the blocks the transcript draws (debug notes are not), for
+	// transcript version shownFor; shownOK is false until it is first filled.
+	shown    []int
+	shownFor uint64
+	shownOK  bool
+	queued   string
 	// images wait in the composer for the next prompt; queuedImages go with queued.
 	images, queuedImages []*agentImage
 	// attention is set when a background tab got a permission ask or finished a turn.
@@ -84,7 +108,8 @@ type agentTab struct {
 }
 
 func newAgentTab() *agentTab {
-	return &agentTab{expanded: map[int]bool{}, scroll: gpui.NewScrollHandle(), shownVersion: ^uint64(0)}
+	return &agentTab{expanded: map[int]bool{}, md: map[int]mdCached{}, copied: map[int]time.Time{},
+		scroll: gpui.NewScrollHandle(), list: gpui.NewListState(), shownVersion: ^uint64(0)}
 }
 
 // agentSet is the agent state of one document tab: its conversation tabs, its place in the
@@ -151,6 +176,21 @@ type AgentPanel struct {
 	thumbs map[string]*image.NRGBA
 	// deferred is a prompt from the AI command that waits for the first frame.
 	deferred string
+	// clip writes the clipboard (gpui.ClipboardWrite; tests replace it). It runs on a goroutine.
+	clip    func(string) error
+	clipErr chan error
+	// clipMu runs clipboard writes one at a time; clipSeq numbers them so a superseded one is
+	// skipped, and clipBusy counts those pending or running.
+	clipMu   sync.Mutex
+	clipSeq  atomic.Uint64
+	clipBusy atomic.Int32
+	// openURL opens a link from the transcript (updater.OpenURL, https only; tests replace it).
+	openURL func(string) error
+	// frames counts the frames the panel rendered (redraw-rate checks).
+	frames int
+	// look is the language, theme and UI scale the transcripts' cached block heights were
+	// measured under; see checkLook.
+	look agentLook
 
 	timer *gpui.Timer
 	tgen  int
@@ -167,9 +207,11 @@ const openerJoinTimeout = 10 * time.Second
 
 func newAgentPanel(ws *Workspace) *AgentPanel {
 	p := &AgentPanel{
-		ws:    ws,
-		open:  harnesses.Open,
-		input: themeBareField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder")), fontUI, false).Multiline(agentPromptLines),
+		ws:      ws,
+		open:    harnesses.Open,
+		clip:    gpui.ClipboardWrite,
+		openURL: updater.OpenURL,
+		input:   themeBareField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder")), fontUI, false).Multiline(agentPromptLines),
 	}
 	p.agentSet = ws.docTab.agentSet()
 	p.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { p.Send(text, w) })
@@ -304,6 +346,13 @@ func (p *AgentPanel) Show() {
 
 // SetOpener replaces how sessions are started.
 func (p *AgentPanel) SetOpener(o AgentOpener) { p.open = o }
+
+// SetClipboard replaces how the copy buttons write the clipboard (gpui.ClipboardWrite); f runs on
+// a goroutine.
+func (p *AgentPanel) SetClipboard(f func(string) error) { p.clip = f }
+
+// SetLinkOpener replaces how a transcript link is opened (updater.OpenURL, https only).
+func (p *AgentPanel) SetLinkOpener(f func(string) error) { p.openURL = f }
 
 // Configure selects the harness and, when binary is not empty, the
 // executable to run for it. A configured harness is always offered, even
@@ -545,6 +594,12 @@ func (p *AgentPanel) stopTab(t *agentTab, wait bool) {
 	t.sess = nil
 	t.state = agentIdle
 	t.queued, t.queuedImages = "", nil
+	// A turn still running ends here: nobody will report its end any more, and a transcript left
+	// running would queue every later prompt.
+	if t.tr.Running() {
+		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopCancelled})
+	}
+	p.dropQueue(t)
 	t.mdl.setting, t.mdl.restart, t.mdl.pending = false, false, false
 	var srv *mcp.Server
 	if s := p.setOf(t); s != nil && !s.live() {
@@ -580,7 +635,8 @@ func (p *AgentPanel) anyLive() bool {
 
 // Send submits a prompt on the active tab. Without a session it starts one
 // first (resuming the tab's stored agent session) and sends the prompt once
-// the agent is connected.
+// the agent is connected. While a turn runs the prompt is queued instead and
+// sent when the turns before it have ended (queued prompts are not merged).
 //
 // The images waiting in the composer go with it; when the tab's model does not read images the
 // prompt is refused with a note and text and images stay.
@@ -589,12 +645,21 @@ func (p *AgentPanel) Send(text string, w *gpui.Window) {
 	text = strings.TrimSpace(text)
 	t := p.cur
 	imgs := t.images
-	if (text == "" && len(imgs) == 0) || t.tr.Running() {
+	if text == "" && len(imgs) == 0 {
 		return
 	}
 	p.win = w
 	if len(imgs) > 0 && p.visionOf(t) == agentmanager.VisionNo {
 		p.note(t, i18n.T("ui.agent.image.no_vision_send", p.modelLabel(t)))
+		w.Refresh()
+		return
+	}
+	// While a turn runs, or prompts wait in the queue, the prompt goes behind them, so the order
+	// always holds; sending also resumes a paused queue.
+	if t.tr.Running() || len(t.queue) > 0 {
+		p.enqueue(t, text, imgs)
+		t.queuePaused = false
+		p.nextQueued(t)
 		w.Refresh()
 		return
 	}
@@ -645,19 +710,24 @@ func (p *AgentPanel) prompt(t *agentTab, text string, imgs []*agentImage) {
 	}
 	if err != nil {
 		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopFailed, Err: err.Error()})
+		p.nextQueued(t)
 	}
 }
 
-// Cancel aborts the active tab's running turn.
+// Cancel aborts the active tab's running turn; the session stays. Prompts queued behind it are
+// paused until the user resumes the queue or sends another prompt. While the session is still
+// starting there is no turn to cancel but the start, so the session and its queue go.
 func (p *AgentPanel) Cancel(w *gpui.Window) {
 	t := p.cur
 	if t.state == agentReady {
+		if len(t.queue) > 0 {
+			t.queuePaused = true
+		}
 		if err := t.sess.Cancel(); err != nil {
 			p.apply(t, agentmanager.Log{Level: "error", Message: err.Error()})
 		}
 	} else if t.state == agentStarting {
 		p.stopTab(t, false)
-		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopCancelled})
 	}
 	w.Refresh()
 }
@@ -698,27 +768,34 @@ func (p *AgentPanel) arm(w *gpui.Window, d time.Duration) {
 // session exists.
 func (p *AgentPanel) pump(w *gpui.Window) {
 	p.win = w
-	live, busy, pending := false, false, false
+	var st pumpState
+	pending := false
 	for _, s := range p.sets() {
 		if s.disp != nil {
 			s.disp.Drain()
 		}
-		live, busy = p.pumpTabs(s.tabs, live, busy)
+		p.pumpTabs(s.tabs, &st)
 		pending = pending || (s.disp != nil && s.disp.Pending() > 0)
 	}
-	if !live {
+	if !st.live {
 		return
 	}
 	next := agentIdlePoll
-	if busy || pending {
+	switch {
+	case st.busy || pending:
 		next = agentBusyPoll
+	case st.turn:
+		next = agentTurnPoll
 	}
 	p.arm(w, next)
 }
 
-// pumpTabs adopts the finished starts and model switches of tabs and folds their events; it adds
-// to live and busy whether one has a session and whether one needs the fast period.
-func (p *AgentPanel) pumpTabs(tabs []*agentTab, live, busy bool) (bool, bool) {
+// pumpState is what one pump tick found across the tabs: a session exists, one needs the fast
+// period (starting, a model switch, events just arrived), or a turn runs.
+type pumpState struct{ live, busy, turn bool }
+
+// pumpTabs adopts the finished starts and model switches of tabs and folds their events into st.
+func (p *AgentPanel) pumpTabs(tabs []*agentTab, st *pumpState) {
 	for _, t := range append([]*agentTab(nil), tabs...) {
 		t.mu.Lock()
 		res := t.startRes
@@ -728,13 +805,17 @@ func (p *AgentPanel) pumpTabs(tabs []*agentTab, live, busy bool) (bool, bool) {
 			p.started(t, res)
 		}
 		p.adoptModel(t)
-		p.drainEvents(t)
+		got := p.drainEvents(t)
+		if t.state == agentReady {
+			p.nextQueued(t)
+		}
 		if t.state != agentIdle {
-			live = true
-			busy = busy || t.state == agentStarting || t.tr.Running() || t.mdl.setting
+			st.live = true
+			st.busy = st.busy || t.state == agentStarting || t.mdl.setting || got ||
+				(len(t.queue) > 0 && !t.queuePaused && !t.tr.Running())
+			st.turn = st.turn || t.tr.Running()
 		}
 	}
-	return live, busy
 }
 
 func (p *AgentPanel) started(t *agentTab, res *agentStart) {
@@ -757,31 +838,51 @@ func (p *AgentPanel) started(t *agentTab, res *agentStart) {
 	}
 }
 
-func (p *AgentPanel) drainEvents(t *agentTab) {
+// drainEvents folds t's pending events into its transcript and reports whether any arrived. A
+// TurnEnd that closes a running turn moves the queue on once the batch is folded, so a duplicate
+// TurnEnd right behind it finds no turn running and cannot send a second queued prompt.
+func (p *AgentPanel) drainEvents(t *agentTab) bool {
 	if t.sess == nil {
-		return
+		return false
 	}
 	ch := t.sess.Events()
+	ended := false
+	defer func() {
+		if ended && t.state != agentIdle {
+			p.nextQueued(t)
+		}
+	}()
 	for i := 0; i < agentEventBatch; i++ {
 		select {
 		case ev, ok := <-ch:
 			if !ok {
 				p.stopTab(t, false)
-				return
+				return true
 			}
+			wasRunning := t.tr.Running()
 			p.apply(t, ev)
 			if _, gone := ev.(agentmanager.Exited); gone {
 				p.stopTab(t, false)
-				return
+				return true
 			}
-			if _, end := ev.(agentmanager.TurnEnd); end && t.mdl.restart {
-				p.stopTab(t, false)
-				return
+			if _, end := ev.(agentmanager.TurnEnd); end && wasRunning {
+				if t.mdl.restart {
+					// The session ends for the model switch; the queue survives it and the next
+					// queued prompt starts the session again.
+					q, paused := t.queue, t.queuePaused
+					t.queue = nil
+					p.stopTab(t, false)
+					t.queue, t.queuePaused = q, paused
+					p.nextQueued(t)
+					return true
+				}
+				ended = true
 			}
 		default:
-			return
+			return i > 0
 		}
 	}
+	return true
 }
 
 // statusLine describes the active tab's session for the panel header.
@@ -799,12 +900,6 @@ func (p *AgentPanel) statusLine() string {
 	return i18n.T("ui.agent.status.stopped")
 }
 
-// sendFromCommand sends a prompt typed after the AI command to the active tab.
-func (p *AgentPanel) sendFromCommand(prompt string, w *gpui.Window) {
-	if p.cur.tr.Running() {
-		p.cur.tr.Apply(agentmanager.Log{Level: "warn", Message: i18n.T("ui.agent.warn.busy")})
-		w.Refresh()
-		return
-	}
-	p.Send(prompt, w)
-}
+// sendFromCommand sends a prompt typed after the AI command to the active tab; while a turn runs
+// it is queued, as from the composer.
+func (p *AgentPanel) sendFromCommand(prompt string, w *gpui.Window) { p.Send(prompt, w) }

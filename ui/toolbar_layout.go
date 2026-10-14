@@ -51,7 +51,7 @@ func (ws *Workspace) ribbonGroups() []ribbonGroup {
 		ws.ribbonLarge(ribbonButton{"pline", "PLINE", icons.DrawPolyline}),
 		ws.ribbonLarge(ribbonButton{"circle", "CIRCLE", icons.DrawCircle}),
 		ws.ribbonLarge(ribbonButton{"arc", "ARC", icons.DrawArc}),
-		ws.ribbonSmall(ribbonButton{"rect", "RECTANG", icons.DrawRectangle}),
+		ws.smallColumns([][2]ribbonButton{{{"rect", "RECTANG", icons.DrawRectangle}, {"polygon", "POLYGON", icons.DrawPolygon}}}),
 	)
 	return []ribbonGroup{
 		{"draw", i18n.T("ui.ribbon.draw"), draw},
@@ -105,7 +105,7 @@ func ribbonWidth() float32 {
 		return max(label(a), label(b)) + 2*ribbonSmallPad + ribbonSmallIcon + ribbonSmallGap + 2
 	}
 	groupPad := float32(2*ribbonGroupPad + 1)
-	draw := large("LINE") + large("PLINE") + large("CIRCLE") + large("ARC") + small("RECTANG", "RECTANG") + groupPad
+	draw := large("LINE") + large("PLINE") + large("CIRCLE") + large("ARC") + small("RECTANG", "POLYGON") + groupPad
 	modify := small("MOVE", "COPY") + small("ROTATE", "SCALE") + small("MIRROR", "ERASE") + small("OFFSET", "FILLET") +
 		small("CHAMFER", "TRIM") + small("EXTEND", "BREAK") + small("JOIN", "EXPLODE") + groupPad
 	utilities := small("DIST", "AREA") + small("ID", "ZOOM") + groupPad

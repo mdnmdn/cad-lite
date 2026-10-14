@@ -224,6 +224,7 @@ func (c *edgeCmd) objectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	p := &cmdsys.Prompt{
 		Message: ctx.T(c.verb("cmd.trim.prompt.select_object", "cmd.extend.prompt.select_object")),
 		Accepts: cmdsys.InputPoint | cmdsys.InputEnter | cmdsys.InputKeyword,
+		Pick:    true,
 	}
 	if c.quick(ctx) {
 		p.Keywords = []string{c.verb(kwCutting, kwBoundary), kwCrossing, kwMode, kwProject, kwErase, kwUndo}
@@ -398,36 +399,12 @@ func editable(ctx *cmdsys.Context, e doc.Entity) bool {
 	return l == nil || !l.Locked
 }
 
-// livePick returns the editable entity nearest p within the pick radius. It reads the document
-// itself, not the spatial index, which lags the command's own open transaction.
-func livePick(ctx *cmdsys.Context, p geom.Vec2) (doc.Handle, doc.Entity, bool) {
-	aperture := pickPixels * ctx.View.PixelSize()
-	var best doc.Handle
-	bestD := math.Inf(1)
-	for _, h := range ctx.Doc.Handles() {
-		e := ctx.Doc.Entity(h)
-		if e == nil || !editable(ctx, e) {
-			continue
-		}
-		for _, g := range e.Geometry() {
-			if d := geom.Closest(g, p).Dist(p); d <= aperture && d <= bestD {
-				best, bestD = h, d
-			}
-		}
-	}
-	if best == 0 {
-		return 0, nil, false
-	}
-	return best, ctx.Doc.Entity(best), true
-}
-
 // edgeCurves returns the geometry of the cutting or boundary edges other than skip: the explicit
-// edges, or every visible object. With EDGEMODE 1 each edge stands for its projection.
-func (c *edgeCmd) edgeCurves(ctx *cmdsys.Context, skip doc.Handle, near geom.Box2) []geom.Curve {
+// edges, or every visible object (only those whose box meets near when local is set, for cuts
+// inside near). With EDGEMODE 1 each edge stands for its projection. A TEXT or MTEXT is an edge
+// by the four sides of its box, as in AutoCAD.
+func (c *edgeCmd) edgeCurves(ctx *cmdsys.Context, skip doc.Handle, near geom.Box2, local bool) []geom.Curve {
 	hs := c.edges
-	if hs == nil {
-		hs = slices.Clone(ctx.Doc.Handles())
-	}
 	implied := ctx.Vars().Int("EDGEMODE") == 1
 	reach := 0.0
 	if implied {
@@ -435,10 +412,32 @@ func (c *edgeCmd) edgeCurves(ctx *cmdsys.Context, skip doc.Handle, near geom.Box
 		w, h := ext.Size()
 		reach = 2*math.Hypot(w, h) + 1
 	}
+	switch {
+	case hs != nil:
+	case local && !implied:
+		// Only an edge whose box meets near can cross a curve inside near; the index holds the
+		// command's own edits too.
+		hs = ctx.Index.Query(near.Grow(workTol(ctx)))
+	default:
+		hs = slices.Clone(ctx.Doc.Handles())
+	}
 	var out []geom.Curve
 	for _, h := range hs {
 		e := ctx.Doc.Entity(h)
 		if h == skip || e == nil || !visibleLayer(ctx.Doc, e) {
+			continue
+		}
+		if t, ok := e.(doc.Annotation); ok {
+			// A text cuts and bounds by its box, as in AutoCAD, not by its glyph strokes.
+			b := t.Box()
+			for i := range 4 {
+				g := geom.Line{A: b[i], B: b[(i+1)%4]}
+				if implied {
+					out = append(out, geom.ImpliedEdge(g, reach)...)
+				} else {
+					out = append(out, g)
+				}
+			}
 			continue
 		}
 		for _, g := range e.Geometry() {
@@ -456,7 +455,7 @@ func (c *edgeCmd) edgeCurves(ctx *cmdsys.Context, skip doc.Handle, near geom.Box
 func (c *edgeCmd) cuts(ctx *cmdsys.Context, h doc.Handle, curve geom.Curve) []float64 {
 	tol := workTol(ctx)
 	var ts []float64
-	for _, cu := range c.edgeCurves(ctx, h, curve.Bounds()) {
+	for _, cu := range c.edgeCurves(ctx, h, curve.Bounds(), true) {
 		for _, q := range geom.Intersect(curve, cu, tol) {
 			ts = append(ts, curve.ClosestParam(q))
 		}
@@ -476,7 +475,7 @@ func curvesOf(curve geom.Curve, spans []geom.Span) []geom.Curve {
 
 // pick trims or extends the object at in.Point (the other verb when Shift was held).
 func (c *edgeCmd) pick(ctx *cmdsys.Context, in cmdsys.Input) {
-	h, e, ok := livePick(ctx, in.Point)
+	h, e, ok := pickEntity(ctx, in.Point)
 	if !ok {
 		ctx.Say("cmd.common.msg.no_object_at_point")
 		return
@@ -514,14 +513,14 @@ func (c *edgeCmd) extendObject(ctx *cmdsys.Context, op *edgeOp, h doc.Handle, e 
 	ok := false
 	switch e := e.(type) {
 	case *doc.Line, *doc.Arc:
-		b := c.edgeCurves(ctx, h, e.Bounds())
+		b := c.edgeCurves(ctx, h, e.Bounds(), false)
 		nc, ok = extendCurve(e.Geometry()[0], p, b, tol)
 	case *doc.LWPolyline:
 		if e.Closed {
 			ctx.Say("cmd.extend.msg.closed_polyline")
 			return false
 		}
-		b := c.edgeCurves(ctx, h, e.Bounds())
+		b := c.edgeCurves(ctx, h, e.Bounds(), false)
 		nc, ok = extendPolyline(e.Geometry()[0].(geom.Polyline), p, b, tol)
 	default:
 		ctx.Say("cmd.extend.msg.cannot_extend")
@@ -570,6 +569,9 @@ func (c *edgeCmd) run(ctx *cmdsys.Context, sel selector) {
 		e := ctx.Doc.Entity(h)
 		if e == nil || !editable(ctx, e) {
 			continue
+		}
+		if _, text := e.(doc.Annotation); text {
+			continue // never trimmed or extended; its glyphs are many curves
 		}
 		for _, g := range e.Geometry() {
 			if sel.touches(g.Tessellate(tol, nil)) {

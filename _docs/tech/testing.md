@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: What each level of test covers and where it lives, how UI behaviour is tested without a display, and the performance targets.
 read_when: you are adding a feature or fixing a bug and need to know which test to write and where
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go, fileio/dwg/read_test.go, fileio/dwg/fuzz_test.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, cmdsys/commands/inflight_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, ui/ruler_test.go, ui/hud_test.go, ui/layerpop_test.go, ui/cmdcomplete_test.go, ui/settings_tabs_test.go, ui/agent_review_test.go, ui/agent_review_internal_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go, fileio/dwg/read_test.go, fileio/dwg/fuzz_test.go, spatial/bench_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -31,6 +31,7 @@ unexported access.
 | Command | Every built-in command end to end | `cmdsys/commands/commands_test.go`: scripts fed to a headless `Session`, then the document inspected |
 | Command | MIRROR, OFFSET, FILLET, CHAMFER; TRIM, EXTEND, BREAK, JOIN, EXPLODE; the measurement commands; the AI command | `cmdsys/commands/construct_test.go`, `construct_more_test.go`, `trim_test.go`, `measure_test.go`, `agent_test.go` |
 | Command | Input parsing, snaps, ortho, window and crossing selection | the same file, calling `ParseInput`, `FindSnap`, `Session.Click` and `Session.SelectBox` |
+| Command | Geometry placed during a command stays visible and pickable; commit and panic recovery leave no stale spatial-index entries | `cmdsys/commands/inflight_test.go`, with one undo step for the whole command |
 | Round trip | DXF write then read; reading a newer-version file; malformed input; truncated files, a missing `EOF` and non-finite numbers | `fileio/dxf/dxf_test.go` |
 | Unit | Atomic save: a failed write keeps the original, a save keeps the mode; a format with only a reader refuses to save and names the writable extension | `fileio/format_test.go` |
 | Unit | DWG bit codes (BS, BL, BD, DD, MC, SMC, MS, H, TV, TU, string streams) at every bit offset, CRC-16, CRC-32 and the page checksum, both LZ77 variants, the section map, the object map and the class table | `fileio/dwg/bits_test.go`, `crc_test.go`, `lz_test.go`, `container_test.go` |
@@ -42,6 +43,8 @@ unexported access.
 | UI | The agent panel's model picker (choice before start, live switch, restart without a setter, refusal, per-harness default) and the tabs of each drawing (OPEN, SAVEAS in and out of the project, untitled first save, a legacy store) | `ui/agent_model_test.go`, `ui/agent_drawing_test.go`, with fake sessions; the backends' model wire is tested in `agentmanager/acp/models_test.go`, `codex/models_test.go` and `claude/claude_test.go` against the fake agent |
 | UI | Agent prompt images (a drop on the composer attaches and never opens a drawing, a drop on the canvas still does, paste, chip removal, refusal without vision) and opencode's free models (ordering, the free default, a settings default and *Default* winning over it) | `ui/agent_image_test.go`, `ui/agent_free_test.go`, `ui/agent_free_internal_test.go`; the backends' image wire in `agentmanager/acp/images_test.go`, `claude/images_test.go`, `codex/images_test.go` against the fake agent's image echo |
 | UI | Typed commands, clicks, right-click Enter, Space as Enter, Escape, box drag, Ctrl+Z, middle-drag pan, wheel zoom, the selection highlight | `ui/workspace_test.go`: a `ui.Workspace` in a headless window, driven by `HeadlessWindow.Dispatch` |
+| UI | Ruler labels and layout reuse, HUD release propagation, layer popover filtering and lifecycle, layer dirty tracking, autocomplete and command recall, settings tabs | `ui/ruler_test.go`, `hud_test.go`, `layerpop_test.go`, `cmdcomplete_test.go`, `settings_tabs_test.go`, with headless input and renders |
+| UI | Agent Stop and Cancel, ordered and paused queues, bounded markdown parsing, redraw rate and asynchronous copy | `ui/agent_review_test.go`, `agent_review_internal_test.go`, using fake sessions and headless input |
 | Real window | The real ebiten window under Xvfb with Mesa llvmpipe software GL: xdotool sends the input, screenshots are compared, and the drawing is saved on exit (`-save-on-exit`) for DXF assertions such as `expect-count LINE 3` | `tools/gui`, scenarios in `tools/gui/scenarios/` (`smoke`, `line`, `snap`, `panzoom`, `toolbar`, `agent_panel`, `gestures`, `settings`); `just gui-test` runs them all and is gated by `CADLITE_GUI_TEST=1`; `just gui-run` runs chosen ones; scenario language in `tools/gui/README.md` |
 | Visual | Whole-window renders | `go run ./cmd/cad -png PATH [-script …] [-hover x,y]`, looked at by a person or an agent |
 
@@ -77,8 +80,9 @@ catalog key and must stay clean.
 | Snap candidate search | Under 2 ms per pointer move |
 | Idle, nothing changing | About 0% CPU: no frame is drawn |
 
-The spike meets the idle target (gpui draws only invalidated frames). The large-drawing targets need
-the R-tree and base-layer caching listed in the backlog; there is no benchmark for them yet.
+gpui draws only invalidated frames. `spatial/bench_test.go`, `BenchmarkQuery`, measures viewport
+queries on 10k and 100k entities through the uniform-grid index; the large-drawing file-open and
+full-frame targets have no end-to-end benchmark.
 
 ## Related docs
 

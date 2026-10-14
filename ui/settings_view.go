@@ -11,8 +11,13 @@ import (
 
 // Settings panel geometry in logical pixels.
 const (
-	settingsWidth   = 580
+	settingsWidth = 580
+	// settingsMinH is the card's height unless a tab needs more or the window
+	// has less; the card's top stays where a card this tall is centred, so the
+	// tab strip does not move when a tab switch changes the height.
+	settingsMinH    = 600
 	settingsMargin  = 24
+	settingsRadius  = 10
 	themeCardWidth  = 118
 	themePreviewH   = 62
 	settingsRowGap  = 10
@@ -20,17 +25,40 @@ const (
 	settingsBtnSize = 28
 )
 
-// settingsButton is the title bar's gear button that opens the panel.
+// settingsTabs are the panel's tabs in strip order: the element id suffix and
+// the catalog keys of the label and the tooltip.
+var settingsTabs = [settingsTabCount]struct{ id, label, tip string }{
+	settingsGeneral: {"general", "ui.settings.tab_general", "ui.settings.tab_general_tip"},
+	settingsAI:      {"ai", "ui.settings.tab_ai", "ui.settings.tab_ai_tip"},
+	settingsUpdates: {"updates", "ui.settings.tab_updates", "ui.settings.tab_updates_tip"},
+}
+
+// settingsButton is the title bar's gear button that opens the panel. While
+// a release waits it carries the update badge and opens the Updates tab.
 func (ws *Workspace) settingsButton() *gpui.Div {
-	b := iconButton("tool-settings", ws.settingsTip(), icons.AppSettings, ws.prefs().open, ws.ToggleSettings)
-	if _, ok := ws.UpdateAvailable(); ok {
+	_, waiting := ws.UpdateAvailable()
+	b := iconButton("tool-settings", ws.settingsTip(), icons.AppSettings, ws.prefs().open, func(w *gpui.Window) {
+		if !ws.prefs().open && waiting {
+			ws.openSettingsAt(w, settingsUpdates)
+			return
+		}
+		ws.ToggleSettings(w)
+	})
+	if waiting {
 		b.Relative().Child(ws.updateBadge())
 	}
 	return b
 }
 
 // settingsOverlay is the modal layer: nothing when the panel is closed, else
-// a dimmed backdrop over the whole window with the panel centred on it.
+// a dimmed backdrop over the whole window with the panel on it, centred
+// across and, vertically, where a settingsMinH card would be centred.
+//
+// The backdrop is four bands around the card rather than one layer under it,
+// and the card has no drop shadow: the CPU rasterizer blends every pixel of a
+// translucent layer and of a shadow's whole area, card included, and these
+// two made a frame with the panel open about ten times as slow as one
+// without it (see BenchmarkSettingsFrameOpen).
 func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 	p := ws.prefs()
 	if !p.open {
@@ -44,34 +72,100 @@ func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 		p.focusWanted = false
 		w.RequestFocus(p.focus)
 	}
-	maxH := float32(w.Bounds().Size.H) - 2*settingsMargin
+	winH := float32(w.Bounds().Size.H)
 	maxW := float32(w.Bounds().Size.W) - 2*settingsMargin
+	top := max(settingsMargin, (winH-settingsMinH)/2)
+	maxH := winH - top - settingsMargin
 
-	// The title bar and the footer keep their size; only the body scrolls, so
-	// Close and Reset stay reachable however short the window is.
-	body := gpui.NewDiv().ID("settings-body").FlexCol().Gap(18).Px_(20).Pb(16).Flex1().MinH(0).OverflowYScroll().ShowScrollbar().
-		TrackScroll(p.bodyScroll).
-		Child(ws.appearanceSection(), ws.drawingSection(), ws.agentSection(), ws.discoverySection(), ws.updateSection())
+	// The title bar, the tabs and the footer keep their size; only the body
+	// scrolls, so Close and Reset stay reachable however short the window is.
+	// Only the active tab is built.
+	body := gpui.NewDiv().ID("settings-body").FlexCol().Gap(18).Px_(20).Pt(16).Pb(16).Flex1().MinH(0).OverflowYScroll().ShowScrollbar().
+		TrackScroll(p.bodyScroll)
+	switch p.tab {
+	case settingsAI:
+		body.Child(ws.agentSection(), ws.discoverySection())
+	case settingsUpdates:
+		body.Child(ws.updateSection())
+	default:
+		body.Child(ws.appearanceSection(), ws.drawingSection())
+	}
 
 	card := gpui.NewDiv().ID("settings-card").TrackFocus(p.focus).FlexCol().
-		SizeW(settingsWidth).MaxW(maxW).MaxH(maxH).
-		Bg(uiPanel).Border(1, uiBorder).Rounded(10).ShadowXl().TextColor(uiText).TextSize(13).
+		SizeW(settingsWidth).MaxW(maxW).MinH(min(settingsMinH, maxH)).MaxH(maxH).
+		Bg(uiPanel).Border(1, uiBorder).Rounded(settingsRadius).TextColor(uiText).TextSize(13).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
-		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, _ *gpui.App) {
-			if e.Keystroke.Key == "escape" {
-				ws.CloseSettings(w)
-				w.StopPropagation()
-			}
-		}).
-		Child(ws.settingsHeader(), body, ws.settingsFooter())
+		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, _ *gpui.App) { ws.settingsKey(e, w) }).
+		Child(ws.settingsHeader(), ws.settingsTabStrip(), body, ws.settingsFooter())
 
-	return gpui.NewDiv().ID("settings-overlay").Absolute().Inset(0).FlexRow().ItemsCenter().JustifyCenter().
-		Bg(uiBackdrop).
+	dim := func() *gpui.Div { return gpui.NewDiv().Bg(uiBackdrop) }
+	// The card's rounded corners leave its bounding box uncovered there;
+	// these squares under it dim those few pixels.
+	corner := func() *gpui.Div {
+		return gpui.NewDiv().Absolute().SizeWH(settingsRadius, settingsRadius).Bg(uiBackdrop)
+	}
+	framed := gpui.NewDiv().Relative().FlexCol().MaxW(maxW).Child(
+		corner().Left(0).Top(0), corner().Right(0).Top(0), corner().Left(0).Bottom(0), corner().Right(0).Bottom(0),
+		card)
+	return gpui.NewDiv().ID("settings-overlay").Absolute().Inset(0).FlexCol().
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.CloseSettings(w) }).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) { p.scale.Move(e.Position, w) }).
 		OnMouseUp(func(e *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) { p.scale.End(w) }).
 		OnScrollWheel(func(e *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) { ws.scrollSettings(e, w) }).
-		Child(card)
+		Child(
+			dim().FlexShrink(0).SizeH(top),
+			gpui.NewDiv().FlexRow().FlexShrink(0).Child(dim().Flex1(), framed, dim().Flex1()),
+			dim().Flex1(),
+		)
+}
+
+// settingsKey handles the keys the panel owns: Escape closes it, Ctrl+Tab and
+// Ctrl+Shift+Tab switch tabs (instead of drawings, while it is open).
+func (ws *Workspace) settingsKey(e *gpui.KeyDownEvent, w *gpui.Window) {
+	k := e.Keystroke
+	switch {
+	case k.Key == "escape":
+		ws.CloseSettings(w)
+	case k.Key == "tab" && k.Modifiers&gpui.Control != 0:
+		d := settingsTab(1)
+		if k.Modifiers&gpui.Shift != 0 {
+			d = -1
+		}
+		ws.setSettingsTab(w, ws.prefs().tab+d)
+	default:
+		return
+	}
+	w.StopPropagation()
+}
+
+// settingsTabStrip is the row of tabs under the title bar, styled like the
+// document tabs: the active one takes the card's colour and joins the body.
+func (ws *Workspace) settingsTabStrip() *gpui.Div {
+	cur := ws.prefs().tab
+	row := gpui.NewDiv().ID("settings-tabs").FlexRow().ItemsEnd().Gap(2).Px_(16).SizeH(docTabHeight).FlexShrink(0).
+		Bg(uiBg)
+	keys := i18n.T("ui.settings.tab_keys_tip")
+	for i, t := range settingsTabs {
+		tab := settingsTab(i)
+		tip := i18n.T(t.tip) + "\n" + keys
+		label := gpui.NewText(i18n.T(t.label)).TextSize(fontUI)
+		chip := gpui.NewDiv().ID("settings-tab-"+t.id).FlexRow().ItemsCenter().Gap(6).Px_(14).SizeH(docTabHeight-4).
+			RoundedAll(7, 7, 0, 0).Border(1, uiBorder).Tooltip(tip).
+			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.setSettingsTab(w, tab) })
+		if tab == cur {
+			chip.Bg(uiPanel)
+			label.FontWeight(700)
+		} else {
+			chip.Bg(uiBg).Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) })
+			label.TextColor(uiMuted)
+		}
+		chip.Child(label)
+		if rel, ok := ws.UpdateAvailable(); ok && tab == settingsUpdates {
+			chip.Tooltip(tip + "\n" + i18n.T("ui.update.badge_tip", rel.Version)).Child(dot(7, uiWarn))
+		}
+		row.Child(chip)
+	}
+	return row
 }
 
 // scrollSettings scrolls the panel's body by a wheel event anywhere over the
@@ -161,7 +255,7 @@ func (ws *Workspace) appearanceSection() *gpui.Div {
 		ws.change(w, func(s *settings.Settings) { s.Language = v })
 	}).Flex1())
 	hint := gpui.NewText(i18n.T("ui.settings.language_hint")).TextSize(11).TextColor(uiMuted)
-	return gpui.NewDiv().FlexCol().Gap(settingsRowGap).
+	return gpui.NewDiv().ID("settings-sec-appearance").FlexCol().Gap(settingsRowGap).
 		Child(sectionTitle(i18n.T("ui.settings.section_appearance")), cards, scaleRow,
 			sectionTitle(i18n.T("ui.settings.section_language")), lang, hint)
 }
@@ -280,7 +374,7 @@ func (ws *Workspace) drawingSection() *gpui.Div {
 		settings.WheelZoom: i18n.T("ui.settings.wheel_hint_zoom"),
 		settings.WheelPan:  i18n.T("ui.settings.wheel_hint_pan"),
 	}[c.Wheel]
-	return gpui.NewDiv().FlexCol().Gap(settingsRowGap).Child(
+	return gpui.NewDiv().ID("settings-sec-drawing").FlexCol().Gap(settingsRowGap).Child(
 		sectionTitle(i18n.T("ui.settings.section_drawing")),
 		gpui.NewText(i18n.T("ui.settings.drawing_hint")).TextColor(uiMuted).TextSize(12),
 		flag("set-grid", i18n.T("ui.settings.grid"), i18n.T("ui.settings.grid_tip"), c.Grid, func(s *settings.Settings, v bool) { s.Grid = v }),

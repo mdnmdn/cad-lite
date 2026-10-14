@@ -38,20 +38,9 @@ func sampleDiscovery() AgentDiscovery {
 	}
 }
 
-// has reports whether the element with the given id is in the last frame.
-func (h *sHarness) has(id string) bool {
-	w := h.hw.Window()
-	b := w.Bounds()
-	for y := float32(0); y < float32(b.Size.H); y += 2 {
-		for x := float32(0); x < float32(b.Size.W); x += 2 {
-			gid, ok := w.HitTest(gpui.Point{X: gpui.Pixels(x), Y: gpui.Pixels(y)})
-			if ok && len(gid.Path) > 0 && gid.Path[len(gid.Path)-1].Key == id {
-				return true
-			}
-		}
-	}
-	return false
-}
+// has reports whether the element with the given id is in the last frame,
+// or on another tab of the open settings panel (which it then shows).
+func (h *sHarness) has(id string) bool { return h.reveal(id) }
 
 func TestSettingsBodyScrollsAndFooterStaysPut(t *testing.T) {
 	ws := NewWorkspace(doc.New(), nil)

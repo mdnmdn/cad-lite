@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"cad-lite/doc"
@@ -50,6 +51,9 @@ func geometrySignature(e doc.Entity) string {
 			s += fmt.Sprintf(" %.9g,%.9g,%.9g", p.X, p.Y, e.Bulges[i])
 		}
 		return s
+	case *doc.Text:
+		return fmt.Sprintf("T %q %.9g,%.9g %.9g,%.9g %.9g %.9g %.9g %.9g %d %d %d %s", e.Value, e.Insert.X, e.Insert.Y, e.Align.X, e.Align.Y,
+			e.Height, e.Rotation, e.WidthFactor, e.Oblique, e.HAlign, e.VAlign, e.Generation, strings.ToUpper(e.Style))
 	}
 	return e.Class()
 }

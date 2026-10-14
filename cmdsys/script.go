@@ -28,18 +28,34 @@ func StripScriptComments(text string) string {
 // Esc, which a synchronous Script cannot see, so the loop ends after this many.
 const maxScriptRestarts = 1000
 
-// scriptTokens splits script text into the responses it feeds: comments are dropped, one final
+// runScriptText submits the responses of one script text: comments are dropped, one final
 // newline is the file's terminator rather than a separator (a file that ends with a blank line
 // sends one Enter, one that ends after the last answer sends none), tabs count as spaces, and
-// every other space or newline separates two responses, an empty one being Enter.
-func scriptTokens(text string) []string {
+// every other space or newline separates two responses, an empty one being Enter. At a Literal
+// prompt (TEXT content) a space belongs to the answer and only a newline ends it. It stops early
+// when the text queued another script.
+func (s *Session) runScriptText(text string) {
 	text = StripScriptComments(strings.ReplaceAll(text, "\r\n", "\n"))
 	text = strings.TrimSuffix(text, "\n")
-	text = strings.NewReplacer("\t", " ", "\n", " ").Replace(text)
-	return strings.Split(text, " ")
+	text = strings.ReplaceAll(text, "\t", " ")
+	for pos := 0; pos <= len(text); {
+		seps := " \n"
+		if s.active != nil && s.prompt != nil && s.prompt.Literal {
+			seps = "\n"
+		}
+		end := len(text)
+		if i := strings.IndexAny(text[pos:], seps); i >= 0 {
+			end = pos + i
+		}
+		s.Submit(text[pos:end])
+		pos = end + 1
+		if len(s.cl.pending) > 0 {
+			return
+		}
+	}
 }
 
-// Script runs AutoCAD script text (scriptTokens): each token is submitted in turn, as typed. It
+// Script runs AutoCAD script text (runScriptText): each response is submitted in turn, as typed. It
 // does not stop at an error, as AutoCAD does not. A SCRIPT command run by the text starts the
 // named file and the rest of the calling text is dropped (the nested script runs to its end and
 // the outer one does not resume); RSCRIPT restarts the text that is running.
@@ -71,12 +87,7 @@ func (s *Session) pumpScripts() {
 		text := s.cl.pending[0]
 		s.cl.pending = s.cl.pending[1:]
 		s.cl.cur = text
-		for _, tok := range scriptTokens(text) {
-			s.Submit(tok)
-			if len(s.cl.pending) > 0 {
-				break
-			}
-		}
+		s.runScriptText(text)
 	}
 }
 

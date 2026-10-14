@@ -18,8 +18,13 @@ import (
 // time, or the dispatcher is closed.
 var ErrUIBusy = errors.New("cadmcp: the drawing window is busy or closed")
 
-// DefaultTimeout bounds Do when the context has no deadline of its own.
+// DefaultTimeout bounds how long Do waits for the UI goroutine to start the work.
 const DefaultTimeout = 15 * time.Second
+
+// RunBudget is the time Do leaves, before its context's deadline, for f to run: work that cannot
+// start with RunBudget to spare is refused, because its result would arrive after the caller
+// stopped waiting. It does not bound the run itself; a tool body cannot be interrupted.
+const RunBudget = 10 * time.Second
 
 // Runner runs f on the goroutine that owns the drawing and waits for it.
 type Runner interface {
@@ -55,17 +60,25 @@ type Dispatcher struct {
 // the UI can arm its drain timer; it must be goroutine-safe.
 func NewDispatcher(wake func()) *Dispatcher { return &Dispatcher{wake: wake} }
 
-// Do queues f for the UI goroutine and waits until it has run. It returns
-// ErrUIBusy, wrapping the context error when there is one, if ctx ends or the
-// dispatcher closes before f started; f then never runs. If f was already
-// running when ctx ended, Do waits for it and reports its outcome. A panic in
-// f is returned as an error.
+// Do queues f for the UI goroutine and waits until it has run. f must start
+// within DefaultTimeout and, when ctx has a deadline, at least RunBudget before
+// it; otherwise, or if ctx ends or the dispatcher closes first, Do returns
+// ErrUIBusy (wrapping the context error when there is one) and f never runs.
+// If f was already running when the wait ended, Do waits for it and reports its
+// outcome. A panic in f is returned as an error.
 func (d *Dispatcher) Do(ctx context.Context, f func()) error {
-	if _, ok := ctx.Deadline(); !ok {
+	if dl, ok := ctx.Deadline(); ok {
+		startBy := dl.Add(-RunBudget)
+		if !time.Now().Before(startBy) {
+			return fmt.Errorf("%w: less than %v left before the request's deadline", ErrUIBusy, RunBudget)
+		}
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultTimeout)
+		ctx, cancel = context.WithDeadline(ctx, startBy)
 		defer cancel()
 	}
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, DefaultTimeout)
+	defer cancel()
 	it := &item{f: f, done: make(chan struct{})}
 	d.mu.Lock()
 	if d.closed {

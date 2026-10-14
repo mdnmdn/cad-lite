@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
 	"cad-lite/doc"
 	"cad-lite/geom"
 )
@@ -354,4 +355,29 @@ func TestDrawPromptsInItalian(t *testing.T) {
 		t.Errorf("prompt = %q", s.Prompt())
 	}
 	s.Escape()
+}
+
+// The exported polygon functions give what POLYGON draws (they serve cadmcp's add_polygon).
+func TestPolygonFunctionsMatchTheCommand(t *testing.T) {
+	s := newSession(t)
+	s.Script("POLYGON 6 10,20 I 5")
+	pl := entities[*doc.LWPolyline](s)
+	if len(pl) != 1 {
+		t.Fatal("POLYGON drew nothing")
+	}
+	got := commands.PolygonFromCenter(geom.V(10, 20), 5, 6, true, 0)
+	if len(got) != 6 {
+		t.Fatalf("%d vertices", len(got))
+	}
+	for i := range got {
+		near(t, "vertex", got[i], pl[0].Points[i])
+	}
+	c := commands.PolygonFromCenter(geom.V(0, 0), 2, 4, false, math.Pi/4)
+	near(t, "rotated circumscribed square", c[0], geom.V(2*math.Sqrt2, 0))
+	e := commands.PolygonFromEdge(geom.V(0, 0), geom.V(3, 0), 4)
+	near(t, "edge square", e[2], geom.V(3, 3))
+	if commands.PolygonFromCenter(geom.V(0, 0), -1, 5, true, 0) != nil || commands.PolygonFromEdge(geom.V(1, 1), geom.V(1, 1), 5) != nil ||
+		commands.PolygonFromCenter(geom.V(0, 0), 1, 2, true, 0) != nil {
+		t.Fatal("invalid input gave a polygon")
+	}
 }

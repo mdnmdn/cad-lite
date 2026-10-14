@@ -177,6 +177,9 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	for _, t := range types {
 		warns = append(warns, i18n.T("dxf.warn.kept_unknown", st.kept[t], t))
 	}
+	if st.mtextIgnored > 0 {
+		warns = append(warns, i18n.T("dxf.warn.mtext_ignored", st.mtextIgnored))
+	}
 	if d.Layer(d.CurrentLayer) == nil {
 		d.CurrentLayer = "0"
 	}
@@ -188,6 +191,8 @@ type state struct {
 	// kept counts the unknown entities kept, by class.
 	kept  map[string]int
 	warns []string
+	// mtextIgnored counts the MTEXT whose extrusion or top-to-bottom direction is not modelled.
+	mtextIgnored int
 }
 
 // preservedTables are the tables whose records the document does not model
@@ -416,6 +421,13 @@ func readEntities(d *doc.Drawing, objs []object, st *state) {
 			e = &doc.Arc{EntityCommon: c, Center: vec(o, 10), Radius: o.float(40), StartAngle: deg(o.float(50)), EndAngle: deg(o.float(51))}
 		case "LWPOLYLINE":
 			e = readLWPolyline(o, c)
+		case "TEXT":
+			e = readText(o, c)
+		case "MTEXT":
+			e = readMText(o, c)
+			if (o.has(230) && o.float(230) < 0) || o.has(210) && o.float(210) != 0 || o.has(220) && o.float(220) != 0 || o.int(72) == 3 {
+				st.mtextIgnored++
+			}
 		case "POLYLINE":
 			var verts []object
 			for i+1 < len(objs) && objs[i+1].typ == "VERTEX" {
@@ -521,4 +533,107 @@ func readLWPolyline(o object, c doc.EntityCommon) *doc.LWPolyline {
 		}
 	}
 	return p
+}
+
+// raw returns the value of the first group code, untrimmed (text values keep their spaces).
+func (o object) raw(code int) (string, bool) {
+	for _, p := range o.pairs {
+		if p.code == code {
+			return p.val, true
+		}
+	}
+	return "", false
+}
+
+// readText reads a TEXT entity. Group 11 is the alignment point when group 72 or 73 is set, and
+// group 10 is then AutoCAD's computed baseline start, which the document recomputes. A text
+// whose extrusion is -Z (a mirrored object coordinate system) is converted to world coordinates
+// as upside-down text, which draws the same; any other extrusion is ignored.
+func readText(o object, c doc.EntityCommon) *doc.Text {
+	t := &doc.Text{EntityCommon: c, Insert: vec(o, 10), Height: o.float(40), Rotation: deg(o.float(50)),
+		WidthFactor: 1, Oblique: o.float(51) * math.Pi / 180, Style: o.str(7),
+		HAlign: doc.TextHAlign(o.int(72)), VAlign: doc.TextVAlign(o.int(73)), Generation: o.int(71) & (doc.TextBackward | doc.TextUpsideDown)}
+	if o.has(41) && o.float(41) > 0 {
+		t.WidthFactor = o.float(41)
+	}
+	if t.HAlign < doc.TextLeft || t.HAlign > doc.TextFit {
+		t.HAlign = doc.TextLeft
+	}
+	if t.VAlign < doc.TextBaseline || t.VAlign > doc.TextTop {
+		t.VAlign = doc.TextBaseline
+	}
+	t.Align = t.Insert
+	if o.has(11) {
+		t.Align = vec(o, 11)
+	}
+	if t.Style == "" {
+		t.Style = doc.DefaultTextStyle
+	}
+	v, _ := o.raw(1)
+	t.Value = decodeUnicode(v)
+	if o.has(230) && o.float(230) < 0 {
+		t.Insert.X, t.Align.X = -t.Insert.X, -t.Align.X
+		t.Rotation = geom.NormAngle(math.Pi - t.Rotation)
+		t.Generation ^= doc.TextUpsideDown
+	}
+	t.Sanitize()
+	return t
+}
+
+// decodeUnicode replaces the \U+XXXX escapes DXF uses for characters outside the file's code page
+// with the characters.
+func decodeUnicode(s string) string {
+	if !strings.Contains(s, "\\U+") && !strings.Contains(s, "\\u+") {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+6 < len(s) && (s[i+1] == 'U' || s[i+1] == 'u') && s[i+2] == '+' {
+			if n, err := strconv.ParseUint(s[i+3:i+7], 16, 32); err == nil {
+				b.WriteRune(rune(n))
+				i += 6
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// readMText reads an MTEXT entity: the value is the group 3 chunks followed by group 1, and a
+// direction vector (group 11) overrides the rotation (group 50). The extrusion (210), the drawing
+// direction (72), the line spacing style (73), the column layout and the background fill are not
+// modelled and are dropped; the caller warns when the extrusion or a top-to-bottom direction
+// would have changed what is drawn.
+func readMText(o object, c doc.EntityCommon) *doc.MText {
+	t := &doc.MText{EntityCommon: c, Insert: vec(o, 10), Height: o.float(40), Width: o.float(41), Attachment: o.int(71),
+		Rotation: deg(o.float(50)), LineSpacing: 1, Style: o.str(7)}
+	if o.has(11) {
+		if d := vec(o, 11); d.Len() > 0 {
+			t.Rotation = geom.NormAngle(d.Angle())
+		}
+	}
+	if o.has(44) && o.float(44) > 0 {
+		t.LineSpacing = o.float(44)
+	}
+	if t.Attachment < 1 || t.Attachment > 9 {
+		t.Attachment = doc.MTextTopLeft
+	}
+	if t.Width < 0 {
+		t.Width = 0
+	}
+	if t.Style == "" {
+		t.Style = doc.DefaultTextStyle
+	}
+	var b strings.Builder
+	for _, p := range o.pairs {
+		if p.code == 3 {
+			b.WriteString(p.val)
+		}
+	}
+	v, _ := o.raw(1)
+	b.WriteString(v)
+	t.Value = decodeUnicode(b.String())
+	t.Sanitize()
+	return t
 }

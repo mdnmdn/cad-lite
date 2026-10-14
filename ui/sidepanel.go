@@ -2,8 +2,11 @@ package ui
 
 import (
 	"fmt"
+	"slices"
+	"weak"
 
 	"cad-lite/assets/icons"
+	"cad-lite/doc"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/render"
@@ -43,63 +46,16 @@ func (ws *Workspace) sidePanel(width float32) *gpui.Div {
 	d := ws.session.Drawing()
 	layers := gpui.NewDiv().FlexCol().Gap(layerRowGap).Px_(10).Pb(layerListPad)
 	for _, l := range d.Layers() {
-		l := l
-		swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).Bg(gpuiColor(render.ACI(l.Color))).Tooltip(i18n.T("ui.layers.swatch_tip", l.Color))
-		name := gpui.NewText(l.Name).Flex1()
-		if l.Name == d.CurrentLayer {
-			name.FontWeight(700).TextColor(uiOn)
-		}
-		state := i18n.T("ui.layers.on")
-		stateCol := uiText
-		if l.Off {
-			state, stateCol = i18n.T("ui.layers.off"), uiMuted
-		}
-		if l.Frozen {
-			state, stateCol = i18n.T("ui.layers.frozen"), uiMuted
-		}
-		vis := gpui.NewDiv().ID("layer-vis-" + l.Name).Px_(6).Rounded(3).Bg(uiPanelAlt).Tooltip(i18n.T("ui.layers.visibility_tip")).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-				l.Off = !l.Off
-				w.Refresh()
-			}).
-			Child(gpui.NewText(state).TextColor(stateCol))
-		layers.Child(gpui.NewDiv().ID("layer-"+l.Name).FlexRow().ItemsCenter().Gap(8).Px_(6).SizeH(layerRowHeight).FlexShrink(0).Rounded(4).Tooltip(i18n.T("ui.layers.current_tip")).
-			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-				d.CurrentLayer = l.Name
-				w.Refresh()
-			}).
-			Child(swatch, name, vis))
+		layers.Child(ws.layerRow("layer-", d, l, false, func(w *gpui.Window) {
+			ws.makeLayerCurrent(l)
+			w.Refresh()
+		}))
 	}
 	add := iconButton("layer-add", i18n.T("ui.panel.layer_add_tip"), icons.AppAdd, false, func(w *gpui.Window) { ws.run("LAYER", w) })
 	add.SizeWH(24, 24)
 	fold := collapseButton("side-collapse", i18n.T("ui.panel.side_collapse_tip"), icons.AppChevronRight, func(w *gpui.Window) { ws.toggleFold(&ws.lay.sideOff, w) })
 
-	props := gpui.NewDiv().FlexCol().Gap(4).Px_(14).Pb(8)
-	sel := ws.session.Selection()
-	if sel.Len() == 0 {
-		props.Child(gpui.NewText(i18n.T("ui.props.none")).TextColor(uiMuted))
-	} else {
-		counts := map[string]int{}
-		var order []string
-		for _, h := range sel.Handles() {
-			if e := d.Entity(h); e != nil {
-				if counts[e.Class()] == 0 {
-					order = append(order, e.Class())
-				}
-				counts[e.Class()]++
-			}
-		}
-		props.Child(gpui.NewText(i18n.Plural("ui.props.selected", sel.Len())).FontWeight(700))
-		for _, c := range order {
-			props.Child(gpui.NewText(fmt.Sprintf("%s × %d", c, counts[c])).TextColor(uiMuted))
-		}
-		if sel.Len() == 1 {
-			e := d.Entity(sel.Handles()[0])
-			props.Child(gpui.NewText(i18n.T("ui.props.layer", e.Common().Layer)).TextColor(uiMuted),
-				gpui.NewText(i18n.T("ui.props.handle", e.Handle().String())).TextColor(uiMuted))
-		}
-	}
+	props := ws.propsBody().Px_(14).Pb(8)
 
 	l := &ws.lay
 	layersH := layersHeight(ws.sectionAvail(), len(d.Layers()), l.layersH, l.layersOff, l.propsOff)
@@ -127,4 +83,127 @@ func (ws *Workspace) sidePanel(width float32) *gpui.Div {
 		col.Child(gpui.NewDiv().Flex1())
 	}
 	return col
+}
+
+// layerRow is one layer of a layer list, shared by the side panel and the status bar's layer
+// popover so both look and act alike: the colour swatch, the name (bold and accented when the
+// layer is current), the lock switch and the visibility switch. idPrefix starts every element id
+// ("layer-" in the panel, so the row is "layer-<name>" and its switches "layer-vis-<name>" and
+// "layer-lock-<name>"). A click on the row runs pick, except on a frozen layer, which cannot be
+// current (as -LAYER Set refuses it; the row's tooltip says so); the switches flip their flag
+// without picking. hi marks the popover's keyboard highlight.
+func (ws *Workspace) layerRow(idPrefix string, d *doc.Drawing, l *doc.Layer, hi bool, pick func(*gpui.Window)) *gpui.Div {
+	swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).FlexShrink(0).Bg(gpuiColor(render.ACI(l.Color))).Tooltip(i18n.T("ui.layers.swatch_tip", l.Color))
+	name := gpui.NewText(l.Name).Flex1().MinW(0)
+	if l.Name == d.CurrentLayer {
+		name.FontWeight(700).TextColor(uiOn)
+	}
+	state := i18n.T("ui.layers.on")
+	stateCol := uiText
+	if l.Off {
+		state, stateCol = i18n.T("ui.layers.off"), uiMuted
+	}
+	if l.Frozen {
+		state, stateCol = i18n.T("ui.layers.frozen"), uiMuted
+	}
+	flip := func(f func()) func(*gpui.ClickEvent, *gpui.Window, *gpui.App) {
+		return func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
+			f()
+			ws.session.MarkModified()
+			w.StopPropagation()
+			w.Refresh()
+		}
+	}
+	vis := gpui.NewDiv().ID(idPrefix + "vis-" + l.Name).Px_(6).Rounded(3).FlexShrink(0).Bg(uiPanelAlt).Tooltip(i18n.T("ui.layers.visibility_tip")).
+		OnClick(flip(func() { l.Off = !l.Off })).
+		Child(gpui.NewText(state).TextColor(stateCol))
+	lockIcon, lockCol := icons.LayerUnlocked, uiMuted
+	if l.Locked {
+		lockIcon, lockCol = icons.LayerLocked, uiOn
+	}
+	lock := gpui.NewDiv().ID(idPrefix+"lock-"+l.Name).FlexRow().ItemsCenter().JustifyCenter().SizeWH(20, 20).Rounded(3).FlexShrink(0).
+		Tooltip(i18n.T("ui.layers.lock_tip")).
+		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
+		OnClick(flip(func() { l.Locked = !l.Locked })).
+		Child(NewIcon(lockIcon, 14, lockCol))
+	tip := i18n.T("ui.layers.current_tip")
+	if l.Frozen {
+		tip = i18n.T("ui.layers.frozen_current_tip")
+	}
+	row := gpui.NewDiv().ID(idPrefix+l.Name).FlexRow().ItemsCenter().Gap(8).Px_(6).SizeH(layerRowHeight).FlexShrink(0).Rounded(4).Tooltip(tip).
+		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
+		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
+			if !l.Frozen {
+				pick(w)
+			}
+		}).
+		Child(swatch, name, lock, vis)
+	if hi {
+		row.Bg(activeFill())
+	}
+	return row
+}
+
+// propsSummary is what the Properties lines say about a selection, before translation.
+type propsSummary struct {
+	// d, handles and mods are what it was worked out from: the drawing (weakly, as the cache
+	// lives in statusTable), the selection and the session's modified counter.
+	d       weak.Pointer[doc.Drawing]
+	handles []doc.Handle
+	mods    int
+	valid   bool
+
+	n             int
+	classes       []string
+	counts        []int
+	layer, handle string
+}
+
+// selectionSummary returns the summary of the current selection, worked out again only when the
+// drawing, the selection or the drawing's contents changed since the last call: the side panel
+// and the HUD ask for it every frame.
+func (ws *Workspace) selectionSummary() *propsSummary {
+	c := &ws.status().props
+	d, sel, mods := ws.session.Drawing(), ws.session.Selection(), ws.session.Modified()
+	if c.valid && c.d == weak.Make(d) && c.mods == mods && slices.Equal(c.handles, sel.Handles()) {
+		return c
+	}
+	*c = propsSummary{d: weak.Make(d), handles: append(c.handles[:0], sel.Handles()...), mods: mods, valid: true, n: sel.Len()}
+	for _, h := range sel.Handles() {
+		e := d.Entity(h)
+		if e == nil {
+			continue
+		}
+		if i := slices.Index(c.classes, e.Class()); i >= 0 {
+			c.counts[i]++
+		} else {
+			c.classes, c.counts = append(c.classes, e.Class()), append(c.counts, 1)
+		}
+	}
+	if sel.Len() == 1 {
+		if e := d.Entity(sel.Handles()[0]); e != nil {
+			c.layer, c.handle = e.Common().Layer, e.Handle().String()
+		}
+	}
+	return c
+}
+
+// propsBody is what the Properties section shows for the selection: "No selection", or the count,
+// the count per object type and, for a single object, its layer and handle. The side panel and the
+// properties HUD both show it.
+func (ws *Workspace) propsBody() *gpui.Div {
+	props := gpui.NewDiv().FlexCol().Gap(4)
+	c := ws.selectionSummary()
+	if c.n == 0 {
+		return props.Child(gpui.NewText(i18n.T("ui.props.none")).TextColor(uiMuted))
+	}
+	props.Child(gpui.NewText(i18n.Plural("ui.props.selected", c.n)).FontWeight(700))
+	for i, cl := range c.classes {
+		props.Child(gpui.NewText(fmt.Sprintf("%s × %d", cl, c.counts[i])).TextColor(uiMuted))
+	}
+	if c.handle != "" {
+		props.Child(gpui.NewText(i18n.T("ui.props.layer", c.layer)).TextColor(uiMuted),
+			gpui.NewText(i18n.T("ui.props.handle", c.handle)).TextColor(uiMuted))
+	}
+	return props
 }

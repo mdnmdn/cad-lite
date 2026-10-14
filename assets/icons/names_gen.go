@@ -9,6 +9,12 @@ const (
 	// AppAgent: talk to the AI agent, a speech bubble with two eyes
 	AppAgent Name = "app-agent"
 
+	// AppCancel: cancel what is running, a cross in a circle
+	AppCancel Name = "app-cancel"
+
+	// AppCheck: done or confirmed, a tick
+	AppCheck Name = "app-check"
+
 	// AppChevronDown: an open section that can fold away, or collapse downwards, a single chevron
 	AppChevronDown Name = "app-chevron-down"
 
@@ -21,14 +27,14 @@ const (
 	// AppChevronUp: collapse upwards, or a folded section that can open downwards, a single chevron
 	AppChevronUp Name = "app-chevron-up"
 
+	// AppCopy: copy this text to the clipboard, two overlapping sheets
+	AppCopy Name = "app-copy"
+
 	// AppHistory: what was done earlier, a clock
 	AppHistory Name = "app-history"
 
 	// AppKeyEnter: the Enter key, an arrow that turns back to the left
 	AppKeyEnter Name = "app-key-enter"
-
-	// AppPrompt: the command line prompt, a chevron over an underscore
-	AppPrompt Name = "app-prompt"
 
 	// AppRemove: take one away or make less, a minus
 	AppRemove Name = "app-remove"
@@ -38,6 +44,9 @@ const (
 
 	// AppSettings: open the settings panel
 	AppSettings Name = "app-settings"
+
+	// AppStop: end the agent session, a square stop control distinct from cancelling a turn
+	AppStop Name = "app-stop"
 
 	// AppWarning: something needs attention, a triangle with an exclamation mark
 	AppWarning Name = "app-warning"
@@ -200,16 +209,19 @@ const (
 var All = []Name{
 	AppAdd,
 	AppAgent,
+	AppCancel,
+	AppCheck,
 	AppChevronDown,
 	AppChevronLeft,
 	AppChevronRight,
 	AppChevronUp,
+	AppCopy,
 	AppHistory,
 	AppKeyEnter,
-	AppPrompt,
 	AppRemove,
 	AppSend,
 	AppSettings,
+	AppStop,
 	AppWarning,
 	DrawArc,
 	DrawCircle,

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -21,6 +22,23 @@ const (
 	maxBody        = 4 << 20
 	defaultVersion = "2025-06-18"
 )
+
+// writeTimeout bounds a whole response, from the end of the request headers, handler time included.
+// Servers read it when they start; tests shorten it.
+var writeTimeout atomic.Int64
+
+func init() { writeTimeout.Store(int64(60 * time.Second)) }
+
+// The budget of one request with write timeout wt (60 s): a tool call must start (take the call
+// slot) within startWithin (30 s) of the request's arrival; its handler's context expires at
+// wt - replyMargin (55 s); the last replyMargin (5 s) is for encoding and writing the reply.
+
+func startWithin(wt time.Duration) time.Duration { return wt / 2 }
+
+func replyMargin(wt time.Duration) time.Duration { return wt / 12 }
+
+// maxBatch caps the frames of one JSON-RPC batch array.
+const maxBatch = 100
 
 var supportedVersions = map[string]bool{"2025-06-18": true, "2025-03-26": true, "2024-11-05": true}
 
@@ -44,6 +62,7 @@ type Server struct {
 	started bool
 	closed  bool
 	srv     *http.Server
+	wt      time.Duration // write timeout, fixed at Start
 	port    int
 	token   string
 	cancel  context.CancelFunc
@@ -87,6 +106,7 @@ func (s *Server) Start() (Endpoint, error) {
 	s.port = ln.Addr().(*net.TCPAddr).Port
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
+	s.wt = time.Duration(writeTimeout.Load())
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", s.handle)
 	s.srv = &http.Server{
@@ -94,6 +114,7 @@ func (s *Server) Start() (Endpoint, error) {
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
+		WriteTimeout:      s.wt,
 	}
 	s.done = make(chan struct{})
 	srv, done := s.srv, s.done
@@ -145,6 +166,7 @@ func (s *Server) hostOK(host string) bool {
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+	arrival := time.Now() // the budget counts from here, not from the end of the body
 	if !s.hostOK(r.Host) {
 		http.Error(w, "forbidden host", http.StatusForbidden)
 		return
@@ -177,6 +199,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
 	}
+	// Handlers get a context that expires when their reply would no longer fit in the write
+	// timeout. Calls that cannot start by startBy are refused, so they never run.
+	ctx, cancel := context.WithDeadline(r.Context(), arrival.Add(s.wt-replyMargin(s.wt)))
+	defer cancel()
+	startBy, cancelStart := context.WithDeadline(ctx, arrival.Add(startWithin(s.wt)))
+	defer cancelStart()
 	trimmed := strings.TrimSpace(string(body))
 	if strings.HasPrefix(trimmed, "[") {
 		var raws []json.RawMessage
@@ -188,9 +216,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, errResp(nil, codeInvalidRequest, "empty batch"))
 			return
 		}
+		if len(raws) > maxBatch {
+			writeJSON(w, errResp(nil, codeInvalidRequest, fmt.Sprintf("batch of %d frames; at most %d per request", len(raws), maxBatch)))
+			return
+		}
 		var out []response
 		for _, raw := range raws {
-			if resp, ok := s.process(r.Context(), raw); ok {
+			if resp, ok := s.process(ctx, startBy, raw); ok {
 				out = append(out, resp)
 			}
 		}
@@ -201,7 +233,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, out)
 		return
 	}
-	resp, ok := s.process(r.Context(), body)
+	resp, ok := s.process(ctx, startBy, body)
 	if !ok {
 		w.WriteHeader(http.StatusAccepted)
 		return
@@ -253,8 +285,9 @@ type request struct {
 	Error  json.RawMessage `json:"error"`
 }
 
-// process handles one frame; ok=false means no reply (notification or client response).
-func (s *Server) process(ctx context.Context, raw []byte) (response, bool) {
+// process handles one frame; ok=false means no reply (notification or client response). A tool
+// call starts only while startBy is live, and its handler gets ctx.
+func (s *Server) process(ctx, startBy context.Context, raw []byte) (response, bool) {
 	var req request
 	if err := json.Unmarshal(raw, &req); err != nil {
 		var probe any
@@ -272,14 +305,14 @@ func (s *Server) process(ctx context.Context, raw []byte) (response, bool) {
 	if len(req.ID) == 0 {
 		return response{}, false
 	}
-	res, rerr := s.dispatch(ctx, req.Method, req.Params)
+	res, rerr := s.dispatch(ctx, startBy, req.Method, req.Params)
 	if rerr != nil {
 		return errResp(req.ID, rerr.Code, rerr.Message), true
 	}
 	return response{JSONRPC: "2.0", ID: req.ID, Result: res}, true
 }
 
-func (s *Server) dispatch(ctx context.Context, method string, params json.RawMessage) (any, *rpcError) {
+func (s *Server) dispatch(ctx, startBy context.Context, method string, params json.RawMessage) (any, *rpcError) {
 	switch method {
 	case "initialize":
 		var p struct {
@@ -334,12 +367,12 @@ func (s *Server) dispatch(ctx context.Context, method string, params json.RawMes
 		if len(p.Arguments) == 0 || string(p.Arguments) == "null" {
 			p.Arguments = json.RawMessage("{}")
 		}
-		return s.call(ctx, p.Name, p.Arguments).wire(), nil
+		return s.call(ctx, startBy, p.Name, p.Arguments).wire(), nil
 	}
 	return nil, &rpcError{codeMethodNotFound, "method not found: " + method}
 }
 
-func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (res Result) {
+func (s *Server) call(ctx, startBy context.Context, name string, args json.RawMessage) (res Result) {
 	s.mu.Lock()
 	t, ok := s.tools[name]
 	s.mu.Unlock()
@@ -350,14 +383,14 @@ func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (r
 		select {
 		case s.callSem <- struct{}{}:
 			defer func() { <-s.callSem }()
-		case <-ctx.Done():
+		case <-startBy.Done():
 			return s.abandoned(name, ctx)
 		}
-		// select picks randomly when both cases are ready, so re-check: a call whose
-		// request is already gone must never reach its handler.
-		if ctx.Err() != nil {
-			return s.abandoned(name, ctx)
-		}
+	}
+	// select picks randomly when both cases are ready, so re-check: a call whose request is
+	// already gone, or too old to finish before the write timeout, must never reach its handler.
+	if startBy.Err() != nil {
+		return s.abandoned(name, ctx)
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -372,7 +405,13 @@ func (s *Server) call(ctx context.Context, name string, args json.RawMessage) (r
 	return res
 }
 
+// abandoned answers a call that did not start: its request ended (ctx) or it waited past
+// startWithin.
 func (s *Server) abandoned(name string, ctx context.Context) Result {
-	s.logf("tool %s: request cancelled before the handler started: %v", name, ctx.Err())
-	return Errorf("%s: cancelled while waiting for another tool call: %v", name, ctx.Err())
+	if err := ctx.Err(); err != nil {
+		s.logf("tool %s: request cancelled before the handler started: %v", name, err)
+		return Errorf("%s: cancelled while waiting for another tool call: %v", name, err)
+	}
+	s.logf("tool %s: not started within %v of its request; refused", name, startWithin(s.wt))
+	return Errorf("%s: not started within %v of the request because other tool calls were running; nothing was done, retry", name, startWithin(s.wt))
 }

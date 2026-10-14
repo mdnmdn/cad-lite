@@ -43,7 +43,7 @@ func Register(srv *mcp.Server, e Env) {
 
 // Instructions returns the text for mcp.Options.Instructions.
 func Instructions() string {
-	return `You control a 2D CAD drawing (Cad-lite, AutoCAD-like). Model space is Y-up; coordinates are in drawing units (millimetres by default); angles are in degrees, counter-clockwise from +X. Entities are identified by hexadecimal handle strings such as "1A2". Every tool is one undo step. Prefer the structured tools (add_line, add_circle, ...); use run_script for anything else: AutoCAD script text where each single space or newline separates tokens and an empty token (two separators in a row, or a trailing separator) is Enter, for example "LAYER walls=4 LINE 0,0 100,0 100,50 " (the trailing space is the Enter that ends LINE; an Enter pressed while idle repeats the last command, so do not add more). Points are "x,y" or relative "@dx,dy" or polar "@dist<angle". Commands still waiting for input after a script are cancelled. Use get_drawing first to see layers and extents. Use render_png to look at the drawing (an image plus the pixel-to-model mapping) and check your work.`
+	return `You control a 2D CAD drawing (Cad-lite, AutoCAD-like). Model space is Y-up; coordinates are in drawing units (millimetres by default); angles are in degrees, counter-clockwise from +X. Entities are identified by hexadecimal handle strings such as "1A2". Every tool is one undo step. Prefer the structured tools (add_line, add_circle, ...), and batch to make many of them in one call and one undo step (refer to entities created earlier in the batch as "$id"); use run_script for anything else: AutoCAD script text where each single space or newline separates tokens and an empty token (two separators in a row, or a trailing separator) is Enter, for example "LAYER walls=4 LINE 0,0 100,0 100,50 " (the trailing space is the Enter that ends LINE; an Enter pressed while idle repeats the last command, so do not add more). Points are "x,y" or relative "@dx,dy" or polar "@dist<angle". Commands still waiting for input after a script are cancelled. Use add_text, add_mtext and update_text for text, and list_entities with "text" to find it. Use get_drawing first to see layers and extents. Use render_png to look at the drawing (an image plus the pixel-to-model mapping) and check your work.`
 }
 
 type toolFunc[A any] func(s *cmdsys.Session, a A) (any, error)
@@ -144,14 +144,19 @@ func Tools(e Env) []mcp.Tool {
 		def(e, "set_selection", "Replace the selection with the given handles (empty list clears it), or add to it.", schemaSetSelection, true, setSelection),
 		def(e, "add_line", "Add a LINE entity on the current layer (or on layer).", schemaAddLine, true, addLine),
 		def(e, "add_circle", "Add a CIRCLE entity.", schemaAddCircle, true, addCircle),
-		def(e, "add_arc", "Add an ARC through three points (start, a point on the arc, end).", schemaAddArc, true, addArc),
-		def(e, "add_polyline", "Add an LWPOLYLINE through the points, optionally closed.", schemaAddPolyline, true, addPolyline),
-		def(e, "add_rectangle", "Add a closed rectangular polyline between two opposite corners.", schemaAddRect, true, addRect),
+		def(e, "add_arc", "Add an ARC through three points (p1 start, p2 a point on the arc, p3 end), or from center, radius, start_angle and end_angle (degrees, counter-clockwise from +X; the arc runs counter-clockwise from start to end, as in AutoCAD).", schemaAddArc, true, addArc),
+		def(e, "add_polyline", "Add an LWPOLYLINE through the points, optionally closed, with optional arc segments given as DXF bulges (one per point).", schemaAddPolyline, true, addPolyline),
+		def(e, "add_rectangle", "Add a closed rectangular polyline (like RECTANG) from two opposite corners (x1, y1, x2, y2) or from a corner plus a signed size (origin, width along X, height along Y), with optional fillet radius or chamfer distances.", schemaAddRect, true, addRect),
+		def(e, "add_polygon", "Add a regular polygon (a closed LWPOLYLINE) as AutoCAD's POLYGON draws it: sides 3-1024, then either center and radius, the radius of the circle the polygon is inscribed in (mode inscribed, the default: radius to the vertices) or circumscribed about (radius to the edge midpoints), with the bottom edge horizontal turned by rotation degrees counter-clockwise; or edge, its first edge [[x1,y1],[x2,y2]] with the polygon to the left of it.", schemaAddPolygon, true, addPolygon),
+		def(e, "add_text", "Add single-line TEXT, as AutoCAD's TEXT command places it: point is the insertion point its justify refers to (default Left: the baseline start), or for Align and Fit the baseline start with second_point its end. Height is the capital height; rotation is in degrees counter-clockwise. The value keeps AutoCAD %% codes (%%d degree, %%c diameter, %%p plus-minus) and must be one line; use add_mtext for several.", schemaAddText, true, addText),
+		def(e, "add_mtext", "Add multiline MTEXT placed by its attachment point (TL default, ... BR) at point, wrapping at width (0 does not wrap). Line breaks in value become paragraphs; \\, { and } show as typed unless raw is true, which passes MTEXT format codes through (\\P paragraph and the like).", schemaAddMText, true, addMText),
+		def(e, "update_text", "Change a TEXT or MTEXT by handle: any of value, point (the insertion point), second_point (Align and Fit), height, rotation, justify, style and width_factor (TEXT), width and attachment (MTEXT). Fields that do not apply to the entity's class are an error. Changing justify keeps the insertion point, so the text moves around it, as TEXT's Justify does. Returns the updated entity.", schemaUpdateText, true, updateText),
 		def(e, "erase", "Erase entities by handle.", schemaHandles, true, erase),
 		def(e, "move", "Translate entities by (dx, dy).", schemaMove, true, move),
 		def(e, "rotate", "Rotate entities counter-clockwise by angle degrees about (cx, cy).", schemaRotate, true, rotate),
 		def(e, "scale", "Scale entities by factor about (cx, cy).", schemaScale, true, scale),
 		def(e, "set_entity_layer", "Move entities to an existing layer.", schemaEntityLayer, true, setEntityLayer),
+		def(e, "batch", "Apply many add_* and edit operations (add_line, add_circle, add_arc, add_polyline, add_rectangle, add_polygon, add_text, add_mtext, erase, move, rotate, scale, set_entity_layer, update_text) in one call and ONE undo step, like an AutoCAD UNDO BEGIN ... UNDO END group. Each op is {op, id?, args} where args are exactly the single tool's arguments. Give an add_* op an id (e.g. \"door1\") and later ops can name its entity as \"$door1\" in handles. All or nothing: every op is checked first and the batch runs in one transaction; any failure changes nothing and names the failing ops[i]. Returns handles (id -> handle), created, modified and erased. At most 500 ops and 200000 polyline points per call.", schemaBatch, true, runBatch),
 		def(e, "set_layer", "Make an existing layer current.", schemaSetLayer, true, setLayer),
 		def(e, "create_layer", "Create a layer (or update an existing one's color, visibility and lock); optionally make it current. Layer table edits are not undoable.", schemaCreateLayer, true, createLayer),
 		def(e, "undo", "Undo the last steps (default 1).", schemaSteps, true, undo),
@@ -167,16 +172,74 @@ const (
 	schemaRunScript  = `{"type":"object","properties":{"script":{"type":"string","description":"AutoCAD script text, e.g. \"CIRCLE 50,50 20\""}},"required":["script"],"additionalProperties":false}`
 	schemaRunCommand = `{"type":"object","properties":{"input":{"type":"string","description":"one line: a command name, or a response to the current prompt (empty string = Enter)"}},"required":["input"],"additionalProperties":false}`
 
-	schemaListEntities = `{"type":"object","properties":{"layer":{"type":"string"},"class":{"type":"string","description":"LINE, CIRCLE, ARC or LWPOLYLINE"},"bbox":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"[minx,miny,maxx,maxy]: entities whose bounds intersect it"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":200,"description":"default 50"}},"additionalProperties":false}`
+	schemaListEntities = `{"type":"object","properties":{"layer":{"type":"string"},"class":{"type":"string","description":"LINE, CIRCLE, ARC, LWPOLYLINE, TEXT or MTEXT"},"text":{"type":"string","description":"only TEXT and MTEXT whose shown text contains this, case-insensitive (MTEXT format codes are ignored)"},"bbox":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4,"description":"[minx,miny,maxx,maxy]: entities whose bounds intersect it"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":200,"description":"default 50"}},"additionalProperties":false}`
 	schemaSetSelection = `{"type":"object","properties":{"handles":{"type":"array","items":{"type":"string"}},"add":{"type":"boolean","description":"add to the selection instead of replacing it"}},"required":["handles"],"additionalProperties":false}`
 
 	pointSchema = `{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2}`
 
-	schemaAddLine     = `{"type":"object","properties":{"x1":{"type":"number"},"y1":{"type":"number"},"x2":{"type":"number"},"y2":{"type":"number"},"layer":{"type":"string"}},"required":["x1","y1","x2","y2"],"additionalProperties":false}`
-	schemaAddCircle   = `{"type":"object","properties":{"cx":{"type":"number"},"cy":{"type":"number"},"r":{"type":"number","exclusiveMinimum":0},"layer":{"type":"string"}},"required":["cx","cy","r"],"additionalProperties":false}`
-	schemaAddArc      = `{"type":"object","properties":{"p1":` + pointSchema + `,"p2":` + pointSchema + `,"p3":` + pointSchema + `,"layer":{"type":"string"}},"required":["p1","p2","p3"],"additionalProperties":false}`
-	schemaAddPolyline = `{"type":"object","properties":{"points":{"type":"array","items":` + pointSchema + `,"minItems":2},"closed":{"type":"boolean"},"layer":{"type":"string"}},"required":["points"],"additionalProperties":false}`
-	schemaAddRect     = `{"type":"object","properties":{"x1":{"type":"number"},"y1":{"type":"number"},"x2":{"type":"number"},"y2":{"type":"number"},"layer":{"type":"string"}},"required":["x1","y1","x2","y2"],"additionalProperties":false}`
+	schemaAddLine   = `{"type":"object","properties":{"x1":{"type":"number"},"y1":{"type":"number"},"x2":{"type":"number"},"y2":{"type":"number"},"layer":{"type":"string"}},"required":["x1","y1","x2","y2"],"additionalProperties":false}`
+	schemaAddCircle = `{"type":"object","properties":{"cx":{"type":"number"},"cy":{"type":"number"},"r":{"type":"number","exclusiveMinimum":0},"layer":{"type":"string"}},"required":["cx","cy","r"],"additionalProperties":false}`
+	schemaAddArc    = `{"type":"object","properties":{` +
+		`"p1":` + pointSchema + `,"p2":` + pointSchema + `,"p3":` + pointSchema + `,` +
+		`"center":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2,"description":"centre form: [x,y]"},` +
+		`"radius":{"type":"number","exclusiveMinimum":0,"description":"centre form"},` +
+		`"start_angle":{"type":"number","description":"centre form: degrees, counter-clockwise from +X"},` +
+		`"end_angle":{"type":"number","description":"centre form: degrees; the arc runs counter-clockwise from start_angle to end_angle"},` +
+		`"layer":{"type":"string"}},"additionalProperties":false,` +
+		`"description":"either p1, p2, p3 (start, a point on the arc, end) or center, radius, start_angle, end_angle"}`
+	schemaAddPolyline = `{"type":"object","properties":{"points":{"type":"array","items":` + pointSchema + `,"minItems":2},` +
+		`"bulges":{"type":"array","items":{"type":"number"},"description":"optional, one per point (DXF group 42): the bulge of the segment leaving that point, tan(included angle/4), positive counter-clockwise, 0 straight; the last applies only when closed"},` +
+		`"closed":{"type":"boolean"},"layer":{"type":"string"}},"required":["points"],"additionalProperties":false}`
+	schemaAddRect = `{"type":"object","properties":{` +
+		`"x1":{"type":"number","description":"corner form: first corner"},"y1":{"type":"number"},"x2":{"type":"number","description":"corner form: opposite corner"},"y2":{"type":"number"},` +
+		`"origin":{"type":"array","items":{"type":"number"},"minItems":2,"maxItems":2,"description":"size form: [x,y] of one corner"},` +
+		`"width":{"type":"number","description":"size form: signed extent along X from origin"},` +
+		`"height":{"type":"number","description":"size form: signed extent along Y from origin"},` +
+		`"fillet":{"type":"number","minimum":0,"description":"optional corner radius (RECTANG Fillet); rounded corners become bulged vertices"},` +
+		`"chamfer":{"type":"array","items":{"type":"number","minimum":0},"minItems":2,"maxItems":2,"description":"optional [d1,d2] (RECTANG Chamfer): d1 off the edges along X, d2 off those along Y"},` +
+		`"layer":{"type":"string"}},"additionalProperties":false,` +
+		`"description":"either x1, y1, x2, y2 (opposite corners) or origin, width, height; optionally fillet or chamfer, not both"}`
+
+	schemaAddPolygon = `{"type":"object","properties":{` +
+		`"sides":{"type":"integer","minimum":3,"maximum":1024},` +
+		`"center":` + pointSchema + `,"radius":{"type":"number","exclusiveMinimum":0},` +
+		`"mode":{"type":"string","enum":["inscribed","circumscribed"],"description":"default inscribed: radius to the vertices; circumscribed: radius to the edge midpoints"},` +
+		`"rotation":{"type":"number","description":"degrees counter-clockwise from a horizontal bottom edge"},` +
+		`"edge":{"type":"array","items":` + pointSchema + `,"minItems":2,"maxItems":2,"description":"edge form: the first edge, polygon to its left"},` +
+		`"layer":{"type":"string"}},"required":["sides"],"additionalProperties":false,` +
+		`"description":"sides plus either center and radius (mode, rotation optional) or edge"}`
+
+	justifyDesc = `Left (default), Center, Right, Align, Middle, Fit, or TL TC TR ML MC MR BL BC BR`
+	attachDesc  = `TL (default), TC, TR, ML, MC, MR, BL, BC or BR`
+
+	schemaAddText = `{"type":"object","properties":{` +
+		`"value":{"type":"string","description":"one line; AutoCAD %% codes allowed"},` +
+		`"point":` + pointSchema + `,"second_point":` + pointSchema + `,` +
+		`"height":{"type":"number","exclusiveMinimum":0,"description":"capital height; required except for Align"},` +
+		`"rotation":{"type":"number","description":"degrees, counter-clockwise; not for Align and Fit"},` +
+		`"justify":{"type":"string","description":"` + justifyDesc + `"},` +
+		`"style":{"type":"string","description":"an existing text style, default Standard"},` +
+		`"width_factor":{"type":"number","minimum":0.01,"maximum":100,"description":"default 1; not for Fit"},` +
+		`"layer":{"type":"string"}},"required":["value","point"],"additionalProperties":false}`
+	schemaAddMText = `{"type":"object","properties":{` +
+		`"value":{"type":"string","description":"line breaks become paragraphs"},` +
+		`"point":` + pointSchema + `,` +
+		`"height":{"type":"number","exclusiveMinimum":0,"description":"capital height"},` +
+		`"width":{"type":"number","minimum":0,"description":"wrapping width, 0 (default) does not wrap"},` +
+		`"attachment":{"type":"string","description":"` + attachDesc + `"},` +
+		`"rotation":{"type":"number","description":"degrees, counter-clockwise"},` +
+		`"style":{"type":"string","description":"an existing text style, default Standard"},` +
+		`"raw":{"type":"boolean","description":"value holds MTEXT format codes; default false escapes \\, { and }"},` +
+		`"layer":{"type":"string"}},"required":["value","point","height"],"additionalProperties":false}`
+	schemaUpdateText = `{"type":"object","properties":{` +
+		`"handle":{"type":"string","description":"hexadecimal handle of a TEXT or MTEXT (in a batch, also \"$id\")"},` +
+		`"value":{"type":"string"},"raw":{"type":"boolean","description":"MTEXT: value holds format codes"},` +
+		`"point":` + pointSchema + `,"second_point":` + pointSchema + `,` +
+		`"height":{"type":"number","exclusiveMinimum":0},"rotation":{"type":"number","description":"degrees"},` +
+		`"justify":{"type":"string","description":"TEXT: ` + justifyDesc + `"},` +
+		`"style":{"type":"string"},"width_factor":{"type":"number","minimum":0.01,"maximum":100,"description":"TEXT"},` +
+		`"width":{"type":"number","minimum":0,"description":"MTEXT"},"attachment":{"type":"string","description":"MTEXT: ` + attachDesc + `"}` +
+		`},"required":["handle"],"additionalProperties":false}`
 
 	handlesProp       = `"handles":{"type":"array","items":{"type":"string"},"minItems":1,"description":"hexadecimal entity handles"}`
 	schemaHandles     = `{"type":"object","properties":{` + handlesProp + `},"required":["handles"],"additionalProperties":false}`
@@ -208,12 +271,9 @@ func parseHandles(s *cmdsys.Session, in []string) ([]doc.Handle, error) {
 	seen := map[doc.Handle]bool{}
 	var out []doc.Handle
 	for _, str := range in {
-		h, err := doc.ParseHandle(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(str), "0x"), "0X"))
-		if err != nil || h == 0 {
-			return nil, fmt.Errorf("invalid handle %q (want hexadecimal)", str)
-		}
-		if s.Drawing().Entity(h) == nil {
-			return nil, fmt.Errorf("no entity with handle %s", h)
+		h, err := existingHandle(s.Drawing(), str)
+		if err != nil {
+			return nil, err
 		}
 		if !seen[h] {
 			seen[h] = true
@@ -221,6 +281,24 @@ func parseHandles(s *cmdsys.Session, in []string) ([]doc.Handle, error) {
 		}
 	}
 	return out, nil
+}
+
+// existingHandle parses one hexadecimal handle and checks that it names an entity a tool can act
+// on: one that exists and is of a class the app models. A *doc.Unknown (an entity read from a file
+// whose class the app does not model) is refused, because transactions silently skip it.
+func existingHandle(d *doc.Drawing, str string) (doc.Handle, error) {
+	h, err := doc.ParseHandle(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(str), "0x"), "0X"))
+	if err != nil || h == 0 {
+		return 0, fmt.Errorf("invalid handle %q (want hexadecimal)", str)
+	}
+	e := d.Entity(h)
+	if e == nil {
+		return 0, fmt.Errorf("no entity with handle %s", h)
+	}
+	if u, ok := e.(*doc.Unknown); ok {
+		return 0, fmt.Errorf("entity %s is a %s, a class Cad-lite does not model; it can be listed but not edited, selected, measured or highlighted", h, u.Type)
+	}
+	return h, nil
 }
 
 // call runs a tool body as an agent: HumanOnly commands are refused, and a panic aborts any
@@ -236,6 +314,51 @@ func call[A any](s *cmdsys.Session, a A, fn toolFunc[A]) (out any, err error) {
 		}
 	}()
 	return fn(s, a)
+}
+
+// MaxCoord caps the magnitude of every number that places or sizes geometry: coordinates,
+// lengths, radii, offsets, angles in degrees and scale factors.
+const MaxCoord = 1e12
+
+// MaxBulge caps the magnitude of a polyline bulge (a bulge of 1e6 is a near-full circle).
+const MaxBulge = 1e6
+
+// MaxExtent caps the bounds of any entity a tool creates or changes; a result past it (possible
+// with in-range inputs, e.g. a large scale far from the centre) is refused.
+const MaxExtent = 1e15
+
+// inRange checks that every value is finite and within ±MaxCoord.
+func inRange(vs ...float64) error {
+	if err := finite(vs...); err != nil {
+		return err
+	}
+	for _, v := range vs {
+		if math.Abs(v) > MaxCoord {
+			return fmt.Errorf("numbers must be within ±%g", float64(MaxCoord))
+		}
+	}
+	return nil
+}
+
+// checkBounds refuses an entity whose bounds are not finite or exceed ±MaxExtent. Erased handles
+// are skipped.
+func checkBounds(d *doc.Drawing, hs ...doc.Handle) error {
+	for _, h := range hs {
+		e := d.Entity(h)
+		if e == nil {
+			continue
+		}
+		b := e.Bounds()
+		if b.IsEmpty() {
+			continue
+		}
+		for _, v := range []float64{b.Min.X, b.Min.Y, b.Max.X, b.Max.Y} {
+			if !(math.Abs(v) <= MaxExtent) {
+				return fmt.Errorf("the resulting %s would be out of range (bounds beyond ±%g or not finite)", e.Class(), float64(MaxExtent))
+			}
+		}
+	}
+	return nil
 }
 
 func finite(vs ...float64) error {

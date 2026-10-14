@@ -113,13 +113,14 @@ func (c *mirrorCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	}
 	m := mirrorMatrix(*c.p1, *c.p2)
 	tx := ctx.Tx()
+	readable := ctx.Vars().Int("MIRRTEXT") == 0
 	for _, h := range c.hs {
 		e := ctx.Doc.Entity(h)
 		if e == nil {
 			continue
 		}
 		cp := e.Clone().(doc.Entity)
-		cp.Transform(m)
+		mirrorEntity(cp, m, readable)
 		layer, color := cp.Common().Layer, cp.Common().Color
 		*cp.Common() = doc.EntityCommon{Layer: layer, Color: color}
 		tx.Add(cp)
@@ -128,6 +129,17 @@ func (c *mirrorCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 	}
 	return nil
+}
+
+// mirrorEntity reflects e by m. With readable (MIRRTEXT 0, the default) text keeps reading
+// normally (doc.Annotation.MirrorReadable); otherwise it is mirrored like any geometry (MTEXT
+// cannot be mirrored and stays readable either way).
+func mirrorEntity(e doc.Entity, m geom.Mat3, readable bool) {
+	if t, ok := e.(doc.Annotation); ok && readable {
+		t.MirrorReadable(m)
+		return
+	}
+	e.Transform(m)
 }
 
 // mirrorMatrix returns the reflection across the line through a and b.
@@ -144,7 +156,20 @@ func (c *mirrorCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.Displ
 	if cur.Near(*c.p1, 1e-12) {
 		return
 	}
-	c.previewTransformed(ctx, mirrorMatrix(*c.p1, cur), dl)
+	m := mirrorMatrix(*c.p1, cur)
+	readable := ctx.Vars().Int("MIRRTEXT") == 0
+	tol := previewTol(ctx)
+	for _, h := range c.hs {
+		e := ctx.Doc.Entity(h)
+		if e == nil {
+			continue
+		}
+		cp := e.Clone().(doc.Entity)
+		mirrorEntity(cp, m, readable)
+		for _, g := range cp.Geometry() {
+			dl.Curve(g, tol, PreviewColor, 1)
+		}
+	}
 }
 
 // --- OFFSET -------------------------------------------------------------

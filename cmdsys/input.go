@@ -67,6 +67,16 @@ type Prompt struct {
 	// NoOr drops the "or" before the keywords, as AutoCAD does in "Enter a ... option [A/B] <A>:"
 	// prompts: "Enter a copy mode option [Single/Multiple] <Multiple>:".
 	NoOr bool
+	// Literal marks a prompt whose answer is text in which a space is a character, not Enter
+	// (TEXT content): a script ends the answer only at a newline, and ParseInput keeps leading
+	// and trailing spaces (an all-blank answer is still Enter).
+	Literal bool
+	// Pick marks a point prompt that selects an object by the point clicked ("Select object:",
+	// "Select arc or circle:"), as AutoCAD's object-selection prompts do: the cursor is the raw
+	// pointer, with no object snap, grid snap, ortho or polar, and the host shows the pickbox
+	// instead of a snap marker. A snapped click could land on another object (an intersection, a
+	// centre) and pick the wrong one.
+	Pick bool
 }
 
 // String renders the prompt as AutoCAD does, in the current language:
@@ -155,6 +165,10 @@ func ParseInputIn(tr i18n.Translator, p *Prompt, text string, base *geom.Vec2, c
 			return *p.Default, nil
 		}
 		return Input{}, ErrInvalidInput
+	}
+	if p.Literal && p.Accepts&InputText != 0 {
+		// Text content keeps its spaces; only an all-blank answer is Enter.
+		return Input{Kind: InputText, Text: strings.TrimRight(text, "\r\n")}, nil
 	}
 	if p.Accepts&InputKeyword != 0 {
 		if kw, ok := tr.MatchKeywords(p.Keywords, t); ok {

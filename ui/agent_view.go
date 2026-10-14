@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"image"
 	"strings"
@@ -22,6 +24,29 @@ func agentPanelWidth(window float32) float32 { return min(510, max(300, window/4
 // agentOutputLimit caps the tool output shown in a block, in runes.
 const agentOutputLimit = 280
 
+// agentParamsLimit caps a tool card's expanded parameters, in runes.
+const agentParamsLimit = 2000
+
+// agentUserInset is the left margin of a user message box, so the conversation reads as a chat.
+const agentUserInset = 40
+
+// toolParams is a tool call's input as indented JSON (raw when it is not JSON), clipped to
+// agentParamsLimit; "" for none.
+func toolParams(raw []byte) string {
+	s := strings.TrimSpace(string(raw))
+	if s == "" || s == "null" || s == "{}" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if json.Indent(&buf, []byte(s), "", "  ") == nil {
+		s = buf.String()
+	}
+	if r := []rune(s); len(r) > agentParamsLimit {
+		s = string(r[:agentParamsLimit]) + "\n..."
+	}
+	return s
+}
+
 // agentTip is the agent button's tooltip.
 func (ws *Workspace) agentTip() string {
 	return toolTip(i18n.CommandName("AI"), ws.keyHint(actionAgent, "AI"), i18n.T("ui.toolbar.agent_tip"))
@@ -42,16 +67,19 @@ func (ws *Workspace) agentToggle() *gpui.Div {
 	return b
 }
 
-// button is a panel button; tip is its tooltip.
-func (p *AgentPanel) button(id, label, tip string, primary bool, f func(*gpui.Window)) *gpui.Div {
+// button is a panel button; tip is its tooltip and glyph is an optional leading icon.
+func (p *AgentPanel) button(id, label, tip string, primary bool, f func(*gpui.Window), glyph ...icons.Name) *gpui.Div {
 	bg := uiPanelAlt
 	if primary {
 		bg = uiAccent
 	}
-	return gpui.NewDiv().ID(id).Px_(10).Py_(4).Rounded(4).Bg(bg).FlexShrink(0).Tooltip(tip).
+	b := gpui.NewDiv().ID(id).Px_(10).Py_(4).Rounded(4).Bg(bg).FlexShrink(0).Tooltip(tip).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiBorder) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(w) }).
-		Child(gpui.NewText(label).TextSize(12))
+		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(w) })
+	if len(glyph) > 0 {
+		b.FlexRow().ItemsCenter().Gap(4).Child(NewIcon(glyph[0], 14, uiText))
+	}
+	return b.Child(gpui.NewText(label).TextSize(12))
 }
 
 // upperFirst returns s with its first letter in upper case.
@@ -75,9 +103,13 @@ func (p *AgentPanel) statusPill() *gpui.Div {
 			col = uiOn
 		}
 	}
+	var mark gpui.IntoElement = dot(7, col)
+	if p.cur.tr.Running() && p.cur.state == agentReady && agentWorkingAnim {
+		mark = workingIndicator()
+	}
 	return gpui.NewDiv().ID("agent-status").FlexRow().ItemsCenter().Gap(6).Px_(10).Py_(3).Rounded(12).Bg(uiPanelAlt).FlexShrink(0).
 		Tooltip(i18n.T("ui.agent.status_tip")).
-		Child(dot(7, col), gpui.NewText(upperFirst(p.statusLine())).TextSize(fontSmall).TextColor(uiMuted))
+		Child(mark, gpui.NewText(upperFirst(p.statusLine())).TextSize(fontSmall).TextColor(uiMuted))
 }
 
 // noCLICard is the amber card shown while no agent CLI is on PATH: what is missing, where it
@@ -108,23 +140,35 @@ func keycap(icon icons.Name) *gpui.Div {
 		Child(NewIcon(icon, 12, uiMuted))
 }
 
-// composer is the message box: the input on top; below it the send hint and the Send button
-// (or Cancel while a turn runs).
+// composerButton is the composer's primary button: an icon and a label on the primary fill.
+func composerButton(id, label, tip string, icon icons.Name, f func(*gpui.Window)) *gpui.Div {
+	return gpui.NewDiv().ID(id).FlexRow().ItemsCenter().Gap(8).Px_(16).Py_(7).Rounded(8).Bg(uiPrimary).FlexShrink(0).
+		Tooltip(tip).
+		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Opacity(0.88) }).
+		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(w) }).
+		Child(NewIcon(icon, 16, uiOnPrimary), gpui.NewText(label).TextSize(fontUI).FontWeight(700).TextColor(uiOnPrimary))
+}
+
+// composer is the message box: the input on top; below it the send hint and the Send button.
+// While a turn runs Send becomes Cancel, which cancels the turn (the header's Stop ends the
+// session); once something is typed it becomes Queue, with Cancel beside it as an icon button.
 func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 	t := p.cur
-	send := gpui.NewDiv().ID("agent-send").FlexRow().ItemsCenter().Gap(8).Px_(16).Py_(7).Rounded(8).Bg(uiPrimary).FlexShrink(0).
-		Tooltip(i18n.T("ui.agent.send_tip")).
-		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Opacity(0.88) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.Send(p.input.Text(), w) }).
-		Child(NewIcon(icons.AppSend, 16, uiOnPrimary), gpui.NewText(i18n.T("ui.agent.send")).TextSize(fontUI).FontWeight(700).TextColor(uiOnPrimary))
+	send := func(w *gpui.Window) { p.Send(p.input.Text(), w) }
 	foot := gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Child(
 		keycap(icons.AppKeyEnter),
 		gpui.NewText(i18n.T("ui.agent.hint_send")).TextSize(fontSmall).TextColor(uiMuted),
 		gpui.NewDiv().Flex1())
-	if t.tr.Running() {
-		foot.Child(p.button("agent-cancel", i18n.T("ui.agent.cancel"), i18n.T("ui.agent.cancel_tip"), false, p.Cancel))
+	typed := strings.TrimSpace(p.input.Text()) != "" || len(t.images) > 0
+	switch {
+	case !t.tr.Running():
+		foot.Child(composerButton("agent-send", i18n.T("ui.agent.send"), i18n.T("ui.agent.send_tip"), icons.AppSend, send))
+	case typed:
+		cancel := iconButton("agent-cancel", i18n.T("ui.agent.cancel_tip"), icons.AppCancel, false, p.Cancel)
+		foot.Child(cancel, composerButton("agent-send", i18n.T("ui.agent.queue.button"), i18n.T("ui.agent.queue.button_tip"), icons.AppSend, send))
+	default:
+		foot.Child(composerButton("agent-cancel", i18n.T("ui.agent.cancel"), i18n.T("ui.agent.cancel_tip"), icons.AppCancel, p.Cancel))
 	}
-	foot.Child(send)
 	box := gpui.NewDiv().ID("agent-composer").FlexCol().Gap(8).P(12).Rounded(10).Border(1, uiBorder).Bg(uiField)
 	if len(t.images) > 0 {
 		box.Child(p.imageChips())
@@ -134,6 +178,7 @@ func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 
 func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.Div {
 	p.win = w
+	p.frames++
 	p.probe()
 	if q := p.deferred; q != "" {
 		p.deferred = ""
@@ -142,10 +187,23 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	t := p.cur
 	input := p.input.Render(w, cx)
 
+	// locked: the tab's harness is fixed once it started or when it holds a stored conversation;
+	// the header then names it and the harness chips are not shown.
+	locked := t.state != agentIdle || t.rec != nil
+	cur := p.harnessOf(t)
+	if t.state != agentIdle && t.harness != "" {
+		cur = t.harness
+	}
+
 	collapse := iconButton("agent-collapse", i18n.T("ui.agent.collapse_tip"), icons.AppChevronRight, false, p.Toggle)
 	collapse.SizeWH(28, 28)
 	head := gpui.NewDiv().FlexRow().ItemsCenter().Gap(10).Child(
-		gpui.NewText(i18n.T("ui.agent.title")).FontWeight(700).TextSize(fontTitle),
+		gpui.NewText(i18n.T("ui.agent.title")).FontWeight(700).TextSize(fontTitle))
+	if locked && cur != "" {
+		head.Child(gpui.NewDiv().ID("agent-harness").FlexShrink(0).Tooltip(i18n.T("ui.agent.harness_tip")).
+			Child(gpui.NewText("· " + string(cur)).TextSize(fontTitle).TextColor(uiMuted)))
+	}
+	head.Child(
 		p.statusPill(),
 		gpui.NewDiv().Flex1(),
 		collapse,
@@ -183,33 +241,29 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		w.Refresh()
 	}))
 
-	locked := t.state != agentIdle || t.rec != nil
-	cur := p.harnessOf(t)
 	var picker gpui.IntoElement
 	if len(p.choices) == 0 {
 		picker = p.noCLICard()
 	} else {
 		row := gpui.NewDiv().FlexRow().ItemsCenter().Gap(4)
-		for _, h := range p.choices {
-			h := h
-			chip := gpui.NewDiv().ID("agent-pick-" + string(h)).Px_(8).Py_(2).Rounded(10).Bg(uiPanelAlt).Tooltip(i18n.T("ui.agent.pick_tip")).
-				Child(gpui.NewText(string(h)).TextSize(fontSmall))
-			if h == cur {
-				chip.Bg(activeFill())
-			}
-			if !locked {
+		if !locked {
+			for _, h := range p.choices {
+				h := h
+				chip := gpui.NewDiv().ID("agent-pick-" + string(h)).Px_(8).Py_(2).Rounded(10).Bg(uiPanelAlt).Tooltip(i18n.T("ui.agent.pick_tip")).
+					Child(gpui.NewText(string(h)).TextSize(fontSmall))
+				if h == cur {
+					chip.Bg(activeFill())
+				}
 				chip.OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.selected = h; w.Refresh() })
-			} else {
-				chip.Opacity(0.6)
+				row.Child(chip)
 			}
-			row.Child(chip)
 		}
 		row.Child(p.modelChip())
 		row.Child(gpui.NewDiv().Flex1())
 		if t.state == agentIdle {
 			row.Child(p.button("agent-start", i18n.T("ui.agent.start"), i18n.T("ui.agent.start_tip"), true, p.Start))
 		} else {
-			row.Child(p.button("agent-stop", i18n.T("ui.agent.stop"), i18n.T("ui.agent.stop_tip"), false, p.Stop))
+			row.Child(p.button("agent-stop", i18n.T("ui.agent.stop"), i18n.T("ui.agent.stop_tip"), false, p.Stop, icons.AppStop))
 		}
 		picker = row
 	}
@@ -225,16 +279,9 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		top.Child(p.modelMenuView(w, cx))
 	}
 
-	list := gpui.NewDiv().ID("agent-list").FlexCol().Flex1().MinH(0).Gap(8).P(12).OverflowYScroll().TrackScroll(t.scroll)
-	blocks := t.tr.Blocks()
-	if len(blocks) == 0 && len(p.choices) > 0 {
-		list.Child(gpui.NewText(i18n.T("ui.agent.empty_hint")).TextColor(uiMuted))
-	}
-	for i, b := range blocks {
-		if el := p.block(i, b); el != nil {
-			list.Child(el)
-		}
-	}
+	p.checkLook(w)
+	p.reportClipboard()
+	list := p.transcriptList()
 	if v := t.tr.Version(); v != t.shownVersion {
 		t.shownVersion = v
 		t.scroll.ScrollToBottom()
@@ -246,8 +293,17 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		hDivider(),
 		list,
 		hDivider(),
-		gpui.NewDiv().FlexCol().P(12).Child(p.composer(input)),
+		p.composerArea(input),
 	)
+}
+
+// composerArea is the bottom of the panel: the queued prompts, if any, above the composer.
+func (p *AgentPanel) composerArea(input gpui.IntoElement) *gpui.Div {
+	area := gpui.NewDiv().FlexCol().Gap(8).P(12)
+	if len(p.cur.queue) > 0 {
+		area.Child(p.queueChips())
+	}
+	return area.Child(p.composer(input))
 }
 
 // historyMenu lists the project's stored conversations, newest first.
@@ -309,11 +365,90 @@ func (p *AgentPanel) card() *gpui.Div {
 	return gpui.NewDiv().FlexCol().Gap(4).P(8).Rounded(6).Bg(uiPanelAlt).Border(1, uiBorder)
 }
 
+// agentLook is what a transcript block's height depends on besides its content and the width.
+type agentLook struct {
+	lang  i18n.Lang
+	theme string
+	scale float32
+}
+
+// checkLook drops every transcript's cached block heights when the language, theme or UI scale
+// changed since the last frame: labels, fonts and sizes may differ, and blocks off-screen would
+// keep the old heights until scrolled into view.
+func (p *AgentPanel) checkLook(w *gpui.Window) {
+	cur := agentLook{lang: i18n.Current(), theme: CurrentTheme().Name, scale: w.UIScale()}
+	if cur == p.look {
+		return
+	}
+	p.look = cur
+	for _, s := range append(p.sets(), p.agentSet) {
+		if s == nil {
+			continue
+		}
+		for _, t := range s.tabs {
+			t.list.InvalidateAll()
+		}
+	}
+}
+
+// agentHintKey is the list key of the empty-transcript hint; block keys are revisions shifted left.
+const agentHintKey = ^uint64(0)
+
+// transcriptList is the virtualized transcript: only the blocks near the viewport are built, the
+// others count by their measured height (gpui.List). A block's key is its transcript revision plus
+// its expanded bit, so a block that changed off-screen is measured again.
+func (p *AgentPanel) transcriptList() *gpui.List {
+	t := p.cur
+	blocks := t.tr.Blocks()
+	if v := t.tr.Version(); !t.shownOK || t.shownFor != v {
+		t.shown = t.shown[:0]
+		for i, b := range blocks {
+			if agentBlockShown(b) {
+				t.shown = append(t.shown, i)
+			}
+		}
+		t.shownFor, t.shownOK = v, true
+	}
+	shown := t.shown
+	hint := len(blocks) == 0 && len(p.choices) > 0
+	count := len(shown)
+	if hint {
+		count = 1
+	}
+	render := func(ix int, _ *gpui.Window, _ *gpui.App) gpui.IntoElement {
+		if hint {
+			return gpui.NewText(i18n.T("ui.agent.empty_hint")).TextColor(uiMuted)
+		}
+		i := shown[ix]
+		return p.block(i, blocks[i])
+	}
+	key := func(ix int) uint64 {
+		if hint {
+			return agentHintKey
+		}
+		i := shown[ix]
+		k := t.tr.Revision(i) << 1
+		if t.expanded[i] {
+			k |= 1
+		}
+		return k
+	}
+	return gpui.NewList("agent-list", t.list, count, render).ItemKey(key).
+		Flex1().MinH(0).Gap(8).P(12).TrackScroll(t.scroll)
+}
+
+// agentBlockShown reports whether a transcript block is drawn: debug notes are not.
+func agentBlockShown(b transcript.Block) bool {
+	n, ok := b.(transcript.Note)
+	return !ok || n.Level != "debug"
+}
+
 func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 	switch b := b.(type) {
 	case transcript.UserMsg:
-		d := gpui.NewDiv().FlexCol().Gap(2).P(8).Rounded(6).Bg(uiAccent).
-			Child(gpui.NewText(i18n.T("ui.agent.you")).FontWeight(700).TextSize(11))
+		head := gpui.NewDiv().FlexRow().ItemsCenter().JustifyBetween().Child(
+			gpui.NewText(i18n.T("ui.agent.you")).FontWeight(700).TextSize(11), p.copyButton(i, b.Text))
+		d := gpui.NewDiv().ID(fmt.Sprintf("agent-user-%d", i)).FlexCol().Gap(2).P(8).Rounded(6).Bg(uiAccent).Child(head)
 		if b.Text != "" {
 			d.Child(gpui.NewText(b.Text))
 		}
@@ -323,9 +458,12 @@ func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 			}
 			d.Child(attachmentRow(b.Attachments, p.thumbs))
 		}
-		return d
+		// The inset is the wrapper's padding: a list item's own margin is not laid out.
+		return gpui.NewDiv().FlexCol().Pl(agentUserInset).Child(d)
 	case transcript.AgentMsg:
-		return gpui.NewText(b.Text)
+		md := p.mdView(i, fontUI, false).render(p.markdownOf(i, b.Text))
+		return gpui.NewDiv().FlexCol().Gap(2).MinW(0).Child(md,
+			gpui.NewDiv().FlexRow().Child(p.copyButton(i, b.Text)))
 	case transcript.Thought:
 		open := p.cur.expanded[i]
 		mark := "> " + i18n.T("ui.agent.thinking")
@@ -339,7 +477,7 @@ func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 			}).
 			Child(gpui.NewText(mark).TextSize(11).TextColor(uiMuted))
 		if open {
-			d.Child(gpui.NewText(b.Text).TextSize(12).TextColor(uiMuted))
+			d.Child(p.mdView(i, 12, true).render(p.markdownOf(i, b.Text)))
 		}
 		return d
 	case transcript.ToolBlock:
@@ -347,10 +485,27 @@ func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 		if title == "" {
 			title = string(b.Call.Kind)
 		}
-		c := p.card().Child(gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Child(
+		head := gpui.NewDiv().ID(fmt.Sprintf("agent-tool-%d", i)).FlexRow().ItemsCenter().Gap(6).Child(
 			gpui.NewDiv().SizeWH(8, 8).Rounded(4).Bg(statusColor(b.Status)).FlexShrink(0),
 			gpui.NewText(title).Flex1().MinW(0).FontWeight(700).TextSize(12),
-			gpui.NewText(string(b.Status)).TextSize(11).TextColor(statusColor(b.Status)).FlexShrink(0)))
+			gpui.NewText(string(b.Status)).TextSize(11).TextColor(statusColor(b.Status)).FlexShrink(0))
+		c := p.card().Child(head)
+		if params := toolParams(b.Call.RawInput); params != "" {
+			open := p.cur.expanded[i]
+			chev := icons.AppChevronRight
+			if open {
+				chev = icons.AppChevronDown
+			}
+			head.Child(NewIcon(chev, 12, uiMuted)).Tooltip(i18n.T("ui.agent.tool_params_tip")).
+				OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
+					p.cur.expanded[i] = !p.cur.expanded[i]
+					w.Refresh()
+				})
+			if open {
+				c.Child(gpui.NewDiv().ID(fmt.Sprintf("agent-tool-params-%d", i)).P(6).Rounded(4).Bg(codeFill()).MinW(0).
+					Child(gpui.NewText(params).FontFamily(monoFamily).TextSize(11).TextColor(uiText)))
+			}
+		}
 		if b.Output != "" {
 			c.Child(gpui.NewText(clip(b.Output, agentOutputLimit)).TextSize(11).TextColor(uiMuted))
 		}

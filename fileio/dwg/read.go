@@ -111,6 +111,8 @@ type importer struct {
 	// layerOrder is the layer control object's entry list: the table order.
 	layerOrder []uint64
 	ltNames    map[uint64]string
+	// styleNames are the text style names by STYLE record handle.
+	styleNames map[uint64]string
 	msBlock    uint64 // the model space block record
 
 	// ents are the entity objects in file order of their handles.
@@ -190,6 +192,14 @@ func (imp *importer) run() {
 			imp.guard(func() { imp.layerOrder = o.readTable() })
 		case o.typ == tLType:
 			imp.guard(func() { imp.ltNames[h] = o.readName() })
+		case o.typ == tStyle:
+			imp.guard(func() {
+				name := o.readName()
+				if imp.styleNames == nil {
+					imp.styleNames = map[uint64]string{}
+				}
+				imp.styleNames[h] = name
+			})
 		case o.typ == tBlockHeader:
 			imp.guard(func() {
 				if strings.EqualFold(o.readName(), "*Model_Space") {

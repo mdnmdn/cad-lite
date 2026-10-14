@@ -57,6 +57,8 @@ func entityInfo(e doc.Entity) map[string]any {
 		if hasBulge(e.Bulges) {
 			m["bulges"] = e.Bulges
 		}
+	case *doc.Text, *doc.MText:
+		textInfo(m, e)
 	}
 	return m
 }
@@ -159,6 +161,7 @@ func getDrawing(s *cmdsys.Session, _ struct{}) (any, error) {
 type listArgs struct {
 	Layer  string
 	Class  string
+	Text   *string
 	BBox   []float64 `json:"bbox"`
 	Offset int
 	Limit  int
@@ -187,12 +190,22 @@ func listEntities(s *cmdsys.Session, a listArgs) (any, error) {
 		return nil, fmt.Errorf("layer %q does not exist", a.Layer)
 	}
 	class := strings.ToUpper(a.Class)
+	needle := ""
+	if a.Text != nil {
+		needle = strings.ToLower(*a.Text)
+	}
 	total := 0
 	out := []map[string]any{}
 	for _, h := range d.Handles() {
 		e := d.Entity(h)
 		if a.Layer != "" && e.Common().Layer != a.Layer || class != "" && e.Class() != class {
 			continue
+		}
+		if a.Text != nil {
+			plain, ok := plainText(e)
+			if !ok || !strings.Contains(strings.ToLower(plain), needle) {
+				continue
+			}
 		}
 		if useBox {
 			b := e.Bounds()

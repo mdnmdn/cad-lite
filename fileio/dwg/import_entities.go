@@ -6,6 +6,7 @@ import "cad-lite/doc"
 // counts the others.
 func (imp *importer) readEntities() {
 	layers := imp.layerNames()
+	styles := func(h uint64) string { return imp.styleNames[h] }
 	for _, ref := range imp.ents {
 		if subEntity(ref.typ) {
 			continue
@@ -31,6 +32,8 @@ func (imp *importer) readEntities() {
 				e = o.readCircle(h, layers)
 			case ref.typ == tArc:
 				e = o.readArc(h, layers)
+			case ref.typ == tText:
+				e = o.readText(h, layers, styles)
 			case ref.typ == tLWPolyline || imp.className(ref.typ) == "LWPOLYLINE":
 				e = o.readLWPolyline(h, layers)
 			case ref.typ == tPolyline2D:

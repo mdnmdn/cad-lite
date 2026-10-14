@@ -29,8 +29,12 @@ func TestAgentToolsSeeADrawingOpenedFromDWG(t *testing.T) {
 	if l["total"] != 26.0 {
 		t.Fatalf("%v LINEs, want 26", l["total"])
 	}
-	if got := r.must("list_entities", `{}`)["total"]; got != 56.0 {
-		t.Fatalf("%v entities, want 56", got)
+	// 26 lines, 8 circles, 1 arc, 21 polylines and 29 TEXT (the DWG reader reads TEXT, not MTEXT).
+	if got := r.must("list_entities", `{}`)["total"]; got != 85.0 {
+		t.Fatalf("%v entities, want 85", got)
+	}
+	if got := r.must("list_entities", `{"class":"text"}`)["total"]; got != 29.0 {
+		t.Fatalf("%v TEXTs, want 29", got)
 	}
 	// The layers arrive with their properties.
 	dr := r.must("get_drawing", `{}`)

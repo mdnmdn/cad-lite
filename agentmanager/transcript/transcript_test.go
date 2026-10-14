@@ -239,3 +239,30 @@ func TestFullTurn(t *testing.T) {
 		t.Fatalf("kinds=%s running=%v", kinds, tr.Running())
 	}
 }
+
+func TestRevisionTracksChangedBlocks(t *testing.T) {
+	var tr transcript.T
+	tr.AddUser("hi")
+	tr.Apply(am.ToolCallStart{Call: am.ToolCall{ID: "t1", Title: "ls"}})
+	tr.Apply(am.TextDelta{MessageID: "m", Text: "a"})
+	if r := tr.Revision(0); r != 1 {
+		t.Fatalf("user block revision = %d, want 1", r)
+	}
+	tool, msg := tr.Revision(1), tr.Revision(2)
+	if tool == 0 || msg <= tool || msg != tr.Version() {
+		t.Fatalf("revisions tool=%d msg=%d version=%d", tool, msg, tr.Version())
+	}
+	// Patching the tool card in place moves only its revision.
+	tr.Apply(am.ToolCallUpdate{Update: am.ToolCallPatch{ID: "t1", Status: sp(am.ToolCompleted)}})
+	if tr.Revision(1) != tr.Version() || tr.Revision(2) != msg || tr.Revision(0) != 1 {
+		t.Fatalf("after tool update revisions = %d %d %d, version %d", tr.Revision(0), tr.Revision(1), tr.Revision(2), tr.Version())
+	}
+	// Streaming extends the message block.
+	tr.Apply(am.TextDelta{MessageID: "m", Text: "b"})
+	if tr.Revision(2) != tr.Version() {
+		t.Fatalf("message revision = %d, version %d", tr.Revision(2), tr.Version())
+	}
+	if tr.Revision(-1) != 0 || tr.Revision(3) != 0 {
+		t.Fatal("out-of-range revision not 0")
+	}
+}

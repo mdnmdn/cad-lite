@@ -51,6 +51,7 @@ const (
 	tBlockHeader  = 0x31
 	tLayerControl = 0x32
 	tLayer        = 0x33
+	tStyle        = 0x35
 	tLType        = 0x39
 	tOLE2Frame    = 0x4A
 	tLWPolyline   = 0x4D

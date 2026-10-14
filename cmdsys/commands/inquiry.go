@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"cad-lite/cmdsys"
 	"cad-lite/doc"
@@ -146,8 +147,62 @@ func (c *listCmd) list(ctx *cmdsys.Context) {
 			for _, p := range e.Points {
 				listPoint(ctx, "cmd.list.msg.at_point", p)
 			}
+		case *doc.Text:
+			listText(ctx, e)
+		case *doc.MText:
+			listMText(ctx, e)
 		}
 	}
+}
+
+// listText prints a TEXT the way LIST does: style, points, height, value and the layout values.
+func listText(ctx *cmdsys.Context, e *doc.Text) {
+	lay := e.Layout()
+	style := e.Style
+	if style == "" {
+		style = doc.DefaultTextStyle
+	}
+	ctx.Say("cmd.list.msg.style", style)
+	listPoint(ctx, "cmd.list.msg.start_point", lay.Origin)
+	if e.HAlign != doc.TextLeft || e.VAlign != doc.TextBaseline {
+		listPoint(ctx, "cmd.list.msg.align_point", e.Align)
+	}
+	ctx.Say("cmd.list.msg.justify", e.Justify())
+	ctx.Say("cmd.list.msg.height", ctx.Fmt(lay.Height))
+	ctx.Say("cmd.list.msg.text", e.Value)
+	ctx.Say("cmd.list.msg.rotation", ctx.FmtAngle(lay.Rotation))
+	ctx.Say("cmd.list.msg.width_factor", ctx.Fmt(lay.WidthFactor))
+	ctx.Say("cmd.list.msg.oblique", ctx.FmtAngle(e.Oblique))
+	gen := "cmd.list.msg.gen_normal"
+	switch e.Generation & (doc.TextBackward | doc.TextUpsideDown) {
+	case doc.TextBackward:
+		gen = "cmd.list.msg.gen_backward"
+	case doc.TextUpsideDown:
+		gen = "cmd.list.msg.gen_upside"
+	case doc.TextBackward | doc.TextUpsideDown:
+		gen = "cmd.list.msg.gen_both"
+	}
+	ctx.Say("cmd.list.msg.generation", ctx.T(gen))
+}
+
+// listMText prints an MTEXT: style, insertion point, attachment, height, box width, rotation and
+// the text without its format codes.
+func listMText(ctx *cmdsys.Context, e *doc.MText) {
+	style := e.Style
+	if style == "" {
+		style = doc.DefaultTextStyle
+	}
+	ctx.Say("cmd.list.msg.style", style)
+	listPoint(ctx, "cmd.list.msg.insertion_point", e.Insert)
+	a := e.Attachment
+	if a < 1 || a > 9 {
+		a = doc.MTextTopLeft
+	}
+	ctx.Say("cmd.list.msg.attachment", mtextJustifyKeywords[a-1])
+	ctx.Say("cmd.list.msg.height", ctx.Fmt(e.CharHeight()))
+	ctx.Say("cmd.list.msg.width", ctx.Fmt(e.Width))
+	ctx.Say("cmd.list.msg.rotation", ctx.FmtAngle(e.Rotation))
+	ctx.Say("cmd.list.msg.contents", strings.ReplaceAll(doc.MTextPlain(e.Value), "\n", " / "))
 }
 
 // listPoint prints a labelled coordinate triple the way LIST does: "from point, X=  0.0000  Y=  0.0000  Z=  0.0000".

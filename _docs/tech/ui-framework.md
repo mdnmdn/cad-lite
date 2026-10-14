@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The boundary between Cad-lite and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/icon.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/agent_view.go, ui/icon.go, cmdsys/sysvars.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go, internal/gpui/list.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -33,6 +33,7 @@ What Cad-lite uses from the library:
 |---|---|
 | `Div`, `Text`, flexbox builders, `Hover` styles | Every panel, button and label |
 | `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line (single-line) and the agent prompt (`Multiline`) |
+| `List`, `ListState`, `ScrollHandle` | The agent transcript: a virtualized list of variable-height blocks; only those near the viewport are built |
 | `Canvas` | The drawing area: a leaf that paints through a callback with its bounds |
 | `Stroke` via `Window.PaintStroke` | Every line the canvas draws |
 | `Quad` via `Window.PaintQuad` | The canvas background and box-selection rectangles |
@@ -43,7 +44,7 @@ What Cad-lite uses from the library:
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
 | `Div.OnFileDrop`, `App.OnOpenPaths` | Files dropped on the window and files the OS asks the app to open (macOS Finder and Dock), both into `Workspace.OpenPaths` |
 
-`Stroke`, `Canvas`, `TextInput.OnEscape` and `TextInput.Multiline` exist in the library for Cad-lite. A new need follows the
+`Stroke`, `Canvas`, `TextInput.OnEscape`, `TextInput.Multiline` and `List` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions
@@ -52,7 +53,9 @@ library's rule: its API contract changes first, then its code, then this table.
   document tabs, each with its session, view and render builder, and builds the element tree from the
   active one each frame.
 - All state the UI shows lives in the session or the workspace; elements are rebuilt every frame and
-  hold none.
+  hold none. A long scrolling list whose items differ in height is a `gpui.List` with a `ListState`
+  kept by the view, keyed per item by its content revision and expanded state. The agent panel
+  invalidates cached item heights when the language, theme or UI scale changes.
 - The root element sets the key context `cad`; workspace shortcuts are bound in that context
   (`ui.Bindings`).
 - The command line keeps keyboard focus: the workspace focuses it on the first frame and whenever the
@@ -74,7 +77,7 @@ their caches. Views name a token, never a colour; the tokens, one `Theme` field 
 | Token | Use |
 |---|---|
 | `colCanvas` | Canvas background; ACI 7 contrasts with it |
-| `colGrid`, `colGridMajor` | Grid lines, every tenth line stronger |
+| `colGrid`, `colGridMajor` | Grid lines, every `GRIDMAJOR`-th line stronger (five by default) |
 | `colCrosshair` | Crosshair and pickbox |
 | `colSnap` | Snap markers |
 | `colSelected`, `colHover` | Selection and hover highlights |

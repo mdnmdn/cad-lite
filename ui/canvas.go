@@ -35,6 +35,13 @@ type canvasState struct {
 	// resized is the scale resizeView last set; a different scale means the
 	// user zoomed since and ref is stale.
 	refScale, refW, refH, resized float64
+	// noRulers hides the rulers (ruler_canvas.go); the zero value shows them.
+	noRulers bool
+	// rulerFrm is the rulers' layout for rulerView (its Saved stack cleared), valid once rulerOK
+	// is set; rulerFrame recomputes it when the view changes.
+	rulerView render.View
+	rulerFrm  rulerFrame
+	rulerOK   bool
 }
 
 // dragThreshold is how far (px) the pointer must move before a press
@@ -133,7 +140,7 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
-		Child(gpui.NewCanvas(ws.paintCanvas), ws.viewportLabel(), ws.zoomPill(), ws.ucsLabels(), ws.startPanel())
+		Child(gpui.NewCanvas(ws.paintCanvas), ws.rulerLabels(), ws.viewportLabel(), ws.zoomPill(), ws.ucsLabels(), ws.startPanel())
 }
 
 // Overlay metrics, in logical pixels from the canvas's edges.
@@ -147,21 +154,24 @@ const (
 
 // viewportLabel is the "[-][Top][2D Wireframe]" caption at the canvas's top left.
 func (ws *Workspace) viewportLabel() *gpui.Div {
-	return gpui.NewDiv().ID("viewport-label").Absolute().Left(overlayInset + 4).Top(overlayInset).Tooltip(i18n.T("ui.canvas.viewport_tip")).
+	left, top := ws.rulerInsets()
+	return gpui.NewDiv().ID("viewport-label").Absolute().Left(left + overlayInset + 4).Top(top + overlayInset).Tooltip(i18n.T("ui.canvas.viewport_tip")).
 		Child(monoText(i18n.T("ui.canvas.viewport_label"), fontUI).TextColor(uiMuted))
 }
 
 // zoomPill is the floating column of zoom in, zoom out and zoom extents at the canvas's top right.
-// Presses on it do not reach the canvas, so they never pick, focus or start a box.
+// Presses on it do not reach the canvas, so they never pick, focus or start a box. Releases do
+// go through: one that ends a splitter drag, a zoom slider drag or a box over it must reach the
+// root's and the canvas's handlers.
 func (ws *Workspace) zoomPill() *gpui.Div {
 	btn := func(id, tip string, icon icons.Name, f func()) *gpui.Div {
 		b := iconButton(id, tip, icon, false, func(w *gpui.Window) { f(); w.Refresh() })
 		return b.SizeWH(40, 40)
 	}
-	return gpui.NewDiv().ID("canvas-zoom").Absolute().Top(overlayInset).Right(overlayInset).FlexCol().Gap(2).P(4).Rounded(10).
+	_, top := ws.rulerInsets()
+	return gpui.NewDiv().ID("canvas-zoom").Absolute().Top(top+overlayInset).Right(overlayInset).FlexCol().Gap(2).P(4).Rounded(10).
 		Bg(uiPanel).Border(1, uiBorder).
 		OnMouseDown(func(_ *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
-		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
 		OnScrollWheel(func(_ *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
 		Child(
 			btn("canvas-zoom-in", i18n.T("ui.canvas.zoom_in_tip"), icons.AppAdd, func() { ws.setZoom(ws.view.Scale*zoomButtonFactor, false) }),
@@ -176,7 +186,8 @@ func (ws *Workspace) ucsLabels() *gpui.Div {
 	letter := func(s string, col render.Color) *gpui.Text {
 		return monoText(s, fontSmall).TextColor(gpuiColor(col))
 	}
-	return gpui.NewDiv().ID("ucs-labels").Absolute().Left(0).Bottom(0).SizeWH(ucsInset+ucsLen+24, ucsInset+ucsLen+24).
+	left, _ := ws.rulerInsets()
+	return gpui.NewDiv().ID("ucs-labels").Absolute().Left(left).Bottom(0).SizeWH(ucsInset+ucsLen+24, ucsInset+ucsLen+24).
 		Child(
 			gpui.NewDiv().Absolute().Left(ucsInset+5).Bottom(ucsInset+ucsLen-2).Child(letter("Y", ws.axisColor(false))),
 			gpui.NewDiv().Absolute().Left(ucsInset+ucsLen+6).Bottom(ucsInset-8).Child(letter("X", ws.axisColor(true))),
@@ -281,6 +292,8 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 		ws.gridItems(dl)
 	}
 	d := ws.session.Drawing()
+	// What the running command placed or changed is drawn as it is now, before the command ends.
+	ws.builder.Invalidate(ws.session.TakeLiveEdits())
 	ws.builder.Build(ws.session.Index().Query(v.Visible()), *v, dl)
 	highlight := func(h doc.Handle, col render.Color, weight float32) {
 		for _, it := range ws.builder.Items(h, *v) {
@@ -307,6 +320,7 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 	if ws.pointerOnCanvas() {
 		ws.cursorItems(dl)
 	}
+	ws.rulerItems(dl)
 	gpuirender.Painter{Origin: b.Origin, View: *v}.Paint(w, dl)
 	paintFrame(w, b)
 }
@@ -382,7 +396,8 @@ func (ws *Workspace) gridItems(dl *render.DisplayList) {
 func (ws *Workspace) ucsIcon(dl *render.DisplayList) {
 	v := ws.view
 	px := v.PixelSize()
-	o := v.ToModel(ucsInset, v.Height-ucsInset)
+	left, _ := ws.rulerInsets()
+	o := v.ToModel(float64(left)+ucsInset, v.Height-ucsInset)
 	l, a := ucsLen*px, 7*px
 	ex, ey := o.Add(geom.V(l, 0)), o.Add(geom.V(0, l))
 	dl.Polyline([]geom.Vec2{o, ex}, colAxisX, 2, false)
@@ -396,20 +411,27 @@ func (ws *Workspace) ucsIcon(dl *render.DisplayList) {
 func (ws *Workspace) cursorItems(dl *render.DisplayList) {
 	v := ws.view
 	px := v.PixelSize()
-	cur := ws.model(ws.canvas.mouse)
-	if ws.wantsPoint() {
-		cur = ws.session.Cursor()
-	}
+	cur := ws.cursorPoint()
 	vis := v.Visible()
 	dl.Polyline([]geom.Vec2{{X: vis.Min.X, Y: cur.Y}, {X: vis.Max.X, Y: cur.Y}}, colCrosshair, 0, false)
 	dl.Polyline([]geom.Vec2{{X: cur.X, Y: vis.Min.Y}, {X: cur.X, Y: vis.Max.Y}}, colCrosshair, 0, false)
-	if !ws.wantsPoint() {
+	// AutoCAD shows the pickbox when idle, at selection prompts and at object-pick prompts.
+	if p := ws.session.CurrentPrompt(); !ws.wantsPoint() || p.Pick {
 		r := ws.session.Aperture * px
 		dl.Polyline(square(cur, r), colCrosshair, 0, true)
 	}
 	if hit, ok := ws.session.Snap(); ok && ws.wantsPoint() {
 		snapMarker(dl, hit, 6*px)
 	}
+}
+
+// cursorPoint is where the crosshair is: the session's cursor (snapped, constrained) while a point
+// is asked for, else the model point under the pointer.
+func (ws *Workspace) cursorPoint() geom.Vec2 {
+	if ws.wantsPoint() {
+		return ws.session.Cursor()
+	}
+	return ws.model(ws.canvas.mouse)
 }
 
 func square(c geom.Vec2, r float64) []geom.Vec2 {

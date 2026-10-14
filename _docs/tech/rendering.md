@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How entities become pixels — the view, camera-relative coordinates, the display list, the per-band tessellation cache and the gpui adapter.
 read_when: you are changing what or how the canvas draws, adding a display primitive, or chasing jitter or a stale render
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [doc/textfont.go, render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
 depends_on: [tech-architecture, tech-document-model]
 review_cycle: quarterly
 ---
@@ -48,6 +48,14 @@ therefore do not jitter: the narrowed values are always viewport-sized.
 
 Points are model space and pre-tessellated; `Owner` names the entity an item draws, 0 for overlays.
 
+**Text** has no primitive of its own (D34). TEXT and MTEXT are strokes of the built-in single-line font, laid
+out in `doc` (see [Document model](document-model.md)), so `Entity.Geometry` hands the builder glyph polylines
+like any other curves: rotation, obliquing, mirroring and justification are model-space geometry, the
+camera-relative narrowing applies unchanged, and the canvas, `-png` renders, highlights and any future exporter
+draw the same text. A text whose capital height is under `textGreekPx` (3 pixels at the lowest scale of the zoom
+band, so between 3 and 6 pixels on screen; 3000 labels of 3.5 px render in 0.35 s for a whole `-png` run against
+0.65 s with their glyphs, which are an unreadable smudge at that size) draws as one line per row of text (`doc.Annotation.Greek`), which costs one item instead of its glyphs.
+
 **Builder and cache.** `render.Builder` turns an entity into display items: each curve of
 `Entity.Geometry` tessellated, coloured by `Builder.EntityColor`. Items are cached per entity and
 per **zoom band** — `render.Band(scale)` is `floor(log2(scale))`, and the band's chord tolerance
@@ -69,7 +77,10 @@ AutoCAD's values, 10–249 follow the palette's hue and shade layout closely but
 `ui.Workspace.paintCanvas` builds each frame in this order, so later items draw on top:
 
 1. the canvas background and the grid;
-2. the visible entities: `spatial.Index.Query(View.Visible())`, layers that are off or frozen skipped (`Drawing.EntityVisible`);
+2. the visible entities: `spatial.Index.Query(View.Visible())`, layers that are off or frozen skipped (`Drawing.EntityVisible`).
+   The running command's work is among them: the session indexes its edits after every answer, and the canvas first
+   passes `Session.TakeLiveEdits` to `Builder.Invalidate`, so an entity the command changed before it ends (a TRIM
+   pick) draws in its current state (see the [command system](command-system.md));
 3. the hover highlight, then the selection highlight (the entities' items recoloured and thickened);
 4. the active command's preview (`Session.Overlay`);
 5. the box-selection rectangle;
@@ -94,4 +105,4 @@ overlay, is the planned answer for large drawings and is in the backlog.
 
 - [UI framework](ui-framework.md) — the `Stroke` primitive and `Canvas` element the adapter uses
 - [Drawing canvas](../features/canvas.md) — what the user sees and does on the canvas
-- [Backlog](../backlog.md) — linetypes, lineweights, text, hatches and base-layer caching
+- [Backlog](../backlog.md) — linetypes, lineweights, hatches and base-layer caching

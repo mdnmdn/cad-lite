@@ -330,7 +330,7 @@ func (c *selSub) collect() []doc.Handle {
 		box := geom.BoxOf(a, b)
 		crossing := c.kind == subCrossing || (c.kind == subBox && b.X < a.X)
 		add(box, func(en doc.Entity) bool {
-			return box.ContainsBox(en.Bounds()) || (crossing && touchesBox(en, box, tol))
+			return box.ContainsBox(selectBounds(en)) || (crossing && touchesBox(en, box, tol))
 		})
 	case subWPoly, subCPoly:
 		box := polyBox(c.pts)
@@ -338,10 +338,12 @@ func (c *selSub) collect() []doc.Handle {
 			if c.kind == subWPoly {
 				return PathsInsidePolygon(entityPaths(en, tol), c.pts)
 			}
-			return PathsCrossPolygon(entityPaths(en, tol), c.pts)
+			return PathsCrossPolygon(entityPaths(en, tol), c.pts) || inTextBox(en, c.pts)
 		})
 	case subFence:
-		add(polyBox(c.pts).Grow(tol), func(en doc.Entity) bool { return PathsCrossFence(entityPaths(en, tol), c.pts) })
+		add(polyBox(c.pts).Grow(tol), func(en doc.Entity) bool {
+			return PathsCrossFence(entityPaths(en, tol), c.pts) || inTextBox(en, c.pts)
+		})
 	}
 	if hs == nil {
 		hs = []doc.Handle{}

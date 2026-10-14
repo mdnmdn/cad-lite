@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How a drawing is stored — handles, entities, layers, the header — and the transaction, change-set and undo contract every edit follows.
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/unknown.go, doc/aci.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/unknown.go, doc/aci.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -31,8 +31,40 @@ Zero means "no object". The model-space block record is `doc.ModelSpace`, the ow
 **Objects and entities.** `doc.Object` is anything stored: handle, owner, DXF class name and a deep
 `Clone`. `doc.Entity` adds the graphical part: `Common()` (handle, owner, layer, colour), `Bounds`,
 `Geometry` (the curves used for snapping, picking and display) and `Transform`. The entity types are
-`Line`, `Circle`, `Arc` and `LWPolyline`. An `LWPolyline` also carries `Widths`, the start and end width per
+`Line`, `Circle`, `Arc`, `LWPolyline`, `Text` and `MText`. An `LWPolyline` also carries `Widths`, the start and end width per
 segment; only the DWG reader fills it, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
+
+**Text.** `Text` is a single-line TEXT with DXF's fields, all exported: `Insert` and `Align` (the first and
+second alignment points, groups 10 and 11), `Height`, `Rotation` and `Oblique` (radians), `WidthFactor`, `Style`,
+`HAlign` and `VAlign` (groups 72 and 73, `TextLeft`… and `TextBaseline`…), `Generation` (`TextBackward`,
+`TextUpsideDown`) and `Value`, with AutoCAD's `%%` codes. Left-baseline text sits at `Insert`; Aligned and Fit run
+the baseline from `Insert` to `Align`, deriving the height or the width factor; every other justification places
+the text by `Align` (`Anchor`, `SetAnchor`; `SetJustify` changes the justification around the anchor;
+`ParseJustify` and `JustifyName` convert AutoCAD's option names). `NewText` makes left-justified text in the
+`Standard` style. `MText` is multiline text: `Insert`, `Height`, `Width` (the wrapping width, 0 for none),
+`Attachment` (1 to 9, top left to bottom right), `Rotation`, `LineSpacing`, `Style` and `Value` with MTEXT format
+codes (`\P` breaks a paragraph; `MTextPlain` strips the rest, `MTextEscape` escapes plain text for a value);
+`NewMText` makes top-left attached text. The document has no text style table: `TextStyles` lists the names a
+drawing knows (Standard, the STYLE records kept from its file, the styles its texts name) and `FindTextStyle`
+matches one without regard to case. Both
+satisfy `doc.Annotation` (`Anchor`, `HitBox`, `Box`, `CharHeight`, `Greek`, `MirrorReadable`).
+
+Text geometry is computed in `doc`, without the UI: every style draws with one built-in single-stroke font, Hershey
+Roman Simplex (`doc/fonts/romans.jhf`, the design AutoCAD's `romans.shx` comes from; licence acknowledgements in
+`doc/fonts/NOTICE`), laid out by `layoutStrokes` in `doc/textfont.go`. `Geometry` returns the glyph strokes as open
+polylines, `Bounds` the union of the strokes' box, the text box and the anchor (so the spatial index finds a text for its
+insertion snap and for a click anywhere in its box), `Layout` where the line sits (`TextLayout`: the baseline
+start AutoCAD writes as group 10, the height, width factor and length in effect, the box from the descenders to the
+capitals). Capitals are `Height` tall and descenders a third of it; advance widths are the font's, so `TextAdvance`
+gives a string's exact length without a display; it only advances the pen, without building strokes.
+MTEXT wraps at spaces by summing each word's advance once (`wrapLine`), so wrapping is linear in the
+paragraph's length. `Text.Sanitize` and `MText.Sanitize` clamp the size fields to the ranges in
+`doc/textlimits.go` (`TextMaxSize`, AutoCAD's width factor, oblique and line spacing ranges); the file
+readers call them, and the layouts apply the same limits, so a text's box is always finite. Characters the font lacks are drawn through their compatibility
+decomposition (accented letters as letter and mark) or as `?`. The layout is cached in the entity against a key of
+the fields it depends on, so editing a field directly (inside `Txn.Modify`) is enough. `Transform` mirrors TEXT for
+real (it toggles `TextUpsideDown`); `MirrorReadable` is MIRROR with `MIRRTEXT` 0. MTEXT has no mirrored form: a
+reflection keeps it readable and swaps its attachment.
 
 **Colour.** An entity's `Color` is an AutoCAD Color Index from 1 to 255, or `doc.ByLayer` (256),
 which a transaction assigns when the colour is unset: `Drawing.CurrentColor` (`CECOLOR`) when it is
@@ -47,7 +79,9 @@ reached for an entity as `Drawing.EntityVisible` and `EntityEditable`; render, s
 call them, so a new layer flag is honoured by changing that file. `Drawing.RemoveLayer` deletes an
 unreferenced layer (never "0" or the current one). Layer "0"
 always exists. `Drawing.CurrentLayer` is the layer new entities go on. Layer table edits are direct
-and not journalled. `Drawing.Layer` matches a name exactly (case-sensitive) through a name-keyed index
+and not journalled. A host that changes layer metadata calls `Session.MarkModified` after the
+actual edit to record unsaved changes without an entity undo step; the counter belongs to the
+[command system](command-system.md). `Drawing.Layer` matches a name exactly (case-sensitive) through a name-keyed index
 that `New`, `AddLayer` and `RemoveLayer` keep in step with the table, so render, snap and selection
 can look a layer up per entity per frame. A layer's `Name` must not change while it is in the table;
 a lookup that finds a renamed record rebuilds the index rather than return it under its old name.
@@ -89,6 +123,9 @@ outnumber live entities). The slice `Handles` returns is shared and valid until 
    selection and the render cache are the listeners in the application.
 8. `Drawing.Load` inserts an entity outside any transaction and journal. Only file readers use it,
    on a drawing nobody else holds yet.
+9. `Txn.TakeEdits` returns the handles `Add`, `Modify` and `Erase` touched since `Begin` or the previous
+   call, and starts a new list. It publishes and journals nothing; the command session uses it to show
+   a command's work before the commit (see the [command system](command-system.md)).
 
 `journal.go` adds the hooks the UNDO commands use, all over the same steps: `Drawing.Mark` pushes a marker at
 the current depth and `UndoToMark` undoes back to the latest one (a marker the history has been undone

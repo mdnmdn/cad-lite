@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: How Cad-lite finds a newer GitHub release, shows it in the settings panel, and on one press downloads, verifies, installs and restarts into it.
 read_when: you are changing the update check, the Update button, the release asset names or checksums, or how the installation is replaced
-updated: 2026-10-14
-verified: 2026-10-14
+updated: 2026-10-15
+verified: 2026-10-15
 code_anchors: [updater/check.go, updater/assets.go, updater/download.go, updater/install.go, updater/extract.go, updater/version.go, ui/update.go, ui/update_view.go, ui/settings_view.go, cmd/cad/main.go, .github/workflows/release.yml, packaging/lib.sh]
 depends_on: [feat-settings, tech-operations, tech-architecture]
 review_cycle: monthly
@@ -25,7 +25,7 @@ and the installation follow without further action; a dialog then asks before th
 ## Behaviour
 
 - **Version.** The build stamps its version (`-X main.version=1.2.3`, tag without `v`); the
-  settings panel shows it under *About and updates*, `cad-lite -version` prints it, and the macOS
+  settings panel shows it on its *Updates* tab, under *About and updates*, `cad-lite -version` prints it, and the macOS
   `Info.plist` and the Windows version resource carry it. An unstamped build is `dev`; CI builds
   are `0.0.0-ci+<shortsha>`. A version with build metadata or that is not semver never updates itself
   (no automatic check, no Update button) but the *Check for updates* button still reports the latest release.
@@ -35,7 +35,8 @@ and the installation follow without further action; a dialog then asks before th
   Drafts and pre-releases are skipped. Nothing runs in `-png` renders, in tests, in the browser
   build, or when `CADLITE_NO_UPDATE=1`.
 - **Notice.** While a release waits, the toolbar's gear button carries a dot and its tooltip names the
-  version; the panel shows the status line, a release-notes excerpt and the Update button.
+  version, and a click on it opens the settings panel on the *Updates* tab, whose label carries the
+  same dot; the tab shows the status line, a release-notes excerpt and the Update button.
   Nothing modal interrupts the user.
 - **Update.** The button downloads the archive for this platform, checks its sha256 against
   `SHA256SUMS.txt` of the same release (a missing list, a missing entry or a mismatch refuses to install),
@@ -82,7 +83,8 @@ symlinks that leave the folder, and caps the unpacked size. Plain http is refuse
 mutex-guarded result and two atomic progress counters; a 250 ms `Window.After` poll, armed only
 while work runs, moves the result onto the UI goroutine, the same shape as the agent panel. The
 6-hour timer is a `Window.After` armed by `startUpdates`, which `mountSettings` calls from every
-`Render`. `ui/update_view.go` draws the section, the gear badge and the restart dialog.
+`Render`. `ui/update_view.go` draws the section, the gear badge and the restart dialog; the gear
+button and the dot on the *Updates* tab are in `ui/settings_view.go`.
 `cmd/cad/main.go` calls `SetVersion`, `EnableUpdates` (not with `-png`) and defers `RelaunchIfPending`
 before the agent's `CloseAgent` defer, so it runs after both the settings save and the agent close.
 

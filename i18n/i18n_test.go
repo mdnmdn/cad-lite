@@ -303,7 +303,7 @@ func TestCommandMetadata(t *testing.T) {
 // command's display name) and the description its tooltip shows exist in every language. The
 // tooltip's keyboard hint is composed by ui from the alias registry and the keymap.
 func TestRibbonTooltipsExist(t *testing.T) {
-	buttons := []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE", "MIRROR",
+	buttons := []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "POLYGON", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE", "MIRROR",
 		"OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "JOIN", "EXPLODE", "DIST", "AREA", "ID", "ZOOM", "U", "REDO"}
 	for _, l := range Langs {
 		for _, cmd := range buttons {

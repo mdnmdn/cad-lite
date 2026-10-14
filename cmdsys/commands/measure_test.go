@@ -256,3 +256,77 @@ func TestDistMultiple(t *testing.T) {
 		t.Fatalf("default DIST changed: %q", lastLine(s))
 	}
 }
+
+// Every point prompt of the measuring commands takes running object snaps, as LINE's do: the
+// cursor sits on the snap and a click answers with the snapped point.
+func TestMeasurePointPromptsSnap(t *testing.T) {
+	cases := []struct{ name, script string }{
+		{"DIST first", "DIST"},
+		{"DIST second", "DIST 0,50"},
+		{"DIST multiple", "DIST M 0,50"},
+		{"ID", "ID"},
+		{"AREA first", "AREA"},
+		{"AREA next", "AREA 0,50 10,50"},
+		{"MEASUREGEOM distance", "MEASUREGEOM D"},
+		{"MEASUREGEOM area", "MEASUREGEOM AR 0,50"},
+		{"MEASUREGEOM angle vertex", "MEASUREGEOM A "},
+		{"transparent DIST", "LINE 0,50 'DIST"},
+	}
+	for _, c := range cases {
+		s := newSession(t)
+		addEntities(t, s, line(geom.V(0, 0), geom.V(100, 0)))
+		s.Script(c.script)
+		s.Hover(geom.V(51, 1.5))
+		if hit, ok := s.Snap(); !ok || hit.Point != geom.V(50, 0) || hit.Mode != cmdsys.SnapMidpoint {
+			t.Fatalf("%s (%q): no midpoint snap: %+v %v", c.name, s.Prompt(), hit, ok)
+		}
+		before := s.Prompt()
+		s.Click(geom.V(99, -1.5), false)
+		if !historyHas(s, before+" 100,0") {
+			t.Fatalf("%s: the click did not answer the endpoint:\n%s", c.name, history(s))
+		}
+	}
+}
+
+// A measurement taken inside LINE snaps to the segments that LINE placed already.
+func TestTransparentDistSnapsToSegmentsOfTheRunningLine(t *testing.T) {
+	s := newSession(t)
+	s.Script("LINE 0,0 100,0 100,50 'DIST")
+	s.Hover(geom.V(50.5, 0.5))
+	if hit, ok := s.Snap(); !ok || hit.Point != geom.V(50, 0) {
+		t.Fatalf("no snap on the running LINE's first segment: %+v %v", hit, ok)
+	}
+	s.Click(geom.V(50.5, 0.5), false)
+	s.Click(geom.V(99.5, 49.5), false)
+	if !historyHas(s, "Distance = 70.7107,") || !historyHas(s, ">>Specify first point or [Multiple points]: 50,0") {
+		t.Fatalf("DIST did not measure between the snapped points:\n%s", history(s))
+	}
+}
+
+// The object prompts of the measurements pick by the raw click, as AutoCAD's object selection
+// does: a running snap would move the pick to an intersection and select the other line.
+func TestMeasureObjectPromptsPickWithoutSnap(t *testing.T) {
+	s := newSession(t)
+	addEntities(t, s,
+		line(geom.V(0, 0), geom.V(100, 0)),
+		line(geom.V(50, -50), geom.V(50, 50)),
+		line(geom.V(0, 0), geom.V(100, 100)))
+	s.Script("MEASUREGEOM A")
+	if !s.CurrentPrompt().Pick {
+		t.Fatalf("%q is not a pick prompt", s.Prompt())
+	}
+	s.Hover(geom.V(53, 0.5))
+	if _, ok := s.Snap(); ok || s.Cursor() != geom.V(53, 0.5) {
+		t.Fatalf("pick prompt snapped the cursor to %v", s.Cursor())
+	}
+	s.Click(geom.V(53, 0.5), false)
+	s.Click(geom.V(80, 79), false)
+	wantMeasured(t, s, "Angle = 45°")
+	for _, script := range []string{"AREA O", "MEASUREGEOM R"} {
+		s.Script(script)
+		if p := s.CurrentPrompt(); p == nil || !p.Pick {
+			t.Fatalf("%s: %q is not a pick prompt", script, s.Prompt())
+		}
+		s.Escape()
+	}
+}

@@ -11,13 +11,13 @@ Back to the [reference index](README.md). Concepts:
 
 `StyledMixin` holds a `StyleRefinement` (a `Style` whose every field is a
 pointer, so "unset" differs from zero) and the Tailwind-style builder methods
-that fill it. `Div`, `Text`, `StyledText` and `UniformList` embed it.
+that fill it. `Div`, `Text`, `StyledText`, `UniformList` and `List` embed it.
 
 Go method promotion has a catch: a method promoted from the embedded mixin
 returns `*StyledMixin`, which ends the typed chain (you could no longer call
 `.Child(...)` or `.OnClick(...)`). To avoid that, `*Div` re-declares every
 mixin builder returning `*Div`, and `*Text` re-declares most of them returning
-`*Text`; `*UniformList` forwards a short list. The third column below says
+`*Text`; `*UniformList` and `*List` forward a short list. The third column below says
 where the chain is preserved; "mixin only" means the call is only reachable as
 a promoted method on the embedded field (for example `st.StyledMixin.P(4)` on
 a `*StyledText`, or `list.StyledMixin.Gap(4)`), and it returns `*StyledMixin`.
@@ -240,7 +240,7 @@ func focusRing() *gpui.Div {
 
 | Builder | Meaning |
 |---|---|
-| `ShowScrollbar() *Div` | Paint a thin overlay scrollbar with primary thumb dragging and viewport paging on track presses (also on `*UniformList`). |
+| `ShowScrollbar() *Div` | Paint a thin overlay scrollbar with primary thumb dragging and viewport paging on track presses (also on `*UniformList` and `*List`). |
 | `TabIndex(i int)` / `TabStop(b bool)` | Focus order; see [events.md](events.md#focus). |
 | `Child(...IntoElement)` / `Children(...)` | Append children; see [elements.md](elements.md#div). |
 
@@ -305,4 +305,5 @@ Enums and value types used by `Style` are in
 | `*Div` | Every mixin builder, plus `Hover`, `Focus`, `FocusVisible`, `Active`, `ShowScrollbar`, events, focus and child methods. |
 | `*Text` | All mixin builders except `Opacity`, `OverflowXScroll`, `OverflowYScroll`, `Shadow` and the shadow presets; plus `Text(s)`. |
 | `*UniformList` | `Bg`, `Border`, `Flex1`, `MaxH`, `MinH`, `Opacity`, `P`, `Px_`, `Py_`, `Rounded`, `ShowScrollbar`, `SizeFull`, `SizeH`, `SizeW`, `SizeWH`, `TextColor`, `TrackScroll`. |
+| `*List` | The `*UniformList` set plus `Gap` (space between items); `ItemKey`, `EstimatedItemHeight` and `Overdraw` are its own (see [elements.md](elements.md#list)). |
 | `*StyledText` | None: it only embeds the mixin. Style it through a variable or wrap it in a `Div`. |

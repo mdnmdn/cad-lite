@@ -20,7 +20,9 @@ type Context struct {
 	// Files is how file commands reach the I/O layer; nil disables them.
 	Files FileHandler
 
-	txn     *doc.Txn
+	txn *doc.Txn
+	// commit commits txn the way the session does (Session.commitOpen).
+	commit  func() doc.ChangeSet
 	out     func(string)
 	tr      func() i18n.Translator
 	replace func(*doc.Drawing)

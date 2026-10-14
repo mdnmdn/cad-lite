@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cad-lite/doc"
@@ -74,7 +75,7 @@ func compareDrawings(t *testing.T, dw, dx *doc.Drawing) {
 	for _, h := range dx.Handles() {
 		x := dx.Entity(h)
 		switch x.Class() {
-		case "LINE", "CIRCLE", "ARC", "LWPOLYLINE":
+		case "LINE", "CIRCLE", "ARC", "LWPOLYLINE", "TEXT":
 			if dw.Entity(h) == nil {
 				t.Errorf("%s %s: in the DXF but not read from the DWG", x.Class(), h)
 			}
@@ -108,6 +109,11 @@ func sameGeometry(a, b doc.Entity) bool {
 			}
 		}
 		return true
+	case *doc.Text:
+		x := b.(*doc.Text)
+		return e.Value == x.Value && e.Justify() == x.Justify() && e.Generation == x.Generation && strings.EqualFold(e.Style, x.Style) &&
+			near(e.Anchor().X, x.Anchor().X) && near(e.Anchor().Y, x.Anchor().Y) && near(e.Height, x.Height) &&
+			near(e.Rotation, x.Rotation) && near(e.WidthFactor, x.WidthFactor) && near(e.Oblique, x.Oblique)
 	}
 	return true
 }

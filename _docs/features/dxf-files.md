@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line, the -open flag and files the OS hands over (dropped, opened from Finder or the Dock, file arguments), how warnings and errors are reported, and where the lossy edges are.
 read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
-updated: 2026-10-14
+updated: 2026-10-15
 verified: 2026-10-14
 code_anchors: [ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
@@ -95,19 +95,23 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   becoming the default; the Linux desktop entry lists the DXF and DWG MIME types and passes `%F`.
 - Opening into the untouched untitled tab replaces that drawing, its undo history and the selection;
   any other open leaves the current tab as it is.
-- Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC` and
-  polylines. What else is read, what is kept and which DXF version is written are owned by
+- Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC`,
+  polylines and `TEXT` (position, height, rotation, justification, width factor, obliquing, style name).
+  Text sizes outside the ranges AutoCAD allows (a width factor past 100, a slant past 85°, a height past
+  1e15) are clamped on reading, so a damaged file cannot make a text infinitely large.
+  `MTEXT` opens as multiline text; saved to R12, which has no MTEXT, it becomes one TEXT per line,
+  with a warning, and loses its box and wrapping. What else is read, what is kept and which DXF version is written are owned by
   [File I/O](../tech/file-io.md).
 - **DWG** (R14, R2000, R2004, R2007, R2010, R2013 and R2018) opens with its layers, units and the
-  `LINE`, `CIRCLE`, `ARC`, `LWPOLYLINE` and 2D polyline entities of model space. Every other entity
-  is skipped, not kept: the history shows one warning such as `skipped 29 TEXT, 15 MULTILEADER, 11
+  `LINE`, `CIRCLE`, `ARC`, `LWPOLYLINE`, 2D polyline and `TEXT` entities of model space. Every other entity
+  is skipped, not kept: the history shows one warning such as `skipped 15 MULTILEADER, 11
   DIMENSION, ... (not read from DWG files; the DXF reader keeps them)`, and paper space is counted in a
   second. Saving to a `.dwg` path fails with `Save failed: DWG writing is not supported; save as
   .dxf`; the drawing stays as it was. Agents see the opened drawing like any other; they cannot run
   OPEN themselves.
 - **Unknown entities.** An entity of a class Cad-lite does not model opens without error. It is not
   shown and cannot be selected, snapped to or edited, but it stays in the drawing and SAVE writes it
-  again when R12 has its class. Entities of classes R12 lacks (SPLINE, MTEXT, HATCH, ELLIPSE and
+  again when R12 has its class. Entities of classes R12 lacks (SPLINE, HATCH, ELLIPSE and
   custom classes) are left out of the saved file, with a warning that names each one. The
   `list_entities` agent tool lists them with `unknown: true`.
 
@@ -232,7 +236,7 @@ macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs o
 ## Next steps
 
 - Write newer DXF versions so unknown entities of classes R12 lacks survive a save.
-- Write DWG, and read more DWG entities (TEXT, INSERT and blocks first).
+- Write DWG, and read more DWG entities (MTEXT, INSERT and blocks first).
 - Browser file access through the browser's own APIs.
 - Pin a recent drawing so it stays at the top of the list.
 - Open a file from the OS that is open in a tab but changed on disk as a reload, not a tab switch.

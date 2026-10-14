@@ -31,7 +31,7 @@ func TestRoundTripThroughDXF(t *testing.T) {
 					}
 				}
 			}
-			if back.Len() != src.Len() || back.Len() != 56 {
+			if back.Len() != src.Len() || back.Len() != 85 {
 				t.Errorf("%d entities after the round trip, %d before", back.Len(), src.Len())
 			}
 			if len(back.Layers()) != len(src.Layers()) {

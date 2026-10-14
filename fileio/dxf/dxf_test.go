@@ -158,12 +158,12 @@ func group(kv ...string) string {
 }
 
 const (
-	textEnt = "  0\nTEXT\n  5\n30\n330\n1F\n100\nAcDbEntity\n  8\nnotes\n  6\nDASHED\n100\nAcDbText\n 10\n5.5\n 20\n6.5\n 30\n0.0\n 40\n2.5\n  1\n  Hello  \n 72\n0\n100\nAcDbText\n"
-	insEnt  = "  0\nINSERT\n  5\n31\n  8\n0\n 66\n1\n  2\nB1\n 10\n1\n 20\n2\n 30\n0\n  0\nATTRIB\n  5\n32\n  8\n0\n  1\nv\n  2\nTAG\n  0\nSEQEND\n  5\n33\n  8\n0\n"
-	splEnt  = "  0\nSPLINE\n  5\n34\n  8\n0\n100\nAcDbEntity\n100\nAcDbSpline\n 70\n8\n 71\n3\n 40\n0.0\n 40\n1.0\n 10\n-3\n 20\n-4\n 30\n0\n 10\n3\n 20\n4\n 30\n0\n"
-	custom  = "  0\nACME_WIDGET\n  5\n35\n  8\nacme\n 62\n  3\n  1\nstrange \u00e9\n 90\n17\n"
-	pl3d    = "  0\nPOLYLINE\n  5\n36\n  8\n0\n 66\n1\n 70\n8\n  0\nVERTEX\n  5\n37\n  8\n0\n 10\n0\n 20\n0\n 30\n1\n 70\n32\n  0\nVERTEX\n  5\n38\n  8\n0\n 10\n1\n 20\n1\n 30\n2\n 70\n32\n  0\nSEQEND\n  5\n39\n  8\n0\n"
-	lineEnt = "  0\nLINE\n  5\n40\n  8\n0\n 10\n0\n 20\n0\n 11\n9\n 21\n9\n"
+	pointEnt = "  0\nPOINT\n  5\n30\n330\n1F\n100\nAcDbEntity\n  8\nnotes\n  6\nDASHED\n100\nAcDbPoint\n 10\n5.5\n 20\n6.5\n 30\n0.0\n 40\n2.5\n  1\n  Hello  \n 72\n0\n100\nAcDbPoint\n"
+	insEnt   = "  0\nINSERT\n  5\n31\n  8\n0\n 66\n1\n  2\nB1\n 10\n1\n 20\n2\n 30\n0\n  0\nATTRIB\n  5\n32\n  8\n0\n  1\nv\n  2\nTAG\n  0\nSEQEND\n  5\n33\n  8\n0\n"
+	splEnt   = "  0\nSPLINE\n  5\n34\n  8\n0\n100\nAcDbEntity\n100\nAcDbSpline\n 70\n8\n 71\n3\n 40\n0.0\n 40\n1.0\n 10\n-3\n 20\n-4\n 30\n0\n 10\n3\n 20\n4\n 30\n0\n"
+	custom   = "  0\nACME_WIDGET\n  5\n35\n  8\nacme\n 62\n  3\n  1\nstrange \u00e9\n 90\n17\n"
+	pl3d     = "  0\nPOLYLINE\n  5\n36\n  8\n0\n 66\n1\n 70\n8\n  0\nVERTEX\n  5\n37\n  8\n0\n 10\n0\n 20\n0\n 30\n1\n 70\n32\n  0\nVERTEX\n  5\n38\n  8\n0\n 10\n1\n 20\n1\n 30\n2\n 70\n32\n  0\nSEQEND\n  5\n39\n  8\n0\n"
+	lineEnt  = "  0\nLINE\n  5\n40\n  8\n0\n 10\n0\n 20\n0\n 11\n9\n 21\n9\n"
 )
 
 func pr(code int, v string) doc.Pair { return doc.Pair{Code: code, Value: v} }
@@ -223,7 +223,7 @@ func unknownRaw(d *doc.Drawing) map[doc.Handle][]doc.Pair {
 }
 
 func TestUnknownEntitiesKeepRawGroups(t *testing.T) {
-	src := richFile(textEnt + insEnt + splEnt + custom + pl3d + lineEnt)
+	src := richFile(pointEnt + insEnt + splEnt + custom + pl3d + lineEnt)
 	d, warns, err := (dxf.Codec{}).Read(strings.NewReader(src))
 	if err != nil {
 		t.Fatal(err)
@@ -235,17 +235,17 @@ func TestUnknownEntitiesKeepRawGroups(t *testing.T) {
 	if len(raw) != 5 {
 		t.Fatalf("%d unknown entities, want 5", len(raw))
 	}
-	text := d.Entity(0x30).(*doc.Unknown)
-	if text.Class() != "TEXT" || text.Layer != "notes" || text.Owner != 0x1F || text.Handle() != 0x30 {
-		t.Fatalf("text = %+v", text)
+	point := d.Entity(0x30).(*doc.Unknown)
+	if point.Class() != "POINT" || point.Layer != "notes" || point.Owner != 0x1F || point.Handle() != 0x30 {
+		t.Fatalf("point = %+v", point)
 	}
-	want := []doc.Pair{pr(5, "30"), pr(330, "1F"), pr(100, "AcDbEntity"), pr(8, "notes"), pr(6, "DASHED"), pr(100, "AcDbText"),
-		pr(10, "5.5"), pr(20, "6.5"), pr(30, "0.0"), pr(40, "2.5"), pr(1, "  Hello  "), pr(72, "0"), pr(100, "AcDbText")}
-	if !reflect.DeepEqual(text.Raw, want) {
-		t.Fatalf("text raw = %v", text.Raw)
+	want := []doc.Pair{pr(5, "30"), pr(330, "1F"), pr(100, "AcDbEntity"), pr(8, "notes"), pr(6, "DASHED"), pr(100, "AcDbPoint"),
+		pr(10, "5.5"), pr(20, "6.5"), pr(30, "0.0"), pr(40, "2.5"), pr(1, "  Hello  "), pr(72, "0"), pr(100, "AcDbPoint")}
+	if !reflect.DeepEqual(point.Raw, want) {
+		t.Fatalf("point raw = %v", point.Raw)
 	}
-	if b := text.Bounds(); b.Min != geom.V(5.5, 6.5) || b.Max != geom.V(5.5, 6.5) {
-		t.Fatalf("text bounds = %+v", b)
+	if b := point.Bounds(); b.Min != geom.V(5.5, 6.5) || b.Max != geom.V(5.5, 6.5) {
+		t.Fatalf("point bounds = %+v", b)
 	}
 	ins := d.Entity(0x31).(*doc.Unknown)
 	if n := len(ins.Raw); ins.Raw[n-1] != (pr(8, "0")) || ins.Raw[n-3] != (pr(0, "SEQEND")) || ins.Raw[n-8] != (pr(0, "ATTRIB")) {
@@ -274,7 +274,7 @@ func TestUnknownEntitiesKeepRawGroups(t *testing.T) {
 }
 
 func TestWriteKeepsR12UnknownEntitiesVerbatimAndWarnsForTheRest(t *testing.T) {
-	src := richFile(textEnt + insEnt + splEnt + custom + pl3d + lineEnt)
+	src := richFile(pointEnt + insEnt + splEnt + custom + pl3d + lineEnt)
 	d, _, err := (dxf.Codec{}).Read(strings.NewReader(src))
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +290,7 @@ func TestWriteKeepsR12UnknownEntitiesVerbatimAndWarnsForTheRest(t *testing.T) {
 	out := buf.String()
 	// The written file keeps every R12-representable record byte for byte
 	// (group code padding aside, which group() and the writer share).
-	for _, frag := range []string{stripR13(textEnt), insEnt, pl3d} {
+	for _, frag := range []string{stripR13(pointEnt), insEnt, pl3d} {
 		if !strings.Contains(out, frag) {
 			t.Fatalf("output lacks %q", frag)
 		}
@@ -388,7 +388,7 @@ func TestUnknownWithoutHandleGetsOne(t *testing.T) {
 }
 
 func TestWriteDropsR13GroupsAndNonR12BlockEntities(t *testing.T) {
-	src := strings.Replace(richFile(textEnt), group("0", "ENDBLK", "5", "62", "8", "0"),
+	src := strings.Replace(richFile(pointEnt), group("0", "ENDBLK", "5", "62", "8", "0"),
 		group("0", "LWPOLYLINE", "5", "63", "8", "0", "90", "0")+group("0", "ENDBLK", "5", "62", "8", "0"), 1)
 	d, _, err := (dxf.Codec{}).Read(strings.NewReader(src))
 	if err != nil {
@@ -448,5 +448,41 @@ func TestReadNonFiniteNumbers(t *testing.T) {
 	(dxf.Codec{}).Write(&buf, d)
 	if s := strings.ToLower(buf.String()); strings.Contains(s, "nan") || strings.Contains(s, "inf") {
 		t.Error("writer emitted a non-finite number")
+	}
+}
+
+// Extreme finite TEXT and MTEXT sizes in a file are clamped on reading (doc.Text.Sanitize), so
+// the entities have finite boxes and the spatial index and renderer never see infinities.
+func TestReadClampsExtremeTextSizes(t *testing.T) {
+	in := "0\nSECTION\n2\nENTITIES\n" +
+		"0\nMTEXT\n8\n0\n10\n0\n20\n0\n40\n1e300\n41\n1e300\n44\n1e300\n1\nab\\Pcd\n" +
+		"0\nTEXT\n8\n0\n10\n1e300\n20\n-1e300\n40\n1e308\n41\n1e308\n51\n89.9999999\n72\n5\n11\n-1e308\n21\n1e308\n1\nAAAA\n" +
+		"0\nTEXT\n8\n0\n10\n0\n20\n0\n40\n1e300\n41\n1e-300\n51\n-1e300\n1\nBBBB\n" +
+		"0\nENDSEC\n0\nEOF\n"
+	d, _, err := (dxf.Codec{}).Read(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Len() != 3 {
+		t.Fatalf("read %d entities, want 3", d.Len())
+	}
+	for _, h := range d.Handles() {
+		e := d.Entity(h)
+		b := e.Bounds()
+		for _, v := range []float64{b.Min.X, b.Min.Y, b.Max.X, b.Max.Y} {
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				t.Fatalf("%s bounds %v", e.Class(), b)
+			}
+		}
+		switch e := e.(type) {
+		case *doc.Text:
+			if e.Height > doc.TextMaxSize || e.WidthFactor > doc.TextMaxWidthFactor || e.WidthFactor < doc.TextMinWidthFactor || math.Abs(e.Oblique) > doc.TextMaxOblique {
+				t.Fatalf("TEXT kept height %g, width factor %g, oblique %g", e.Height, e.WidthFactor, e.Oblique)
+			}
+		case *doc.MText:
+			if e.Height > doc.TextMaxSize || e.Width > doc.TextMaxSize || e.LineSpacing > doc.MTextMaxSpacing {
+				t.Fatalf("MTEXT kept height %g, width %g, spacing %g", e.Height, e.Width, e.LineSpacing)
+			}
+		}
 	}
 }

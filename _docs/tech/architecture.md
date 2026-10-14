@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The layers of Cad-lite, the dependency rule between them, where each layer lives, and how an edit flows from input to pixels.
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go, i18n/i18n.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go, cmdsys/inflight.go, cmdsys/session.go, i18n/i18n.go]
 depends_on: [prod-overview]
 review_cycle: quarterly
 ---
@@ -89,11 +89,15 @@ window that renders one frame to PNG. Every package's purpose is listed in the
    to `Session.Submit`, clicks to `Session.Click`, pointer moves to `Session.Hover`, box drags to
    `Session.SelectBox`.
 2. The session parses the input for the active prompt and calls the active command's `Input`.
-3. The command changes the document through the transaction from `Context.Tx`.
+3. The command changes the document through the transaction from `Context.Tx`. After each command
+   step, the session synchronizes the transaction's edits with the spatial index and selection;
+   the workspace takes `Session.TakeLiveEdits` to invalidate the affected display-cache entries,
+   so geometry is visible and available to picks and snaps while the command runs.
 4. When the command ends, the session commits the transaction; `doc` records one journal step and
    publishes a `ChangeSet`.
-5. Change listeners update the spatial index (`spatial.Index.Apply`), prune the selection and drop
-   the render cache entries of the touched handles (`render.Builder.Invalidate`).
+5. Change listeners prune the selection and drop the render cache entries of the touched handles
+   (`render.Builder.Invalidate`). They update the spatial index (`spatial.Index.Apply`) for changes
+   outside the session's synchronized commit path, including undo, redo and external transactions.
 6. The workspace refreshes the window; on the next frame the canvas rebuilds the display list from
    the cache and paints it through `render/gpuirender`.
 

@@ -46,10 +46,10 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G12 | Browser build: file open and save need browser APIs; the file registry is operating-system based | [Operations](tech/operations.md), [DXF files](features/dxf-files.md) |
 | G13 | Base-layer caching, the answer to R1 | [Rendering](tech/rendering.md) |
 | G15 | The operating system cursor is not hidden over the canvas; it needs a platform API. The crosshair can linger when the pointer leaves through the window edge, because the platform sends no leave event | [Drawing canvas](features/canvas.md) |
-| G16 | Layer table edits are not journalled, so they are not undoable (the render cache detects them by comparing the layer table, D27) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
+| G16 | Layer table edits are not journalled, so they are not undoable. Typed layer commands and side-panel creation still do not mark the drawing modified; panel/popover switches, current-layer changes and named popover creation call `Session.MarkModified` (the render cache detects layer changes by comparing the layer table, D27) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
 | G17 | Paper space and layouts, view rotation, UCS | [Product overview](product/overview.md) |
 | G18 | Typed OPEN and SAVEAS never show the native dialog (FILEDIA is a stored variable with no effect); the dialogs are reached only from the buttons and shortcuts | [DXF files](features/dxf-files.md) |
-| G20 | Command-line autocomplete, history recall and F1 help | [Command line](features/command-line.md) |
+| G20 | Command line: F1 help listing the commands, and Up/Down recall of earlier answers at a command's prompt (AutoComplete and recall at `Command:` exist) | [Command line](features/command-line.md) |
 
 ## Further items
 
@@ -69,8 +69,8 @@ New lines are appended below this heading.
 | G33 | A live test of `ResumeID` against the real CLIs | [Agent integration](tech/agent-integration.md) |
 | G34 | Delete and rename stored agent sessions from the history list | [Agent panel](features/agent-panel.md) |
 | G35 | The command history keeps the last prompt text after LINE ends (cosmetic, `cmdsys`) | [Command line](features/command-line.md) |
-| G36 | The point prompts of TRIM, EXTEND and BREAK snap the click to nearby points, and the pick radius is a fixed 8 pixels because `Context` cannot see `Session.Aperture` | [Drawing and editing commands](features/drawing-and-editing.md) |
-| G37 | OFFSET, FILLET and CHAMFER cannot pick entities created earlier in the same command (the index updates on commit), and their remembered settings are process-wide rather than per session | [Drawing and editing commands](features/drawing-and-editing.md) |
+| G36 | The pick radius of the TRIM, EXTEND and BREAK object prompts is a fixed 8 pixels because `Context` cannot see `Session.Aperture` (they no longer snap the pick: `Prompt.Pick`) | [Drawing and editing commands](features/drawing-and-editing.md) |
+| G37 | The remembered settings of OFFSET, FILLET and CHAMFER are process-wide rather than per session (picking entities made earlier in the same command works since in-flight edits reach the spatial index) | [Drawing and editing commands](features/drawing-and-editing.md) |
 | G38 | Confirm the macOS signing identity and the bundle identifier (`it.synesthesia.cad-lite`) | [Operations](tech/operations.md) |
 | G39 | Windows Authenticode signing is not wired; unsigned executables trigger SmartScreen | [Operations](tech/operations.md) |
 | G41 | UI/UX review findings in `inbox/review-ux.md`, to be triaged | [Drawing canvas](features/canvas.md) |
@@ -102,6 +102,14 @@ New lines are appended below this heading.
 | G69 | Images are decoded and scaled on the UI goroutine when attached, so a very large file stalls the panel briefly; move it off the goroutine | [Agent panel](features/agent-panel.md) |
 | G70 | OpenCode auto-install is run for real only on Linux; macOS and Windows terminals and mise there, the aqua backend with a reachable GitHub API, and a real `opencode auth login` are untested. The direct-download fallback has HTTPS only, because opencode publishes no checksum list | [Agent integration](tech/agent-integration.md) |
 | G71 | The Windows installer's shell integration, the macOS open-documents handler and `Info.plist` document types, and a real file drop on the window are untested on their platforms | [DXF files](features/dxf-files.md), [Operations](tech/operations.md) |
+| G72 | Flaky agentmanager tests under parallel package runs: `claude` TestOpenMissingBinary (leaked temp MCP config) and `harnesses` TestDiscoverReportsPathsAndVersions (empty version); both pass alone and with `-p 1` | [Testing](tech/testing.md) |
+| G75 | `geom.CutPolyline` accepts a cut overshooting by 1e-9 and emits a reversed ulp-long segment when a cut uses a whole side; `geom.NormAngle` returns exactly 2π for a tiny negative angle. `cadmcp` works around both | [Geometry kernel](tech/geometry-kernel.md) |
+| G76 | `run_script` is not covered by the MCP number caps: a command fed huge finite values (SCALE 1e300) can store geometry that `get_drawing` cannot encode as JSON | [Agent integration](tech/agent-integration.md), [Command system](tech/command-system.md) |
+| G77 | gpui rasteriser: a box shadow is computed over its whole area, including the part a solid element covers, and translucent fills have no fast path (about 10 ms per frame at 2x for a window-sized one); the settings card and the restart dialog avoid or still pay it | [UI framework](tech/ui-framework.md) |
+| G78 | The settings AI tab looks up the agent programs on PATH and stats files every frame (`ui/agent_binary.go`, `ui/agent_install.go`); cache until discovery runs again | [Settings](features/settings.md) |
+| G79 | TEXTSIZE and TEXTSTYLE are session variables, not saved in the drawing header as AutoCAD does; needs a session-to-drawing sync and header variables in the DXF writer | [Drawing and editing commands](features/drawing-and-editing.md), [File I/O](tech/file-io.md) |
+| G80 | The Hershey font notice (`doc/fonts/NOTICE`) is not shipped with the release archives and installers, and there is no About or licences view | [Operations](tech/operations.md) |
+| G82 | Headless `-png` in the light theme draws colour 7 near-white, as if the render cache were built before the theme is applied | [Operations](tech/operations.md), [Rendering](tech/rendering.md) |
 
 ## Next features
 
@@ -110,3 +118,16 @@ Requested next, in no fixed order.
 | id | Item | Affects |
 |---|---|---|
 | N8 | Agent panel: a ring that fills with the context-window usage, and a Compact button that asks the agent to compact its context | [Agent panel](features/agent-panel.md) |
+| N9 | Agent drawing API, from [`inbox/Cad-lite-improvement-suggestions.txt`](inbox/Cad-lite-improvement-suggestions.txt) (suggested order: N9 to N14, then the rest): native TEXT and MTEXT, entity, renderer, DXF and MCP `add_text`/`update_text`; TEXT is writable in R12, MTEXT needs G2 (G7, G61, O3) | [Document model](tech/document-model.md), [Agent integration](tech/agent-integration.md) |
+| N10 | MCP batch tool: many operations in one call and one undo step, client ids mapped to handles, validated before commit and rolled back on failure; lands with the batch cap of G49 and the unknown-handle errors of G32 | [Agent integration](tech/agent-integration.md) |
+| N11 | Groups, then blocks and INSERT with attributes and definition updates (G7, G61, G2) | [Document model](tech/document-model.md), [File I/O](tech/file-io.md) |
+| N12 | Entity tags (key/value metadata) journalled with the entity, a tag filter in `list_entities`, export through XDATA | [Document model](tech/document-model.md), [Agent integration](tech/agent-integration.md) |
+| N13 | Structured edits by handle: `update_entity` for geometry, layer and colour, polyline vertex insert, remove and move; per-entity lineweight and linetype (G64) | [Agent integration](tech/agent-integration.md), [Document model](tech/document-model.md) |
+| N14 | Handle-based TRIM, EXTEND, OFFSET, FILLET and CHAMFER tools returning created, replaced and deleted handles; needs the commands factored into functions | [Agent integration](tech/agent-integration.md), [Drawing and editing commands](features/drawing-and-editing.md) |
+| N15 | Dimensions (associative) and boundary-area annotations; HATCH and fills (G7, G2) | [Document model](tech/document-model.md) |
+| N16 | Clearance and collision checks: region overlap, minimum distance, door swings and clearance envelopes; depends on N11 and N12 (R2) | [Geometry kernel](tech/geometry-kernel.md), [Agent integration](tech/agent-integration.md) |
+| N17 | MCP geometry: arcs by centre, radius and angles, polyline bulges, width/height and rounded rectangles, polygons; ellipse and spline need new entities | [Agent integration](tech/agent-integration.md) |
+| N18 | Measurements and validation with units: minimum separation, angle, point in region, intersections; open boundaries, duplicates, tiny segments, self-intersections | [Agent integration](tech/agent-integration.md), [Geometry kernel](tech/geometry-kernel.md) |
+| N19 | Output: an agent-safe save with one path policy (G50), SVG and PDF export, `render_png` file output, backgrounds, layer filters and named views (G29) | [DXF files](features/dxf-files.md), [Agent integration](tech/agent-integration.md) |
+| N20 | Queries and schemas: containment, proximity, tag and group filters, detail levels; a capabilities tool, a uniform response envelope and a drawing revision; later dry runs, checkpoints, idempotency keys, UCS, asset libraries, layer styles, layouts and schedules (suggestions 16 to 24) | [Agent integration](tech/agent-integration.md) |
+| N21 | Agent panel: follow the end of the transcript only when the view is already at the bottom, so a user who scrolled up is not pulled down by each streamed delta, debug log line or empty turn end | [Agent panel](features/agent-panel.md) |

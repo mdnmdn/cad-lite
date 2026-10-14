@@ -707,3 +707,63 @@ func TestTrimGridLeavesCells(t *testing.T) {
 		t.Fatalf("lines = %v", dumpLines(ls))
 	}
 }
+
+// A text is a cutting edge by its box, as in AutoCAD: a pick between its letters removes the
+// part of the line across the whole box, not the gap between two glyph strokes.
+func TestTrimAtTextUsesItsBox(t *testing.T) {
+	s := newSession(t)
+	txt := doc.NewText(geom.V(0, 0), 10, 0, "HHH")
+	addEntities(t, s, txt, line(geom.V(-20, 5), geom.V(80, 5)))
+	b := txt.Box()
+	left, right := math.Min(b[0].X, b[3].X), math.Max(b[1].X, b[2].X)
+	s.Script("TRIM " + cmdsys.FormatPoint(geom.V((left+right)/2, 5)) + " ")
+	ls := sortedLines(s)
+	if len(ls) != 2 || !hasLine(ls, geom.V(-20, 5), geom.V(left, 5)) || !hasLine(ls, geom.V(right, 5), geom.V(80, 5)) {
+		t.Fatalf("box %v..%v, lines = %v\n%s", left, right, dumpLines(ls), history(s))
+	}
+}
+
+// The object prompts of TRIM, EXTEND, BREAK and BREAKATPOINT pick by the raw click (backlog G36):
+// no running snap moves the pick, and a typed snap override does not apply there.
+func TestTrimFamilyPicksWithoutSnap(t *testing.T) {
+	for _, name := range []string{"TRIM", "EXTEND", "BREAK", "BREAKATPOINT"} {
+		s := newSession(t)
+		addEntities(t, s, line(geom.V(0, 0), geom.V(100, 0)), line(geom.V(50, -50), geom.V(50, 50)))
+		s.Run(name)
+		if p := s.CurrentPrompt(); p == nil || !p.Pick {
+			t.Fatalf("%s: %q is not a pick prompt", name, s.Prompt())
+		}
+		s.Hover(geom.V(52, 1))
+		if _, ok := s.Snap(); ok || s.Cursor() != geom.V(52, 1) {
+			t.Fatalf("%s: the pick prompt snapped the cursor to %v", name, s.Cursor())
+		}
+		before := s.Prompt()
+		s.Submit("INT")
+		if s.Prompt() != before {
+			t.Fatalf("%s: a typed INT armed an override at a pick prompt: %q", name, s.Prompt())
+		}
+	}
+	// BREAK's pick is also its first break point: unsnapped, the break starts where clicked.
+	s := newSession(t)
+	addEntities(t, s, line(geom.V(0, 0), geom.V(100, 0)), line(geom.V(50, -50), geom.V(50, 50)))
+	s.Run("BREAK")
+	s.Click(geom.V(53, 0.5), false)
+	s.Script("80,0")
+	if !hasLine(sortedLines(s), geom.V(0, 0), geom.V(53, 0)) {
+		t.Fatalf("lines = %v", dumpLines(sortedLines(s)))
+	}
+}
+
+// At an object-pick prompt a typed snap name is not an override (L4).
+func TestPickPromptIgnoresTypedOverride(t *testing.T) {
+	s := newSession(t)
+	addEntities(t, s, &doc.Circle{Center: geom.V(0, 0), Radius: 10})
+	s.Script("AREA O INT")
+	if s.Prompt() != "Select object:" {
+		t.Fatalf("prompt = %q", s.Prompt())
+	}
+	s.Click(geom.V(10, 0.2), false)
+	if !historyHas(s, "Circumference") {
+		t.Fatalf("the pick after a typed INT failed:\n%s", history(s))
+	}
+}

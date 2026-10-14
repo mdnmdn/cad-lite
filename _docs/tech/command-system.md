@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The command model, the session state machine, typed-input parsing, the input pipeline from pointer to point, object snaps, ortho and selection.
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -32,19 +32,44 @@ rubber-band geometry for the cursor to a display list) and `Cancel`.
 **Context.** A command reaches the document, the view, the spatial index, the selection and the file
 handler through `cmdsys.Context`. `Context.Tx` opens the command's transaction on first use.
 
+**Work in progress** (`inflight.go`). What a command adds, changes or erases before it ends is real
+document state at once, as in AutoCAD (each LINE segment is an entity the moment it is placed). The
+drawing publishes a change set only at the commit, so after every `Start` and `Input` the session takes
+the transaction's new edits (`doc.Txn.TakeEdits`), applies them to the spatial index, prunes the
+selection, and queues them for the host's display cache: `Session.TakeLiveEdits` returns and forgets
+them, and the canvas drops their cached items before drawing. Snaps, picks and the canvas therefore see
+the running command's work; nothing is journalled or published early, so the command is still one undo
+step and the commit's change set still reaches every listener. A command's `Preview` draws only what is
+not an entity yet (the rubber band, PLINE's polyline in progress, TEXT's next-line box).
+Every commit and abort of a command's transaction goes through the session (`commitOpen`, `abortOpen`;
+`Context.CommitStep` too), which syncs first: an entity indexed in one step and erased in the step that
+commits is absent from the commit's change set (one transaction added and erased it), so only the sync
+removes it from the index. The commit's change set is then not re-applied to the index, which by then
+holds it, and the live-edit queue keeps only what the change set cannot report (an entity added and
+erased), for the host's cache.
+
 **Prompt.** `cmdsys.Prompt` has the message, the set of accepted input kinds, keywords, an optional
 default, and an optional `Base` point. `Prompt.StringIn` renders AutoCAD's form:
 `Specify next point or [Close/Undo] <default>:`, in the language of the translator it is given
 (`Prompt.String` uses `i18n.Current()`). A keyword is its English id (`eXit`); the shortcut, the
 label shown and the matching come from the `i18n` catalog, see Language below. `Prompt.NoOr` drops the
 `or` before the keywords, which AutoCAD omits in its `Enter a ... option [A/B] <A>:` prompts.
+`Prompt.Literal` marks a text-entry prompt (TEXT and MTEXT content) whose answer may hold spaces: the UI
+takes a space as a character at any prompt that accepts text, a script ends a Literal answer only at a newline, and
+`ParseInput` keeps its leading and trailing spaces (an all-blank answer is still Enter).
+`Prompt.Pick` marks a point prompt that selects an object by the click (AREA's `Select object:`, MEASUREGEOM's
+Radius and Angle object prompts): the cursor is the raw pointer, with no object snap, grid snap, ortho or polar,
+and the canvas shows the pickbox, as AutoCAD's object selection does.
 
 **Input kinds.** Point, distance, angle (radians internally, degrees typed), keyword, selection,
 text, integer and Enter. `cmdsys.Input` carries the response.
 
 **File and history state** (`cmdsys/dirty.go`). Each session counts the changes published by its drawing's
 change listener (a committed transaction, an undo, a redo): `Session.Modified`, `Dirty`, `MarkSaved`, and the
-read-only variable `DBMOD`. The counter is reset when the drawing is replaced (`SetDrawing`) and by a save.
+read-only variable `DBMOD`. `Session.MarkModified` increments that counter once when the host actually
+changes drawing metadata outside the entity journal, such as a layer property. It sets Dirty and DBMOD
+without adding an undo step; the host calls it only after a change, never for a cancelled or unchanged
+edit. The counter is reset when the drawing is replaced (`SetDrawing`) and by a save.
 The host reads `Dirty` for its title, status and restart decisions and installs `SetQuitHandler` for QUIT and
 EXIT. A host that keeps several drawings, one session each, installs a `DocumentHost` per session
 (`SetDocumentHost`, read by commands through `Context.Documents`): OPEN asks it to show a tab that has the
@@ -61,7 +86,8 @@ REDO reverses a whole `UNDO n`. When a command ends the session names the undo s
 
 1. **One command, one transaction, one undo step.** The session commits the command's transaction
    when `Input` returns nil, and also on cancel, so what a command committed before Escape stays (as
-   AutoCAD keeps the segments of a cancelled LINE).
+   AutoCAD keeps the segments of a cancelled LINE). Its edits are visible before the commit (Work in
+   progress, above).
 2. **Starting a command cancels the running one.** Replacing the drawing (OPEN, NEW) from inside a
    command does not print a cancel.
 3. **Enter at `Command:` repeats the last command.** An unknown name prints
@@ -87,11 +113,12 @@ REDO reverses a whole `UNDO n`. When a command ends the session names the undo s
    A parse error is printed to the history and the prompt stays. Numbers must be finite: `nan`,
    `inf` and values that overflow (`1e999`) are rejected as an invalid value, and a point whose result overflows
    to infinity as an invalid point.
-5. **Scripts** follow AutoCAD script rules (`scriptTokens`): `Session.Script` drops `;` comments to the end of the line
+5. **Scripts** follow AutoCAD script rules (`runScriptText`): `Session.Script` drops `;` comments to the end of the line
    (`StripScriptComments`; a comment-only line vanishes, an empty line stays), treats a tab as a space, drops
    exactly one final newline (the file's terminator: a script that ends after its last answer sends no Enter, one that
    ends with a blank line sends one), splits on single spaces and newlines and submits each token; an empty token (two
-   separators in a row, a trailing space) is Enter. Scripts queue: the `SCRIPT` command hands the file's text to the
+   separators in a row, a trailing space) is Enter. At a `Prompt.Literal` prompt only a newline ends the answer, so
+   `TEXT` content keeps its spaces (V45). Scripts queue: the `SCRIPT` command hands the file's text to the
    session (`Context.RunScript`), which runs it once that command ended and abandons the script that called it
    (V32); `RSCRIPT` (`Context.RestartScript`) queues the running text again, at most 1000 times in a row. Nothing
    aborts a script on an error, as in AutoCAD. `DELAY` validates its argument and does not wait; `RESUME` does
@@ -197,7 +224,10 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
   (a dropped file Cad-lite cannot open).
 - **Keywords keep their English id** in `Prompt.Keywords` and in `Input.Keyword`; the display
   (`i18n.PromptKeywords`) and the matching (`i18n.MatchKeywords`) are localized. English always
-  matches, whatever the language.
+  matches, whatever the language. `i18n.KeywordGroups` includes TEXT's insertion, justification and
+  style prompts and MTEXT's corner, attachment and style prompts, so `i18n.Verify` checks their
+  localized labels and shortcuts for collisions. Tests compare those groups with the commands'
+  actual prompts.
 - **Names.** `Register` ends with `i18n.RegisterAliases`, so the Italian command names are aliases in
   every language; canonical names stay English. `SnapMode.String` is localized (`SnapMode.In` takes
   a translator).
@@ -208,7 +238,8 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 
 ```
 pointer (window px) → ui: canvas-local px → View.ToModel → model point
-  → Session.Hover: pending typed override (override.go), else running object snap (if on),
+  → Session.Hover: at a Pick prompt the raw point, nothing else; otherwise
+                   pending typed override (override.go), else running object snap (if on),
                    else the snap grid (SNAPMODE), then ortho, or polar tracking, (if on and the prompt has a Base)   → Session.Cursor
   → Session.Click: point prompt → the cursor as a point
                    distance / angle prompt with a Base → measured from the Base
@@ -216,7 +247,8 @@ pointer (window px) → ui: canvas-local px → View.ToModel → model point
                    selection prompt or idle → pick (Shift removes; plain click removes in Remove mode)
 ```
 
-Object snap wins over ortho and polar tracking. Typed coordinates are never snapped or constrained. Polar
+At a `Prompt.Pick` prompt a typed snap name is not an override: the text stage leaves it to the
+prompt, which rejects it. Object snap wins over ortho and polar tracking. Typed coordinates are never snapped or constrained. Polar
 tracking (`polar.go`, `Session.Polar`, `SetPolar`) locks the point onto the ray at the nearest multiple of `POLARANG`
 within 5 degrees; ortho and polar tracking exclude each other (`SetOrtho` and `SetPolar` turn the other off). `polar.go`
 also registers `POLARANG` (live, degrees, default 45), `AUTOSNAP` (live for bit 8, polar tracking; default 55, so off) and `LWDISPLAY`
@@ -235,6 +267,7 @@ and considers:
 | Center | Circle and arc centres |
 | Quadrant | The 0°, 90°, 180° and 270° points of circles, and of arcs where they lie on the arc |
 | Intersection | Every pairwise crossing of the candidate curves |
+| Insertion | The insertion point (`Anchor`) of TEXT and MTEXT (`doc.Annotation`); text offers no other snap point, because its strokes are glyphs |
 | Perpendicular, Tangent | Feet and tangent points from the prompt's `Base` (`FindSnapFrom`); nothing without a base |
 | Nearest | The closest point on any candidate, only when nothing else is in range |
 
@@ -254,9 +287,13 @@ it. State whose substitute prompt has been replaced (Escape, the command moved o
 ## Selection
 
 `cmdsys.Pick` returns the entity whose curves come closest to the point within the aperture, the
-newest on a tie. `cmdsys.SelectBox` selects by box: dragged left to right it is a **window**
+newest on a tie; a point inside a text's box (`doc.Annotation.HitBox`) picks the text, ranked as a
+stroke at the edge of the aperture, so a curve nearer the point (a line across the text) wins. `cmdsys.SelectBox` selects by box: dragged left to right it is a **window**
 (entities entirely inside); right to left it is a **crossing** (entities inside or touching, tested
-on their tessellation). Entities on locked, off or frozen layers are not selectable (`doc.Layer.Editable`). The selection set is
+on their tessellation). A text counts by its text box rather than its glyph strokes (`selectBounds`,
+`touchesBox`; for WP, CP and F `entityPaths` and `inTextBox`): a window must hold the whole box, and a
+crossing window, polygon or fence that meets the box selects the text, even between two letters or
+inside an O. Entities on locked, off or frozen layers are not selectable (`doc.Layer.Editable`). The selection set is
 `cmdsys.Selection`; it drops handles that leave the document.
 
 `Session.HistoryTotal` is the monotonic count of lines ever printed; `Session.History` keeps the last

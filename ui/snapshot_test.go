@@ -2,6 +2,8 @@ package ui_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"image"
 	"image/png"
 	"os"
@@ -141,5 +143,28 @@ func TestSnapshotSample(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, "sample.png"), b, 0o644); err != nil {
 		t.Skip(err)
+	}
+}
+
+// TestSnapshotRulersUnchanged pins the pixels of render_png's rulers: the canvas rulers share
+// their code (ruler.go), and agents compare renders, so the MCP image must not move. A deliberate
+// change to the MCP rulers updates these hashes.
+func TestSnapshotRulersUnchanged(t *testing.T) {
+	s, _ := snapSession(snapScript)
+	cases := []struct {
+		view render.View
+		want string
+	}{
+		{render.View{Center: geom.V(110, 65), Scale: 3.5}, "945475342e92d42b"},
+		{render.View{Center: geom.V(-2500, 1e6), Scale: 0.02}, "b26e8c1890d49ff7"},
+		{render.View{Center: geom.V(0.3, -0.2), Scale: 900}, "8674e58bb86fc872"},
+	}
+	for i, c := range cases {
+		req := cadmcp.SnapshotRequest{Width: 640, Height: 400, View: c.view, Grid: true, Rulers: true}
+		img := snap(t, s, req)
+		sum := sha256.Sum256(img.Pix)
+		if got := hex.EncodeToString(sum[:8]); got != c.want {
+			t.Errorf("case %d: ruler render hash %s, want %s", i, got, c.want)
+		}
 	}
 }

@@ -208,6 +208,15 @@ func (s *Server) Start() (Endpoint, error) // binds 127.0.0.1:0 and generates th
 func (s *Server) Close() error
 type Endpoint struct{ URL, Token string }  // URL = http://127.0.0.1:P/mcp
 ```
+Server limits (behaviour, no exported names): a request body holds at most 4 MB (413 otherwise); a JSON-RPC
+batch array holds 1–100 frames, and an empty or longer one is refused whole with one `-32600` (invalid request)
+error and runs nothing; the HTTP server has a 10 s header timeout, a 2 min idle timeout and a 60 s write
+timeout, counted from the end of the request headers, so handler time counts. The budget counts from the
+request's arrival (before its body is read): a tool call that has not taken the call slot 30 s in (waiting for a
+serialised call or behind earlier frames of its batch) is answered with an `IsError` result and never runs; the
+handler's context carries a deadline 55 s in; the last 5 s are for writing the reply. A handler that returns after
+its deadline loses its reply (the server still writes it, into a closed connection), even if its work took effect,
+so a host must start no irreversible work it cannot finish before that deadline.
 (To keep `mcp` independent of the root package, the conversion is `agentmanager.MCPServer{Name:n,URL:e.URL,Token:e.Token}` written by the caller.)
 
 Package `transcript` (WP2): `type Block interface{}`; concrete `UserMsg{Text; Attachments []Attachment}`, `AgentMsg{ID,Text}`, `Thought{ID,Text}`,
@@ -215,7 +224,9 @@ Package `transcript` (WP2): `type Block interface{}`; concrete `UserMsg{Text; At
 `Note{Level,Text}`; `type Attachment struct{ Name, MIME string; Width, Height int; Thumb []byte }` (an image sent with the
 message: its file name or "", its type and pixel size, and a small PNG preview chosen by the host, nil for none).
 `type T struct`; `func (t *T) AddUser(text string)`, `AddUserWith(text string, a []Attachment)`, `Apply(ev Event)`,
-`Blocks() []Block`, `Version() uint64`, `Running() bool`, `ResolvePermission(requestID string)`. Pure, no goroutines.
+`Blocks() []Block`, `Version() uint64`, `Revision(i int) uint64` (the `Version` at which block i was added or last
+changed, 0 out of range; lets a view re-measure only changed blocks), `Running() bool`, `ResolvePermission(requestID string)`.
+Pure, no goroutines.
 
 Package `harnesses` (WP1 stub, finalised after WP3-5): `func Open(ctx context.Context, cfg agentmanager.Config) (agentmanager.Session, error)`
 (switch on `cfg.Harness`; when `cfg.Binary` is empty it takes the executable `SetBinary` stored for the harness, else resolves it on the effective PATH of `shellenv`, and the child's environment gets that PATH);

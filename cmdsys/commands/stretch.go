@@ -229,6 +229,11 @@ func (c *stretchCmd) stretch(e doc.Entity, v geom.Vec2) {
 		}
 	case *doc.Arc:
 		c.stretchArc(e, v)
+	case doc.Annotation:
+		// Text moves whole when its insertion point is inside, as in AutoCAD.
+		if c.inside(e.Anchor()) {
+			e.Transform(geom.Translate(v))
+		}
 	default:
 		b := e.Bounds()
 		if !b.IsEmpty() && c.inside(b.Min) && c.inside(b.Max) &&

@@ -60,9 +60,10 @@ type storedVar struct {
 }
 
 // storedVars are the AutoCAD variables (acadiso.dwt defaults) a script or a drafter may set that
-// no Cad-lite package owns yet: the ones with no meaning here (FILEDIA, MIRRTEXT, DIMSCALE) are
-// permanent no-ops, the rest hold the value until their package registers the real variable, which
-// then takes the name (registerStoredVars skips a registered name). Angle variables (POLARANG,
+// no Cad-lite package owns yet: the ones with no meaning here (FILEDIA, DIMSCALE) are permanent
+// no-ops, some are read where they are used (MIRROR reads MIRRTEXT), the rest hold the value until
+// their package registers the real variable, which then takes the name (registerStoredVars skips a
+// registered name). Angle variables (POLARANG,
 // SNAPANG, ANGBASE, CHAMFERD) are not listed: their unit is the units package's.
 var storedVars = []storedVar{
 	// Command line and scripts.

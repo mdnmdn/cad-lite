@@ -178,7 +178,7 @@ type breakCmd struct {
 func (*breakCmd) Name() string { return "BREAK" }
 
 func (*breakCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint, Pick: true}
 }
 
 func (c *breakCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
@@ -248,7 +248,7 @@ type breakAtPointCmd struct {
 func (*breakAtPointCmd) Name() string { return "BREAKATPOINT" }
 
 func (*breakAtPointCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint, Pick: true}
 }
 
 func (c *breakAtPointCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {

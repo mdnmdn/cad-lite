@@ -45,9 +45,30 @@ type agentImage struct {
 }
 
 var (
-	errImageType  = errors.New("unsupported image type")
-	errImageLarge = errors.New("image too large")
+	errImageType   = errors.New("unsupported image type")
+	errImageLarge  = errors.New("image too large")
+	errImagePixels = errors.New("image has too many pixels")
 )
+
+// agentImageMaxPixels refuses an image before decoding it when its header announces more pixels:
+// a small file can claim a huge size, and decoding allocates for all of it.
+const agentImageMaxPixels = 50_000_000
+
+// imageConfig reads the size an image's header announces.
+func imageConfig(mime string, data []byte) (image.Config, error) {
+	r := bytes.NewReader(data)
+	switch mime {
+	case "image/png":
+		return png.DecodeConfig(r)
+	case "image/jpeg":
+		return jpeg.DecodeConfig(r)
+	case "image/gif":
+		return gif.DecodeConfig(r)
+	case "image/webp":
+		return webp.DecodeConfig(r)
+	}
+	return image.Config{}, errImageType
+}
 
 // imageMIME is data's type when it is one the agents read: PNG, JPEG, GIF or WebP.
 func imageMIME(data []byte) (string, bool) {
@@ -105,6 +126,13 @@ func newAgentImage(name string, data []byte) (*agentImage, error) {
 	mime, ok := imageMIME(data)
 	if !ok {
 		return nil, errImageType
+	}
+	cfg, err := imageConfig(mime, data)
+	if err != nil {
+		return nil, err
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > agentImageMaxPixels {
+		return nil, errImagePixels
 	}
 	src, err := decodeImage(mime, data)
 	if err != nil {
@@ -215,6 +243,8 @@ func imageError(label string, err error) string {
 		return i18n.T("ui.agent.image.unsupported", label)
 	case errors.Is(err, errImageLarge):
 		return i18n.T("ui.agent.image.too_large", label, agentImageMaxBytes>>20)
+	case errors.Is(err, errImagePixels):
+		return i18n.T("ui.agent.image.too_many_pixels", label, agentImageMaxPixels/1_000_000)
 	}
 	return i18n.T("ui.agent.image.unreadable", label, err)
 }

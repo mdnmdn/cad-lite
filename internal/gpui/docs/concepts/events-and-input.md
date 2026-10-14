@@ -196,7 +196,7 @@ with `HeadlessWindow.Dispatch`.
 
 ### Scrollbar input
 
-`Div.ShowScrollbar()` and `UniformList.ShowScrollbar()` opt into interactive
+`Div.ShowScrollbar()`, `UniformList.ShowScrollbar()` and `List.ShowScrollbar()` opt into interactive
 overlay scrollbars. The primary button drags a thumb proportionally to scroll
 extent, clamped at both ends. Capture follows the stable container ID and axis,
 so movement and release outside the container still work. A primary press on
@@ -219,6 +219,8 @@ automatically. Programmatic offsets still require the caller to refresh.
 Capture cancels when its container/scrollbar disappears, track becomes fully
 clipped, bounds/extent geometry changes, or a programmatic offset changes.
 Resize/content changes cancel the drag rather than retarget it mid-gesture.
+A `List` is the exception for extent changes: measuring items as they come into
+view moves its extent, so its drag re-bases on the current pointer and offset.
 A cancelled gesture still consumes its remaining primary release; the next
 normal content press works normally. This is internal scrollbar capture, not
 a generic drag/drop API.

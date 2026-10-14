@@ -37,6 +37,8 @@ type cmdAreaState struct {
 	// recent holds the commands run lately, newest first; open shows the menu of them.
 	recent []string
 	open   bool
+	// ac is the AutoComplete list and the recall of typed lines (cmdcomplete.go).
+	ac completeState
 }
 
 func (ws *Workspace) historyHeight() float32 {
@@ -66,7 +68,8 @@ func (ws *Workspace) noteCommand(name string) {
 }
 
 // commandArea is the strip under the canvas: the history, with a handle on its top edge that
-// resizes it, and the rounded command box (prompt glyph, current prompt, input, recent commands).
+// resizes it, and the rounded command box (current prompt, input, recent commands), with the
+// AutoComplete list or the recent commands menu above it.
 func (ws *Workspace) commandArea(cmdline gpui.IntoElement, w *gpui.Window) *gpui.Div {
 	hist := ws.session.History()
 	h := ws.historyHeight()
@@ -114,10 +117,9 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement, w *gpui.Window) *gpui
 	})
 	recent.SizeWH(28, 28)
 	box := gpui.NewDiv().ID("cmd-box").FlexRow().ItemsCenter().Gap(10).SizeH(40).FlexShrink(0).Pl(12).Pr(6).Rounded(8).Border(1, border).Bg(uiField).Child(
-		NewIcon(icons.AppPrompt, 16, uiMuted),
 		gpui.NewDiv().ID("cmd-prompt").FlexShrink(0).Tooltip(i18n.T("ui.cmdline.prompt_tip")).
 			Child(monoText(ws.session.Prompt(), fontUI+1).TextColor(uiText)),
-		gpui.NewDiv().Flex1().MinW(0).FlexCol().Child(cmdline),
+		gpui.NewDiv().Flex1().MinW(0).FlexCol().OnKeyDown(ws.commandKeyDown).Child(cmdline),
 		recent,
 	)
 	area := gpui.NewDiv().ID("cmd-area").Relative().FlexCol().FlexShrink(0).Bg(uiPanel).
@@ -126,7 +128,9 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement, w *gpui.Window) *gpui
 		area.Child(lines)
 	}
 	area.Child(gpui.NewDiv().Px_(10).Pb(10).Child(box))
-	if ws.cmd.open {
+	if ws.suggesting() {
+		area.Child(ws.suggestList())
+	} else if ws.cmd.open {
 		area.Child(ws.recentMenu())
 	}
 	return area

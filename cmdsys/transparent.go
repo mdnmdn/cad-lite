@@ -97,10 +97,7 @@ func (s *Session) unwindFrames() {
 		if s.active != nil {
 			s.guard(func() { s.active.Cancel(&s.ctx) })
 		}
-		if s.ctx.txn != nil {
-			s.ctx.txn.Commit()
-			s.ctx.txn = nil
-		}
+		s.commitOpen()
 		s.active, s.prompt = nil, nil
 		s.resumeFrame()
 	}

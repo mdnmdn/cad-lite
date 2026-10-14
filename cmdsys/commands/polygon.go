@@ -109,7 +109,7 @@ func (c *polygonCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt 
 		}
 	case polyEdgeSecond:
 		if in.Kind == cmdsys.InputPoint {
-			pts := polygonFromEdge(c.n, c.edgeA, in.Point)
+			pts := PolygonFromEdge(c.edgeA, in.Point, c.n)
 			if pts == nil {
 				ctx.Say("cmd.common.msg.positive")
 				break
@@ -130,14 +130,32 @@ func (c *polygonCmd) byRadius(in cmdsys.Input) []geom.Vec2 {
 		d := in.Point.Sub(c.center)
 		return polygonFromCenter(c.n, c.center, d.Len(), d.Angle(), c.circumscribed)
 	case cmdsys.InputDistance:
-		// A horizontal bottom edge: an edge midpoint at -90°, or the vertices π/n past it.
-		if c.circumscribed {
-			return polygonFromCenter(c.n, c.center, in.Value, -math.Pi/2, true)
-		}
-		return polygonFromCenter(c.n, c.center, in.Value, -math.Pi/2+math.Pi/float64(c.n), false)
+		return PolygonFromCenter(c.center, in.Value, c.n, !c.circumscribed, 0)
 	}
 	return nil
 }
+
+// PolygonFromCenter returns the vertices, counter-clockwise, of the regular polygon POLYGON draws
+// for a typed radius: sides vertices around center; radius is the circumradius when inscribed
+// is set (Inscribed in circle) and the apothem otherwise (Circumscribed about circle). At
+// rotation 0 the bottom edge is horizontal, as AutoCAD draws a polygon whose radius is typed;
+// rotation (radians) turns it counter-clockwise about center. It returns nil when sides is under
+// 3 or the radius is not a positive finite number.
+func PolygonFromCenter(center geom.Vec2, radius float64, sides int, inscribed bool, rotation float64) []geom.Vec2 {
+	if sides < 3 {
+		return nil
+	}
+	// A horizontal bottom edge: an edge midpoint at -90°, or the vertices π/n past it.
+	if inscribed {
+		return polygonFromCenter(sides, center, radius, -math.Pi/2+math.Pi/float64(sides)+rotation, false)
+	}
+	return polygonFromCenter(sides, center, radius, -math.Pi/2+rotation, true)
+}
+
+// PolygonFromEdge returns the vertices of the regular polygon with sides sides whose first edge
+// runs from a to b, counter-clockwise with the polygon to the left of the edge (POLYGON's Edge
+// option). It returns nil when sides is under 3 or the edge has no length.
+func PolygonFromEdge(a, b geom.Vec2, sides int) []geom.Vec2 { return polygonFromEdge(sides, a, b) }
 
 // polygonFromCenter returns the n vertices of the regular polygon around c. With circumscribed
 // unset, r is the circumradius and a vertex lies at angle; set, r is the apothem and an edge

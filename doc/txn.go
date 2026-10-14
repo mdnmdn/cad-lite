@@ -24,7 +24,9 @@ type Txn struct {
 	// an entity the transaction added.
 	before map[Handle]Entity
 	order  []Handle
-	done   bool
+	// edits lists every handle Add, Modify and Erase touched since Begin or the last TakeEdits.
+	edits []Handle
+	done  bool
 }
 
 // Begin opens a transaction. Only one may be open at a time.
@@ -69,6 +71,7 @@ func (t *Txn) Add(e Entity) Handle {
 		}
 	}
 	t.touch(c.H)
+	t.edits = append(t.edits, c.H)
 	t.d.insert(e)
 	return c.H
 }
@@ -82,6 +85,7 @@ func (t *Txn) Modify(h Handle, fn func(Entity)) {
 		return
 	}
 	t.touch(h)
+	t.edits = append(t.edits, h)
 	fn(e)
 }
 
@@ -92,6 +96,7 @@ func (t *Txn) Erase(h Handle) {
 		return
 	}
 	t.touch(h)
+	t.edits = append(t.edits, h)
 	t.d.remove(h)
 }
 
@@ -155,6 +160,17 @@ func (d *Drawing) AbortOpen() {
 
 // Touched reports whether the transaction has changed anything yet.
 func (t *Txn) Touched() bool { return len(t.order) > 0 }
+
+// TakeEdits returns the handles Add, Modify and Erase touched since Begin or the previous call, in
+// call order and possibly repeated, and starts a new list. Whether a handle now exists says which
+// edit it was. It neither publishes nor journals anything: a host that shows a command's work
+// before the commit (cmdsys.Session) uses it to update its index and display while the
+// transaction is open; the commit's change set still reports the transaction as a whole.
+func (t *Txn) TakeEdits() []Handle {
+	hs := t.edits
+	t.edits = nil
+	return hs
+}
 
 // restore puts state (nil = absent) back for h and records the kind of
 // change in cs.

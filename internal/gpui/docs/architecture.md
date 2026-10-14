@@ -11,6 +11,7 @@ internal/gpui/           core (package gpui), import path cad-lite/internal/gpui
     text_elem.go           Text, StyledText, Str
     background.go shadow.go Fill/gradients, BoxShadow, paintBox
     scroll.go uniform_list.go ScrollHandle, scrollbars, UniformList
+    list.go                List, ListState (virtualized, variable heights)
     styled_layout.go       Div/Text wrappers for margins, positioning and flex shorthands
     scene.go raster.go     Scene primitives, CPU rasterizer, scaleScene
     bounds.go              hitbox list (BoundsTree)

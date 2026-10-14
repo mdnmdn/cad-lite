@@ -108,7 +108,7 @@ func (c *areaCmd) firstPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 }
 
 func (c *areaCmd) objectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Pick: true}
 }
 
 func (c *areaCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -216,7 +216,7 @@ type radiusCmd struct{}
 func (*radiusCmd) Name() string { return "RADIUS" }
 
 func radiusPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.radius.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.radius.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Pick: true}
 }
 
 func (*radiusCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return radiusPrompt(ctx) }
@@ -278,7 +278,7 @@ type angleCmd struct {
 func (*angleCmd) Name() string { return "ANGLE" }
 
 func (*angleCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Pick: true}
 }
 
 func endpointPrompt(msg string, vertex geom.Vec2) *cmdsys.Prompt {
@@ -324,7 +324,7 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		case *doc.Line:
 			c.line1, _ = lineOf(e)
 			c.pick1, c.stage = in.Point, angleLine2
-			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Pick: true}
 		}
 		ctx.Say("cmd.angle.msg.select_object")
 		return c.Start(ctx)
@@ -339,7 +339,7 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 		if !isLine {
 			ctx.Say("cmd.angle.msg.select_line")
-			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Pick: true}
 		}
 		ctx.Say("cmd.angle.msg.result", angleText(ctx, lineAngle(c.line1, c.pick1, l2, in.Point)))
 		return nil

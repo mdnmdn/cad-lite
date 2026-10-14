@@ -65,17 +65,7 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	ws.lay.col = gpui.NewScrollHandle()
 	ws.docTab = ws.newDocTab(d)
 	ws.input = themeBareField(gpui.NewTextInput(i18n.T("ui.cmdline.placeholder")), fontUI+1, true)
-	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
-	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
-	ws.input.OnChange(func(text string, w *gpui.Window, _ *gpui.App) {
-		if text != "" {
-			ws.dismissStart()
-		}
-		// Space is Enter, as in AutoCAD, except where the prompt takes text.
-		if strings.HasSuffix(text, " ") && !ws.acceptsText() {
-			ws.submit(strings.TrimSuffix(text, " "), w)
-		}
-	})
+	ws.wireCommandLine()
 	return ws
 }
 

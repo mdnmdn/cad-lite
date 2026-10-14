@@ -52,11 +52,15 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 	sub := d.Header.HandSeed
 	seed := sub
 	for _, h := range d.Handles() {
-		if p, ok := d.Entity(h).(*doc.LWPolyline); ok {
-			seed += doc.Handle(len(p.Points) + 1)
+		switch e := d.Entity(h).(type) {
+		case *doc.LWPolyline:
+			seed += doc.Handle(len(e.Points) + 1)
+		case *doc.MText:
+			seed += doc.Handle(len(e.Layout().Lines))
 		}
 	}
 	nextSub := func() string { h := sub; sub++; return h.String() }
+	mtexts := 0
 
 	w.pair(0, "SECTION")
 	w.pair(2, "HEADER")
@@ -120,7 +124,8 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 		}
 	}
 	w.pair(0, "ENDTAB")
-	for _, t := range []string{"STYLE", "VIEW", "UCS"} {
+	w.styleTable(d)
+	for _, t := range []string{"VIEW", "UCS"} {
 		w.rawTable(d, t)
 	}
 	w.appidTable(d)
@@ -176,6 +181,11 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 			w.pair(0, "SEQEND")
 			w.pair(5, nextSub())
 			w.pair(8, e.Layer)
+		case *doc.Text:
+			w.text(e)
+		case *doc.MText:
+			w.mtextAsText(e, nextSub)
+			mtexts++
 		case *doc.Unknown:
 			if !r12Entities[e.Type] {
 				warns = append(warns, i18n.T("dxf.warn.not_written_r12", e.Type, h))
@@ -188,16 +198,168 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 	}
 	w.pair(0, "ENDSEC")
 	w.pair(0, "EOF")
+	if mtexts > 0 {
+		warns = append(warns, i18n.T("dxf.warn.mtext_as_text", mtexts))
+	}
 	if w.err == nil {
 		w.err = w.w.Flush()
 	}
 	return warns, w.err
 }
 
+// text writes a TEXT entity as AutoCAD does: group 10 is the computed baseline start (for Aligned
+// and Fit the first baseline point, Insert), 11 the
+// alignment point when the justification is not left-baseline, and the height, rotation and
+// width factor are the ones in effect (Aligned and Fit derive them from the two points).
+func (w *writer) text(e *doc.Text) {
+	lay := e.Layout()
+	w.head("TEXT", e)
+	if e.HAlign == doc.TextAligned || e.HAlign == doc.TextFit {
+		// The baseline's first point, which a backward text's layout origin is not.
+		w.point(10, e.Insert)
+	} else {
+		w.point(10, lay.Origin)
+	}
+	w.num(40, lay.Height)
+	w.pair(1, encodeText(e.Value))
+	if lay.Rotation != 0 {
+		w.num(50, lay.Rotation*180/math.Pi)
+	}
+	if lay.WidthFactor != 1 {
+		w.num(41, lay.WidthFactor)
+	}
+	if e.Oblique != 0 {
+		w.num(51, e.Oblique*180/math.Pi)
+	}
+	w.pair(7, textStyle(e))
+	if e.Generation != 0 {
+		w.int(71, e.Generation)
+	}
+	if e.HAlign != doc.TextLeft {
+		w.int(72, int(e.HAlign))
+	}
+	if e.HAlign != doc.TextLeft || e.VAlign != doc.TextBaseline {
+		w.point(11, e.Align)
+	}
+	if e.VAlign != doc.TextBaseline {
+		w.int(73, int(e.VAlign))
+	}
+}
+
+// mtextAsText writes an MTEXT as R12 can hold it: one left-justified TEXT per line of its
+// layout, the first with the MTEXT's handle and the others with handles above the seed. The
+// formatting codes are already gone from the lines; the box, the attachment and the wrapping
+// width are lost.
+func (w *writer) mtextAsText(e *doc.MText, nextSub func() string) {
+	lay := e.Layout()
+	style := e.Style
+	if style == "" {
+		style = doc.DefaultTextStyle
+	}
+	c := e.Common()
+	first := true
+	for i, l := range lay.Lines {
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		h := c.H.String()
+		if !first {
+			h = nextSub()
+		}
+		first = false
+		w.headAs("TEXT", h, c)
+		w.point(10, lay.Starts[i])
+		w.num(40, e.Height)
+		w.pair(1, encodeText(l))
+		if e.Rotation != 0 {
+			w.num(50, e.Rotation*180/math.Pi)
+		}
+		w.pair(7, style)
+	}
+}
+
+// textStyle is the style name a text is written with.
+func textStyle(e *doc.Text) string {
+	if e.Style == "" {
+		return doc.DefaultTextStyle
+	}
+	return e.Style
+}
+
+// encodeText makes a text value safe for a DXF line: line breaks become spaces and characters
+// outside ASCII are written as \U+XXXX, which every AutoCAD reads whatever the code page.
+func encodeText(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\r':
+			b.WriteByte(' ')
+		case r < 0x80:
+			b.WriteRune(r)
+		case r <= 0xFFFF:
+			fmt.Fprintf(&b, "\\U+%04X", r)
+		default:
+			b.WriteByte('?')
+		}
+	}
+	return b.String()
+}
+
+// styleTable writes the STYLE table: the preserved records, plus a record for the default style
+// and for every style a text names that the table lacks (each drawing with the built-in txt font,
+// which is all Cad-lite draws text with).
+func (w *writer) styleTable(d *doc.Drawing) {
+	rs := d.Preserved.Tables["STYLE"]
+	have := map[string]bool{}
+	for _, r := range rs {
+		have[strings.ToUpper(r.Name())] = true
+	}
+	var add []string
+	need := func(name string) {
+		if u := strings.ToUpper(name); !have[u] {
+			have[u] = true
+			add = append(add, name)
+		}
+	}
+	need(doc.DefaultTextStyle)
+	for _, h := range d.Handles() {
+		switch t := d.Entity(h).(type) {
+		case *doc.Text:
+			need(textStyle(t))
+		case *doc.MText:
+			if t.Style != "" {
+				need(t.Style)
+			}
+		}
+	}
+	w.pair(0, "TABLE")
+	w.pair(2, "STYLE")
+	w.int(70, len(rs)+len(add))
+	w.records(rs)
+	for _, name := range add {
+		w.pair(0, "STYLE")
+		w.pair(2, name)
+		w.int(70, 0)
+		w.num(40, 0)
+		w.num(41, 1)
+		w.num(50, 0)
+		w.int(71, 0)
+		w.num(42, 2.5)
+		w.pair(3, "txt")
+		w.pair(4, "")
+	}
+	w.pair(0, "ENDTAB")
+}
+
 func (w *writer) head(typ string, e doc.Entity) {
 	c := e.Common()
+	w.headAs(typ, c.H.String(), c)
+}
+
+// headAs writes an entity's type, the handle h, the layer and a colour other than ByLayer.
+func (w *writer) headAs(typ, h string, c *doc.EntityCommon) {
 	w.pair(0, typ)
-	w.pair(5, c.H.String())
+	w.pair(5, h)
 	w.pair(8, c.Layer)
 	if c.Color != doc.ByLayer && c.Color > 0 {
 		w.int(62, c.Color)

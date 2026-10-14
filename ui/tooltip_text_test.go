@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -10,24 +11,34 @@ import (
 )
 
 // buttonCommands are the commands of every ribbon and title bar command button.
-var buttonCommands = []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE",
+var buttonCommands = []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "POLYGON", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE",
 	"MIRROR", "OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "JOIN", "EXPLODE", "DIST", "AREA", "ID", "ZOOM",
 	"U", "REDO"}
+
+func platformShortcutExpectation(text string) string {
+	if runtime.GOOS == "darwin" {
+		return strings.ReplaceAll(text, "Ctrl+", "Cmd+")
+	}
+	return text
+}
 
 func TestCommandTipHeadlines(t *testing.T) {
 	ws := NewWorkspace(doc.New(), nil)
 	want := map[string]string{
 		"LINE": "Line (L)", "PLINE": "Polyline (PL)", "CIRCLE": "Circle (C)", "ARC": "Arc (A)",
-		"RECTANG": "Rectangle (REC)", "MOVE": "Move (M)", "COPY": "Copy (CO)", "ROTATE": "Rotate (RO)",
+		"RECTANG": "Rectangle (REC)", "POLYGON": "Polygon (POL)", "MOVE": "Move (M)", "COPY": "Copy (CO)", "ROTATE": "Rotate (RO)",
 		"SCALE": "Scale (SC)", "ERASE": "Erase (E)", "MIRROR": "Mirror (MI)", "OFFSET": "Offset (O)",
 		"FILLET": "Fillet (F)", "CHAMFER": "Chamfer (CHA)", "TRIM": "Trim (TR)", "EXTEND": "Extend (EX)",
 		"BREAK": "Break (BR)", "JOIN": "Join (J)", "EXPLODE": "Explode (X)", "DIST": "Distance (DI)",
 		"AREA": "Area (AA)", "ID": "ID point (ID)", "ZOOM": "Zoom (Z)",
 		"U": "Undo (Ctrl+Z / U)", "REDO": "Redo (Ctrl+Y / REDO)",
 	}
+	if runtime.GOOS == "darwin" {
+		want["REDO"] = "Redo (Cmd+Shift+Z / REDO)"
+	}
 	for _, c := range buttonCommands {
 		head, desc, _ := strings.Cut(ws.commandTip(c), "\n")
-		if head != want[c] {
+		if head != platformShortcutExpectation(want[c]) {
 			t.Errorf("%s: headline %q, want %q", c, head, want[c])
 		}
 		if desc != i18n.Command(c).Desc || desc == "" {
@@ -69,7 +80,7 @@ func TestFileAndSettingsTips(t *testing.T) {
 		{ws.agentTip(), "AI agent (F2 / AI)", "agent panel"},
 	} {
 		head, desc, _ := strings.Cut(tc.got, "\n")
-		if head != tc.head || !strings.Contains(desc, tc.has) {
+		if head != platformShortcutExpectation(tc.head) || !strings.Contains(desc, platformShortcutExpectation(tc.has)) {
 			t.Errorf("tip %q, want headline %q and %q", tc.got, tc.head, tc.has)
 		}
 	}
@@ -77,7 +88,7 @@ func TestFileAndSettingsTips(t *testing.T) {
 	if got := ws.commandTip("LINE"); !strings.HasPrefix(got, "Linea (L)\n") {
 		t.Errorf("LINE it: %q", got)
 	}
-	if got := ws.saveTip(); !strings.HasPrefix(got, "Salva (Ctrl+S / QSAVE)\n") || !strings.Contains(got, "Salva con nome (Ctrl+Shift+S / SAVEAS)") {
+	if got := ws.saveTip(); !strings.HasPrefix(got, platformShortcutExpectation("Salva (Ctrl+S / QSAVE)\n")) || !strings.Contains(got, platformShortcutExpectation("Salva con nome (Ctrl+Shift+S / SAVEAS)")) {
 		t.Errorf("save it: %q", got)
 	}
 }

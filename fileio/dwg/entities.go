@@ -369,3 +369,88 @@ func polylineEntity(c doc.EntityCommon, p polyline2D, vs []vertex2D) doc.Entity 
 	}
 	return e
 }
+
+// readText parses a TEXT. The style handle follows the common handles; styles maps it to the
+// style name ("" when the STYLE record was not read, which the document reads as the default).
+// A -Z extrusion is converted as the DXF reader converts it: mirrored X, upside-down text.
+func (o *object) readText(h entityHeader, layers, styles func(uint64) string) doc.Entity {
+	m := o.main
+	var ix, iy, ax, ay, oblique, rot, height, wf float64
+	var gen, ha, va int
+	var nx, ny, nz float64
+	var value string
+	if o.src.ver <= verR14 {
+		m.bd() // elevation
+		ix, iy = m.point2()
+		ax, ay = m.point2()
+		nx, ny, nz = m.point3bd()
+		m.bd() // thickness
+		oblique, rot, height, wf = m.bd(), m.bd(), m.bd(), m.bd()
+		value = o.str()
+		gen, ha, va = int(m.bs()), int(m.bs()), int(m.bs())
+	} else {
+		flags := m.rc()
+		if flags&0x01 == 0 {
+			m.rd() // elevation
+		}
+		ix, iy = m.point2()
+		ax, ay = ix, iy
+		if flags&0x02 == 0 {
+			ax = m.dd(ix)
+			ay = m.dd(iy)
+		}
+		nx, ny, nz = m.bitExtrusion()
+		m.bitThickness()
+		if flags&0x04 == 0 {
+			oblique = m.rd()
+		}
+		if flags&0x08 == 0 {
+			rot = m.rd()
+		}
+		height = m.rd()
+		wf = 1
+		if flags&0x10 == 0 {
+			wf = m.rd()
+		}
+		value = o.str()
+		if flags&0x20 == 0 {
+			gen = int(m.bs())
+		}
+		if flags&0x40 == 0 {
+			ha = int(m.bs())
+		}
+		if flags&0x80 == 0 {
+			va = int(m.bs())
+		}
+	}
+	style := styles(o.hnd.handle(0))
+	if !finite(ix, iy, ax, ay, oblique, rot, height, wf) {
+		panic(errCorrupt)
+	}
+	t := &doc.Text{EntityCommon: o.common(h, layers), Height: height, Rotation: geom.NormAngle(rot), WidthFactor: wf,
+		Oblique: oblique, Style: style, HAlign: doc.TextHAlign(ha), VAlign: doc.TextVAlign(va),
+		Generation: gen & (doc.TextBackward | doc.TextUpsideDown), Value: value}
+	if !(t.WidthFactor > 0) {
+		t.WidthFactor = 1
+	}
+	t.Sanitize()
+	if t.HAlign < doc.TextLeft || t.HAlign > doc.TextFit {
+		t.HAlign = doc.TextLeft
+	}
+	if t.VAlign < doc.TextBaseline || t.VAlign > doc.TextTop {
+		t.VAlign = doc.TextBaseline
+	}
+	if t.Style == "" {
+		t.Style = doc.DefaultTextStyle
+	}
+	c := newOCS(nx, ny, nz)
+	t.Insert, t.Align = c.point(ix, iy), c.point(ax, ay)
+	if t.HAlign == doc.TextLeft && t.VAlign == doc.TextBaseline {
+		t.Align = t.Insert // unused; R14 stores zero, R2000 the insertion point
+	}
+	if c.mirror {
+		t.Rotation = geom.NormAngle(math.Pi - t.Rotation)
+		t.Generation ^= doc.TextUpsideDown
+	}
+	return t
+}

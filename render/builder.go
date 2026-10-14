@@ -1,6 +1,15 @@
 package render
 
-import "cad-lite/doc"
+import (
+	"math"
+
+	"cad-lite/doc"
+)
+
+// textGreekPx is the capital height, in pixels at the lowest scale of a zoom band, below which a
+// text draws as a single line: its glyphs would be an unreadable smudge that costs as much to
+// draw as a legible label.
+const textGreekPx = 3
 
 // Builder turns entities into display items, caching each entity's
 // tessellation per zoom band. Feed it every change set (Invalidate) so the
@@ -133,6 +142,14 @@ func (b *Builder) Items(h doc.Handle, v View) []DisplayItem {
 	col := b.EntityColor(e)
 	var items []DisplayItem
 	weight := b.weightOf(e)
+	if t, ok := e.(doc.Annotation); ok && t.CharHeight()*math.Exp2(float64(band)) < textGreekPx {
+		// Text too small to read draws as one line per row of text.
+		for _, l := range t.Greek() {
+			items = append(items, DisplayItem{Owner: h, Kind: ItemPolyline, Points: l, Color: col, Weight: weight})
+		}
+		b.cache[h] = cached{band: band, items: items}
+		return items
+	}
 	for _, c := range e.Geometry() {
 		items = append(items, DisplayItem{Owner: h, Kind: ItemPolyline, Points: c.Tessellate(tol, nil), Color: col, Weight: weight})
 	}
