@@ -25,7 +25,7 @@ func TestQuitDuringStartClosesTheLateSession(t *testing.T) {
 		<-ctx.Done() // the start completes after quit cancelled it
 		return late, nil
 	})
-	r.click(posStart)
+	r.click(r.pos("agent-start"))
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):

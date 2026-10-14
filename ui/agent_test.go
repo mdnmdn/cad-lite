@@ -70,13 +70,25 @@ type agentRig struct {
 	more []*fakeSession
 }
 
-// Positions of the panel controls in the 1280x800 window.
-var (
-	posStart  = gpui.Point{X: 1245, Y: 152}
-	posInput  = gpui.Point{X: 1040, Y: 639}
-	posSend   = gpui.Point{X: 1246, Y: 639}
-	posCancel = gpui.Point{X: 1241, Y: 639}
-)
+// pos is the centre of the element with the given id, found by hit testing the window.
+func (r *agentRig) pos(id string) gpui.Point {
+	r.t.Helper()
+	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere(id)
+	if !ok {
+		r.t.Fatalf("%s not on screen", id)
+	}
+	return gpui.Point{X: gpui.Pixels((b.x0 + b.x1) / 2), Y: gpui.Pixels((b.y0 + b.y1) / 2)}
+}
+
+// inputPos is a point on the composer's input line.
+func (r *agentRig) inputPos() gpui.Point {
+	r.t.Helper()
+	b, ok := (&tbRig{t: r.t, hw: r.hw}).boundsAnywhere("agent-composer")
+	if !ok {
+		r.t.Fatal("agent composer not on screen")
+	}
+	return gpui.Point{X: gpui.Pixels((b.x0 + b.x1) / 2), Y: gpui.Pixels(b.y0 + 24)}
+}
 
 func openAgent(t *testing.T) *agentRig {
 	t.Helper()
@@ -158,7 +170,7 @@ func (r *agentRig) typ(s string) {
 
 func (r *agentRig) start() {
 	r.t.Helper()
-	r.click(posStart)
+	r.click(r.pos("agent-start"))
 	r.until("session", func() bool { return r.ws.AgentPanel().Running() && len(r.cfg) == 1 })
 	r.tick()
 }
@@ -206,7 +218,7 @@ func TestAgentStartWiresCadMCPAndPolicy(t *testing.T) {
 func TestAgentPromptSubmitCallsPrompt(t *testing.T) {
 	r := openAgent(t)
 	r.start()
-	r.click(posInput)
+	r.click(r.inputPos())
 	r.typ("draw a circle")
 	r.hw.Dispatch(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "enter"}})
 	r.fs.mu.Lock()
@@ -228,9 +240,9 @@ func TestAgentPromptSubmitCallsPrompt(t *testing.T) {
 
 func TestAgentSendWithoutSessionStartsAndQueues(t *testing.T) {
 	r := openAgent(t)
-	r.click(posInput)
+	r.click(r.inputPos())
 	r.typ("hello")
-	r.click(posSend)
+	r.click(r.pos("agent-send"))
 	r.until("queued prompt", func() bool {
 		r.fs.mu.Lock()
 		defer r.fs.mu.Unlock()
@@ -248,7 +260,7 @@ func TestAgentPermissionButtonAnswers(t *testing.T) {
 			{ID: "r", Name: "Reject", Kind: agentmanager.RejectOnce}}}
 	r.until("permission block", func() bool { return len(r.ws.AgentPanel().Transcript().Blocks()) == 1 })
 	r.hw.Pixels()
-	r.click(gpui.Point{X: 998, Y: 237})
+	r.click(r.pos("agent-perm-p1-a"))
 	r.fs.mu.Lock()
 	ids, ans := r.fs.answerIDs, r.fs.answers
 	r.fs.mu.Unlock()
@@ -262,7 +274,7 @@ func TestAgentCancelButtonWhileRunning(t *testing.T) {
 	r.start()
 	r.ws.AgentPanel().Send("go", r.hw.Window())
 	r.tick()
-	r.click(posCancel)
+	r.click(r.pos("agent-cancel"))
 	r.fs.mu.Lock()
 	n := r.fs.cancels
 	r.fs.mu.Unlock()
@@ -283,7 +295,7 @@ func TestAgentPromptErrorEndsTurn(t *testing.T) {
 
 func TestAgentEscapeReturnsFocusToCommandLine(t *testing.T) {
 	r := openAgent(t)
-	r.click(posInput)
+	r.click(r.inputPos())
 	r.typ("x")
 	r.hw.Dispatch(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "escape"}})
 	r.typ("line")
@@ -381,7 +393,7 @@ func TestAgentF2TogglesPanel(t *testing.T) {
 
 func TestAgentPanelButtonTooltip(t *testing.T) {
 	r := openAgent(t)
-	r.hw.Dispatch(gpui.MouseMoveEvent{Position: posStart})
+	r.hw.Dispatch(gpui.MouseMoveEvent{Position: r.pos("agent-start")})
 	if err := r.p.Advance(600 * time.Millisecond); err != nil {
 		t.Fatal(err)
 	}

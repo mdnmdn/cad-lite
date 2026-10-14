@@ -189,13 +189,10 @@ func extFilters(exts []string) []filedialog.Filter {
 	return fs
 }
 
-// fileButton is a toolbar button for a file action: icon over label, with its own tooltip. alt,
-// when set, runs on a right click.
-func (ws *Workspace) fileButton(id, label, tip string, icon icons.Name, act, alt func(*gpui.Window)) *gpui.Div {
-	b := gpui.NewDiv().ID("tool-"+id).FlexCol().ItemsCenter().Gap(2).Px_(6).Py_(4).Rounded(4).Tooltip(tip).
-		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { act(w) }).
-		Child(NewIcon(icon, toolIconSize, uiText), gpui.NewText(label).TextSize(10))
+// fileButton is an icon-only title bar button for a file action, with its own tooltip. alt, when
+// set, runs on a right click.
+func (ws *Workspace) fileButton(id, tip string, icon icons.Name, act, alt func(*gpui.Window)) *gpui.Div {
+	b := iconButton("tool-"+id, tip, icon, false, act)
 	if alt != nil {
 		b.OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
 			if e.IsRight() {

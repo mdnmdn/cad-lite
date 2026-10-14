@@ -55,10 +55,16 @@ func (s *Session) wantsPoint() bool {
 }
 
 func (s *Session) constrain(p geom.Vec2) geom.Vec2 {
-	if !s.Ortho || s.prompt == nil || s.prompt.Base == nil {
+	if s.prompt == nil || s.prompt.Base == nil {
 		return p
 	}
 	b := *s.prompt.Base
+	if !s.Ortho {
+		if s.aids.polar {
+			return s.polarConstrain(p, b)
+		}
+		return p
+	}
 	d := p.Sub(b)
 	if math.Abs(d.X) >= math.Abs(d.Y) {
 		return geom.V(p.X, b.Y)

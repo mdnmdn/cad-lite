@@ -25,7 +25,7 @@ func init() { RegisterVarGroup(coreVars) }
 func coreVars(s *Session, v *Vars) {
 	v.Register(Var{Name: "ORTHOMODE", Kind: VarInt, Default: 0, Min: 0, Max: 1,
 		Read:     func() any { return boolInt(s.Ortho) },
-		OnChange: func(_, n any) { s.Ortho = n.(int) != 0 }})
+		OnChange: func(_, n any) { s.SetOrtho(n.(int) != 0) }})
 	v.Register(Var{Name: "APERTURE", Kind: VarInt, Default: 8, Min: 1, Max: 50,
 		Read:     func() any { return int(s.Aperture) },
 		OnChange: func(_, n any) { s.Aperture = float64(n.(int)) }})
@@ -83,7 +83,6 @@ var storedVars = []storedVar{
 	{name: "REGENMODE", kind: VarInt, def: 1, max: 1},
 	// Drafting aids (WP3 registers the live ones).
 	{name: "OSMODE", kind: VarInt, def: 4133, max: 32767},
-	{name: "AUTOSNAP", kind: VarInt, def: 63, max: 127},
 	{name: "PICKBOX", kind: VarInt, def: 3, max: 50},
 	{name: "POLARMODE", kind: VarInt, def: 0, max: 15},
 	{name: "GRIDMODE", kind: VarInt, def: 1, max: 1},

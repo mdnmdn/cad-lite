@@ -1,0 +1,61 @@
+# Splitters resize the Layers column, the chevrons fold the panels, and every change is put back
+# at the end because the scenarios share one settings file (the layout is saved there).
+app -demo
+move 600 400
+shot base
+# The column splitter at the left edge of Layers/Properties: drag it 100 px left, then reset it
+# with a double click.
+drag 1058 400 958 400
+wait 300
+move 600 400
+shot wider
+expect-diff base wider
+dclick 958 400
+wait 300
+move 600 400
+shot reset
+expect-same base reset
+# Fold the Layers section to its header, then bring it back.
+click 1090 148
+wait 300
+move 600 400
+shot layers_folded
+expect-diff base layers_folded
+click 1090 148
+wait 300
+move 600 400
+shot layers_back
+expect-same base layers_back
+# Fold the whole column to a strip, then expand it.
+click 1261 148
+wait 300
+move 600 400
+shot strip
+expect-diff base strip
+click 1265 148
+wait 300
+move 600 400
+shot column_back
+expect-same base column_back
+# Fold the command history to the input row, then expand it.
+click 1036 617
+wait 300
+move 600 400
+shot history_folded
+expect-diff base history_folded
+click 1036 706
+wait 300
+move 600 400
+shot history_back
+expect-same base history_back
+# The title bar button hides the ribbon and shows it again.
+click 1194 22
+wait 300
+move 600 400
+shot ribbon_folded
+expect-diff base ribbon_folded
+click 1194 22
+wait 300
+move 600 400
+shot ribbon_back
+expect-same base ribbon_back

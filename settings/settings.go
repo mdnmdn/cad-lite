@@ -67,6 +67,32 @@ type Window struct {
 	Height int
 }
 
+// MaxLayoutSize bounds each stored panel size in logical pixels; zero means
+// "automatic" and is kept as is.
+const MaxLayoutSize = 4096
+
+// Layout is the workspace layout the user arranged: panel sizes in logical
+// pixels (zero means automatic) and which panels are collapsed. Collapsing
+// keeps the size, so expanding restores it.
+type Layout struct {
+	// SideWidth is the Layers and Properties column's width.
+	SideWidth int
+	// AgentWidth is the agent column's width.
+	AgentWidth int
+	// LayersHeight caps the Layers section's height; the section never grows past its rows.
+	LayersHeight int
+	// HistoryHeight is the command history's height.
+	HistoryHeight int
+	// SideCollapsed folds the Layers and Properties column to a thin strip.
+	SideCollapsed bool
+	// LayersCollapsed and PropsCollapsed fold one section to its header.
+	LayersCollapsed, PropsCollapsed bool
+	// HistoryCollapsed hides the command history, leaving the input row.
+	HistoryCollapsed bool
+	// RibbonCollapsed hides the ribbon's button groups.
+	RibbonCollapsed bool
+}
+
 // Settings are the user's persisted preferences.
 type Settings struct {
 	// Theme names a registered UI theme ("dark", "light", ...). Unknown names
@@ -89,6 +115,8 @@ type Settings struct {
 	LastUpdateCheck time.Time
 	// Window is the size to open the window at.
 	Window Window
+	// Layout is the arrangement of the workspace panels.
+	Layout Layout
 	// Extra round-trips keys this version does not know. Top-level keys are
 	// stored under their name, keys inside a known table as "table.key".
 	Extra map[string]any
@@ -141,6 +169,16 @@ func (s *Settings) Normalize() []string {
 	if !ok {
 		w = append(w, i18n.T("settings.warn.wheel", s.Wheel, WheelModes, WheelAuto))
 		s.Wheel = WheelAuto
+	}
+	for _, d := range []struct {
+		name string
+		v    *int
+	}{{"layout.side_width", &s.Layout.SideWidth}, {"layout.agent_width", &s.Layout.AgentWidth},
+		{"layout.layers_height", &s.Layout.LayersHeight}, {"layout.history_height", &s.Layout.HistoryHeight}} {
+		if c := min(max(*d.v, 0), MaxLayoutSize); c != *d.v {
+			w = append(w, i18n.T("settings.warn.out_of_range", d.name, *d.v, c))
+			*d.v = c
+		}
 	}
 	for _, d := range []struct {
 		name string

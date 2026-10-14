@@ -241,3 +241,18 @@ func (c *Context) FmtAngleRel(rad float64) string {
 }
 
 func clampPrec(p int) int { return max(0, min(p, 8)) }
+
+// insUnitNames are the INSUNITS codes' abbreviations, indexed by code; "" is unitless.
+var insUnitNames = [...]string{"", "in", "ft", "mi", "mm", "cm", "m", "km", "µin", "mil", "yd", "Å", "nm", "µm", "dm", "dam", "hm", "Gm", "AU", "ly", "pc", "US ft", "US in", "US yd", "US mi"}
+
+// UnitName returns the abbreviation of the drawing unit INSUNITS code names ("mm", "cm", "in"),
+// or "" for unitless and for a code with no unit.
+func UnitName(code int) string {
+	if code < 0 || code >= len(insUnitNames) {
+		return ""
+	}
+	return insUnitNames[code]
+}
+
+// Units returns the drawing's insertion unit abbreviation (INSUNITS), "" when unitless.
+func (s *Session) Units() string { return UnitName(s.vars.Int("INSUNITS")) }

@@ -123,7 +123,7 @@ func newAgentPanel(ws *Workspace) *AgentPanel {
 	p := &AgentPanel{
 		ws:    ws,
 		open:  harnesses.Open,
-		input: themeField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder"))),
+		input: themeBareField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder")), fontUI, false),
 	}
 	p.cur = newAgentTab()
 	p.tabs = []*agentTab{p.cur}
@@ -309,6 +309,11 @@ func (p *AgentPanel) ensureServer(w *gpui.Window) error {
 // the pump timer picks up the result.
 func (p *AgentPanel) Start(w *gpui.Window) {
 	p.ensureLoaded()
+	if t := p.cur; t.state == agentIdle && p.harnessOf(t) == "" {
+		t.tr.Apply(agentmanager.Log{Level: "warn", Message: i18n.T("ui.agent.warn.no_agent")})
+		w.Refresh()
+		return
+	}
 	p.startTab(p.cur, w)
 }
 

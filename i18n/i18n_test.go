@@ -302,14 +302,15 @@ func TestCommandMetadata(t *testing.T) {
 	}
 }
 
-func TestToolbarTooltipsExist(t *testing.T) {
-	toolbar := map[string]string{"line": "LINE", "pline": "PLINE", "circle": "CIRCLE", "arc": "ARC", "rect": "RECTANG",
-		"move": "MOVE", "copy": "COPY", "rotate": "ROTATE", "scale": "SCALE", "erase": "ERASE", "dist": "DIST",
-		"area": "AREA", "undo": "UNDO", "redo": "REDO", "zoom": "ZOOM"}
+// TestRibbonTooltipsExist checks every command with a ribbon or title bar button: its caption (the
+// command's display name) and its "Title — text (keys)" tooltip exist in every language.
+func TestRibbonTooltipsExist(t *testing.T) {
+	buttons := []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE", "MIRROR",
+		"OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "JOIN", "EXPLODE", "DIST", "AREA", "ID", "ZOOM", "U", "REDO"}
 	for _, l := range Langs {
-		for id, cmd := range toolbar {
-			if !Has(l, "ui.toolbar."+id) {
-				t.Errorf("%s: no label ui.toolbar.%s", l, id)
+		for _, cmd := range buttons {
+			if CommandIn(l, cmd).Name == "" {
+				t.Errorf("%s: no display name for %s", l, cmd)
 			}
 			if tip := CommandIn(l, cmd).Tip; !strings.Contains(tip, " — ") || !strings.HasSuffix(tip, ")") {
 				t.Errorf("%s: tooltip for %s is not \"Title — text (keys)\": %q", l, cmd, tip)

@@ -90,3 +90,11 @@ func TestParseAngleText(t *testing.T) {
 		}
 	}
 }
+
+func TestUnitName(t *testing.T) {
+	for code, want := range map[int]string{0: "", 1: "in", 4: "mm", 5: "cm", 6: "m", 24: "US mi", 25: "", -1: ""} {
+		if got := cmdsys.UnitName(code); got != want {
+			t.Errorf("UnitName(%d) = %q, want %q", code, got, want)
+		}
+	}
+}

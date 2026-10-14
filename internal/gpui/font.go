@@ -13,6 +13,8 @@ import (
 	tsfont "github.com/go-text/typesetting/font"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gomono"
+	"golang.org/x/image/font/gofont/gomonobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
@@ -25,8 +27,10 @@ var ErrNoFont = errors.New("gpui: no usable system font found")
 
 // Pseudo-paths naming the bundled Go fonts in the FontManager caches.
 const (
-	bundledRegularPath = "gpui:bundled/goregular"
-	bundledBoldPath    = "gpui:bundled/gobold"
+	bundledRegularPath  = "gpui:bundled/goregular"
+	bundledBoldPath     = "gpui:bundled/gobold"
+	bundledMonoPath     = "gpui:bundled/gomono"
+	bundledMonoBoldPath = "gpui:bundled/gomonobold"
 )
 
 // NoSystemFontsEnv is the environment variable that, when non-empty, makes
@@ -48,6 +52,10 @@ func bundledFontData(path string) []byte {
 		return goregular.TTF
 	case bundledBoldPath:
 		return gobold.TTF
+	case bundledMonoPath:
+		return gomono.TTF
+	case bundledMonoBoldPath:
+		return gomonobold.TTF
 	}
 	return nil
 }
@@ -547,6 +555,12 @@ func (m *FontManager) familyLocked(name string) familyEntry {
 			}
 		}
 		break
+	}
+	if e.regular == nil && (key == "monospace" || key == "uimonospace") {
+		e.regular, _ = m.loadLocked(bundledMonoPath)
+		if e.regular != nil {
+			e.bold, _ = m.loadLocked(bundledMonoBoldPath)
+		}
 	}
 	m.families[key] = e
 	return e

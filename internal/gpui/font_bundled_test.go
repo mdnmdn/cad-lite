@@ -32,3 +32,19 @@ func TestBundledFontWhenSystemFontsDisabled(t *testing.T) {
 		t.Fatalf("Fallback used a system font: %q", f.path)
 	}
 }
+
+func TestMonospaceFallsBackToBundledGoMono(t *testing.T) {
+	t.Setenv(NoSystemFontsEnv, "1")
+	m := NewFontManager()
+	reg, err := m.Face("monospace", 14, 400)
+	if err != nil || reg.path != bundledMonoPath {
+		t.Fatalf("monospace = %v, %v; want bundled Go Mono", reg, err)
+	}
+	bold, err := m.Face("monospace", 14, 700)
+	if err != nil || bold.path != bundledMonoBoldPath || bold.synthBold {
+		t.Fatalf("bold monospace = %v, %v; want real bundled Go Mono Bold", bold, err)
+	}
+	if reg.Family() == "" || !reg.HasGlyph('0') {
+		t.Fatalf("bundled mono face unusable: family %q", reg.Family())
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"cad-lite/cmdsys/commands"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/render"
@@ -14,9 +15,9 @@ import (
 const (
 	zoomSliderMinExp = -3
 	zoomSliderMaxExp = 3
-	// zoomButtonFactor is the scale step of the - and + buttons.
+	// zoomButtonFactor is the scale step of the canvas's zoom in and zoom out buttons.
 	zoomButtonFactor = 1.25
-	zoomSliderWidth  = 110
+	zoomSliderWidth  = 96
 )
 
 // zoomToSlider maps a view scale to the slider's value, its decimal log.
@@ -61,18 +62,20 @@ func (ws *Workspace) setZoom(scale float64, drag bool) {
 	}
 }
 
-// zoomControls is the status bar's zoom group: - and + buttons around the
-// slider, and the scale as a percentage.
-func (ws *Workspace) zoomControls() *gpui.Div {
-	step := func(id, label, tip string, f float64) *gpui.Div {
-		return gpui.NewDiv().ID("status-zoom-" + id).Px_(6).Rounded(3).Tooltip(tip).FlexShrink(0).
-			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-				ws.setZoom(ws.view.Scale*f, false)
-				w.Refresh()
-			}).
-			Child(gpui.NewText(label).FontWeight(700))
+// zoomExtents fits the drawing in the window as a step of its own on the ZOOM Previous stack.
+func (ws *Workspace) zoomExtents() {
+	v := ws.view
+	if v.Width <= 0 || v.Height <= 0 {
+		return
 	}
+	h := v.History()
+	h.Save(*v)
+	commands.ZoomExtents(ws.session.Drawing(), v)
+	h.Settle(*v)
+}
+
+// zoomControls is the status bar's zoom group: the slider and the scale as a percentage.
+func (ws *Workspace) zoomControls() *gpui.Div {
 	slider := NewSlider("status-zoom-slider", &ws.zoom, SliderOptions{
 		Value: zoomToSlider(ws.view.Scale), Min: zoomSliderMinExp, Max: zoomSliderMaxExp,
 		OnChange: func(v float64, _ *gpui.Window) { ws.setZoom(sliderToZoom(v), ws.zoom.Dragging()) },
@@ -81,11 +84,9 @@ func (ws *Workspace) zoomControls() *gpui.Div {
 			ws.view.History().Settle(*ws.view)
 		},
 	}).SizeW(zoomSliderWidth).FlexShrink(0).Tooltip(i18n.T("ui.status.zoom_slider_tip"))
-	return gpui.NewDiv().ID("status-zoom").FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Children(
-		step("out", "−", i18n.T("ui.status.zoom_out_tip"), 1/zoomButtonFactor),
+	return gpui.NewDiv().ID("status-zoom").FlexRow().ItemsCenter().Gap(8).FlexShrink(0).Children(
 		slider,
-		step("in", "+", i18n.T("ui.status.zoom_in_tip"), zoomButtonFactor),
-		gpui.NewDiv().ID("status-zoom-readout").SizeW(58).Tooltip(i18n.T("ui.status.zoom_readout_tip")).
+		gpui.NewDiv().ID("status-zoom-readout").SizeW(52).Tooltip(i18n.T("ui.status.zoom_readout_tip")).
 			Child(gpui.NewText(zoomPercent(ws.view.Scale)).TextColor(uiMuted)),
 	)
 }

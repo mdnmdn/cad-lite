@@ -3,7 +3,7 @@
 # steps put the dark theme back so later scenarios sharing that folder start the same.
 app -demo
 shot before
-click 1240 62
+click 1253 22
 wait 300
 shot panel
 expect-diff before panel

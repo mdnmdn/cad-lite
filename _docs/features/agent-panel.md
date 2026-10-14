@@ -7,7 +7,7 @@ summary: The on-demand docked chat panel that runs AI coding agents (opencode, C
 read_when: you are changing the agent panel, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -23,9 +23,9 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 ## Behaviour
 
 - **On demand.** Nothing agent related runs or exists until the user asks: no panel object, no MCP
-  server, no process, no timer and no files. Three things ask: the `Agent` button at the right end of
-  the toolbar, **F2**, and the `AI` command (alias `AGENT`). The first two show and hide the panel, which
-  docks to the right of the layers panel. `AI` prompts `Ask the agent`, which takes free text (Space
+  server, no process, no timer and no files. Three things ask: the `Agent` icon button at the right end of
+  the title bar, **F2**, and the `AI` command (alias `AGENT`). The first two show and hide the panel, which
+  docks to the right of the layers panel and runs from under the ribbon to the status bar. Its width defaults to a quarter of the window and the user drags it at its left edge ([Drawing canvas](canvas.md) has the limits); the `>` button at the top hides it. `AI` prompts `Ask the agent`, which takes free text (Space
   does not submit it): text opens the panel and sends it to the active tab, starting a session if the
   tab has none; an empty answer toggles the panel. A prompt sent while the tab's agent works is refused
   with a note. Hiding the panel leaves running sessions alive; a dot on the `Agent` button shows that

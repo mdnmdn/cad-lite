@@ -4,10 +4,12 @@ import (
 	"cad-lite/settings"
 	"math"
 
+	"cad-lite/assets/icons"
 	"cad-lite/cmdsys"
 	"cad-lite/cmdsys/commands"
 	"cad-lite/doc"
 	"cad-lite/geom"
+	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/render"
 	"cad-lite/render/gpuirender"
@@ -69,7 +71,7 @@ func (ws *Workspace) wantsPoint() bool {
 
 func (ws *Workspace) canvasElement() *gpui.Div {
 	c := &ws.canvas
-	return gpui.NewDiv().ID("canvas").Flex1().MinW(0).OverflowHidden().
+	return gpui.NewDiv().ID("canvas").Relative().Flex1().MinW(0).MinH(0).OverflowHidden().
 		OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
 			if fh := ws.input.FocusHandle(); fh != nil {
 				w.RequestFocus(fh)
@@ -130,7 +132,61 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
-		Child(gpui.NewCanvas(ws.paintCanvas))
+		Child(gpui.NewCanvas(ws.paintCanvas), ws.viewportLabel(), ws.zoomPill(), ws.ucsLabels())
+}
+
+// Overlay metrics, in logical pixels from the canvas's edges.
+const (
+	overlayInset = 16
+	// ucsInset is the UCS icon origin's distance from the canvas's left and bottom edges, ucsLen
+	// the length of its axes.
+	ucsInset = 30
+	ucsLen   = 40
+)
+
+// viewportLabel is the "[-][Top][2D Wireframe]" caption at the canvas's top left.
+func (ws *Workspace) viewportLabel() *gpui.Div {
+	return gpui.NewDiv().ID("viewport-label").Absolute().Left(overlayInset + 4).Top(overlayInset).Tooltip(i18n.T("ui.canvas.viewport_tip")).
+		Child(monoText(i18n.T("ui.canvas.viewport_label"), fontUI).TextColor(uiMuted))
+}
+
+// zoomPill is the floating column of zoom in, zoom out and zoom extents at the canvas's top right.
+// Presses on it do not reach the canvas, so they never pick, focus or start a box.
+func (ws *Workspace) zoomPill() *gpui.Div {
+	btn := func(id, tip string, icon icons.Name, f func()) *gpui.Div {
+		b := iconButton(id, tip, icon, false, func(w *gpui.Window) { f(); w.Refresh() })
+		return b.SizeWH(40, 40)
+	}
+	return gpui.NewDiv().ID("canvas-zoom").Absolute().Top(overlayInset).Right(overlayInset).FlexCol().Gap(2).P(4).Rounded(10).
+		Bg(uiPanel).Border(1, uiBorder).
+		OnMouseDown(func(_ *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
+		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
+		OnScrollWheel(func(_ *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
+		Child(
+			btn("canvas-zoom-in", i18n.T("ui.canvas.zoom_in_tip"), icons.AppAdd, func() { ws.setZoom(ws.view.Scale*zoomButtonFactor, false) }),
+			btn("canvas-zoom-out", i18n.T("ui.canvas.zoom_out_tip"), icons.AppRemove, func() { ws.setZoom(ws.view.Scale/zoomButtonFactor, false) }),
+			btn("canvas-zoom-fit", i18n.T("ui.canvas.zoom_fit_tip"), icons.ViewFit, ws.zoomExtents),
+		)
+}
+
+// ucsLabels are the "Y" and "X" letters at the tips of the UCS icon's axes; the axes themselves
+// are in the display list (ucsIcon).
+func (ws *Workspace) ucsLabels() *gpui.Div {
+	letter := func(s string, col render.Color) *gpui.Text {
+		return monoText(s, fontSmall).TextColor(gpuiColor(col))
+	}
+	return gpui.NewDiv().ID("ucs-labels").Absolute().Left(0).Bottom(0).SizeWH(ucsInset+ucsLen+24, ucsInset+ucsLen+24).
+		Child(
+			gpui.NewDiv().Absolute().Left(ucsInset+5).Bottom(ucsInset+ucsLen-2).Child(letter("Y", ws.axisColor(false))),
+			gpui.NewDiv().Absolute().Left(ucsInset+ucsLen+6).Bottom(ucsInset-8).Child(letter("X", ws.axisColor(true))),
+		)
+}
+
+func (ws *Workspace) axisColor(x bool) render.Color {
+	if x {
+		return colAxisX
+	}
+	return colAxisY
 }
 
 // wheel maps a scroll event to a view change:
@@ -214,6 +270,10 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 	defer w.PopClip()
 	w.PaintQuad(gpui.Quad{Bounds: b, Background: gpui.BackgroundSolid, Fill: gpuiColor(colCanvas)})
 
+	if lw := ws.session.LineweightDisplay(); ws.builder.Lineweights != lw {
+		ws.builder.Lineweights = lw
+		ws.builder.InvalidateAll()
+	}
 	dl := &c.dl
 	dl.Reset()
 	if ws.session.Grid() {
@@ -316,13 +376,18 @@ func (ws *Workspace) gridItems(dl *render.DisplayList) {
 	}
 }
 
-// ucsIcon draws the X/Y axis icon in the bottom-left corner.
+// ucsIcon draws the X/Y axis icon in the bottom-left corner: Y up in green, X right in red, each
+// with an arrowhead (the letters are ucsLabels).
 func (ws *Workspace) ucsIcon(dl *render.DisplayList) {
 	v := ws.view
-	o := v.ToModel(24, v.Height-24)
-	l := 36 * v.PixelSize()
-	dl.Polyline([]geom.Vec2{o, o.Add(geom.V(l, 0))}, colAxisX, 2, false)
-	dl.Polyline([]geom.Vec2{o, o.Add(geom.V(0, l))}, colAxisY, 2, false)
+	px := v.PixelSize()
+	o := v.ToModel(ucsInset, v.Height-ucsInset)
+	l, a := ucsLen*px, 7*px
+	ex, ey := o.Add(geom.V(l, 0)), o.Add(geom.V(0, l))
+	dl.Polyline([]geom.Vec2{o, ex}, colAxisX, 2, false)
+	dl.Polyline([]geom.Vec2{ex.Add(geom.V(-a, -a*0.6)), ex, ex.Add(geom.V(-a, a*0.6))}, colAxisX, 2, false)
+	dl.Polyline([]geom.Vec2{o, ey}, colAxisY, 2, false)
+	dl.Polyline([]geom.Vec2{ey.Add(geom.V(-a*0.6, -a)), ey, ey.Add(geom.V(a*0.6, -a))}, colAxisY, 2, false)
 }
 
 // cursorItems draws the crosshair (or pickbox when idle), and the snap

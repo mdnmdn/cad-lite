@@ -3,11 +3,11 @@ id: feat-command-line
 title: Command line
 kind: feature
 status: current
-summary: The command line under the canvas — typing commands and answers, the prompt and history, Enter, Space, Escape and right-click, and the keyboard shortcuts.
+summary: The command line under the canvas — typing commands and answers, the prompt, the resizable history and recent commands, Enter, Space, Escape and right-click, and the keyboard shortcuts.
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/workspace.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go]
+code_anchors: [ui/workspace.go, ui/cmdarea.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
 ---
@@ -19,15 +19,23 @@ review_cycle: quarterly
 The command line is the drafter's primary input, as in AutoCAD: type a command name or alias, then
 answer its prompts with coordinates, distances, keywords or text. It always has keyboard focus, so
 typing never needs a click first, and it shows the active prompt and the last lines of the command
-history.
+history. It sits under the canvas only: the layers and agent columns run down beside it.
 
 ## Behaviour
 
-- The prompt label shows `Command:` when no command runs, otherwise the active prompt in AutoCAD's
-  form, e.g. `Specify next point or [Close/Undo]:`.
-- The four most recent history lines show above the prompt. Each response is echoed after its
+- The command box is a rounded, bordered row: a `>_` prompt glyph, the prompt in monospace, the input field
+  (monospace, placeholder `Type a command`) and a clock button at the right. The box's border turns to the accent
+  colour while the field has focus. The prompt shows `Command:` when no command runs, otherwise the
+  active prompt in AutoCAD's form, e.g. `Specify next point or [Close/Undo]:`.
+- The most recent history lines show above the box, bottom-aligned, in muted monospace. Each response is echoed after its
   prompt; errors, warnings and command output (`LIST`, `DIST`) are printed there. The history keeps
-  the last 200 lines.
+  the last 200 lines. The region is 96 px high (less in a window shorter than 860 px, down to 54 px) until the user
+  drags the small bar centred on its top edge: moving the pointer up grows it, down shrinks it, between one line and 480 px, and the
+  height is saved with the settings. A double click on the bar resets it, and the chevron at the right end of the bar's row folds the
+  history so only the input row remains (the height comes back when it is unfolded; the bar does not drag while it is folded).
+- **Recent commands.** The clock button opens a menu above the box of the last 8 distinct commands the user started, newest first
+  (typed or from a button), under their display names; clicking one runs it again (cancelling a running command, as the buttons do) and
+  closes the menu. Escape closes it too. The list is not saved between sessions.
 - **Enter** submits the field. At `Command:` an empty Enter repeats the last command.
 - **Space** submits like Enter, except at a prompt that takes text (a layer name, a file path), where
   it types a space.
@@ -78,8 +86,8 @@ history.
 - An invalid answer prints the error and the prompt stays, worded by the kind of prompt: `Invalid point.`,
   `Point or option keyword required.`, `Requires numeric distance or second point.`,
   `Requires numeric angle or second point.`, `Invalid option keyword.`.
-- Toolbar buttons run their command as if typed; the [canvas](canvas.md) document owns the toolbar's layout and icons.
-- The field's placeholder and the `Command:` label come from the catalog (`ui.cmdline.placeholder`); the placeholder follows a language change at once.
+- Ribbon buttons run their command as if typed; the [canvas](canvas.md) document owns the ribbon's layout and icons.
+- The field's placeholder, the handle's and the buttons' tooltips and the `Command:` label come from the catalog (`ui.cmdline.*`); the placeholder follows a language change at once.
 - The field clears after every submission, cancel and canvas click that answers a prompt.
 
 Shortcuts, active anywhere in the window:
@@ -96,13 +104,14 @@ Shortcuts, active anywhere in the window:
 | F7 | Grid on or off |
 | F8 | Ortho on or off |
 | F9 | Snap to the snap grid on or off |
+| F10 | Polar tracking on or off (turns ortho off) |
 | Ctrl+E | Zoom to extents |
 | Ctrl+, , Cmd+, | Settings panel on or off (the `OPTIONS` command opens it too) |
 
 ## Contract
 
 - Session: `Session.Submit`, `Session.Escape`, `Session.Run`, `Session.Prompt`,
-  `Session.CurrentPrompt`, `Session.History`.
+  `Session.CurrentPrompt`, `Session.History`, `Session.RunCount` and `Session.LastCommand` (which feed the recent list).
 - Prompt input kinds, which decide whether Space submits (`InputText`).
 - Key context `cad` and the actions in `ui.Bindings`.
 
@@ -111,7 +120,10 @@ Shortcuts, active anywhere in the window:
 `ui.NewWorkspace` creates the `gpui.TextInput` and wires its callbacks: `OnSubmit` →
 `Workspace.submit` → `Session.Submit`; `OnEscape` → `Workspace.escape` → `Session.Escape`;
 `OnChange` turns a trailing space into a submission unless `Workspace.acceptsText`.
-`Workspace.commandArea` renders the history and the prompt; `Workspace.Render` focuses the field on
+`Workspace.commandArea` (`ui/cmdarea.go`) renders the handle, the history and the box; the field is
+styled by `themeBareField`, so the box carries the border. `cmdAreaState` holds the dragged height
+(`Workspace.dragMove` in `ui/layout.go`, fed by the root element's mouse move and up; the folded flag is in `layoutState`) and the recent list (`noteCommand`, called
+by `Workspace.submit` and `Workspace.run` when `Session.RunCount` rose). `Workspace.Render` focuses the field on
 the first frame and binds the shortcut actions on the root element. Parsing and the history live in
 `cmdsys/session.go` and `cmdsys/input.go`.
 
@@ -131,5 +143,5 @@ the first frame and binds the shortcut actions on the root element. Parsing and 
 ## Next steps
 
 - Autocomplete command names as they are typed (`Registry.Complete` exists).
-- Up and down arrows to recall earlier input.
+- Up and down arrows to recall earlier input, and a recent list that survives a restart.
 - F1 help listing the commands.

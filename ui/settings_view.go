@@ -20,15 +20,9 @@ const (
 	settingsBtnSize = 28
 )
 
-// settingsButton is the toolbar's gear button that opens the panel.
+// settingsButton is the title bar's gear button that opens the panel.
 func (ws *Workspace) settingsButton() *gpui.Div {
-	b := gpui.NewDiv().ID("tool-settings").FlexCol().ItemsCenter().Gap(2).Px_(10).Py_(4).Rounded(4).Tooltip(ws.settingsTip()).
-		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.ToggleSettings(w) }).
-		Child(NewIcon(icons.AppSettings, toolIconSize, uiText), gpui.NewText(tb("settings")).TextSize(10))
-	if ws.prefs().open {
-		b.Bg(uiAccent)
-	}
+	b := iconButton("tool-settings", ws.settingsTip(), icons.AppSettings, ws.prefs().open, ws.ToggleSettings)
 	if _, ok := ws.UpdateAvailable(); ok {
 		b.Relative().Child(ws.updateBadge())
 	}
@@ -337,7 +331,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 		ws.smallButton("settings-reset", i18n.T("ui.settings.reset"), i18n.T("ui.settings.reset_tip"), func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
-				d.Extra, d.Window, d.LastUpdateCheck = s.Extra, s.Window, s.LastUpdateCheck
+				d.Extra, d.Window, d.Layout, d.LastUpdateCheck = s.Extra, s.Window, s.Layout, s.LastUpdateCheck
 				*s = d
 			})
 		}).Px_(12),

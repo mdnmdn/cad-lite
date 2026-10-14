@@ -481,16 +481,38 @@ func TestLanguagePickerSwitchesCatalog(t *testing.T) {
 	}
 }
 
-// settingsBubble reports whether a one-line tooltip bubble (themed border,
-// wider than any control) is in the last frame.
-func (h *sHarness) settingsBubble() bool {
+// borderQuads is the set of boxes in the scene drawn with the theme's border colour.
+func (h *sHarness) borderQuads() map[gpui.Bounds]bool {
 	th := CurrentTheme()
+	out := map[gpui.Bounds]bool{}
 	for _, q := range h.hw.Window().Scene().Quads {
-		if q.BorderColor == th.Border && q.Bounds.Size.W > 150 && q.Bounds.Size.H < 40 {
+		if q.BorderColor == th.Border {
+			out[q.Bounds] = true
+		}
+	}
+	return out
+}
+
+// bubbleSince reports whether a tooltip bubble (a new box with the themed border) is in the scene
+// that base, a borderQuads taken with the pointer parked, did not hold.
+func (h *sHarness) bubbleSince(base map[gpui.Bounds]bool) bool {
+	for b := range h.borderQuads() {
+		if !base[b] && b.Size.W > 60 {
 			return true
 		}
 	}
 	return false
+}
+
+// hoverTip parks the pointer, moves it onto p and reports whether a tooltip bubble appeared
+// within 600 ms.
+func (h *sHarness) hoverTip(p gpui.Point) bool {
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: gpui.Point{X: 5, Y: 5}})
+	h.hp.Advance(600 * time.Millisecond)
+	base := h.borderQuads()
+	h.hw.Dispatch(gpui.MouseMoveEvent{Position: p})
+	h.hp.Advance(600 * time.Millisecond)
+	return h.bubbleSince(base)
 }
 
 func TestSettingsControlsHaveTooltips(t *testing.T) {
@@ -498,12 +520,7 @@ func TestSettingsControlsHaveTooltips(t *testing.T) {
 	h.openPanel()
 	for _, id := range []string{"settings-close", "theme-light", "ui-scale-down", "ui-scale-up", "ui-scale-reset",
 		"lang-it", "set-grid", "set-osnap", "set-ortho", "wheel-pan", "agent-claude", "settings-reset"} {
-		p := h.find(id)
-		h.hw.Dispatch(gpui.MouseMoveEvent{Position: gpui.Point{X: 5, Y: 5}})
-		h.hp.Advance(600 * time.Millisecond)
-		h.hw.Dispatch(gpui.MouseMoveEvent{Position: p})
-		h.hp.Advance(600 * time.Millisecond)
-		if !h.settingsBubble() {
+		if !h.hoverTip(h.find(id)) {
 			t.Errorf("%s: no tooltip after 600 ms", id)
 		}
 	}

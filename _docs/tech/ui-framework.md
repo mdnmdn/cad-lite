@@ -82,6 +82,7 @@ cache. Views name a token, never a colour; the tokens, one `Theme` field each:
 | `uiText`, `uiMuted`, `uiAccent`, `uiOn` | Text, secondary text, the active command (text in `uiText` must read on `uiAccent`), toggles that are on |
 | `uiField`, `uiSelect` | Text field fill and selection highlight; the field border is `uiBorder`, turning `uiAccent` when focused, the placeholder `uiMuted` (all applied by `themeField`) |
 | `uiOK`, `uiWarn`, `uiErr` | Status colours of the agent panel: completed, in progress or warning, failed or error |
+| `Primary`, `OnPrimary` (`uiPrimary`, `uiOnPrimary`) | The call-to-action button (Send) and its text; the soft accent fill and border of active chips and buttons are `mix`es of `uiAccent` with the shell colours (`activeFill`, `activeBorder`) |
 | `uiBackdrop` | The dim layer behind a modal panel |
 
 The per-theme values are the literals in `ui/themes.go`; the canvas of each, for reference:
@@ -93,7 +94,7 @@ The per-theme values are the literals in `ui/themes.go`; the canvas of each, for
 | `classic` | 6, 6, 8 | 58, 58, 60 / 76, 76, 80 | 70, 120, 210 |
 | `high-contrast` | 0, 0, 0 | 0, 0, 0 / 10, 10, 10 | 0, 76, 178 |
 
-The command line and the agent prompt are `gpui.TextInput`s themed through `themeField` in
+The viewport label, command line, coordinates and status chips use the monospace family (`monoFamily`; the library bundles Go Mono, BSD-style licence, as the fallback for `monospace`). The command line and the agent prompt are `gpui.TextInput`s themed through `themeField` in
 `ui/theme.go`, which uses the library's `Style`, `PlaceholderColor` and `SelectionColor`; a new
 field gets the same look by passing through it, and `ApplyTheme` restyles every such field (the
 registry holds them weakly).

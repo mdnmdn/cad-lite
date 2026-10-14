@@ -11,7 +11,10 @@ type Builder struct {
 	Background Color
 	// Weight is the line width of entity geometry in logical pixels.
 	Weight float32
-	cache  map[doc.Handle]cached
+	// Lineweights draws an entity as wide as its layer's lineweight (never thinner than Weight)
+	// instead of at Weight; the owner drops the cache with InvalidateAll when it changes.
+	Lineweights bool
+	cache       map[doc.Handle]cached
 }
 
 type cached struct {
@@ -22,6 +25,20 @@ type cached struct {
 // NewBuilder returns a builder for d drawing on background.
 func NewBuilder(d *doc.Drawing, background Color) *Builder {
 	return &Builder{d: d, Background: background, Weight: 1, cache: map[doc.Handle]cached{}}
+}
+
+// lineweightPx converts a lineweight in hundredths of a millimetre to logical pixels at 96 dpi.
+const lineweightPx float64 = 96.0 / 25.4 / 100
+
+// weightOf is the line width of entity e: Weight, or with Lineweights its layer's lineweight.
+func (b *Builder) weightOf(e doc.Entity) float32 {
+	w := b.Weight
+	if b.Lineweights {
+		if l := b.d.Layer(e.Common().Layer); l != nil && l.Lineweight > 0 {
+			w = max(w, float32(float64(l.Lineweight)*lineweightPx))
+		}
+	}
+	return w
 }
 
 // Invalidate drops the cached items of every handle in cs.
@@ -72,8 +89,9 @@ func (b *Builder) Items(h doc.Handle, v View) []DisplayItem {
 	tol := BandTolerance(band)
 	col := b.EntityColor(e)
 	var items []DisplayItem
+	weight := b.weightOf(e)
 	for _, c := range e.Geometry() {
-		items = append(items, DisplayItem{Owner: h, Kind: ItemPolyline, Points: c.Tessellate(tol, nil), Color: col, Weight: b.Weight})
+		items = append(items, DisplayItem{Owner: h, Kind: ItemPolyline, Points: c.Tessellate(tol, nil), Color: col, Weight: weight})
 	}
 	b.cache[h] = cached{band: band, items: items}
 	return items

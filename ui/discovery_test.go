@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"agentmanager"
 	"agentmanager/harnesses"
@@ -174,12 +173,7 @@ func TestCheckButtonShowsFoundAndNotFoundRows(t *testing.T) {
 	}
 	h.png("discovery-expanded-en.png")
 	for _, id := range []string{"agent-found-opencode", "agent-found-claude", "agents-show-path", "agents-check", "agents-terminal"} {
-		p := h.find(id)
-		h.hw.Dispatch(gpui.MouseMoveEvent{Position: gpui.Point{X: 5, Y: 5}})
-		h.hp.Advance(600 * time.Millisecond)
-		h.hw.Dispatch(gpui.MouseMoveEvent{Position: p})
-		h.hp.Advance(600 * time.Millisecond)
-		if !h.settingsBubble() {
+		if !h.hoverTip(h.find(id)) {
 			t.Errorf("%s: no tooltip", id)
 		}
 	}

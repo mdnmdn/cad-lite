@@ -3,8 +3,44 @@
 package icons
 
 const (
+	// AppAdd: add one more of something, a plus
+	AppAdd Name = "app-add"
+
+	// AppAgent: talk to the AI agent, a speech bubble with two eyes
+	AppAgent Name = "app-agent"
+
+	// AppChevronDown: an open section that can fold away, or collapse downwards, a single chevron
+	AppChevronDown Name = "app-chevron-down"
+
+	// AppChevronLeft: bring a folded panel back from the right, a single chevron
+	AppChevronLeft Name = "app-chevron-left"
+
+	// AppChevronRight: collapse or move on to the right, a single chevron
+	AppChevronRight Name = "app-chevron-right"
+
+	// AppChevronUp: collapse upwards, or a folded section that can open downwards, a single chevron
+	AppChevronUp Name = "app-chevron-up"
+
+	// AppHistory: what was done earlier, a clock
+	AppHistory Name = "app-history"
+
+	// AppKeyEnter: the Enter key, an arrow that turns back to the left
+	AppKeyEnter Name = "app-key-enter"
+
+	// AppPrompt: the command line prompt, a chevron over an underscore
+	AppPrompt Name = "app-prompt"
+
+	// AppRemove: take one away or make less, a minus
+	AppRemove Name = "app-remove"
+
+	// AppSend: send what was typed, an arrow pointing right
+	AppSend Name = "app-send"
+
 	// AppSettings: open the settings panel
 	AppSettings Name = "app-settings"
+
+	// AppWarning: something needs attention, a triangle with an exclamation mark
+	AppWarning Name = "app-warning"
 
 	// DrawArc: a curved piece of a circle through three picked points (start, middle, end)
 	DrawArc Name = "draw-arc"
@@ -141,6 +177,9 @@ const (
 	// SnapPolar: movement locks to angle increments around the start point
 	SnapPolar Name = "snap-polar"
 
+	// ViewFit: four corner brackets framing the view, the drawing fills the window
+	ViewFit Name = "view-fit"
+
 	// ViewGrid: the background grid, shown or hidden
 	ViewGrid Name = "view-grid"
 
@@ -159,7 +198,19 @@ const (
 
 // All lists every icon that has a file, in name order.
 var All = []Name{
+	AppAdd,
+	AppAgent,
+	AppChevronDown,
+	AppChevronLeft,
+	AppChevronRight,
+	AppChevronUp,
+	AppHistory,
+	AppKeyEnter,
+	AppPrompt,
+	AppRemove,
+	AppSend,
 	AppSettings,
+	AppWarning,
 	DrawArc,
 	DrawCircle,
 	DrawEllipse,
@@ -205,6 +256,7 @@ var All = []Name{
 	SnapOsnap,
 	SnapOtrack,
 	SnapPolar,
+	ViewFit,
 	ViewGrid,
 	ViewPan,
 	ViewZoom,
