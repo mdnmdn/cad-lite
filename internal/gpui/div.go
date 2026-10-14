@@ -43,6 +43,7 @@ type Div struct {
 
 	scrollHandle  *ScrollHandle
 	showScrollbar bool
+	tooltip       string
 }
 
 // NewDiv returns a new Div seeded with DefaultStyle, so a bare NewDiv() is a
@@ -595,6 +596,7 @@ func (d *Div) prepaint(w *Window, cx *App, bounds Bounds, layoutState any) any {
 	ml.OnScrollWheel = d.onScrollWheel
 	ml.OnHoverStart = d.onHoverStart
 	ml.OnHoverEnd = d.onHoverEnd
+	ml.tooltip = d.tooltip
 	ml.focusID = focusID
 	ml.hoverStyle = d.hoverStyle != nil
 	ml.activeStyle = d.activeStyle != nil

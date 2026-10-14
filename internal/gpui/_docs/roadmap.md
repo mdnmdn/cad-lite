@@ -211,7 +211,7 @@ standard verification (section 1) and a contract update when signatures change.
 | E3 | P1 | L | - | Images: PNG/JPEG via `image/*`, `Img` element, object-fit, asset source | `Img` loads and scales; raster supports image sprites; example; golden test |
 | E4 | P2 | L | E3 | SVG element (rasterized to image sprites; stdlib-only subset or an approved dependency) | `svg` legacy example renders; dependency decision recorded |
 | E5 | P1 | L | - | Async tasks / executor (`cx.Spawn`, background executor, results back on the main loop) | `async_tasks` port runs; entity safety rules preserved; race-detector test |
-| E6 | P2 | L | L1 | Overlays: tooltips, popovers, deferred and anchored elements | Overlay paints above siblings regardless of tree order; anchored to a bounds with edge snapping; hover tooltip example |
+| E6 | P2 | L | L1 | Overlays: popovers, deferred and anchored elements (plain-text `Div.Tooltip` done, 2026-10-14: window-level overlay painted after the tree, no hitboxes; builder-style tooltips and a general deferred layer remain) | Overlay paints above siblings regardless of tree order; anchored to a bounds with edge snapping; hover tooltip example |
 | E7 | P2 | M | - | `List` with variable row heights (virtualized) next to `UniformList` | Measures visible rows only; scroll-to-index; test with mixed heights |
 | E8 | P3 | M | E1 | Blur, corner smoothing, custom drawing (canvas / paint_path) | Per-example acceptance as in 3.6 |
 | E9 | P2 | L | - | Multi-window in the ebiten backend (`OpenWindow` more than once) | Two windows open, receive their own input, close independently; ebiten limits documented; headless already supports it |

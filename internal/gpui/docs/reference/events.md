@@ -46,7 +46,8 @@ type DispatchPhase uint8   // Capture, Bubble
 
 See the signature table in [elements.md](elements.md#mouse-and-keyboard-listeners):
 `OnMouseDown`, `OnMouseUp`, `OnMouseMove`, `OnClick`, `OnScrollWheel`,
-`OnHoverStart`, `OnHoverEnd`, `OnKeyDown`, `OnKeyUp`, `OnAction`. Mouse
+`OnHoverStart`, `OnHoverEnd`, `OnKeyDown`, `OnKeyUp`, `OnAction`, plus
+`Tooltip(text string)` (see [events-and-input.md](../concepts/events-and-input.md#tooltips)). Mouse
 listeners run innermost first along the hit path (bubbling); call
 `Window.StopPropagation()` to halt the traversal.
 

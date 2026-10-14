@@ -682,6 +682,7 @@ type Div struct {
     onKeyUp      func(*KeyUpEvent, *Window, *App)
     onHoverStart func(*Window, *App)
     onHoverEnd   func(*Window, *App)
+    tooltip      string
     onAction     map[ActionKey]func(Action, *Window, *App)
     focusHandle  *FocusHandle
     keyContext   string
@@ -701,6 +702,9 @@ func (d *Div) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *Div
 func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div
 func (d *Div) OnHoverEnd(f func(*Window, *App)) *Div
+// Tooltip shows text in a bubble once the pointer has rested on the div for
+// TooltipStyle.Delay (see "Tooltips" below). Empty text removes it.
+func (d *Div) Tooltip(text string) *Div
 func (d *Div) OnAction(action Action, f func(Action, *Window, *App)) *Div // keyed by ActionKeyOf(action)
 func (d *Div) TrackFocus(h *FocusHandle) *Div
 func (d *Div) KeyContext(ctx string) *Div
@@ -741,6 +745,74 @@ Focus semantics:
 - Hover style is resolved at paint from the hit test of the frame being
   built at the last pointer position; a hover-styled element entering or
   leaving the hover set triggers a redraw.
+
+Tooltips (`tooltip.go`; GPUI's `.tooltip(|window, cx| Tooltip::text(..))`,
+reduced to plain text):
+
+```go
+type TooltipStyle struct {
+    Background, Border, Foreground Rgba
+    BorderWidth, FontSize, PaddingX, PaddingY, CornerRadius float32
+    MaxWidth float32        // 0 = window width only
+    Delay    time.Duration // hover delay
+    Offset   float32       // gap below the pointer
+}
+func DefaultTooltipStyle() TooltipStyle      // dark; Delay 500ms
+func (a *App) SetTooltipStyle(s TooltipStyle) // refreshes all windows
+func (a *App) TooltipStyle() TooltipStyle
+```
+
+- The tooltip target is the innermost element with `Tooltip` on the hit path
+  under the pointer. A pointer move on a new target starts a `Window.After(Delay)`
+  timer; a move within the same pending target restarts it ("rested"). When it
+  fires the bubble becomes visible at the pointer position of that moment.
+  Time comes from the app clock, so headless tests use
+  `HeadlessPlatform.Advance`.
+- A visible bubble stays while the pointer stays on the target (it does not
+  follow the pointer). It hides on leaving the target, mouse down (any button),
+  scroll wheel and key down; after a press/scroll/key it does not return until
+  the pointer has left the target.
+- It is painted after the whole tree (above everything, regardless of tree
+  order), registers no hitboxes or key nodes, so it never takes input. Placed
+  `Offset` below the pointer with its left edge at the pointer, flipped above
+  the pointer if it would overflow the bottom, then clamped inside
+  `Window.Bounds()`; its width is capped at min(`MaxWidth`, window width).
+- Style values are logical pixels inside the tree, so `Window.UIScale` applies.
+  Text uses the default font family; the style has no font family field.
+
+Tooltips (`tooltip.go`; GPUI's `.tooltip(|window, cx| Tooltip::text(..))`,
+reduced to plain text):
+
+```go
+type TooltipStyle struct {
+    Background, Border, Foreground Rgba
+    BorderWidth, FontSize, PaddingX, PaddingY, CornerRadius float32
+    MaxWidth float32        // 0 = window width only
+    Delay    time.Duration // hover delay
+    Offset   float32       // gap below the pointer
+}
+func DefaultTooltipStyle() TooltipStyle      // dark; Delay 500ms
+func (a *App) SetTooltipStyle(s TooltipStyle) // refreshes all windows
+func (a *App) TooltipStyle() TooltipStyle
+```
+
+- The tooltip target is the innermost element with `Tooltip` on the hit path
+  under the pointer. A pointer move on a new target starts a `Window.After(Delay)`
+  timer; a move within the same pending target restarts it ("rested"). When it
+  fires the bubble becomes visible at the pointer position of that moment.
+  Time comes from the app clock, so headless tests use
+  `HeadlessPlatform.Advance`.
+- A visible bubble stays while the pointer stays on the target (it does not
+  follow the pointer). It hides on leaving the target, mouse down (any button),
+  scroll wheel and key down; after a press/scroll/key it does not return until
+  the pointer has left the target.
+- It is painted after the whole tree (above everything, regardless of tree
+  order), registers no hitboxes or key nodes, so it never takes input. Placed
+  `Offset` below the pointer with its left edge at the pointer, flipped above
+  the pointer if it would overflow the bottom, then clamped inside
+  `Window.Bounds()`; its width is capped at min(`MaxWidth`, window width).
+- Style values are logical pixels inside the tree, so `Window.UIScale` applies.
+  Text uses the default font family; the style has no font family field.
 
 ### `scroll.go`
 

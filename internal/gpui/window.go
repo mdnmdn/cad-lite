@@ -37,6 +37,7 @@ type Window struct {
 	// hovered maps the global-id key of each currently hovered element to its
 	// hitbox depth; callbacks are looked up in the rendered frame when fired.
 	hovered map[string]int
+	tooltip tooltipState
 	// active captures the primary press path, pruned on leave and before paint.
 	active         map[string]struct{}
 	scrollbarDrag  *scrollbarDrag
@@ -158,6 +159,7 @@ type MouseListener struct {
 	OnScrollWheel func(*ScrollWheelEvent, *Window, *App)
 	OnHoverStart  func(*Window, *App)
 	OnHoverEnd    func(*Window, *App)
+	tooltip       string
 	KeyContext    string
 
 	// elementID identifies the owning element for retained state lookups
@@ -801,6 +803,7 @@ func (w *Window) Draw(cx *App) {
 	w.reconcileScrollbarDrag(&w.nextFrame)
 	w.retainActive(&w.nextFrame, false)
 	w.paintTree(rn, cx)
+	w.paintTooltip(cx)
 	if w.closed {
 		return
 	}
@@ -826,6 +829,7 @@ func (w *Window) Draw(cx *App) {
 		} else {
 			w.updateHover(w.mousePosition, nil)
 		}
+		w.updateTooltip(w.mousePosition, false)
 		w.hoverAfterDraw = false
 	}
 }
@@ -1194,6 +1198,7 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	switch e := input.(type) {
 	case MouseDownEvent:
 		w.mousePosition, w.hasMouse = e.Position, true
+		w.dismissTooltip()
 		if e.Button == MouseLeft {
 			w.inputSelection = nil
 			w.scrollbarDrag, w.scrollbarPress = nil, false
@@ -1267,6 +1272,7 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 		}
 		w.retainActive(&w.renderedFrame, true)
 		w.updateHover(e.Position, cx)
+		w.updateTooltip(e.Position, true)
 		ev := e
 		w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
 			if l.OnMouseMove != nil {
@@ -1290,8 +1296,10 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 			}
 		})
 	case ScrollWheelEvent:
+		w.dismissTooltip()
 		w.dispatchScroll(e, cx)
 	case KeyDownEvent:
+		w.dismissTooltip()
 		w.setFocusVisible(true)
 		w.dispatchKeyDown(e, cx)
 	case KeyUpEvent:

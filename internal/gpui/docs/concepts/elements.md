@@ -89,6 +89,10 @@ Event/focus builders on `Div`: `OnMouseDown`, `OnMouseUp`, `OnMouseMove`,
 `TabIndex`. Each setter holds one handler; a second call replaces
 the first. See [events-and-input.md](events-and-input.md).
 
+`Tooltip(text)` shows a text bubble after the pointer rests on the div for
+`TooltipStyle.Delay` (500 ms by default); see
+[events-and-input.md](events-and-input.md#tooltips).
+
 What a Div does per phase:
 
 - **RequestLayout:** a `LayoutNode` with its resolved style; recurses into

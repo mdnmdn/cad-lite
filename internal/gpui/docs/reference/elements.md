@@ -73,6 +73,7 @@ Each setter holds one handler; a second call replaces the first.
 | `OnHoverEnd(f)` | `func(*Window, *App)` |
 | `OnKeyDown(f)` | `func(*KeyDownEvent, *Window, *App)` |
 | `OnKeyUp(f)` | `func(*KeyUpEvent, *Window, *App)` |
+| `Tooltip(text)` | `string`; hover tooltip, see [events-and-input.md](../concepts/events-and-input.md#tooltips) |
 | `OnAction(action Action, f)` | `f` is `func(Action, *Window, *App)`; keyed by `ActionKeyOf(action)` |
 
 `gpui.Listener(ctx, func(state *T, ev *E, w, cx))` produces the

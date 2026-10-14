@@ -50,6 +50,8 @@ func (t *BoundsTree) HitTest(p Point) int {
 	return best
 }
 
+func (t *BoundsTree) truncate(n int) { t.boxes = t.boxes[:n] }
+
 // Len returns the number of hitboxes.
 func (t *BoundsTree) Len() int { return len(t.boxes) }
 

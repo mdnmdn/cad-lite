@@ -77,6 +77,7 @@ type App struct {
 	// are recorded on that window for Notify-driven redraws.
 	drawing                      *Window
 	clock                        Clock
+	tooltipStyle                 *TooltipStyle
 	timers                       []*Timer
 	nextTimerSequence            uint64
 	updateSerial, lastTickUpdate uint64

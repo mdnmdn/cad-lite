@@ -34,6 +34,7 @@ your launch callback; there is no `App.Run` method.
 | `SetGlobal(v any)` | Store a value keyed by its concrete type (replaces any previous one). |
 | `Global(out any) bool` | Copy the stored value into `out` (a non-nil pointer to the value's type); false when absent. |
 | `UpdateGlobal(f func(any))` | Call `f` once per stored global. To change one, store a pointer and mutate it, or call `SetGlobal` from inside `f`. |
+| `SetTooltipStyle(s TooltipStyle)` / `TooltipStyle() TooltipStyle` | Colours, font size, padding, wrap width, hover delay and offset of `Div.Tooltip` bubbles for every window (default `DefaultTooltipStyle()`, dark). `SetTooltipStyle` refreshes all windows. See [events-and-input.md](../concepts/events-and-input.md#tooltips). |
 | `Quit()` | Mark the app quitting and ask the platform to terminate. Goroutine-safe. |
 | `IsQuitting() bool` | Whether `Quit` has been called. Goroutine-safe. |
 

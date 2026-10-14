@@ -79,6 +79,30 @@ frame, so an element that disappeared gets no `OnHoverEnd`. Use stable
 `.ID(...)`s. The move event's own `OnMouseMove` listeners run after the hover
 update.
 
+### Tooltips
+
+`Div.Tooltip(text)` marks an element. The innermost marked element under the
+pointer wins. After the pointer rests on it for `TooltipStyle.Delay` (a move
+restarts the wait) a bubble appears below the pointer, painted above the whole
+tree and clamped inside the window; flipped above the pointer near the bottom
+edge. It never takes input. It hides when the pointer leaves, on mouse down,
+scroll and key press, and stays hidden until the pointer re-enters the element.
+
+Style the bubble app-wide with `App.SetTooltipStyle` (colours, font size,
+padding, corner radius, wrap width, delay, offset); sizes are logical pixels,
+so `Window.SetUIScale` scales them. Headless tests move the pointer with
+`HeadlessWindow.Dispatch(MouseMoveEvent{...})` and the clock with
+`HeadlessPlatform.Advance`.
+
+```go
+app.SetTooltipStyle(gpui.TooltipStyle{
+	Background: gpui.Gray(245), Border: gpui.Gray(180), Foreground: gpui.Gray(20),
+	BorderWidth: 1, FontSize: 12, PaddingX: 8, PaddingY: 4, CornerRadius: 4,
+	MaxWidth: 320, Delay: 500 * time.Millisecond, Offset: 18,
+})
+gpui.NewDiv().SizeWH(60, 30).Tooltip("Open file")
+```
+
 ### Pressed styles
 
 `Div.Active(f)` applies a paint refinement while the primary (MouseLeft) button
