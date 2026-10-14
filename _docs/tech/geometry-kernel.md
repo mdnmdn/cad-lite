@@ -7,7 +7,7 @@ summary: The numeric policy, the curve types and operations of geom, and the spa
 read_when: you are adding a curve type or a geometric operation, comparing floats, or querying entities by location
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/offset.go, geom/fillet.go, geom/filletpoly.go, geom/split.go, geom/tol.go, spatial/index.go]
+code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/offset.go, geom/fillet.go, geom/filletpoly.go, geom/split.go, geom/tol.go, spatial/index.go, spatial/bench_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -82,17 +82,37 @@ updated from every change set (`Apply`). Two queries serve the layers above:
 Results are in ascending handle order, which is draw order, so a tie between overlapping entities
 goes to the newest one.
 
+The structure is a uniform grid over the drawing's extent, laid out by `Build` with a cell side of
+about one and a half times the square root of the area per entity, capped at 1024 cells per axis.
+An entity is filed in every cell its box overlaps and reported once, from the first of its cells
+that a query visits. An entity spanning more than 64 cells, or with an unbounded box, goes to a
+short list that every query checks; one with an empty box is counted by `Len` and never returned.
+Coordinates beyond the extent clamp to the border cells, so entities added outside it stay correct.
+Beside the grid the index keeps every entry in ascending handle order:
+
+- a query covering at most half the grid gathers from its cells and sorts the result (a radix sort
+  once it is long);
+- a query covering more, such as zoom extents, scans the ordered list and needs no sort;
+- a drawing of 64 entities or fewer has no grid and is always scanned.
+
+`Apply` updates the cells and the ordered list in place, and lays the grid out again when the drawing
+has doubled, shrunk to a quarter, or spread well beyond the extent. `Query` and `Near` never modify
+the index. `spatial/bench_test.go`, `BenchmarkQuery`, measures views of drawings of 10 000 and
+100 000 entities.
+
 ## Rationale
 
 **Bulges rather than arc segments in polylines.** Bulges are how DWG and DXF store polyline arcs;
 keeping the file representation avoids a lossy conversion on every round trip.
 
-**The index API is the R-tree's.** The index is a linear scan over cached boxes, which is fast enough
-for the drawings the spike handles. The query functions are the ones an R-tree serves, so replacing
-the implementation does not touch any caller.
+**A uniform grid rather than an R-tree.** Drafting drawings fill their extent fairly evenly with
+small entities, which is the case a grid serves best: filing and moving an entity touch only its own
+cells, with no rebalancing. The few long entities that would bloat a grid go to the short list. The
+query functions are the ones an R-tree serves, so a drawing that proves the grid wrong can change
+the implementation without touching a caller (D26).
 
 ## Related docs
 
 - [Document model](document-model.md) — the entities built from these curves
 - [Command system](command-system.md) — snaps and selection, the main users of the queries
-- [Backlog](../backlog.md) — the R-tree and the other operations still to build
+- [Backlog](../backlog.md) — the other operations still to build
