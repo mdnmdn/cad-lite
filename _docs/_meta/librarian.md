@@ -5,8 +5,8 @@ kind: meta
 status: current
 summary: How `_docs/` is organized, why it is organized that way, and how a bookkeeper agent keeps it that way.
 read_when: you are creating, moving, splitting or deleting a document, or running a maintenance pass
-updated: 2026-08-31
-verified: 2026-08-31
+updated: 2026-10-14
+verified: 2026-10-14
 review_cycle: quarterly
 ---
 
@@ -38,10 +38,10 @@ Folders encode **kind of knowledge**. Frontmatter encodes **stability**. Never m
 |---|---|---|
 | `INDEX.md` | The map: catalogue, fact-ownership registry, reading paths | Every agent, first |
 | `backlog.md` | Every open question, known gap and deferred item, project-wide | Whoever plans next work |
-| `product/` | Why Ubiq exists, in user terms. **No code references.** | Product decisions |
+| `product/` | Why go-draw exists, in user terms. **No code references.** | Product decisions |
 | `features/` | One document per user-visible capability: contract on top, implementation below | Building or changing a feature |
 | `tech/` | Cross-cutting models, rules, conventions and procedures | Any implementation task |
-| `references/` | Specifications of protocols Ubiq speaks but does not own | Wiring one of them |
+| `references/` | Specifications of file formats and protocols go-draw reads or writes but does not own (DXF, DWG) | Implementing a codec |
 | `design/` | Wireframes, prototypes and captured artifacts. **Assets, not documents** | Anyone building a screen |
 | `wip/` | The current task's working notes. Deleted when the task closes | The task in flight |
 | `inbox/` | Raw unprocessed input: transcripts, dumps, pasted drafts | Nobody yet — to be filed |
@@ -55,16 +55,17 @@ prototype is evidence, and editing it to satisfy a linter destroys what makes it
 
 The placement rule, which settles the product-versus-technical question without a third category:
 
-> **If deleting the capability from Ubiq would delete the document, it belongs in `features/`.
+> **If deleting the capability from go-draw would delete the document, it belongs in `features/`.
 > If the document would survive, it belongs in `tech/`.**
 
 Applied:
 
-- Pane focus and layout behaviour → its feature document. Remove panes, the behaviour goes too.
-- The transport contract every message obeys → `tech/`. It outlives any one feature.
-- The session and workspace model → its feature document. The rule that the UI never touches a
-  PTY → `tech/`.
-- The theme token set → `tech/`. A screen's composition → its feature document.
+- How the canvas pans, zooms and draws the crosshair → its feature document. Remove the canvas,
+  the behaviour goes too.
+- The command framework every command obeys → `tech/`. It outlives any one command.
+- The command list and what each command asks for → its feature document. The rule that commands
+  only change the document inside a transaction → `tech/`.
+- The theme colours → `tech/`. A panel's composition → its feature document.
 
 Then, in order:
 
@@ -92,14 +93,14 @@ mismatch rule in §8.1 both turn on.
 ```markdown
 ## Purpose            2–4 sentences. The user-visible outcome.
 ## Behaviour          The contract: rules, invariants, edge cases, what is forbidden.
-## Contract           Which message variants and state it touches — names only, linked.
-## Implementation     Modules and functions in call order: ui → state → orchestrator → pty.
-## Failure            Harness death, PTY close, spawn failure.
+## Contract           Which commands, prompts, document and session state it touches — names only.
+## Implementation     Packages and functions in call order: ui → cmdsys → doc → render.
+## Failure            Invalid input, a cancelled command, a failed file operation.
 ## Related docs       One list. The only place a link may repeat.
 ## Next steps         Optional, ≤8 bullets, no dates. The only forward-looking section allowed.
 ```
 
-*Behaviour* must be checkable by someone who cannot read Rust. *Implementation* must be enough for
+*Behaviour* must be checkable by someone who cannot read Go. *Implementation* must be enough for
 someone who has never opened the repository to know which files to open.
 
 ### 3.2 Technical document
@@ -129,8 +130,8 @@ Target **150–400 lines**. Ceiling **500**.
   architecture document; do not create `architecture-part-2`.
 - Under 80 lines with no independent reader → fold it into its parent.
 
-Exempt from both bounds: `INDEX.md`, `backlog.md`, the glossary, the decision register, the code map,
-the transport contract, and the two append-only ledgers in `_meta/`. All of these are read by lookup
+Exempt from both bounds: `INDEX.md`, `backlog.md`, the decision register, the code map, and the two
+append-only ledgers in `_meta/`. All of these are read by lookup
 rather than read through.
 
 ### 4.2 Content type
@@ -144,7 +145,7 @@ half-lives, and different failure modes when stale.
 ### 4.3 Code in documents
 
 - Fenced code ≤ **15%** of a document's lines; each fence ≤ **20 lines**.
-- Beyond that, name the file and the symbol — `crates/ubiq/src/app/wire.rs`, `spawn_pane()` — and drop
+- Beyond that, name the file and the symbol — `cmdsys/session.go`, `Session.Submit()` — and drop
   the block.
 - **Never cite line numbers.** They rot within one commit. File plus symbol is stable and greppable.
 - Fences are for what cannot be pointed at: a message shape, a directory tree, a shell invocation.
@@ -202,7 +203,7 @@ claims, not every file it mentions. Omit for `product/` and `_meta/`.
 
 ## 7. Cross-references
 
-- **One fact, one owner.** Each class of fact — message variants, theme tokens, commands,
+- **One fact, one owner.** Each class of fact — commands, snap modes, theme colours,
   decisions — is stated in exactly one document. Everyone else links. The ownership registry lives
   in `INDEX.md`.
 - **Derived content is generated or linked, never copied.** Directory trees and document listings
@@ -213,9 +214,10 @@ claims, not every file it mentions. Omit for `product/` and `_meta/`.
   document and break the moment one is reorganized.
 - **Cite code by path and symbol.** Never a line number (§4.3).
 
-`crates/agent-manager/` is a separate library with its own `_docs/` and its own `AGENTS.md`. This
-library never restates what that one owns — it links, and the boundary between the two is stated once
-in `tech/agent-manager.md`.
+`internal/gpui/` is a separate library with its own `_docs/`, `docs/` and `AGENTS.md`. This library
+never restates what that one owns — it links, and the boundary between the two is stated once in
+`tech/ui-framework.md`. `just docs-lint` does not read the library's docs, and its rules do not apply
+to them.
 
 ## 8. The bookkeeper
 
@@ -252,7 +254,7 @@ disagreement down with both sides named — in `backlog.md` if it is a project q
 
 | Trigger | Scope |
 |---|---|
-| A task touched `crates/` | Only documents whose `code_anchors` intersect the diff: re-verify or record drift |
+| A task touched Go code outside `internal/gpui/` | Only documents whose `code_anchors` intersect the diff: re-verify or record drift |
 | `inbox/` is non-empty | Classify and file, or propose a new document |
 | Weekly | Light pass: checks L1, L2, L4, L5, L7, L9, L10 |
 | Monthly | Deep pass: the drift queue (L3) plus the light pass |
@@ -261,7 +263,7 @@ disagreement down with both sides named — in `backlog.md` if it is a project q
 
 ### 8.3 The revision checklist
 
-`just docs-lint` runs every mechanical check below. Cite these ids in reports and feedback entries.
+`just docs-lint` (`go run ./tools/docs lint`) runs every mechanical check below. Cite these ids in reports and feedback entries.
 
 | id | Check | Failure action |
 |---|---|---|
@@ -276,8 +278,9 @@ disagreement down with both sides named — in `backlog.md` if it is a project q
 | **L9** | No link target appears more than three times within one document | Drop the surplus; keep the `## Related docs` entry |
 | **L10** | The update duty and the `authoring.md` pointer are present in `AGENTS.md` and `INDEX.md` | Restore them before anything else (§8.5) |
 
-L1, L2, L4, L5, L7, L9 and L10 are mechanical and scripted. L3, L6 and L8 need judgement about
-meaning and stay with a capable model.
+L1, L2, L4, L5, L7, L8, L9 and L10 are scripted in `tools/docs`; L3 is scripted as `just docs-drift`
+but resolving it needs judgement, and L6 needs judgement about meaning and stays with a capable model.
+L8 is scripted for headings only.
 
 ### 8.4 Reporting
 
