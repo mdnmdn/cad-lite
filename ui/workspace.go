@@ -33,6 +33,8 @@ type Workspace struct {
 	// pan, so the plain wheel always zooms as in AutoCAD. Ctrl+wheel zooms
 	// and Shift+wheel pans either way.
 	WheelZoom bool
+	// Brand is what leads the toolbar: the wordmark, the app icon or nothing.
+	Brand Brand
 	// tipTheme is the theme whose tooltip style the App currently has.
 	tipTheme string
 	// fitPending zooms to extents once the canvas size is known.
@@ -203,8 +205,11 @@ func tb(key string) string { return i18n.T("ui.toolbar." + key) }
 // top, the modify commands below. Commands without a short caption of their
 // own show their display name.
 func (ws *Workspace) toolbar() *gpui.Div {
-	top := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Child(
-		gpui.NewText("go-draw").FontWeight(700).TextColor(uiOn).Pr(10),
+	top := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2)
+	if b := ws.brand(); b != nil {
+		top.Child(b)
+	}
+	top.Child(
 		ws.button("line", tb("line"), "LINE", icons.DrawLine),
 		ws.button("pline", tb("pline"), "PLINE", icons.DrawPolyline),
 		ws.button("circle", tb("circle"), "CIRCLE", icons.DrawCircle),

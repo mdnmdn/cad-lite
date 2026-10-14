@@ -44,3 +44,20 @@ func Images() []image.Image {
 	}
 	return out
 }
+
+// Image returns the window icon whose edge is px, or the nearest size when the set has none that
+// exact, and nil if the set is empty. The UI uses it to draw the logo 1:1 on the device grid.
+func Image(px int) image.Image {
+	var best image.Image
+	bestD := -1
+	for _, img := range Images() {
+		d := img.Bounds().Dx() - px
+		if d < 0 {
+			d = -d
+		}
+		if bestD < 0 || d < bestD {
+			best, bestD = img, d
+		}
+	}
+	return best
+}

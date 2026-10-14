@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -105,6 +106,7 @@ func main() {
 			}
 		}
 	}
+	ws.Brand = brandFromEnv()
 	if *agent != "" || *agentCmd != "" {
 		h := agentmanager.Harness(*agent)
 		switch h {
@@ -194,4 +196,13 @@ func renderPNG(ws *ui.Workspace, path string, w, h int, scale float32, hover str
 		hw.Dispatch(gpui.MouseMoveEvent{Position: ws.ScreenPoint(geom.V(x, y))})
 	}
 	return hw.SavePNG(path)
+}
+
+// brandFromEnv picks the toolbar brand: GODRAW_BRAND=mac|win|text forces one (for -png renders),
+// otherwise it follows the OS.
+func brandFromEnv() ui.Brand {
+	if b, ok := ui.ParseBrand(os.Getenv("GODRAW_BRAND")); ok {
+		return b
+	}
+	return ui.BrandForOS(runtime.GOOS)
 }

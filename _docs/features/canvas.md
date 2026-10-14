@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, crosshair a
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/icon.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/icon.go, ui/brand.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -105,6 +105,12 @@ command is highlighted. Every button shows its command's icon from the
 [icon pipeline](../tech/ui-framework.md); a command without a button (LAYER, LIST, NEW, OPEN, SAVE,
 MEASUREGEOM) is still reached by typing it.
 
+The top row starts with a brand that depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`):
+macOS shows the application icon (32px, the 32 and 64 px window icons drawn 1:1 at UI scale 1 and
+2), Windows shows nothing and the buttons start at the row's left padding (the window frame
+carries icon and title), and Linux and the web show the `go-draw` wordmark. `GODRAW_BRAND=mac|win|text`
+forces a mode for `-png` renders.
+
 Labels come from the catalog (`ui.toolbar.*`, or the command's display name for the buttons without a
 short caption), so they follow the interface language; Italian labels fit the same buttons without
 clipping.
@@ -142,7 +148,8 @@ languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and gr
 button around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `statusBar` does
 the same for the toggles. User-visible text goes through `i18n.T` (`ui.*` keys); `Workspace.Render`
 installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app whenever the theme
-changes. `Bindings` registers the key bindings for the `cad` key context.
+changes. `ui/brand.go` holds the toolbar brand: `Brand`, `BrandForOS`, and a colour bitmap element that paints
+`appicon.Image` as runs of device-pixel quads (gpui has no colour image primitive). `Bindings` registers the key bindings for the `cad` key context.
 
 `ui/canvas.go` holds the canvas. `Workspace.canvasElement` wires mouse down, move, up and wheel
 to `Session.Click`, `Session.SelectBox`, `Workspace.pointerMoved` and the view. `pointerMoved`
