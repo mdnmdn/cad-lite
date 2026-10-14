@@ -75,6 +75,12 @@ Run `go mod tidy` after adding an import.
 | `-agent-cmd PATH` | Run this executable for the selected harness instead of the one on `PATH` |
 | `-agent-demo` | Open the agent panel on a canned transcript; for `-png` renders |
 
+A render in Italian takes the language from the environment (`-png` does not read the settings file):
+
+```
+LANG=it_IT.UTF-8 go run ./cmd/cad -png _tmp/it.png
+```
+
 A render that shows an active command with its snap marker:
 
 ```

@@ -23,7 +23,10 @@ made exact by object snaps and ortho, or typed coordinates. Every command undoes
 
 ### Commands
 
-This table is the owner of the command list and the default aliases.
+This table is the owner of the command list and the default aliases. The prompts and messages
+quoted here are the English text. Each command also has Italian names, registered as aliases in every
+language (`LINEA`, `CERCHIO`, ...); the `aliases` and `name` entries of `i18n/locales/it.toml` own them. A leading `_`
+on a typed keyword forces the English one.
 
 | Command | Aliases | Prompts and behaviour |
 |---|---|---|
@@ -46,7 +49,7 @@ This table is the owner of the command list and the default aliases.
 | MEASUREGEOM | MEA | `[Distance/Radius/Angle/ARea]`, Enter is Distance. Radius picks an arc or circle (`Radius = r, Diameter = d`); Angle measures two lines, an arc's included angle, a circle centre and two points, or a vertex and two points (`Angle = n°`); ARea is AREA. One measurement per run |
 | MIRROR | MI | Selection, two points of the mirror line, then `Erase source objects [Yes/No] <No>`; the reflection is added on the source's layer and colour, arcs stay counter-clockwise and bulges flip. Two equal points print `The two points of the mirror line must differ.` |
 | OFFSET | O | `Specify offset distance [Through]`: a typed distance, two points, or `Through` (the distance is the one just used, and the side point sets it per pick). Then loops `Select object to offset [Exit]` and `Specify point on side to offset [Exit]`; Enter exits. Lines, circles, arcs and open or closed polylines; the copy lands on the source's layer. Polyline corners mitre, arc segments take the new radius, segments that collapse are dropped; a radius that would reach zero creates nothing and prints why |
-| FILLET | F | `Select first object [Radius]`, `Select second object`. Two lines, trimmed or extended to the corner and joined by a tangent arc; the picked sides are kept. Radius 0 makes a sharp corner. The radius is remembered. Parallel lines print `Lines are parallel.` and a radius that does not fit prints `Radius is too large for the lines.`, both leaving the drawing unchanged; other objects print `FILLET supports two lines.` |
+| FILLET | F | `Select first object [Radius]`, `Select second object`. Two lines, trimmed or extended to the corner and joined by a tangent arc; the picked sides are kept. Radius 0 makes a sharp corner. The radius is remembered. Parallel lines print `Lines are parallel.` and a radius that does not fit prints `Radius is too large for the lines.`, both leaving the drawing unchanged; other objects print `Fillet supports two lines.` |
 | CHAMFER | CHA | `Select first line [Distance]`, `Select second line`. Two lines, trimmed to the corner and joined by a bevel line; the two distances are asked for by the `Distance` keyword and remembered. Distances 0 and 0 make a sharp corner; too large prints `Chamfer distances are too large for the lines.` |
 | TRIM | TR | `Select object to trim [cuTting edges]`, repeated until Enter. Without a chosen edge set every visible entity is a cutting edge; `T` asks `Select cutting edges <select all>` and the picks become the edge set. A pick removes the piece of the object between the two nearest cuts, or from the one cut to the end. Lines, circles, arcs and polylines (a polyline's bulges are kept). Prints `Object does not intersect an edge.` when no edge cuts it |
 | EXTEND | EX | `Select object to extend`, repeated until Enter. The end nearest the pick grows along its line or its own circle to the nearest visible entity ahead of it. Lines, arcs and open polylines (the end segment grows); a closed polyline prints `Cannot extend a closed polyline.` and no boundary ahead prints `No boundary edge in the extension of that end.` |

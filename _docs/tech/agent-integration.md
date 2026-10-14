@@ -71,6 +71,11 @@ in by implementing the interface. `call` also recovers a panic in a tool body, a
 transaction (`doc.Drawing.AbortOpen`) and returns an error, so a bad tool call leaves the drawing usable;
 the session's own guard is in the [command system](command-system.md).
 
+**Agents always see English.** While `SetAgentCaller(true)` is on, the session's history lines,
+prompts and errors are English whatever the UI language, and keywords match in English only, so an
+agent types the English keywords the tool documentation names. Italian command names still resolve
+as aliases but are not needed.
+
 ## The UI-goroutine rule
 
 gpui and `cmdsys.Session` are single threaded and gpui has no cross-goroutine post. MCP handlers run on

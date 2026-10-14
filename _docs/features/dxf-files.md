@@ -51,6 +51,10 @@ class, or `... not written (not supported by the R12 writer)` on saving. Each sh
 five show; any further ones collapse into `... and N more warnings.` With `-open`, warnings go to the
 standard error log instead, one line each, prefixed with the path.
 
+Warning and error sentences are in the language active when the file is read or written; the
+examples here are the English text. DXF tokens inside them (`SPLINE`, `ENDSEC`, handles) stay as
+written.
+
 ### Errors
 
 A failure ends the command and leaves the drawing as it was:

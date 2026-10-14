@@ -28,6 +28,10 @@ any existing file untouched. A symbolic link is resolved first and the link is k
 not a regular file is an error. The package is named `fileio` so it
 never shadows the standard library's `io`.
 
+Warnings and errors are localized sentences (`dxf.warn.*`, `dxf.err.*` and `fileio.err.*` in the
+`i18n` catalogs), in the language active when the file is read or written; DXF tokens inside them
+(class names, section names, handles) stay as written in the file.
+
 ## The DXF codec
 
 `fileio/dxf.Codec` is a native Go reader and writer.

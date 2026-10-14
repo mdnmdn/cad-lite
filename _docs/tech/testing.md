@@ -7,7 +7,7 @@ summary: What each level of test covers and where it lives, how UI behaviour is 
 read_when: you are adding a feature or fixing a bug and need to know which test to write and where
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go]
+code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -52,6 +52,15 @@ A bug fix gets a regression test that fails before the fix.
 Script the command with AutoCAD script rules — single spaces between inputs, two in a row for Enter —
 and inspect the drawing. A command that ends by itself needs no trailing Enter; an extra one repeats
 the command. Clicks and boxes take model points, so a test never depends on pixel positions.
+
+## Testing a language
+
+The default test language is English. A test of Italian output sets `i18n.Set(i18n.Italian)`,
+restores English in `t.Cleanup`, and sets `i18n.MissingHandler` to fail on a missing key; the helper
+is `italian` in `cmdsys/commands/i18n_test.go`, which also covers the Italian aliases, keywords and
+prompts, and the English output of an agent caller. `go run ./i18n/cmd/i18ncheck -scan
+cmdsys,fileio,settings -strict` reports string literals at user-facing call sites that have no
+catalog key and must stay clean.
 
 ## Performance targets
 

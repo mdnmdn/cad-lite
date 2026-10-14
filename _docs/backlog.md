@@ -91,3 +91,4 @@ New lines are appended below this heading.
 | G50 | No "unsaved changes" confirmation for a human NEW, OPEN or quit (the drawing has no dirty flag), and SAVE has no path allow-list; agents cannot run them, humans can | [DXF files](features/dxf-files.md) |
 | G51 | gpui `text.go` uses the deprecated `ClusterIndex` (staticcheck SA1019); fixing it needs a `go-text/typesetting` bump | [UI framework](tech/ui-framework.md) |
 | G52 | Promote the random-script fuzz to a `go test -fuzz` target with `NaN` and `1e308` tokens in the pool, and add a fuzz target for the DXF reader | [Testing](tech/testing.md) |
+| G53 | The Italian terms marked `(verify)` in `i18n/locales/it.toml` (36 entries) need a review by a CAD-fluent Italian speaker; `cadmcp` relies on the session being English for agents, so an agent never sees them | [Drawing and editing commands](features/drawing-and-editing.md), [Agent integration](tech/agent-integration.md) |

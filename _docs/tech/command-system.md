@@ -33,9 +33,10 @@ rubber-band geometry for the cursor to a display list) and `Cancel`.
 handler through `cmdsys.Context`. `Context.Tx` opens the command's transaction on first use.
 
 **Prompt.** `cmdsys.Prompt` has the message, the set of accepted input kinds, keywords, an optional
-default, and an optional `Base` point. `Prompt.String` renders AutoCAD's form:
-`Specify next point or [Close/Undo] <default>:`. A keyword's shortcut is its capital letters
-(`eXit` → `X`), or its first letter when it has none.
+default, and an optional `Base` point. `Prompt.StringIn` renders AutoCAD's form:
+`Specify next point or [Close/Undo] <default>:`, in the language of the translator it is given
+(`Prompt.String` uses `i18n.Current()`). A keyword is its English id (`eXit`); the shortcut, the
+label shown and the matching come from the `i18n` catalog, see Language below.
 
 **Input kinds.** Point, distance, angle (radians internally, degrees typed), keyword, selection,
 text, integer and Enter. `cmdsys.Input` carries the response.
@@ -51,10 +52,11 @@ text, integer and Enter. `cmdsys.Input` carries the response.
 2. **Starting a command cancels the running one.** Replacing the drawing (OPEN, NEW) from inside a
    command does not print a cancel.
 3. **Enter at `Command:` repeats the last command.** An unknown name prints
-   `Unknown command "NAME".` and starts nothing.
-4. **Typed input** is parsed by `cmdsys.ParseInput`, in this order:
+   `Unknown command "NAME". Press F1 for help.` and starts nothing.
+4. **Typed input** is parsed by `cmdsys.ParseInputIn` (`ParseInput` for the current language), in this order:
    - empty → Enter if accepted, else the default, else an error;
-   - a keyword or its shortcut, case-insensitive;
+   - a keyword or its shortcut, case-insensitive, in the session's language or English; a leading
+     `_` forces English;
    - a point: `x,y`, `@dx,dy`, `d<angle`, `@d<angle`; `@` measures from the prompt's `Base`, or
      from the last point entered when the prompt has none;
    - a bare number: a distance, an angle in degrees, or an integer when the prompt takes one;
@@ -71,12 +73,31 @@ text, integer and Enter. `cmdsys.Input` carries the response.
 
 7. **A panic in a command does not end the session.** `Session.guard` wraps the command's `Start`,
    `Input`, `Cancel` and `Preview`. On a panic it aborts the open transaction (`doc.Drawing.AbortOpen`),
-   ends the command and its prompt, and prints `Error: NAME failed: ...`; the session accepts the next
+   ends the command and its prompt, and prints `Error: NAME failed: ...` (key `session.internal_error`); the session accepts the next
    command.
 8. **Human-only commands.** A command that implements `cmdsys.HumanOnly` (NEW, OPEN, SAVE) is refused
    with `NAME is not available to agents.` while `Session.SetAgentCaller(true)` is on, by name or alias,
    and an agent cannot answer the prompt of one a human started. `cadmcp` sets the flag around every
    tool body; see [Agent integration](agent-integration.md).
+
+## Language
+
+Every line a session prints, every prompt and every keyword match goes through one translator.
+`Session.Translator()` is English while `SetAgentCaller(true)` is on, else the translator pinned with
+`Session.SetTranslator`, else `i18n.Current()`, so a language change in the settings applies to the
+next line printed. Catalogs and the language choice are owned by `i18n` and the
+[settings](../features/settings.md) feature.
+
+- **Commands build text from whole sentences.** A command calls `Context.T`, `Context.Say` or
+  `Context.SayPlural` with a key (`cmd.<name>.prompt.*`, `msg.*`), never assembling a sentence from
+  fragments, so word order stays the catalog's. `Context.Cmd` gives a command's display name.
+- **Keywords keep their English id** in `Prompt.Keywords` and in `Input.Keyword`; the display
+  (`i18n.PromptKeywords`) and the matching (`i18n.MatchKeywords`) are localized. English always
+  matches, whatever the language.
+- **Names.** `Register` ends with `i18n.RegisterAliases`, so the Italian command names are aliases in
+  every language; canonical names stay English. `SnapMode.String` is localized (`SnapMode.In` takes
+  a translator).
+- **Parse errors** map to `input.err.*` keys in `Session.inputError`.
 
 ## Input pipeline
 
