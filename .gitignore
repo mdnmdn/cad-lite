@@ -4,3 +4,5 @@
 /_tmp/
 /assets/icons/preview/
 /assets/icons/variants/
+/assets/appicon/preview/
+!/assets/appicon/*.png

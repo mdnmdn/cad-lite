@@ -79,3 +79,11 @@ gui-shot *FLAGS:
     mkdir -p _tmp/gui
     printf 'app %s\nshot shot\n' "{{FLAGS}}" > _tmp/gui/shot.gui
     go run ./tools/gui _tmp/gui/shot.gui
+
+# build the application icon (.icns, .ico, window PNGs) from assets/appicon/*.svg
+appicon:
+    uv run tools/icons/appicon.py build
+
+# review sheet of the app icon at every size, light and dark, beside UI icons: assets/appicon/preview/
+appicon-sheet:
+    uv run tools/icons/appicon.py sheet
