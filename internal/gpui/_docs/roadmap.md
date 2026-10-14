@@ -76,6 +76,7 @@ Commit hashes from `git log --oneline` (oldest first within a group).
 | `8fdf9a2` | `Window.Draw` rasterizes and presents; input handler, `HitTest`, scale refresh |
 | `74e1df8` | Default text shaper installed for every window, not just headless |
 | `cb6d403` | Ebiten snapshot key (`cmd/ctrl-shift-s`, `WithSnapshotKey`) |
+| `c48c7ec` | `ebitenplatform.WithWindowIcon` sets the window icon from several image sizes |
 
 ### Examples
 

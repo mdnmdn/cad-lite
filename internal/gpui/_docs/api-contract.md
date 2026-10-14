@@ -1959,7 +1959,11 @@ func ClipboardAvailable() bool
 ```go
 package ebitenplatform
 
-import "go-draw/internal/gpui"
+import (
+    "image"
+
+    "go-draw/internal/gpui"
+)
 
 type Platform struct{ /* ... */ }
 func New(opts ...Option) gpui.Platform     // gpui.Platform is an interface
@@ -1975,6 +1979,13 @@ func WithSnapshotKey(keystroke string) Option
 // DefaultSnapshotKey is the default binding: "cmd-shift-s" on darwin,
 // "ctrl-shift-s" elsewhere.
 func DefaultSnapshotKey() string
+
+// WithWindowIcon sets the window icon (the title bar and taskbar on Windows
+// and Linux) through ebiten.SetWindowIcon. imgs are the same picture at several
+// sizes, 16 to 256 pixels, and the OS picks the closest; an empty slice leaves
+// the default icon. macOS ignores it: the Dock icon is the .app bundle's
+// AppIcon.icns.
+func WithWindowIcon(imgs []image.Image) Option
 ```
 
 Snapshot: when the bound keystroke is pressed, the last presented frame

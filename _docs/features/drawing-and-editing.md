@@ -7,7 +7,7 @@ summary: Every built-in command with its prompts and aliases, how selection, obj
 read_when: you are adding or changing a command, an alias, or what a click does while a command runs
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/util.go, cmdsys/commands/measure.go, cmdsys/snap.go]
+code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/util.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/snap.go]
 depends_on: [tech-command-system, tech-document-model]
 review_cycle: monthly
 ---
@@ -44,6 +44,15 @@ This table is the owner of the command list and the default aliases.
 | DIST | DI | Two points; prints distance, angle and the X and Y deltas. `[Multiple points]` (`M`) adds up consecutive segments and prints `Distance = total` on Enter |
 | AREA | AA | Corner points until Enter, or `[Object]` to pick one; prints `Area = X, Perimeter = Y` (`Circumference` for a circle). Open polylines and arcs close by their chord; polyline bulges count; a line has no area |
 | MEASUREGEOM | MEA | `[Distance/Radius/Angle/ARea]`, Enter is Distance. Radius picks an arc or circle (`Radius = r, Diameter = d`); Angle measures two lines, an arc's included angle, a circle centre and two points, or a vertex and two points (`Angle = n°`); ARea is AREA. One measurement per run |
+| MIRROR | MI | Selection, two points of the mirror line, then `Erase source objects [Yes/No] <No>`; the reflection is added on the source's layer and colour, arcs stay counter-clockwise and bulges flip. Two equal points print `The two points of the mirror line must differ.` |
+| OFFSET | O | `Specify offset distance [Through]`: a typed distance, two points, or `Through` (the distance is the one just used, and the side point sets it per pick). Then loops `Select object to offset [Exit]` and `Specify point on side to offset [Exit]`; Enter exits. Lines, circles, arcs and open or closed polylines; the copy lands on the source's layer. Polyline corners mitre, arc segments take the new radius, segments that collapse are dropped; a radius that would reach zero creates nothing and prints why |
+| FILLET | F | `Select first object [Radius]`, `Select second object`. Two lines, trimmed or extended to the corner and joined by a tangent arc; the picked sides are kept. Radius 0 makes a sharp corner. The radius is remembered. Parallel lines print `Lines are parallel.` and a radius that does not fit prints `Radius is too large for the lines.`, both leaving the drawing unchanged; other objects print `FILLET supports two lines.` |
+| CHAMFER | CHA | `Select first line [Distance]`, `Select second line`. Two lines, trimmed to the corner and joined by a bevel line; the two distances are asked for by the `Distance` keyword and remembered. Distances 0 and 0 make a sharp corner; too large prints `Chamfer distances are too large for the lines.` |
+| TRIM | TR | `Select object to trim [cuTting edges]`, repeated until Enter. Without a chosen edge set every visible entity is a cutting edge; `T` asks `Select cutting edges <select all>` and the picks become the edge set. A pick removes the piece of the object between the two nearest cuts, or from the one cut to the end. Lines, circles, arcs and polylines (a polyline's bulges are kept). Prints `Object does not intersect an edge.` when no edge cuts it |
+| EXTEND | EX | `Select object to extend`, repeated until Enter. The end nearest the pick grows along its line or its own circle to the nearest visible entity ahead of it. Lines, arcs and open polylines (the end segment grows); a closed polyline prints `Cannot extend a closed polyline.` and no boundary ahead prints `No boundary edge in the extension of that end.` |
+| BREAK | BR | `Select object`, `Specify second break point [First point]`; the part between the two points is removed and the object splits in two, or at one point when both are equal. `F` re-asks the first point. A circle loses its arc counter-clockwise from the first point to the second |
+| JOIN | J | `Select source object or multiple objects to join at once`, then `Select objects to join to source` unless several were selected. Collinear lines become one line, arcs of one circle one arc (a circle when they close it), and lines, arcs and open polylines that meet end to end become one polyline. Prints `N objects joined.` and how many `cannot be joined.` |
+| EXPLODE | X | Selection; each polyline becomes its lines and arcs, on its layer; other objects print `N objects cannot be exploded.` |
 | ID | — | One point; prints its coordinates |
 | LIST | LI | Prints each selected entity's type, layer, handle and geometry |
 | NEW | — | Replaces the drawing with an empty one |
@@ -88,10 +97,17 @@ with their handles. Selections, view changes and layer table edits are not undoa
 
 The draw commands are in `cmdsys/commands/draw.go` (`lineCmd`, `plineCmd`, `circleCmd`, `arcCmd`,
 `rectCmd`), the modify commands in `modify.go` (`eraseCmd`, `moveCmd` for MOVE and COPY,
-`transformCmd` for ROTATE and SCALE, all sharing `selecting`), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, and the rest in `util.go`, which also
+`transformCmd` for ROTATE and SCALE, all sharing `selecting`), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, the construct commands in `construct.go` (`mirrorCmd`, `offsetCmd`, `cornerCmd` for FILLET and CHAMFER, on `geom/offset.go` and `geom/fillet.go`), the trim family in `trim.go` (`trimCmd`, `extendCmd`, `breakCmd`, `joinCmd`, `explodeCmd`, on `geom/split.go`), and the rest in `util.go`, which also
 holds `Register`, `Aliases` and `ZoomExtents`. Snaps, picking and box selection are
 `cmdsys.FindSnap`, `cmdsys.Pick` and `cmdsys.SelectBox`; the UI forwards clicks and drags to
 `Session.Click` and `Session.SelectBox` from `ui/canvas.go`.
+
+OFFSET, FILLET and CHAMFER pick against the spatial index, which follows the document on commit, so
+an entity created earlier in the same command is not pickable until the command ends. Their
+remembered distance, radius and chamfer distances are package variables in `construct.go`, shared by
+every session in the process. The point-picking prompts of the trim family pick within a fixed 8
+pixels, because a command's `Context` does not carry `Session.Aperture`, and the picking clicks
+snap like any point click.
 
 ## Failure
 
@@ -108,7 +124,8 @@ holds `Register`, `Aliases` and `ZoomExtents`. Snaps, picking and box selection 
 
 ## Next steps
 
-- TRIM, EXTEND, OFFSET, FILLET, CHAMFER, MIRROR, STRETCH, BREAK, JOIN, EXPLODE and ARRAY.
+- STRETCH, ARRAY and MATCHPROP.
+- FILLET and CHAMFER on arcs, circles and polylines; the TRIM, Multiple and Undo options of OFFSET, FILLET and CHAMFER.
 - Grip editing and a properties palette.
 - Polar tracking, object snap tracking, and the Perpendicular, Tangent and Extension snaps.
 - PLINE arc segments.

@@ -5,6 +5,8 @@ description: Reference for go-draw's icon set — the registry in assets/icons/i
 
 # go-draw icons
 
+The full-colour application icon (not part of this set) is documented in `assets/appicon/README.md`.
+
 An icon is a **monochrome 24×24 SVG** in `assets/icons/`, listed in `assets/icons/icons.yaml`.
 `just icons-check` is what a change has to pass. The Go package is `go-draw/assets/icons`
 (`icons.SVG(name)`, typed `icons.Name` constants in the generated `names_gen.go`); the element that

@@ -173,6 +173,7 @@ func New(opts ...Option) gpui.Platform
 type Option func(*Platform)
 func WithSnapshotKey(keystroke string) Option   // keymap syntax; "" disables; panics on a malformed keystroke
 func DefaultSnapshotKey() string                // "cmd-shift-s" on darwin, "ctrl-shift-s" elsewhere
+func WithWindowIcon(imgs []image.Image) Option  // ebiten.SetWindowIcon; several sizes (16-256), the OS picks; empty = default; title bar/taskbar on Windows/Linux, ignored on macOS (the bundle's AppIcon.icns)
 
 type Platform struct{ /* opaque */ }            // Name() ("macos"/"windows"/"linux"), OpenWindow, Run, Quit
 ```

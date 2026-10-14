@@ -7,7 +7,7 @@ summary: The numeric policy, the curve types and operations of geom, and the spa
 read_when: you are adding a curve type or a geometric operation, comparing floats, or querying entities by location
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/tol.go, spatial/index.go]
+code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/offset.go, geom/fillet.go, geom/split.go, geom/tol.go, spatial/index.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -55,6 +55,16 @@ Operations:
 | Box/segment overlap | `geom.SegmentIntersectsBox` | crossing selection |
 | Arc through three points | `doc.ArcFrom3Points` | the ARC command |
 | Signed area of a polygon or a bulged polyline (closed by its chord) | `geom.PolygonArea`, `geom.PolylineArea`, `geom.ArcSegmentArea` | AREA, MEASUREGEOM |
+| Parallel offset of a line, circle, arc or polyline; positive is left of the direction of travel (outward for a circle or arc); `ok` is false for a radius that reaches zero or a degenerate polyline | `geom.OffsetLine`, `OffsetCircle`, `OffsetArc`, `OffsetPolyline` | OFFSET |
+| Round or bevel the corner of two lines, keeping the picked sides: a `Corner` with each line's retained far end and new join point and a tangent `Arc` or a `Bevel`, neither for a sharp corner; `ErrParallel` and `ErrTooLarge` refuse | `geom.FilletLines`, `ChamferLines` | FILLET, CHAMFER |
+| Which spans of a curve survive a trim at the cut parameters, or a break between two; sub-curves and splits of a curve or polyline | `geom.TrimSpan`, `KeepOutside`, `SubCurve`, `SubPolyline`, `SplitCurve` | TRIM, BREAK |
+| Convert a bulged polyline segment to its arc and back | `geom.ArcFromBulge`, `BulgeFromArc` | polyline splitting, JOIN |
+| Flatten a polyline into `Piece`s (a line or arc, forwards or reversed), chain pieces end to end within a tolerance, rebuild a polyline | `geom.PolylinePieces`, `ChainPieces`, `PolylineFromPieces` | JOIN |
+| Merge collinear lines or co-circular arcs that touch or overlap | `geom.JoinLines`, `JoinArcs` | JOIN |
+| Extend one end of a line or arc to the nearest boundary ahead | `geom.ExtendEnd` | EXTEND |
+
+`geom.Intersect` reports no points for overlapping collinear lines or concentric overlapping arcs, so
+TRIM and EXTEND see no cut where two pieces coincide.
 
 `Curve.Transform` assumes a similarity transform (translate, rotate, uniform scale, mirror): a circle
 stays a circle with its radius scaled by `Mat3.ScaleFactor`. A mirroring transform keeps arcs
@@ -84,4 +94,4 @@ the implementation does not touch any caller.
 
 - [Document model](document-model.md) — the entities built from these curves
 - [Command system](command-system.md) — snaps and selection, the main users of the queries
-- [Backlog](../backlog.md) — the R-tree, offsets, fillets and the other operations still to build
+- [Backlog](../backlog.md) — the R-tree and the other operations still to build
