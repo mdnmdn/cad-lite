@@ -61,8 +61,6 @@ New lines are appended below this heading.
 | G23 | The view-pan, view-zoom-extents, measure-angle, measure-radius and measure-id-point icons have no toolbar buttons | [Drawing canvas](features/canvas.md) |
 | G24 | A Go render helper so the icon sheets use oksvg, the application's rasterizer, instead of resvg | [Operations](tech/operations.md) |
 | G25 | measure-radius may need a redraw after review | [UI framework](tech/ui-framework.md) |
-| G26 | The agent panel prompt is a single-line field; a multi-line prompt needs `TextInput` support | [Agent panel](features/agent-panel.md) |
-| G27 | Pick a model, and persist the transcript with the drawing file (sessions persist per project in `.cad-lite/agent/`) | [Agent panel](features/agent-panel.md) |
 | G28 | Live smoke tests of the opencode and Codex backends against the real CLIs; only fakes run in CI (Claude Code is verified live) | [Agent integration](tech/agent-integration.md) |
 | G29 | Alternative to image results: a small CLI, found through an environment variable, that talks to the running instance and writes a PNG for agents whose harness drops MCP images | [Agent integration](tech/agent-integration.md) |
 | G30 | Agent token usage: `TurnEnd` has no usage field, so usage only reaches the debug log and the panel cannot show it | [Agent panel](features/agent-panel.md) |
@@ -100,6 +98,10 @@ New lines are appended below this heading.
 | G65 | The DWG reader mirrors entities whose extrusion is (0,0,-1) and the DXF reader does not (code 210 is ignored, G7); make the two agree | [File I/O](tech/file-io.md) |
 | G66 | DWG code pages 857, 861, 864, 869 and the UTF-16 one decode as Windows-1252 | [File I/O](tech/file-io.md) |
 | G67 | DWG: read the R2018+ header variables beyond `$INSUNITS` that the document could use ($CECOLOR, $LTSCALE, $PDMODE), and `AcDb:SummaryInfo` | [File I/O](tech/file-io.md) |
+| G68 | Images in agent prompts are verified only against the fake agents: the Codex `inputModalities` field and image item shape, opencode's answer to an image on a text-only model, and the opencode model ids (`opencode/big-pickle`, `*-free`) are assumptions | [Agent integration](tech/agent-integration.md), [Agent panel](features/agent-panel.md) |
+| G69 | Images are decoded and scaled on the UI goroutine when attached, so a very large file stalls the panel briefly; move it off the goroutine | [Agent panel](features/agent-panel.md) |
+| G70 | OpenCode auto-install is run for real only on Linux; macOS and Windows terminals and mise there, the aqua backend with a reachable GitHub API, and a real `opencode auth login` are untested. The direct-download fallback has HTTPS only, because opencode publishes no checksum list | [Agent integration](tech/agent-integration.md) |
+| G71 | The Windows installer's shell integration, the macOS open-documents handler and `Info.plist` document types, and a real file drop on the window are untested on their platforms | [DXF files](features/dxf-files.md), [Operations](tech/operations.md) |
 
 ## Next features
 
@@ -107,11 +109,4 @@ Requested next, in no fixed order.
 
 | id | Item | Affects |
 |---|---|---|
-| N1 | Document tabs: open several drawings at once, one tab each, each with its own session, undo history and view; the agent panel follows the active tab | [Drawing canvas](features/canvas.md), [Architecture](tech/architecture.md) |
-| N2 | Drop a file onto the window to open it (in a new tab once N1 lands); needs a drop event from the platform layer | [DXF files](features/dxf-files.md), [UI framework](tech/ui-framework.md) |
-| N3 | macOS: open a file dropped on the Dock or Finder icon (document types in `Info.plist` and the open-file Apple event) | [DXF files](features/dxf-files.md), [Operations](tech/operations.md) |
-| N4 | Windows: shell integration, an "Open in Cad-lite" context-menu entry and the `.dxf` association, written by the installer | [DXF files](features/dxf-files.md), [Operations](tech/operations.md) |
-| N5 | Recent folders (and files) list, persisted in settings, shown on start and in an Open menu | [Settings](features/settings.md), [DXF files](features/dxf-files.md) |
-| N6 | Agent auto-install: when no agent is on PATH, install mise into the app's private folder (no system install), run mise with its data and working directories in that folder to install OpenCode, check whether OpenCode is authenticated, and if not open a terminal (Terminal, PowerShell or cmd) running its login so the user can sign in | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
-| N7 | OpenCode over ACP: suggest `big-pickle` and the `*-free` models by default; when the chosen model supports vision, let the user drop or paste an image into the agent chat and send it to the agent | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
 | N8 | Agent panel: a ring that fills with the context-window usage, and a Compact button that asks the agent to compact its context | [Agent panel](features/agent-panel.md) |
