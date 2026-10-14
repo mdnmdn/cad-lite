@@ -2,6 +2,7 @@ package ebitenplatform
 
 import (
 	"reflect"
+	"strings"
 
 	"cad-lite/internal/gpui"
 )
@@ -83,7 +84,7 @@ func applyClipboard(r clipResult, current gpui.PlatformInputHandler, dispatch fu
 	}
 	switch r.op {
 	case "paste":
-		text := printableLine(r.text)
+		text := printableText(r.text)
 		if text == "" {
 			return
 		}
@@ -120,11 +121,17 @@ func sameHandler(a, b gpui.PlatformInputHandler) bool {
 	return a == b
 }
 
-func printableLine(s string) string {
+// printableText keeps the printable runes of pasted text: line breaks
+// ("\r\n", "\r", "\n") become "\n", which the focused field keeps or turns
+// into a space, tabs become spaces and other control runes are dropped.
+func printableText(s string) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
 	out := make([]rune, 0, len(s))
 	for _, r := range s {
 		switch {
-		case r == '\n' || r == '\r' || r == '\t':
+		case r == '\n':
+			out = append(out, r)
+		case r == '\t':
 			out = append(out, ' ')
 		case r >= 0x20 && r != 0x7f:
 			out = append(out, r)

@@ -64,7 +64,10 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   status line (`starting claude...`, `ready`), warning and relative date comes from the catalog
   (`ui.agent.*`), so the panel follows the interface language. Text sent to and received from the
   agent (prompts, tool names, permission option names) is not translated.
-- **Prompt.** One line; Enter or Send submits. Only one turn runs at a time, so Send does nothing
+- **Prompt.** Multi-line: Enter or Send submits, Shift+Enter starts a new line, and pasted text
+  keeps its line breaks. Long lines wrap at the panel's width; the field grows with its text up to
+  eight lines and then scrolls, keeping the caret in view. Up/Down move between lines and Home/End
+  go to the ends of the line. Only one turn runs at a time, so Send does nothing
   while the agent works. **Cancel** appears while a turn runs and stops it; the session stays usable.
 - **Transcript.** User messages, agent messages and notes in order; thoughts collapsed behind a
   `Thinking` line that expands on click; tool calls as cards with a status dot (pending, in progress,
@@ -104,7 +107,8 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 `pump` over every tab and `stopTab`. `ui/agent_store.go` holds the persistence glue: project directory,
 `ensureLoaded` (open set restore), tabs, history and `apply`, which folds each event into the
 transcript and `agentmanager/store`. `ui/agent_view.go` renders the header, tabs, history menu,
-transcript (`agentmanager/transcript`) and prompt row. `ui/workspace.go` creates the panel lazily and
+transcript (`agentmanager/transcript`) and prompt row; the prompt is a `gpui.TextInput` made
+`Multiline(agentPromptLines)` in `newAgentPanel` (`ui/agent.go`). `ui/workspace.go` creates the panel lazily and
 hosts the toggle and `agentCommand`; `cmdsys/commands/agent.go` is the `AI` command. `ui/agent_demo.go`
 seeds the canned transcript. Threading and lifecycle rules are in
 [Agent integration](../tech/agent-integration.md).

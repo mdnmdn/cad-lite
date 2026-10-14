@@ -56,7 +56,7 @@ func waitResult(t *testing.T, cw *clipWorker, apply func(clipResult)) {
 func TestClipboardPasteIsAsync(t *testing.T) {
 	cw := newClipWorker()
 	release := make(chan struct{})
-	read := func() (string, error) { <-release; return "a\nb", nil }
+	read := func() (string, error) { <-release; return "a\r\nb\rc\td\x01", nil }
 	start := time.Now()
 	if !startClipboard(cw, "paste", nil, read, nil) {
 		t.Fatal("paste not consumed")
@@ -74,7 +74,7 @@ func TestClipboardPasteIsAsync(t *testing.T) {
 		t.Fatalf("dispatched %d events", len(got))
 	}
 	kd := got[0].(gpui.KeyDownEvent)
-	if !kd.PreferCharacterInput || kd.Keystroke.KeyChar == nil || *kd.Keystroke.KeyChar != "a b" {
+	if !kd.PreferCharacterInput || kd.Keystroke.KeyChar == nil || *kd.Keystroke.KeyChar != "a\nb\nc d" {
 		t.Fatalf("paste event = %+v", kd)
 	}
 }

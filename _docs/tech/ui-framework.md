@@ -32,7 +32,7 @@ What Cad-lite uses from the library:
 | From gpui | Used for |
 |---|---|
 | `Div`, `Text`, flexbox builders, `Hover` styles | Every panel, button and label |
-| `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line |
+| `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line (single-line) and the agent prompt (`Multiline`) |
 | `Canvas` | The drawing area: a leaf that paints through a callback with its bounds |
 | `Stroke` via `Window.PaintStroke` | Every line the canvas draws |
 | `Quad` via `Window.PaintQuad` | The canvas background and box-selection rectangles |
@@ -42,7 +42,7 @@ What Cad-lite uses from the library:
 | `Window.PaintGlyph` | Every icon: an alpha mask tinted with one theme colour |
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
 
-`Stroke`, `Canvas` and `TextInput.OnEscape` exist in the library for Cad-lite. A new need follows the
+`Stroke`, `Canvas`, `TextInput.OnEscape` and `TextInput.Multiline` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions

@@ -116,6 +116,9 @@ type AgentPanel struct {
 	openers sync.WaitGroup
 }
 
+// agentPromptLines is how many lines the prompt field grows to before it scrolls.
+const agentPromptLines = 8
+
 // openerJoinTimeout bounds how long quitting waits for a start in flight.
 const openerJoinTimeout = 10 * time.Second
 
@@ -123,7 +126,7 @@ func newAgentPanel(ws *Workspace) *AgentPanel {
 	p := &AgentPanel{
 		ws:    ws,
 		open:  harnesses.Open,
-		input: themeBareField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder")), fontUI, false),
+		input: themeBareField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder")), fontUI, false).Multiline(agentPromptLines),
 	}
 	p.cur = newAgentTab()
 	p.tabs = []*agentTab{p.cur}

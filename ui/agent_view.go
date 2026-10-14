@@ -125,7 +125,7 @@ func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 	}
 	foot.Child(send)
 	return gpui.NewDiv().ID("agent-composer").FlexCol().Gap(8).P(12).Rounded(10).Border(1, uiBorder).Bg(uiField).
-		Child(gpui.NewDiv().SizeH(36).FlexCol().Child(input), foot)
+		Child(gpui.NewDiv().MinH(36).FlexCol().Child(input), foot)
 }
 
 func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.Div {

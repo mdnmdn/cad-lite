@@ -1394,6 +1394,9 @@ func (t *TextInput) Style(f func(*Div) *Div) *TextInput
 func (t *TextInput) PlaceholderColor(c Rgba) *TextInput
 // SelectionColor sets the selection highlight fill (default Blue500 at 25%).
 func (t *TextInput) SelectionColor(c Rgba) *TextInput
+// Multiline makes the field a multi-line editor that grows from one line up
+// to maxLines visible lines (values below 1 count as 1) and then scrolls.
+func (t *TextInput) Multiline(maxLines int) *TextInput
 ```
 
 Theming follows GPUI's element-styling model rather than per-property setters:
@@ -1450,6 +1453,36 @@ rune boundaries. Fallback metrics count runes, not UTF-16 units. These are logic
 metrics using existing shaping APIs; no scale API change. Grapheme navigation,
 BiDi visual-order selection, word-arrow shortcuts, horizontal autoscroll,
 select-all and undo remain unsupported.
+
+### Multi-line fields
+
+`Multiline(maxLines)` switches a field to multi-line editing; without it every
+rule above holds unchanged (and resting renders are pixel-identical). A
+multi-line field lays its box out as a column; the text area is one line tall
+when empty and grows by a line height per visual line up to `maxLines`, after
+which it keeps that height and scrolls vertically. Lines break at `\n` and wrap
+softly at the text area's width (the same Unicode line breaking as `Text`);
+without a shaper only `\n` breaks lines. A caret at a soft-wrap boundary shows
+at the start of the next visual line.
+
+Keys: Shift+Enter inserts `\n`; Enter runs the `OnSubmit` callbacks when any
+is registered and otherwise inserts `\n`. Up/Down move to the nearest caret
+stop on the previous/next visual line, keeping the x of the first vertical move
+while vertical moves chain; Up on the first line goes to 0, Down on the last to
+the end, and either forgets that x. Home/End go to the start/end of the visual line (End on a soft-wrapped
+line stops before its last rune, so the caret stays on that line). Shift extends
+with all of them. Triple-click selects the logical line (between `\n`s).
+Double-click, drag, Shift-click and `CharacterIndexForPoint` map the point to
+the visual line under it and the nearest stop on that line; `BoundsForRange`
+returns the caret rect on its visual line.
+
+Any edit or caret move scrolls the text area so the caret line is visible; the
+mouse wheel over the field scrolls it within its content (and is consumed only
+when it moved). Text arriving through `ReplaceTextInRange` (typing, paste)
+keeps `\n` and turns `\r\n` and `\r` into `\n` in a multi-line field; a
+single-line field turns each of them into a space. `SetText` stores its
+argument unchanged. Copy and cut keep newlines; IME and the rest of the
+`PlatformInputHandler` surface use the same UTF-16 offsets across lines.
 
 ## 11. `entity.go`, `context.go`, `app.go`, `subscription.go`
 

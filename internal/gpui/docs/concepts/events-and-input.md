@@ -397,7 +397,28 @@ fallback estimate counts runes, never surrogate halves. The cache refreshes on
 text, inherited style or measurer changes. Existing logical scale-1 shaping
 APIs remain in use; glyph masks still rasterize at the window scale.
 
-Not implemented: up/down, word-arrow shortcuts, select-all, horizontal
+### Multi-line fields
+
+`Multiline(maxLines)` turns a field into a multi-line editor, for chat
+prompts and notes:
+
+```go
+prompt := gpui.NewTextInput("Ask anything").Multiline(8).
+    OnSubmit(func(text string, w *gpui.Window, cx *gpui.App) { /* Enter */ })
+```
+
+Text breaks at `\n` and wraps at the field's width. The text area starts one
+line tall, grows a line at a time up to `maxLines`, then scrolls (the caret
+line stays in view; the mouse wheel scrolls too). Shift+Enter inserts a
+newline; Enter submits when an `OnSubmit` callback is registered and inserts a
+newline otherwise. `up`/`down` move to the nearest position on the
+neighbouring visual line, keeping the column across chained moves;
+`home`/`end` go to the ends of the visual line; Shift extends with all of
+them. Triple-click selects the logical line. Pasted or IME text keeps its line
+breaks (`\r\n` and `\r` become `\n`); a single-line field turns them into
+spaces.
+
+Not implemented: up/down in a single-line field, word-arrow shortcuts, select-all, horizontal
 scroll/autoscroll, undo, grapheme-cluster navigation or BiDi visual selection.
 `SetText` replaces content, moves the caret to the end and refreshes an already
 rendered field. Selection-only changes do not call `OnChange`.
