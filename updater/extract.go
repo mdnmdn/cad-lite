@@ -28,8 +28,10 @@ func Extract(archive, dest string) error {
 	return fmt.Errorf("updater: unknown archive type %s", filepath.Base(archive))
 }
 
-// inside joins name to dest and rejects results outside it.
+// inside joins name to dest and rejects results outside it. A backslash counts as a
+// separator: Windows PowerShell's Compress-Archive writes entry names with them.
 func inside(dest, name string) (string, error) {
+	name = strings.ReplaceAll(name, `\`, "/")
 	p := filepath.Join(dest, filepath.FromSlash(name))
 	rel, err := filepath.Rel(dest, p)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(filepath.FromSlash(name)) {

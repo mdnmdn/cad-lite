@@ -74,8 +74,9 @@ Package `updater`: `Client` (`NewClient`, `Check`, `CheckForce`, `Download`, `Up
 which is how the tests drive it) and compares versions with `ParseVersion` and `Version.Compare`.
 `Client.Update` calls `Download` (checksum first, then the archive into a temporary folder, hashing
 while it streams), `Install` (extract into a staging folder beside the target, then `swap`) and
-fills a `Plan` that `Relaunch` uses. `Extract` rejects paths and symlinks that leave the folder and
-caps the unpacked size. Plain http is refused except to loopback.
+fills a `Plan` that `Relaunch` uses. `Extract` reads a backslash in an entry name as a separator (Windows
+PowerShell's `Compress-Archive` writes them; the v0.1.0 Windows zips have them), rejects paths and
+symlinks that leave the folder, and caps the unpacked size. Plain http is refused except to loopback.
 
 `ui/update.go` keeps the state beside the workspace (`upd`). The worker goroutines write one
 mutex-guarded result and two atomic progress counters; a 250 ms `Window.After` poll, armed only

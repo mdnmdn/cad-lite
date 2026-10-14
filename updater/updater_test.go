@@ -326,8 +326,21 @@ func TestExtractZipAndTarGz(t *testing.T) {
 	}
 }
 
+// Windows PowerShell's Compress-Archive writes backslashes in entry names (the v0.1.0
+// Windows zips have them); they must unpack into folders on every OS.
+func TestExtractZipWithBackslashNames(t *testing.T) {
+	dest := t.TempDir()
+	z := writeTemp(t, "w.zip", zipBytes(t, map[string]string{`cad-lite-windows-amd64\cad-lite.exe`: "EXE"}, nil))
+	if err := Extract(z, dest); err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := findFile(dest, "cad-lite.exe"); !ok || filepath.Dir(p) != filepath.Join(dest, "cad-lite-windows-amd64") {
+		t.Fatalf("cad-lite.exe not unpacked into its folder: %q %v", p, ok)
+	}
+}
+
 func TestExtractRejectsEscapes(t *testing.T) {
-	for _, name := range []string{"../evil", "a/../../evil", "/abs/evil"} {
+	for _, name := range []string{"../evil", "a/../../evil", "/abs/evil", `..\evil`, `a\..\..\evil`} {
 		dest := t.TempDir()
 		z := writeTemp(t, "z.zip", zipBytes(t, map[string]string{name: "x"}, nil))
 		if err := Extract(z, dest); err == nil {
