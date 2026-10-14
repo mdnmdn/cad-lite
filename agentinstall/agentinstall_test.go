@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,36 +23,77 @@ import (
 	"time"
 )
 
-// fakeMise is a shell script standing in for mise: `install` writes a fake opencode (whose
-// `auth list` prints $FAKE_AUTH) under MISE_DATA_DIR and records its environment and working
-// directory under MISE_STATE_DIR; `which` prints that opencode's path.
+// fakeMise is a shell script standing in for mise. `install <spec>` appends the spec to
+// MISE_STATE_DIR/tool.txt, records its environment and working directory there and writes a fake
+// opencode under MISE_DATA_DIR/installs/<kind>-opencode (kind aqua, http or npm). FAKE_FAIL_AQUA,
+// FAKE_FAIL_HTTP and FAKE_FAIL_NPM make that backend fail; FAKE_MISE_SLEEP leaves a half-written
+// install folder and a child process, then hangs. `which --tool <spec> opencode` prints the path.
+// The fake opencode prints $FAKE_AUTH for `auth list`; with FAKE_SERVICE set it also starts a
+// "service" (a sleep) recorded in $FAKE_STATE/service.json, which `service stop` ends.
 const fakeMise = `#!/bin/sh
+kind() {
+  case "$1" in
+  aqua:*) echo aqua ;;
+  http:*) echo http ;;
+  *) echo npm ;;
+  esac
+}
 case "$1" in
 --version) echo "mise 2026.1.0-fake"; exit 0 ;;
 install)
-  if [ "$FAKE_MISE_SLEEP" = 1 ]; then exec sleep 30; fi
-  if [ "$FAKE_MISE_FAIL" = 1 ]; then echo "boom: registry unreachable" >&2; exit 1; fi
+  k=$(kind "$2")
   mkdir -p "$MISE_STATE_DIR"
+  echo "$2" >> "$MISE_STATE_DIR/tool.txt"
+  d="$MISE_DATA_DIR/installs/$k-opencode/1.2.3"
+  if [ "$FAKE_MISE_SLEEP" = 1 ]; then
+    mkdir -p "$d/partial"
+    sleep 30 &
+    echo $! > "$MISE_STATE_DIR/child.pid"
+    exec sleep 30
+  fi
+  if [ "$k" = aqua ] && [ "$FAKE_FAIL_AQUA" = 1 ]; then
+    mkdir -p "$d/partial"
+    echo "unable to fetch versions: HTTP status client error (403 Forbidden) for url (https://api.github.com/repos/anomalyco/opencode/releases)" >&2
+    exit 1
+  fi
+  if [ "$k" = http ] && [ "$FAKE_FAIL_HTTP" = 1 ]; then echo "http download failed" >&2; exit 1; fi
+  if [ "$k" = npm ] && [ "$FAKE_FAIL_NPM" = 1 ]; then echo "boom: registry unreachable" >&2; exit 1; fi
   env | grep '^MISE_' | sort > "$MISE_STATE_DIR/env.txt"
   pwd > "$MISE_STATE_DIR/pwd.txt"
-  echo "$2" > "$MISE_STATE_DIR/tool.txt"
-  d="$MISE_DATA_DIR/installs/opencode/1.2.3/bin"
-  mkdir -p "$d"
-  cat > "$d/opencode" <<'EOS'
+  mkdir -p "$d/bin"
+  cat > "$d/bin/opencode" <<'EOS'
 #!/bin/sh
-if [ "$1 $2" = "auth list" ]; then printf '%b' "$FAKE_AUTH"; exit 0; fi
+if [ "$1 $2" = "auth list" ]; then
+  if [ "$FAKE_SERVICE" = 1 ] && [ ! -f "$FAKE_STATE/service.json" ]; then
+    sleep 30 > /dev/null 2>&1 &
+    mkdir -p "$FAKE_STATE"
+    echo "{\"pid\":$!,\"url\":\"http://127.0.0.1:1\"}" > "$FAKE_STATE/service.json"
+  fi
+  printf '%b' "$FAKE_AUTH"
+  exit 0
+fi
+if [ "$1 $2" = "service stop" ]; then
+  pid=$(sed 's/.*"pid":\([0-9]*\).*/\1/' "$FAKE_STATE/service.json")
+  kill "$pid"
+  rm -f "$FAKE_STATE/service.json"
+  touch "$FAKE_STATE/stopped"
+  exit 0
+fi
 echo "opencode 1.2.3"
 EOS
-  chmod +x "$d/opencode"
+  chmod +x "$d/bin/opencode"
   echo "installed opencode" >&2
   ;;
-which) echo "$MISE_DATA_DIR/installs/opencode/1.2.3/bin/opencode" ;;
+which) echo "$MISE_DATA_DIR/installs/$(kind "$3")-opencode/1.2.3/bin/opencode" ;;
 cache) exit 0 ;;
 *) exit 2 ;;
 esac
 `
 
 const testVersion = "2026.1.0"
+
+// testOpenCode is the OpenCode release the fake releases page redirects `latest` to.
+const testOpenCode = "1.19.0"
 
 // testAsset is the archive name the tests' installer (linux/amd64) asks for.
 var testAsset = "mise-v" + testVersion + "-linux-x64-musl.tar.gz"
@@ -116,6 +158,10 @@ func (r *release) serve(t *testing.T) *httptest.Server {
 				return
 			}
 			w.Write(r.archive)
+		case "/oc/latest/download/opencode-linux-x64.tar.gz":
+			http.Redirect(w, req, "/oc/download/v"+testOpenCode+"/opencode-linux-x64.tar.gz", http.StatusFound)
+		case "/oc/download/v" + testOpenCode + "/opencode-linux-x64.tar.gz":
+			w.WriteHeader(http.StatusOK)
 		default:
 			http.NotFound(w, req)
 		}
@@ -144,7 +190,17 @@ func newInstaller(t *testing.T, srv *httptest.Server, env ...string) (*Installer
 		t.Skip("the fake mise is a shell script")
 	}
 	log := &progressLog{}
-	return &Installer{Dir: t.TempDir(), BaseURL: srv.URL, GOOS: "linux", GOARCH: "amd64", Env: env, Progress: log.add}, log
+	state := filepath.Join(t.TempDir(), "opencode-state")
+	env = append(env, "FAKE_STATE="+state)
+	return &Installer{Dir: t.TempDir(), BaseURL: srv.URL, OpenCodeURL: srv.URL + "/oc", GOOS: "linux", GOARCH: "amd64",
+		Env: env, Progress: log.add, StateDir: state, HasNode: func() bool { return false }}, log
+}
+
+// specs is every tool spec the fake mise was asked to install, in order.
+func specs(t *testing.T, in *Installer) []string {
+	t.Helper()
+	b, _ := os.ReadFile(filepath.Join(in.Dir, "mise", "state", "tool.txt"))
+	return strings.Fields(string(b))
 }
 
 const framedNone = "┌  Credentials ~/.local/share/opencode/auth.json\n│\n└  0 credentials\n\n┌  Environment\n│\n└  0 environment variables\n"
@@ -160,7 +216,7 @@ func TestInstallDownloadsMiseInstallsOpenCodeAndChecksAuth(t *testing.T) {
 	if r.Mise != filepath.Join(in.Dir, "mise", "bin", "mise") {
 		t.Errorf("mise at %s", r.Mise)
 	}
-	if want := filepath.Join(in.Dir, "mise", "data", "installs", "opencode", "1.2.3", "bin", "opencode"); r.Binary != want {
+	if want := filepath.Join(in.Dir, "mise", "data", "installs", "aqua-opencode", "1.2.3", "bin", "opencode"); r.Binary != want {
 		t.Errorf("binary %s, want %s", r.Binary, want)
 	}
 	if r.Authenticated || r.AuthErr != nil {
@@ -189,7 +245,7 @@ func TestInstallDownloadsMiseInstallsOpenCodeAndChecksAuth(t *testing.T) {
 	if got, _ := filepath.EvalSymlinks(strings.TrimSpace(string(pwd))); got != mustEval(t, filepath.Join(in.Dir, "work")) {
 		t.Errorf("mise ran in %q", pwd)
 	}
-	if tool, _ := os.ReadFile(filepath.Join(state, "tool.txt")); strings.TrimSpace(string(tool)) != DefaultTool {
+	if tool, _ := os.ReadFile(filepath.Join(state, "tool.txt")); strings.TrimSpace(string(tool)) != BinarySpec {
 		t.Errorf("mise installed %q", tool)
 	}
 
@@ -309,9 +365,18 @@ func TestCancelDuringToolInstall(t *testing.T) {
 	srv := newRelease(t).serve(t)
 	in, _ := newInstaller(t, srv, "FAKE_MISE_SLEEP=1")
 	ctx, cancel := context.WithCancel(context.Background())
+	childPID := filepath.Join(in.Dir, "mise", "state", "child.pid")
 	in.Progress = func(p Progress) {
 		if p.Step == StepTool {
-			go func() { time.Sleep(100 * time.Millisecond); cancel() }()
+			go func() {
+				for i := 0; i < 500; i++ {
+					if _, err := os.Stat(childPID); err == nil {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+				cancel()
+			}()
 		}
 	}
 	start := time.Now()
@@ -322,14 +387,152 @@ func TestCancelDuringToolInstall(t *testing.T) {
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("cancel took %v", d)
 	}
+	for i := 0; i < 100 && alive(t, childPID); i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if alive(t, childPID) {
+		t.Error("a process mise started survived the cancel")
+	}
+	if _, err := os.Stat(filepath.Join(in.Dir, "mise", "data", "installs", "aqua-opencode")); err == nil {
+		t.Error("the half-written install folder was kept")
+	}
+	if !slices.Equal(specs(t, in), []string{BinarySpec}) {
+		t.Errorf("a cancelled install went on to another backend: %v", specs(t, in))
+	}
 }
 
-func TestToolFailureCarriesItsOutput(t *testing.T) {
+func TestBinaryFallsBackToTheDirectDownload(t *testing.T) {
 	srv := newRelease(t).serve(t)
-	in, _ := newInstaller(t, srv, "FAKE_MISE_FAIL=1")
+	in, _ := newInstaller(t, srv, "FAKE_FAIL_AQUA=1")
+	r, err := in.Install(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct := "http:opencode[url=" + srv.URL + "/oc/download/v{{version}}/opencode-linux-x64.tar.gz]@" + testOpenCode
+	if got := specs(t, in); !slices.Equal(got, []string{BinarySpec, direct}) {
+		t.Fatalf("specs %v, want aqua then %s", got, direct)
+	}
+	if !strings.Contains(r.Binary, "http-opencode") {
+		t.Errorf("binary %s is not the direct download's", r.Binary)
+	}
+	if _, err := os.Stat(filepath.Join(in.Dir, "mise", "data", "installs", "aqua-opencode")); err == nil {
+		t.Error("the failed aqua attempt left its folder")
+	}
+}
+
+func TestNoNodeMeansNoNpmFallback(t *testing.T) {
+	srv := newRelease(t).serve(t)
+	in, _ := newInstaller(t, srv, "FAKE_FAIL_AQUA=1", "FAKE_FAIL_HTTP=1")
 	_, err := in.Install(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "registry unreachable") {
-		t.Fatalf("err = %v", err)
+	if !errors.Is(err, ErrNoNode) || !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("err = %v, want ErrNoNode and ErrRateLimited", err)
+	}
+	if got := specs(t, in); len(got) != 2 || got[0] != BinarySpec || !strings.HasPrefix(got[1], "http:") {
+		t.Errorf("specs %v: npm must not be tried without node", got)
+	}
+}
+
+func TestNpmFallbackNeedsNode(t *testing.T) {
+	srv := newRelease(t).serve(t)
+	in, _ := newInstaller(t, srv, "FAKE_FAIL_AQUA=1", "FAKE_FAIL_HTTP=1")
+	in.HasNode = func() bool { return true }
+	r, err := in.Install(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := specs(t, in); len(got) != 3 || got[2] != NpmSpec || !strings.Contains(r.Binary, "npm-opencode") {
+		t.Errorf("specs %v binary %s", got, r.Binary)
+	}
+}
+
+func TestEveryBackendFailingCarriesTheOutput(t *testing.T) {
+	srv := newRelease(t).serve(t)
+	in, _ := newInstaller(t, srv, "FAKE_FAIL_AQUA=1", "FAKE_FAIL_HTTP=1", "FAKE_FAIL_NPM=1")
+	in.HasNode = func() bool { return true }
+	_, err := in.Install(context.Background())
+	for _, want := range []string{"403 Forbidden", "http download failed", "registry unreachable"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want it to say %q", err, want)
+		}
+	}
+}
+
+func TestToolSpecIsTheOnlyOneTried(t *testing.T) {
+	srv := newRelease(t).serve(t)
+	in, _ := newInstaller(t, srv, "FAKE_FAIL_NPM=1")
+	in.Tool = "npm:opencode-ai@latest"
+	if _, err := in.Install(context.Background()); err == nil {
+		t.Fatal("a failing spec succeeded")
+	}
+	if got := specs(t, in); !slices.Equal(got, []string{"npm:opencode-ai@latest"}) {
+		t.Errorf("specs %v", got)
+	}
+}
+
+func TestAuthCheckStopsTheServiceItStarted(t *testing.T) {
+	srv := newRelease(t).serve(t)
+	in, _ := newInstaller(t, srv, "FAKE_SERVICE=1")
+	if _, err := in.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(in.StateDir, "service.json")); err == nil {
+		t.Error("the service opencode started is still recorded")
+	}
+	if _, err := os.Stat(filepath.Join(in.StateDir, "stopped")); err != nil {
+		t.Error("opencode service stop was not run")
+	}
+}
+
+func TestAuthCheckLeavesARunningServiceAlone(t *testing.T) {
+	srv := newRelease(t).serve(t)
+	in, _ := newInstaller(t, srv, "FAKE_SERVICE=1")
+	if err := os.MkdirAll(in.StateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	svc := filepath.Join(in.StateDir, "service.json")
+	if err := os.WriteFile(svc, []byte(`{"pid":0}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := in.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(svc); err != nil {
+		t.Error("the user's own service was stopped")
+	}
+	if _, err := os.Stat(filepath.Join(in.StateDir, "stopped")); err == nil {
+		t.Error("opencode service stop ran for a service that was already there")
+	}
+}
+
+func TestReleaseAsset(t *testing.T) {
+	for _, c := range []struct{ goos, goarch, want string }{
+		{"linux", "amd64", "opencode-linux-x64.tar.gz"},
+		{"linux", "arm64", "opencode-linux-arm64.tar.gz"},
+		{"darwin", "arm64", "opencode-darwin-arm64.zip"},
+		{"darwin", "amd64", "opencode-darwin-x64.zip"},
+		{"windows", "amd64", "opencode-windows-x64.zip"},
+		{"windows", "arm64", "opencode-windows-arm64.zip"},
+		{"linux", "arm", ""},
+		{"freebsd", "amd64", ""},
+	} {
+		got, ok := ReleaseAsset(c.goos, c.goarch)
+		if got != c.want || ok != (c.want != "") {
+			t.Errorf("ReleaseAsset(%s, %s) = %q, %v", c.goos, c.goarch, got, ok)
+		}
+	}
+}
+
+func TestHasNodeLooksAtThePATHHandedToMise(t *testing.T) {
+	dir := t.TempDir()
+	in := &Installer{GOOS: "linux", Env: []string{"PATH=" + dir}}
+	if in.hasNode() {
+		t.Fatal("found node in an empty folder")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "node"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !in.hasNode() {
+		t.Fatal("node on the PATH was not found")
 	}
 }
 
@@ -368,6 +571,10 @@ func TestHasCredentials(t *testing.T) {
 		{"framed one", "┌  Credentials ~/.local/share/opencode/auth.json\n│\n●  Anthropic oauth\n│\n└  1 credentials\n", true},
 		{"framed env only", "┌  Credentials x\n└  0 credentials\n┌  Environment\n●  OpenAI OPENAI_API_KEY\n└  1 environment variables\n", true},
 		{"coloured", "\x1b[90m┌\x1b[0m  Credentials\n\x1b[90m└\x1b[0m  \x1b[1m0\x1b[0m credentials\n", false},
+		{"ascii frame none (1.19)", "\x1b[0m\nT  Credentials \x1b[90m~/.local/share/opencode/auth.json\n|\n—  0 credentials\n", false},
+		{"ascii frame env (1.19)", "T  Credentials x\n|\n—  0 credentials\n\nT  Environment\n|\n•  Amazon Bedrock \x1b[90mAWS_ACCESS_KEY_ID\n|\n—  2 environment variables\n", true},
+		{"ascii frame one", "T  Credentials x\n|\no  OpenAI \x1b[90mapi\n|\n—  1 credentials\n", true},
+		{"2.x none", "No authenticated integrations\n", false},
 		{"plain one", "Anthropic        oauth        ~/.local/share/opencode/auth.json\n", true},
 		{"plain env", "GitHub Copilot  GITHUB_TOKEN                environment\n", true},
 		{"plain none", "No credentials found. Run `opencode auth login`.\n", false},

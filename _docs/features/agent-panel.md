@@ -108,14 +108,14 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   warning (the settings panel's Agent discovery section shows the same card whenever OpenCode is not
   found). Nothing runs until the user clicks *Install OpenCode…* and then *Install* on the question that
   follows, which says what is downloaded (mise, about 50 MB, from github.com/jdx/mise, checked against
-  the release's SHA256 list; OpenCode, up to about 1 GB on disk), the folder it all goes into, that
+  the release's SHA256 list; then OpenCode's release binary, about 60 MB, from github.com/anomalyco/opencode; about 350 MB on disk in all; OpenCode's npm package, up to about 1 GB, only when the binary cannot be fetched and Node.js is installed), the folder it all goes into, that
   nothing is installed system-wide, and that a terminal opens for sign-in; the other button closes it without installing. While it
   runs, the card lists three steps (download and verify mise, with a bar and megabytes; install OpenCode;
   check the sign-in) and a *Cancel* button, which stops the running step and keeps nothing
   half-downloaded. On success the installed OpenCode becomes its executable (`agent.binaries`, as if
   chosen with Browse, so a restart keeps it), its chip appears, and when `opencode auth list` shows no
   credential a terminal opens running `opencode auth login`; the card says which terminal opened, and
-  *Sign in…* opens it again. A failure shows the error with *Retry* and *Close*.
+  *Sign in…* opens it again. A failure shows the error with *Retry* and *Close*. Quitting the application cancels a running installation and waits for it to stop its processes and remove what it half-wrote.
 - **Start and Stop.** Start launches the selected agent with the drawing's MCP server attached and
   shows `starting...`, then `ready`. Stop closes the session; the transcript stays. The session also
   ends, with a note, when the agent process exits. Sending a prompt with no session starts one and

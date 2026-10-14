@@ -54,8 +54,10 @@ const (
 type agentInstall struct {
 	run AgentInstaller
 
-	phase      instPhase
-	cancel     context.CancelFunc
+	phase  instPhase
+	cancel context.CancelFunc
+	// finished closes when the installer goroutine has returned.
+	finished   chan struct{}
 	cancelling bool
 	// cancelled is set when the last run was cancelled, for a note under the offer.
 	cancelled bool
@@ -120,8 +122,11 @@ func (ws *Workspace) startInstall(w *gpui.Window) {
 	a.total.Store(0)
 	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
 	a.cancel = cancel
+	finished := make(chan struct{})
+	a.finished = finished
 	run := a.run
 	go func() {
+		defer close(finished)
 		defer cancel()
 		r, err := run(ctx, func(p agentinstall.Progress) {
 			a.step.Store(int32(p.Step))
@@ -152,6 +157,25 @@ func (ws *Workspace) cancelInstall(w *gpui.Window) {
 	a.cancelling = true
 	a.cancel()
 	w.Refresh()
+}
+
+// installQuitWait bounds how long quitting waits for a cancelled installation to kill its
+// processes and remove what it half-wrote.
+const installQuitWait = 10 * time.Second
+
+// stopAgentInstall cancels a running installation and waits (up to installQuitWait) for the
+// installer to return, so mise's process tree is gone and partial files are removed before the
+// application exits. CloseAgent calls it.
+func (ws *Workspace) stopAgentInstall() {
+	a := &ws.disc().inst
+	if a.phase != instRunning || a.cancel == nil {
+		return
+	}
+	a.cancel()
+	select {
+	case <-a.finished:
+	case <-time.After(installQuitWait):
+	}
 }
 
 // dismissInstall closes the confirmation, the result or the error.
@@ -247,6 +271,7 @@ func (ws *Workspace) agentInstallBlock(id string) *gpui.Div {
 		}
 		card.Child(title(i18n.T("ui.agent.install.confirm_title")),
 			line(i18n.T("ui.agent.install.confirm_what")),
+			line(i18n.T("ui.agent.install.confirm_fallback")),
 			line(i18n.T("ui.agent.install.confirm_where", dir)),
 			line(i18n.T("ui.agent.install.confirm_login")))
 		buttons.Child(

@@ -26,10 +26,6 @@ import (
 // tests and portable setups.
 const EnvDir = "TOOLS_DIR"
 
-// DefaultTool is the mise tool spec installed for OpenCode. mise's registry maps `opencode` to
-// its npm package and, failing that, to the release binaries (aqua:anomalyco/opencode).
-const DefaultTool = "opencode@latest"
-
 // DefaultBaseURL is mise's GitHub releases page; `/latest/download/<file>` and
 // `/download/<tag>/<file>` are appended to it.
 const DefaultBaseURL = "https://github.com/jdx/mise/releases"
@@ -123,19 +119,28 @@ type Installer struct {
 	HTTP *http.Client
 	// GOOS and GOARCH pick the mise build; they default to the running platform.
 	GOOS, GOARCH string
-	// Tool is the mise tool spec (DefaultTool).
+	// Tool, when set, is the only mise tool spec tried; empty runs the default chain (see
+	// InstallTool).
 	Tool string
+	// OpenCodeURL is OpenCode's releases page (DefaultOpenCodeURL), for the direct download.
+	OpenCodeURL string
 	// Env is added to the environment of every program run, after the process's own (later
-	// entries win); hosts pass the PATH the user's login shell reports, so mise finds node.
+	// entries win); hosts pass the PATH the user's login shell reports.
 	Env []string
+	// HasNode reports whether Node.js is on the PATH, which the npm fallback needs; nil looks
+	// for `node` on the PATH in Env, else the process's.
+	HasNode func() bool
+	// StateDir is OpenCode's state folder, where its background service records itself; empty is
+	// $XDG_STATE_HOME/opencode or ~/.local/state/opencode, the folder opencode uses on every OS.
+	StateDir string
 	// Progress, when set, is called from the installing goroutine.
 	Progress func(Progress)
 }
 
-// Install makes OpenCode available: it reuses the mise already in Dir or downloads it, runs
-// `mise install <Tool>`, finds the executable with `mise which` and checks the credentials. A
-// cancelled ctx stops the running step and returns ctx's error; nothing half-downloaded is
-// kept.
+// Install makes OpenCode available: it reuses the mise already in Dir or downloads it, has mise
+// install OpenCode (InstallTool), and checks the credentials (CheckAuth). A cancelled ctx kills
+// the running step's whole process tree and returns ctx's error; nothing half-downloaded or
+// half-installed is kept.
 func (in *Installer) Install(ctx context.Context) (Result, error) {
 	if in.Dir == "" {
 		return Result{}, errors.New("agentinstall: no tools folder")
@@ -182,20 +187,6 @@ func (in *Installer) goarch() string {
 	return runtime.GOARCH
 }
 
-func (in *Installer) tool() string {
-	if in.Tool != "" {
-		return in.Tool
-	}
-	return DefaultTool
-}
-
-// toolName is the tool spec without its version: what `mise which --tool` and the
-// executable's name are about.
-func (in *Installer) toolName() string {
-	name, _, _ := strings.Cut(in.tool(), "@")
-	return name
-}
-
 // misePath is where the private mise executable lives.
 func (in *Installer) misePath() string {
 	name := "mise"
@@ -238,7 +229,7 @@ func (in *Installer) command(ctx context.Context, bin string, env []string, args
 	cmd.Env = append(append(os.Environ(), in.Env...), env...)
 	cmd.WaitDelay = 2 * time.Second
 	cmd.Stdin = nil
-	hideWindow(cmd)
+	prepare(cmd)
 	return cmd, nil
 }
 
@@ -263,50 +254,6 @@ func (in *Installer) output(ctx context.Context, bin string, env []string, args 
 		return "", fmt.Errorf("agentinstall: %s %s: %w: %s", filepath.Base(bin), strings.Join(args, " "), err, lastLines(msg, 4))
 	}
 	return out.String(), nil
-}
-
-// InstallTool runs `mise install <Tool>` and returns the executable `mise which` reports.
-func (in *Installer) InstallTool(ctx context.Context, mise string) (string, error) {
-	ictx, cancel := context.WithTimeout(ctx, ToolTimeout)
-	defer cancel()
-	if _, err := in.output(ictx, mise, in.miseEnv(), "install", in.tool()); err != nil {
-		return "", err
-	}
-	wctx, wcancel := context.WithTimeout(ctx, shortTimeout)
-	defer wcancel()
-	out, err := in.output(wctx, mise, in.miseEnv(), "which", "--tool", in.tool(), in.toolName())
-	if err != nil {
-		return "", err
-	}
-	bin := lastLine(out)
-	if bin == "" || !filepath.IsAbs(bin) {
-		return "", fmt.Errorf("agentinstall: mise did not report where %s is (%q)", in.toolName(), bin)
-	}
-	if fi, err := os.Stat(bin); err != nil || fi.IsDir() {
-		return "", fmt.Errorf("agentinstall: mise reported %s, which is not a file", bin)
-	}
-	in.pruneCache(ctx, mise)
-	return bin, nil
-}
-
-// pruneCache drops mise's download cache, which holds a second copy of the package; failures are
-// ignored because the installation is complete without it.
-func (in *Installer) pruneCache(ctx context.Context, mise string) {
-	cctx, cancel := context.WithTimeout(ctx, shortTimeout)
-	defer cancel()
-	_, _ = in.output(cctx, mise, in.miseEnv(), "cache", "clear")
-}
-
-// CheckAuth runs `<bin> auth list` and reports whether it lists a credential (see
-// HasCredentials). err is set when the command could not run or failed.
-func (in *Installer) CheckAuth(ctx context.Context, bin string) (bool, error) {
-	actx, cancel := context.WithTimeout(ctx, AuthTimeout)
-	defer cancel()
-	out, err := in.output(actx, bin, []string{"NO_COLOR=1"}, "auth", "list")
-	if err != nil {
-		return false, err
-	}
-	return HasCredentials(out), nil
 }
 
 // LoginArgs is the command line that signs in to OpenCode at bin, for a terminal.

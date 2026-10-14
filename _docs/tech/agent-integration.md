@@ -7,7 +7,7 @@ summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -66,27 +66,47 @@ the user confirms it in the UI. `Installer.Install` runs three steps, each cance
    tests), refuses it unless its sha256 matches (`ErrChecksum`, `ErrNoChecksum`), unpacks it with
    `updater.Extract` in a temporary folder and moves the executable into place, mode 0755. No shell
    installer runs.
-2. **OpenCode.** `InstallTool` runs `mise install opencode@latest` (`DefaultTool`; mise's registry maps
-   `opencode` to its npm package, else its release binaries), then `mise which --tool opencode@latest
-   opencode` for the executable, then `mise cache clear` (the cache holds a second copy). mise is confined to
-   the tools folder: `MISE_DATA_DIR`, `MISE_CONFIG_DIR`, `MISE_CACHE_DIR`, `MISE_STATE_DIR`,
-   `MISE_GLOBAL_CONFIG_FILE` and `MISE_SYSTEM_CONFIG_FILE` point inside it, `MISE_CEILING_PATHS` stops it
-   reading project files above it, `MISE_YES=1` answers its prompts, npm's cache is redirected there too, and
-   the working directory is `<tools>/work`. The child gets the merged PATH (`shellenv.Env`), so the npm
-   backend finds node.
-3. **Sign-in.** `CheckAuth` runs `opencode auth list` (30 s) and `HasCredentials` reads either layout opencode
-   prints: the framed one with `N credentials` counts, or one line per credential. opencode 2.x starts its
-   background service on this call, as on any command.
+2. **OpenCode.** `InstallTool` installs OpenCode's release binary, never needing node for it, trying in
+   order: `aqua:anomalyco/opencode@latest` (`BinarySpec`; mise's aqua backend asks the GitHub API for the
+   release, unauthenticated, 60 requests an hour); then the same archive through mise's `http` backend from a
+   direct URL, `http:opencode[url=https://github.com/anomalyco/opencode/releases/download/v{{version}}/<asset>]@<version>`,
+   where `<asset>` is `ReleaseAsset` (`opencode-linux-x64.tar.gz`, `opencode-darwin-arm64.zip`,
+   `opencode-windows-x64.zip` and the arm64 forms) and the version comes from the redirect of
+   `releases/latest/download/<asset>`, so no API call is made (github.com/sst/opencode redirects to that
+   repository); and only when `node` is on the merged PATH, mise's registry entry `opencode@latest` (`NpmSpec`,
+   npm, about 1 GB). Without node the error says so (`ErrNoNode`) with why the binary attempts failed; a
+   GitHub refusal (403, 429, rate limit) is marked `ErrRateLimited`, "try again later". After a success
+   `mise which --tool <spec> opencode` gives the executable and `mise cache clear` drops the second copy; a
+   failed or cancelled attempt removes the install folders it created. mise is confined to the tools
+   folder: `MISE_DATA_DIR`, `MISE_CONFIG_DIR`, `MISE_CACHE_DIR`, `MISE_STATE_DIR`, `MISE_GLOBAL_CONFIG_FILE`
+   and `MISE_SYSTEM_CONFIG_FILE` point inside it, `MISE_CEILING_PATHS` stops it reading project files above
+   it, `MISE_YES=1` answers its prompts, npm's cache is redirected there too, and the working directory is
+   `<tools>/work`. Every program runs in a process group of its own (Windows: `taskkill /T` on cancel), so a
+   cancel kills mise with the downloads and npm processes it started. mise plus the binary take about
+   320 MB on disk (mise about 140 MB, OpenCode about 180 MB) from about 110 MB of downloads.
+3. **Sign-in.** `CheckAuth` runs `opencode auth list` (30 s) and `HasCredentials` reads the layouts opencode
+   prints: the framed one with `N credentials` counts, in Unicode or with its ASCII fallback (`T`, `|`, `—`),
+   or one line per credential (2.x: `No authenticated integrations` when empty). Credentials given by
+   environment variables count. OpenCode 1.x leaves no process behind; OpenCode 2.x starts a detached
+   background service on this call (its own session, recorded in `~/.local/state/opencode/service.json` with
+   pid, URL and password) that would keep running. When that file appears only during the check, the
+   service is ours and `opencode service stop` ends it (else the recorded pid is killed); a service running
+   before the check is left alone. (`auth list --standalone` would avoid the service on 2.x, but 1.x rejects the
+   flag.)
 
 The tools folder is `cad-lite/tools` under `%LocalAppData%`, `~/Library/Application Support` or
 `$XDG_DATA_HOME` (`~/.local/share`), or `$CADLITE_TOOLS_DIR` ([Operations](operations.md)). `ui/agent_install.go`
 runs `Install` on a goroutine and adopts the result through a poll timer, like the discovery probe; the
 installed executable is stored as `agent.binaries.opencode`, which `applyAgentBinaries` hands to
-`harnesses.SetBinary`. When there is no credential, `OpenTerminalCommand` opens a terminal running
-`opencode auth login` (`agentinstall.LoginArgs`). Tests serve a fake release (a tarball holding a shell-script
-mise that writes a fake opencode) from `httptest`; checksum refusal, cancellation during the download and
-during `mise install`, and the isolation variables are covered. A real download and `mise install` were run
-once on Linux; a real sign-in and the macOS and Windows terminals were not.
+`harnesses.SetBinary`. `Workspace.CloseAgent` (quit) cancels a running installation and waits up to 10 s for
+it to kill its processes and remove what it half-wrote. When there is no credential, `OpenTerminalCommand`
+opens a terminal running `opencode auth login` (`agentinstall.LoginArgs`). Tests serve a fake release (a
+tarball holding a shell-script mise that writes a fake opencode) from `httptest`; covered are checksum
+refusal, cancellation during the download and during `mise install` (child process killed, partial folder
+removed), each fallback, the node rule, the service stop, and the isolation variables. Run for real once on
+Linux: the mise download, the aqua attempt failing on a blocked API, the direct-download fallback installing
+OpenCode 1.19.0 without node, and the sign-in check with no process left. A real sign-in, the aqua backend
+with a reachable API, and the macOS and Windows terminals were not run.
 
 ## The `cad` MCP server
 

@@ -199,9 +199,11 @@ func (ws *Workspace) AgentPanel() *AgentPanel {
 }
 
 // CloseAgent stops every agent session and the MCP server, waits for the
-// agent processes to exit and saves which sessions were open. Call it when
-// the application quits.
+// agent processes to exit and saves which sessions were open; a running
+// OpenCode installation is cancelled and waited for. Call it when the
+// application quits.
 func (ws *Workspace) CloseAgent() {
+	ws.stopAgentInstall()
 	p := ws.agent
 	if p == nil {
 		return

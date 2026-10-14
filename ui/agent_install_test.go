@@ -181,6 +181,30 @@ func TestInstallCancel(t *testing.T) {
 	}
 }
 
+func TestQuitCancelsARunningInstall(t *testing.T) {
+	cleaned := make(chan struct{})
+	h, _ := installRig(t, &fakeInstaller{})
+	h.ws.SetAgentInstaller(func(ctx context.Context, progress func(agentinstall.Progress)) (agentinstall.Result, error) {
+		progress(agentinstall.Progress{Step: agentinstall.StepTool})
+		<-ctx.Done()
+		close(cleaned) // the real installer kills mise's process group and removes partial folders here
+		return agentinstall.Result{}, ctx.Err()
+	})
+	h.ws.startInstall(h.hw.Window())
+	h.settle(func() bool { return h.ws.inst().step.Load() == int32(agentinstall.StepTool) })
+	h.ws.CloseAgent()
+	select {
+	case <-cleaned:
+	default:
+		t.Fatal("CloseAgent returned before the installation was cancelled and cleaned up")
+	}
+	select {
+	case <-h.ws.inst().finished:
+	default:
+		t.Fatal("CloseAgent did not wait for the installer to return")
+	}
+}
+
 func TestInstallFailureShowsTheErrorAndRetries(t *testing.T) {
 	f := &fakeInstaller{release: make(chan struct{}), err: errors.New("agentinstall: checksum mismatch")}
 	close(f.release)
