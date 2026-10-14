@@ -27,6 +27,10 @@ type Env struct {
 	// Changed is the UI refresh hook, called on the UI goroutine after every
 	// tool that may have modified the drawing, selection or view.
 	Changed func()
+	// Snapshot renders the drawing to PNG bytes (see SnapshotRequest). It is
+	// called on the UI goroutine. When nil, render_png reports that
+	// rendering is not available.
+	Snapshot func(*cmdsys.Session, SnapshotRequest) ([]byte, error)
 }
 
 // Register adds every drawing tool to srv.
@@ -38,7 +42,7 @@ func Register(srv *mcp.Server, e Env) {
 
 // Instructions returns the text for mcp.Options.Instructions.
 func Instructions() string {
-	return `You control a 2D CAD drawing (go-draw, AutoCAD-like). Model space is Y-up; coordinates are in drawing units (millimetres by default); angles are in degrees, counter-clockwise from +X. Entities are identified by hexadecimal handle strings such as "1A2". Every tool is one undo step. Prefer the structured tools (add_line, add_circle, ...); use run_script for anything else: AutoCAD script text where each single space or newline separates tokens and an empty token (two separators in a row, or a trailing separator) is Enter, for example "LAYER walls=4 LINE 0,0 100,0 100,50 " (the trailing space is the Enter that ends LINE; an Enter pressed while idle repeats the last command, so do not add more). Points are "x,y" or relative "@dx,dy" or polar "@dist<angle". Commands still waiting for input after a script are cancelled. Use get_drawing first to see layers and extents.`
+	return `You control a 2D CAD drawing (go-draw, AutoCAD-like). Model space is Y-up; coordinates are in drawing units (millimetres by default); angles are in degrees, counter-clockwise from +X. Entities are identified by hexadecimal handle strings such as "1A2". Every tool is one undo step. Prefer the structured tools (add_line, add_circle, ...); use run_script for anything else: AutoCAD script text where each single space or newline separates tokens and an empty token (two separators in a row, or a trailing separator) is Enter, for example "LAYER walls=4 LINE 0,0 100,0 100,50 " (the trailing space is the Enter that ends LINE; an Enter pressed while idle repeats the last command, so do not add more). Points are "x,y" or relative "@dx,dy" or polar "@dist<angle". Commands still waiting for input after a script are cancelled. Use get_drawing first to see layers and extents. Use render_png to look at the drawing (an image plus the pixel-to-model mapping) and check your work.`
 }
 
 type toolFunc[A any] func(s *cmdsys.Session, a A) (any, error)
@@ -152,6 +156,7 @@ func Tools(e Env) []mcp.Tool {
 		def(e, "undo", "Undo the last steps (default 1).", schemaSteps, true, undo),
 		def(e, "redo", "Redo undone steps (default 1).", schemaSteps, true, redo),
 		def(e, "zoom_extents", "Fit the view to the drawing's extents.", schemaEmpty, true, zoomExtents),
+		renderPNG(e),
 		def(e, "measure", "Measure entities (length/perimeter and area) and/or the distance between two points.", schemaMeasure, false, measure),
 	}
 }
