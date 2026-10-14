@@ -1,0 +1,137 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp (e.g. 0.3.0); empty uses git describe"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ inputs.version }}
+  CGO_ENABLED: "0"
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Pure-Go darwin builds (ebiten uses purego there), so both arches cross-compile on one
+      # runner and are merged into a universal binary with lipo.
+      - name: Assemble go-draw.app
+        run: ARCHS="arm64 amd64" packaging/macos/bundle.sh
+      - name: Sign, notarize when APPLE_* secrets exist, zip and dmg
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: packaging/macos/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          if-no-files-found: error
+          path: |
+            _tmp/dist/macos/*.zip
+            _tmp/dist/macos/*.dmg
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install go-winres
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # Cross-builds amd64 and arm64 with the icon and version resources linked in.
+      - name: Build exe and zip per arch
+        run: packaging/windows/bundle.sh
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: Build installers
+        shell: pwsh
+        run: |
+          $v = (Get-ChildItem _tmp/dist/windows -Filter 'go-draw-*-windows-amd64.zip').Name -replace '^go-draw-(.*)-windows-amd64\.zip$', '$1'
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          foreach ($arch in 'amd64', 'arm64') {
+            & $iscc "/DMyAppVersion=$v" "/DMyArch=$arch" packaging\windows\go-draw.iss
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      # Authenticode signing is not wired: see packaging/README.md.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          if-no-files-found: error
+          path: |
+            _tmp/dist/windows/*.zip
+            _tmp/dist/windows/*-setup.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libc6-dev libgl1-mesa-dev libx11-dev \
+            libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config librsvg2-bin
+      - name: Build tar.gz
+        run: CGO_ENABLED=1 packaging/linux/bundle.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          if-no-files-found: error
+          path: _tmp/dist/linux/*.tar.gz
+
+  publish:
+    needs: [macos, windows, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: ${{ contains(github.ref_name, '-') }}

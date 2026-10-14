@@ -87,3 +87,15 @@ appicon:
 # review sheet of the app icon at every size, light and dark, beside UI icons: assets/appicon/preview/
 appicon-sheet:
     uv run tools/icons/appicon.py sheet
+
+# macOS bundle (unsigned go-draw.app in _tmp/dist/macos); ARCHS="arm64" off macOS. See packaging/README.md
+bundle-mac:
+    packaging/macos/bundle.sh
+
+# Windows exe + zip per arch in _tmp/dist/windows (needs go-winres on PATH)
+bundle-win:
+    packaging/windows/bundle.sh
+
+# Linux tar.gz in _tmp/dist/linux (needs cgo and X11/GL dev headers)
+bundle-linux:
+    packaging/linux/bundle.sh

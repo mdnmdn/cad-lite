@@ -6,3 +6,4 @@
 /assets/icons/variants/
 /assets/appicon/preview/
 !/assets/appicon/*.png
+/cmd/cad/rsrc_windows_*.syso
