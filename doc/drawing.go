@@ -35,6 +35,9 @@ const ModelSpace Handle = 0x1F
 // model space, plus the undo journal.
 type Drawing struct {
 	Header Header
+	// Preserved is what a file reader kept of tables and blocks the document
+	// does not model, for the writer to emit again.
+	Preserved Preserved
 	// CurrentLayer is the layer new entities go on ($CLAYER).
 	CurrentLayer string
 
@@ -100,10 +103,14 @@ func (d *Drawing) Handles() []Handle {
 	return d.order
 }
 
-// Extents returns the bounding box of every entity, or an empty box.
+// Extents returns the bounding box of every displayed entity, or an empty
+// box. Unknown entities are not displayed and do not count.
 func (d *Drawing) Extents() geom.Box2 {
 	b := geom.EmptyBox()
 	for _, e := range d.entities {
+		if _, ok := e.(*Unknown); ok {
+			continue
+		}
 		b = b.Union(e.Bounds())
 	}
 	return b

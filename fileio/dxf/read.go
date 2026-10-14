@@ -1,7 +1,9 @@
 // Package dxf reads and writes ASCII DXF. The reader accepts R12 through
 // current versions and keeps handles; the writer emits R12 (AC1009), the
 // most widely readable version. Entities the document does not model are
-// skipped with a warning.
+// kept as doc.Unknown with their raw groups, and the tables and blocks it
+// does not model are kept in doc.Preserved, so a file can be written back
+// without losing them; the writer says what R12 cannot represent.
 package dxf
 
 import (
@@ -94,8 +96,7 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	}
 	d := doc.New()
 	d.Header.Extra = map[string][]string{}
-	skipped := map[string]int{}
-	var warns []string
+	st := &state{kept: map[string]int{}}
 	var section string
 	var objs []object
 	for i := 0; i < len(ps); i++ {
@@ -121,7 +122,7 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 			section = ""
 			objs = append(objs[:0], object{typ: typ})
 		case "ENDSEC":
-			if err := applySection(d, section, objs, skipped); err != nil {
+			if err := applySection(d, section, objs, st); err != nil {
 				return nil, nil, err
 			}
 			section, objs = "", objs[:0]
@@ -131,13 +132,14 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 			objs = append(objs, object{typ: typ})
 		}
 	}
-	types := make([]string, 0, len(skipped))
-	for t := range skipped {
+	warns := st.warns
+	types := make([]string, 0, len(st.kept))
+	for t := range st.kept {
 		types = append(types, t)
 	}
 	sort.Strings(types)
 	for _, t := range types {
-		warns = append(warns, fmt.Sprintf("skipped %d %s entities (not supported)", skipped[t], t))
+		warns = append(warns, fmt.Sprintf("kept %d %s entities as unknown objects (not displayed or editable)", st.kept[t], t))
 	}
 	if d.Layer(d.CurrentLayer) == nil {
 		d.CurrentLayer = "0"
@@ -145,20 +147,102 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	return d, warns, nil
 }
 
-func applySection(d *doc.Drawing, section string, objs []object, skipped map[string]int) error {
+// state is what reading one file accumulates besides the drawing.
+type state struct {
+	// kept counts the unknown entities kept, by class.
+	kept  map[string]int
+	warns []string
+}
+
+// preservedTables are the tables whose records the document does not model
+// and the writer emits again.
+var preservedTables = map[string]bool{"VPORT": true, "LTYPE": true, "STYLE": true, "VIEW": true, "UCS": true, "APPID": true, "DIMSTYLE": true}
+
+func applySection(d *doc.Drawing, section string, objs []object, st *state) error {
 	switch section {
 	case "HEADER":
 		readHeader(d, objs)
 	case "TABLES":
-		for _, o := range objs {
-			if o.typ == "LAYER" {
-				readLayer(d, o)
-			}
-		}
+		readTables(d, objs)
+	case "BLOCKS":
+		readBlocks(d, objs)
 	case "ENTITIES":
-		readEntities(d, objs, skipped)
+		readEntities(d, objs, st)
 	}
 	return nil
+}
+
+func rawPairs(o object) []doc.Pair {
+	out := make([]doc.Pair, 0, len(o.pairs)+1)
+	out = append(out, doc.Pair{Code: 0, Value: o.typ})
+	for _, p := range o.pairs {
+		out = append(out, doc.Pair{Code: p.code, Value: p.val})
+	}
+	return out
+}
+
+// bumpSeed raises the handle seed above every handle (codes 5 and 105) in
+// ps, so no handle the writer or a command allocates collides with one kept
+// verbatim.
+func bumpSeed(d *doc.Drawing, ps []doc.Pair) {
+	for _, p := range ps {
+		if p.Code == 5 || p.Code == 105 {
+			if h, err := doc.ParseHandle(strings.TrimSpace(p.Value)); err == nil && h >= d.Header.HandSeed {
+				d.Header.HandSeed = h + 1
+			}
+		}
+	}
+}
+
+func readTables(d *doc.Drawing, objs []object) {
+	table := ""
+	for _, o := range objs {
+		switch o.typ {
+		case "TABLE":
+			table = o.str(2)
+		case "ENDTAB":
+			table = ""
+		case "LAYER":
+			readLayer(d, o)
+		default:
+			if !preservedTables[table] || o.typ != table {
+				continue
+			}
+			if o.typ == "LTYPE" && strings.EqualFold(o.str(2), "CONTINUOUS") {
+				continue
+			}
+			r := doc.RawRecord{Pairs: rawPairs(o)}
+			bumpSeed(d, r.Pairs)
+			if d.Preserved.Tables == nil {
+				d.Preserved.Tables = map[string][]doc.RawRecord{}
+			}
+			d.Preserved.Tables[table] = append(d.Preserved.Tables[table], r)
+		}
+	}
+}
+
+// readBlocks keeps each block definition, BLOCK to ENDBLK, except the model
+// and paper space blocks, whose entities live in ENTITIES.
+func readBlocks(d *doc.Drawing, objs []object) {
+	var cur []doc.Pair
+	name := ""
+	for _, o := range objs {
+		if o.typ == "BLOCK" {
+			cur, name = nil, o.str(2)
+		}
+		if cur == nil && o.typ != "BLOCK" {
+			continue
+		}
+		cur = append(cur, rawPairs(o)...)
+		if o.typ == "ENDBLK" {
+			u := strings.ToUpper(name)
+			if !strings.HasPrefix(u, "*MODEL_SPACE") && !strings.HasPrefix(u, "*PAPER_SPACE") {
+				bumpSeed(d, cur)
+				d.Preserved.Blocks = append(d.Preserved.Blocks, doc.RawRecord{Pairs: cur})
+			}
+			cur = nil
+		}
+	}
 }
 
 func readHeader(d *doc.Drawing, objs []object) {
@@ -224,11 +308,15 @@ func vec(o object, xc int) geom.Vec2 { return geom.V(o.float(xc), o.float(xc+10)
 
 func deg(v float64) float64 { return geom.NormAngle(v * math.Pi / 180) }
 
-func readEntities(d *doc.Drawing, objs []object, skipped map[string]int) {
+func readEntities(d *doc.Drawing, objs []object, st *state) {
+	for _, o := range objs {
+		bumpSeed(d, rawPairs(o))
+	}
 	for i := 0; i < len(objs); i++ {
 		o := objs[i]
 		c := common(o)
 		var e doc.Entity
+		start := i
 		switch o.typ {
 		case "LINE":
 			e = &doc.Line{EntityCommon: c, Start: vec(o, 10), End: vec(o, 11)}
@@ -248,8 +336,8 @@ func readEntities(d *doc.Drawing, objs []object, skipped map[string]int) {
 				i++
 			}
 			if o.int(70)&(8|16|64) != 0 {
-				skipped["3D POLYLINE/MESH"]++
-				continue
+				e = unknown(o, objs[start+1:i+1], c)
+				break
 			}
 			p := &doc.LWPolyline{EntityCommon: c, Closed: o.int(70)&1 != 0}
 			for _, v := range verts {
@@ -258,11 +346,67 @@ func readEntities(d *doc.Drawing, objs []object, skipped map[string]int) {
 			}
 			e = p
 		default:
-			skipped[o.typ]++
+			// An entity that owns sub-records (code 66, as an INSERT with
+			// attributes) runs to its SEQEND.
+			if o.int(66) == 1 {
+				for j := i + 1; j < len(objs); j++ {
+					if objs[j].typ == "SEQEND" {
+						i = j
+						break
+					}
+				}
+			}
+			e = unknown(o, objs[start+1:i+1], c)
+		}
+		if u, ok := e.(*doc.Unknown); ok {
+			st.kept[u.Type]++
+		}
+		if d.Entity(c.H) != nil {
+			old := c.H
+			e.Common().H = 0
+			d.Load(e)
+			if u, ok := e.(*doc.Unknown); ok {
+				setHandle(u, e.Handle())
+			}
+			st.warns = append(st.warns, fmt.Sprintf("%s handle %s is already used; renumbered to %s", e.Class(), old, e.Handle()))
 			continue
 		}
 		d.Load(e)
+		if u, ok := e.(*doc.Unknown); ok {
+			setHandle(u, e.Handle())
+		}
 	}
+}
+
+// unknown keeps o and its sub-records as an Unknown entity.
+func unknown(o object, subs []object, c doc.EntityCommon) *doc.Unknown {
+	u := &doc.Unknown{EntityCommon: c, Type: o.typ}
+	u.Raw = rawPairs(o)[1:]
+	for _, s := range subs {
+		u.Raw = append(u.Raw, rawPairs(s)...)
+	}
+	if h, err := doc.ParseHandle(o.str(330)); err == nil {
+		u.Owner = h
+	}
+	return u
+}
+
+// setHandle makes Raw carry handle h in the entity's own record: it rewrites
+// the code 5 group, or inserts one when the file had none (R12 without
+// handles). It is the only change the reader makes to the raw groups.
+func setHandle(u *doc.Unknown, h doc.Handle) {
+	for i, p := range u.Raw {
+		if p.Code == 0 {
+			break
+		}
+		if p.Code == 5 {
+			if got, err := doc.ParseHandle(strings.TrimSpace(p.Value)); err != nil || got != h {
+				u.Raw[i].Value = h.String()
+			}
+			return
+		}
+	}
+	u.Raw = append([]doc.Pair{{Code: 5, Value: h.String()}}, u.Raw...)
 }
 
 func readLWPolyline(o object, c doc.EntityCommon) *doc.LWPolyline {

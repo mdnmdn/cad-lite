@@ -50,8 +50,12 @@ func (t *Txn) touch(h Handle) {
 }
 
 // Add inserts e into model space on its layer (the current layer when
-// unset) and returns its new handle.
+// unset) and returns its new handle. It adds nothing and returns 0 for an
+// *Unknown, which only a file reader may create.
 func (t *Txn) Add(e Entity) Handle {
+	if _, ok := e.(*Unknown); ok {
+		return 0
+	}
 	c := e.Common()
 	c.H = t.d.allocHandle()
 	c.Owner = ModelSpace
@@ -67,19 +71,21 @@ func (t *Txn) Add(e Entity) Handle {
 }
 
 // Modify snapshots the entity h, then calls fn to change it in place.
-// It does nothing when h does not exist.
+// It does nothing when h does not exist or is an *Unknown, which is never
+// editable.
 func (t *Txn) Modify(h Handle, fn func(Entity)) {
 	e := t.d.entities[h]
-	if e == nil {
+	if _, unknown := e.(*Unknown); e == nil || unknown {
 		return
 	}
 	t.touch(h)
 	fn(e)
 }
 
-// Erase removes the entity h.
+// Erase removes the entity h. It does nothing for an *Unknown.
 func (t *Txn) Erase(h Handle) {
-	if t.d.entities[h] == nil {
+	e := t.d.entities[h]
+	if _, unknown := e.(*Unknown); e == nil || unknown {
 		return
 	}
 	t.touch(h)

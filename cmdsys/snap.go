@@ -68,7 +68,7 @@ func FindSnap(d *doc.Drawing, ix *spatial.Index, p geom.Vec2, aperture float64, 
 	var curves []geom.Curve
 	for _, h := range ix.Near(p, aperture) {
 		e := d.Entity(h)
-		if e == nil || layerOff(d, e) {
+		if e == nil || isUnknown(e) || layerOff(d, e) {
 			continue
 		}
 		if len(curves) >= snapCandidateLimit {
@@ -137,6 +137,13 @@ func layerOff(d *doc.Drawing, e doc.Entity) bool {
 	return l != nil && l.Off
 }
 
+// isUnknown reports whether e is an unmodelled entity kept only for the file
+// round trip; it is neither selectable nor snappable.
+func isUnknown(e doc.Entity) bool {
+	_, ok := e.(*doc.Unknown)
+	return ok
+}
+
 func layerLocked(d *doc.Drawing, e doc.Entity) bool {
 	l := d.Layer(e.Common().Layer)
 	return l != nil && (l.Locked || l.Off)
@@ -149,7 +156,7 @@ func Pick(d *doc.Drawing, ix *spatial.Index, p geom.Vec2, aperture float64) (doc
 	bestD := math.Inf(1)
 	for _, h := range ix.Near(p, aperture) {
 		e := d.Entity(h)
-		if e == nil || layerLocked(d, e) {
+		if e == nil || isUnknown(e) || layerLocked(d, e) {
 			continue
 		}
 		for _, c := range e.Geometry() {
@@ -171,7 +178,7 @@ func SelectBox(d *doc.Drawing, ix *spatial.Index, a, b geom.Vec2, tol float64) [
 	var out []doc.Handle
 	for _, h := range ix.Query(box) {
 		e := d.Entity(h)
-		if e == nil || layerLocked(d, e) {
+		if e == nil || isUnknown(e) || layerLocked(d, e) {
 			continue
 		}
 		eb := e.Bounds()

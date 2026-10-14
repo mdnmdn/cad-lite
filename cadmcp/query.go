@@ -42,6 +42,8 @@ func entityInfo(e doc.Entity) map[string]any {
 		m["color"] = c.Color
 	}
 	switch e := e.(type) {
+	case *doc.Unknown:
+		m["unknown"] = true
 	case *doc.Line:
 		m["start"], m["end"] = xy(e.Start), xy(e.End)
 		m["length"] = e.Start.Dist(e.End)
