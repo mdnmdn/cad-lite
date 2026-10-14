@@ -1608,6 +1608,85 @@ func (f *Frame) HitTest(p Point) int
 `Prepaint` is where `Interactivity` decides hover/active/focus style refinements
 and where the content mask (for `Overflow`) is pushed onto a stack on the window.
 
+## 12b. Clock, timers and animation (`animation.go` / `timer.go`)
+
+```go
+// Clock supplies nondecreasing UI time. Implementations run on the UI goroutine.
+type Clock interface { Now() time.Time }
+func NewAppWithClock(p Platform, clock Clock) *App
+func (a *App) Tick()
+func (w *Window) FrameTime() time.Time
+func (w *Window) RequestNextFrame()
+func (w *Window) After(delay time.Duration, f func(*Window, *App)) *Timer
+// Timer is a window-owned one-shot callback; Cancel and Done are nil-safe.
+type Timer struct { /* unexported */ }
+func (t *Timer) Cancel()
+func (t *Timer) Done() bool
+
+type Easing func(float32) float32
+func Linear(p float32) float32
+func EaseIn(p float32) float32
+func EaseOut(p float32) float32
+func EaseInOut(p float32) float32
+func NewAnimation(duration time.Duration, easing Easing) *Animation
+type Animation struct { /* unexported */ }
+func (a *Animation) Repeat() *Animation
+func (a *Animation) Progress(w *Window) float32
+func (a *Animation) Cancel()
+func (a *Animation) Restart()
+func (a *Animation) Done() bool
+```
+
+Existing NewApp/NewAppWithPlatform signatures stay unchanged. They use the
+platform's optional Clock when present, otherwise time.Now. NewAppWithClock
+explicitly overrides that source; nil chooses the normal fallback. Zero-valued
+time.Time is a valid clock/frame/start time. Clock time must be nondecreasing.
+All new APIs, including cancellation and Tick, run on the UI goroutine; they
+create no background callbacks/goroutines. Entity callbacks must upgrade weak
+handles at invocation (use Listener), never retain entity state across reentry.
+
+FrameTime is sampled once per draw and stable during render/layout/paint.
+RequestNextFrame coalesces independently of dirty invalidation; a next-frame-only
+request becomes eligible strictly after the request/last frame timestamp.
+Repeated reads/Tick at frozen time do not consume/rearm it. Refresh still requests
+ordinary redraws, even at unchanged time. Draw consumes prior invalidation at
+entry, preserves invalidation created during/post draw, and never recursively
+renders. RequestNextFrame inside Render survives draw completion.
+
+After bases its deadline on Clock.Now at the call, not the prior FrameTime.
+Nonpositive delays mean due on the next Tick, never inline. Timers are one-shot;
+Done becomes true before invocation, on Cancel, or owner close; Cancel is
+idempotent. Nil callbacks return a done timer. Timer callback state changes
+redraw the owner automatically unless closed. No repeating timer API; reschedule
+After explicitly. Window.Close cancels its timers and queued frames.
+
+Tick snapshots open windows and all due timers at entry, sorted globally by
+deadline then insertion order. Cancel/Close before a due callback prevents its
+invocation. Callbacks execute inside one App.Update; timers added by callbacks,
+even zero-delay/cross-window, wait for a later Tick. Each snapshot window gets
+at most one draw, including a callback's manual Draw (tracked by frame serial).
+Nested Tick is ignored; repeated Tick within one outer App.Update coalesces.
+A later outer Tick at the same timestamp can process new due timers or dirty
+state. Custom/stub platforms call App.Tick from their UI loop if they do not
+support deadline wakeups; timers never fall back to an immediate wakeup spin.
+FrameRequester callbacks pump this same bounded Tick and consume eligibility,
+not unconditional drawing. Earliest deadlines are recomputed/cleared on
+Cancel/Close. A due timer at zero-valued time wakes by ordinary RequestFrame.
+
+Animation is a persistent view-owned sampler bound to the first window sampled.
+It starts on its first Progress call, uses FrameTime, and requests another frame
+while running; callers do not call Refresh from Render. Easing input/output
+is clamped to [0,1], nil means Linear; NaN easing results fall back to raw progress.
+Presets use quadratic ease-in/out and symmetric quadratic ease-in-out. Finite
+animation completes at 1; duration <=0 completes immediately even with Repeat.
+Positive repeats use elapsed modulo duration with no catch-up callbacks. Cancel
+freezes the last sample (0 before first sample) and marks Done; Restart resets
+start/completion/cancellation so the next sample starts at 0. Repeat/Restart
+while idle require caller Refresh to wake the view. Closing the bound window
+stops scheduling and makes Done true. Sample one Animation in one window; using
+another window panics. Grapheme/text/style transitions and async executors are
+outside this milestone.
+
 ## 13. `platform.go`
 
 ```go
@@ -1640,8 +1719,11 @@ type PlatformWindow interface {
 
 // RequestFrameCallback is registered by the Window on its PlatformWindow.
 type FrameRequester interface {
-    OnRequestFrame(f func())
+    OnRequestFrame(f func()) // callbacks must be queued, never invoked inline by RequestFrame
 }
+
+// Optional: replace the timed wakeup; zero clears. RequestFrame remains separate.
+type FrameDeadlineRequester interface { RequestFrameAt(deadline time.Time) }
 ```
 
 The `App` wires `platform.OpenWindow` → creates a `Window` → calls
@@ -1685,6 +1767,8 @@ func (w *HeadlessWindow) Dispatch(input PlatformInput)  // feed synthetic input,
 func (p *HeadlessPlatform) SetScaleFactor(s float32)     // scale of windows opened afterwards
 func (p *HeadlessPlatform) SetBackgroundColor(c Rgba)    // clear color of windows opened afterwards
 func (p *HeadlessPlatform) Windows() []*HeadlessWindow
+func (p *HeadlessPlatform) Now() time.Time
+func (p *HeadlessPlatform) Advance(d time.Duration) error
 func (w *HeadlessWindow) Window() *Window
 ```
 
@@ -1698,6 +1782,14 @@ re-enter an in-flight event dispatch. Text shaping is not
 headless-specific: every window created through `App.OpenWindow` gets the
 App's shared `Shaper` (one `FontManager` per App) when `DefaultFontPath() != ""`;
 `Window.SetTextMeasurer` overrides it and `Window.TextMeasurer()` returns it.
+
+Headless time starts at Unix epoch UTC and changes only through Advance.
+Negative Advance fails without changing time; each call pumps each bound App
+once. Advance(0) can fire newly due zero-delay timers but cannot advance an
+animation frame. Pixels/Image/Dispatch preserve frozen animation time and do
+not consume timed next-frame requests; they still flush ordinary invalidation.
+With an explicit NewAppWithClock override, advance that injected clock and call
+App.Tick; HeadlessPlatform.Advance only advances its own clock, not the override.
 
 `RenderToPNG` uses `image/png` from the standard library.
 

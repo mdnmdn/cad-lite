@@ -1,5 +1,7 @@
 package gpui
 
+import "time"
+
 // Platform is the OS/backend abstraction. Implemented by
 // gpui/ebitenplatform and by the headless test platform.
 type Platform interface {
@@ -38,9 +40,15 @@ type PlatformWindow interface {
 // invoked when the window should draw. The Window registers its draw routine
 // here so the platform can drive frames without holding a *Window.
 type FrameRequester interface {
-	// OnRequestFrame registers f as the draw routine to call when a frame is due.
+	// OnRequestFrame registers the bounded UI pump. RequestFrame must queue it,
+	// never invoke it inline.
 	OnRequestFrame(f func())
 }
+
+// FrameDeadlineRequester optionally schedules a timed UI wakeup. A call
+// replaces the prior timed deadline; zero clears it. RequestFrame is separate.
+// Wakeup callbacks must be queued on the UI goroutine, never called inline.
+type FrameDeadlineRequester interface{ RequestFrameAt(deadline time.Time) }
 
 // PlatformInputHandler is the focused text field's editing surface. The
 // textbox implementation in input.go satisfies it. It is declared here so

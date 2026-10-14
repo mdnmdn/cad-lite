@@ -5,12 +5,13 @@ It replaces the former first-wave plan and work-in-progress notes
 (activity registry). Contract: [api-contract.md](api-contract.md) (change
 signatures there first). Layout of the repo: [project-structure.md](project-structure.md).
 
-Last updated: 2026-10-13.
+Last updated: 2026-10-14.
 
-Current wave: **I2 — done**, implemented by `l1`, independently reviewed by
-`review_l1`, coordinated by Jake; committed in `4c93e7c`.
-I1 remains committed in `e6f5130`. I3 (multi-line text area) is now unblocked;
-remaining P1 runtime work begins with E1 (animation frames and timers).
+Current wave: **E1 — in progress**, owned by `l1`, coordinated by Jake.
+Scope: animation frames, UI-thread timers, easing and deterministic headless
+clock advancement; contract design precedes implementation.
+I2 is committed in `4c93e7c`, I1 in `e6f5130`; I3 is unblocked.
+E1 combined verification and independent review are pending.
 Requested gpui-kit investigation **K1 — done**, researched by `gpui_kit`,
 independently source-reviewed by `review_l1`; document/roadmap committed in
 `a59d2f6`. Integration implementation remains the K2 backlog proposal.

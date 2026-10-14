@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // TextMeasurer is implemented by the window's text backend. It is satisfied
@@ -99,7 +100,12 @@ type Window struct {
 	renderedEntities map[EntityID]struct{}
 	nextEntities     map[EntityID]struct{}
 	// closed is set by Close.
-	closed bool
+	closed                                  bool
+	drawing, frameValid                     bool
+	frameTime                               time.Time
+	frameSerial                             uint64
+	nextFrameRequested, nextFrameWakeIssued bool
+	nextFrameAt                             time.Time
 }
 
 // Frame is the result of one Draw: a scene plus the hitboxes, listeners and
@@ -232,7 +238,7 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 		if fr, ok := pw.(FrameRequester); ok {
 			fr.OnRequestFrame(func() {
 				if w.app != nil {
-					w.Draw(w.app)
+					w.app.Tick()
 				}
 			})
 		}
@@ -268,8 +274,13 @@ func (w *Window) ScaleFactor() float32 { return w.scale }
 // Refresh marks the window dirty and asks the platform for a frame. The
 // dirty flag is cleared by the next Draw.
 func (w *Window) Refresh() {
+	if w.closed {
+		return
+	}
 	w.invalid = true
-	w.scheduleFrame()
+	if !w.drawing {
+		w.scheduleFrame()
+	}
 }
 
 // scheduleFrame asks the platform to invoke the registered frame callback.
@@ -657,6 +668,40 @@ func (w *Window) Draw(cx *App) {
 	if cx == nil {
 		cx = w.app
 	}
+	if w.closed {
+		return
+	}
+	if w.drawing {
+		w.Refresh()
+		return
+	}
+	if cx != nil && cx.ticking {
+		if cx.tickDrawn[w] {
+			w.Refresh()
+			return
+		}
+		cx.tickDrawn[w] = true
+	}
+	w.drawing = true
+	w.invalid = false
+	w.frameSerial++
+	if cx != nil && cx.ticking {
+		w.frameTime = cx.tickTime
+	} else if w.app != nil {
+		w.frameTime = w.app.clock.Now()
+	}
+	w.frameValid = true
+	if w.nextFrameRequested && w.frameTime.After(w.nextFrameAt) {
+		w.nextFrameRequested = false
+		w.nextFrameWakeIssued = false
+	}
+	defer func() {
+		w.drawing = false
+		w.scheduleTimedWake()
+		if w.invalid && !w.closed {
+			w.scheduleFrame()
+		}
+	}()
 	w.nextFrame.reset()
 	w.layoutNodes = make(map[LayoutID]*LayoutNode)
 	w.nextLayoutID = 1
@@ -672,28 +717,55 @@ func (w *Window) Draw(cx *App) {
 	if cx != nil {
 		prevDrawing, cx.drawing = cx.drawing, w
 		clear(w.nextEntities)
+		defer func() { cx.drawing = prevDrawing }()
 	}
+	defer func() {
+		if w.closed {
+			w.nextFrame.reset()
+			w.clipStack = w.clipStack[:0]
+			w.hitboxStack = w.hitboxStack[:0]
+			w.keyStack = w.keyStack[:0]
+			w.paintTexts = w.paintTexts[:0]
+			w.textStyles = w.textStyles[:0]
+			w.opacity = 1
+		}
+	}()
 	var el Element
 	if w.root != nil {
 		el = IntoElementOf(w.root.Render(w, cx))
+	}
+	if w.closed {
+		return
 	}
 	var rn *renderNode
 	if el != nil {
 		rootPath := elementIDOf(el)
 		gid := GlobalElementID{Path: append([]ElementPathKey(nil), rootPath.Path...)}
 		lid, state := el.RequestLayout(w, cx)
+		if w.closed {
+			return
+		}
 		rootNode := w.layoutNodes[lid]
 		if rootNode != nil {
 			b := w.Bounds()
 			Layout(rootNode, Definite(float32(b.Width()), float32(b.Height())))
 		}
+		if w.closed {
+			return
+		}
 		rn = w.buildRenderNode(el, gid, rootNode, state, Point{}, cx)
 		w.prepaintTree(rn, cx, true)
+	}
+	if w.closed {
+		return
 	}
 	w.reconcileInputSelection(&w.nextFrame)
 	w.reconcileScrollbarDrag(&w.nextFrame)
 	w.retainActive(&w.nextFrame, false)
 	w.paintTree(rn, cx)
+	if w.closed {
+		return
+	}
 	if cx != nil {
 		cx.drawing = prevDrawing
 		w.renderedEntities, w.nextEntities = w.nextEntities, w.renderedEntities
@@ -702,7 +774,6 @@ func (w *Window) Draw(cx *App) {
 
 	w.renderedFrame, w.nextFrame = w.nextFrame, w.renderedFrame
 	w.nextFrame.reset()
-	w.invalid = false
 
 	if w.platformWindow != nil {
 		w.present()
@@ -746,6 +817,21 @@ func (w *Window) Close() {
 		return
 	}
 	w.closed = true
+	w.nextFrameRequested = false
+	w.invalid = false
+	if w.app != nil {
+		remaining := w.app.timers[:0]
+		for _, timer := range w.app.timers {
+			if timer.owner == w {
+				timer.done = true
+				timer.callback = nil
+			} else {
+				remaining = append(remaining, timer)
+			}
+		}
+		w.app.timers = remaining
+	}
+	w.scheduleTimedWake()
 	app := w.app
 	if app != nil {
 		for i, o := range app.windows {
@@ -863,7 +949,7 @@ func (w *Window) buildRenderNode(el Element, gid GlobalElementID, node *LayoutNo
 // The first hitbox and key node an element registers become the parents of
 // those its descendants register, which is what dispatch paths follow.
 func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
-	if n == nil || n.elem == nil {
+	if w.closed || n == nil || n.elem == nil {
 		return
 	}
 	if n.layout != nil && !n.layout.Style.Display {
@@ -872,6 +958,9 @@ func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
 	hb, kb := len(w.nextFrame.mouseListeners), len(w.nextFrame.keyNodes)
 	w.currentElementID = n.id
 	n.prepaint = n.elem.Prepaint(w, cx, ElementID{Path: n.id.Path}, n.bounds, n.state)
+	if w.closed {
+		return
+	}
 	if lc, ok := n.prepaint.(lateChildren); ok {
 		n.children = append(n.children, lc.lateChildren()...)
 	}
@@ -896,7 +985,7 @@ func (w *Window) prepaintTree(n *renderNode, cx *App, isRoot bool) {
 	for _, c := range n.children {
 		w.prepaintTree(c, cx, false)
 	}
-	if sp, ok := n.prepaint.(scrollbarRegistrar); ok {
+	if sp, ok := n.prepaint.(scrollbarRegistrar); ok && !w.closed {
 		sp.registerScrollbar(w)
 	}
 	if pushedHitbox {
@@ -965,7 +1054,7 @@ func (w *Window) isHoveredHitbox(i int) bool {
 // prepaint-pushed stack would leave every container's clip active while early
 // siblings paint, masking the wrong region.
 func (w *Window) paintTree(n *renderNode, cx *App) {
-	if n == nil || n.elem == nil {
+	if w.closed || n == nil || n.elem == nil {
 		return
 	}
 	if n.layout != nil && !n.layout.Style.Display {
@@ -999,7 +1088,7 @@ func (w *Window) paintTree(n *renderNode, cx *App) {
 	for _, c := range n.children {
 		w.paintTree(c, cx)
 	}
-	if sp, ok := n.prepaint.(scrollbarPainter); ok {
+	if sp, ok := n.prepaint.(scrollbarPainter); ok && !w.closed {
 		sp.paintScrollbar(w)
 	}
 	if pushed {

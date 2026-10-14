@@ -91,12 +91,13 @@ func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 
 // window is the single PlatformWindow.
 type window struct {
-	p       *Platform
-	w, h    gpui.Pixels
-	scale   float32
-	pending bool
-	onFrame func()
-	handler gpui.PlatformInputHandler
+	p        *Platform
+	w, h     gpui.Pixels
+	scale    float32
+	pending  bool
+	deadline time.Time
+	onFrame  func()
+	handler  gpui.PlatformInputHandler
 
 	pix     []byte
 	pixW    int
@@ -114,6 +115,10 @@ func (w *window) ScaleFactor() float32 { return w.scale }
 
 // RequestFrame marks the window dirty so the next update redraws it.
 func (w *window) RequestFrame() { w.pending = true }
+
+// RequestFrameAt replaces the timed deadline; zero clears it. Update queues the
+// core UI pump when it becomes due without a background goroutine.
+func (w *window) RequestFrameAt(deadline time.Time) { w.deadline = deadline }
 
 // OnRequestFrame registers the window's draw routine.
 func (w *window) OnRequestFrame(f func()) { w.onFrame = f }
@@ -200,6 +205,10 @@ func (g *game) Update() error {
 	})
 	if g.p.quit.Load() || g.app.IsQuitting() {
 		return ebiten.Termination
+	}
+	if !w.deadline.IsZero() && !time.Now().Before(w.deadline) {
+		w.deadline = time.Time{}
+		w.pending = true
 	}
 	if w.pending && w.onFrame != nil {
 		w.pending = false

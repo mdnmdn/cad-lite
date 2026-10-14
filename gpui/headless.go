@@ -1,10 +1,12 @@
 package gpui
 
 import (
+	"errors"
 	"image"
 	"image/png"
 	"os"
 	"sync"
+	"time"
 )
 
 type renderConfig struct {
@@ -82,12 +84,36 @@ type HeadlessPlatform struct {
 	scale      float32
 	background Rgba
 	quit       bool
+	now        time.Time
 }
 
 // NewHeadlessPlatform returns a headless platform with scale 1 and a white
 // background.
 func NewHeadlessPlatform() *HeadlessPlatform {
-	return &HeadlessPlatform{scale: 1, background: White}
+	return &HeadlessPlatform{scale: 1, background: White, now: time.Unix(0, 0).UTC()}
+}
+
+// Now returns the deterministic clock, initially Unix epoch UTC.
+func (p *HeadlessPlatform) Now() time.Time { return p.now }
+
+// Advance moves the clock forward and runs one Tick per bound App. Negative
+// durations fail. Explicit App clock overrides must be advanced by their owner.
+func (p *HeadlessPlatform) Advance(d time.Duration) error {
+	if d < 0 {
+		return errors.New("gpui: headless clock cannot move backwards")
+	}
+	p.now = p.now.Add(d)
+	seen := make(map[*App]struct{})
+	for _, hw := range p.Windows() {
+		if hw.win != nil && hw.win.app != nil {
+			a := hw.win.app
+			if _, ok := seen[a]; !ok {
+				seen[a] = struct{}{}
+				a.Tick()
+			}
+		}
+	}
+	return nil
 }
 
 // SetScaleFactor sets the device scale of windows opened afterwards.
@@ -157,6 +183,8 @@ type HeadlessWindow struct {
 	win        *Window
 	handler    PlatformInputHandler
 	pending    bool
+	deadline   time.Time
+	closed     bool
 	pix        []byte
 	pw, ph     int
 }
@@ -174,7 +202,15 @@ func (hw *HeadlessWindow) ScaleFactor() float32 { return hw.scale }
 
 // RequestFrame records that a redraw is wanted; the next Dispatch, Pixels or
 // Image call draws it.
-func (hw *HeadlessWindow) RequestFrame() { hw.pending = true }
+func (hw *HeadlessWindow) RequestFrame() {
+	if !hw.closed {
+		hw.pending = true
+	}
+}
+
+// RequestFrameAt replaces the timed wakeup. Advance drives timed work; image
+// reads only flush ordinary invalidation. Zero clears the deadline.
+func (hw *HeadlessWindow) RequestFrameAt(deadline time.Time) { hw.deadline = deadline }
 
 // Present stores a copy of the premultiplied RGBA frame.
 func (hw *HeadlessWindow) Present(pix []byte, w, h int) {
@@ -193,7 +229,7 @@ func (hw *HeadlessWindow) TakeInputHandler() PlatformInputHandler {
 }
 
 // Quit is a no-op.
-func (hw *HeadlessWindow) Quit() {}
+func (hw *HeadlessWindow) Quit() { hw.closed = true; hw.pending = false; hw.deadline = time.Time{} }
 
 // Window returns the Window this platform window backs.
 func (hw *HeadlessWindow) Window() *Window { return hw.win }
@@ -201,7 +237,7 @@ func (hw *HeadlessWindow) Window() *Window { return hw.win }
 // Dispatch feeds a synthetic input event to the window, then draws any frame
 // the event invalidated.
 func (hw *HeadlessWindow) Dispatch(input PlatformInput) {
-	if hw.win == nil {
+	if hw.win == nil || hw.closed || hw.win.closed {
 		return
 	}
 	app := hw.win.app
@@ -210,12 +246,15 @@ func (hw *HeadlessWindow) Dispatch(input PlatformInput) {
 }
 
 func (hw *HeadlessWindow) flush() {
-	if hw.win == nil {
+	if hw.win == nil || hw.closed || hw.win.closed {
 		return
 	}
 	if hw.win.invalid || hw.pending || hw.pix == nil {
 		hw.pending = false
 		hw.win.Draw(hw.win.app)
+		if !hw.win.invalid {
+			hw.pending = false
+		}
 	}
 }
 

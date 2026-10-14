@@ -3,6 +3,7 @@ package gpui
 import (
 	"reflect"
 	"sync/atomic"
+	"time"
 )
 
 // EntityRoot is the root view a window renders. Any type with a Render
@@ -74,7 +75,14 @@ type App struct {
 
 	// drawing is the window whose Draw is running; entity reads during it
 	// are recorded on that window for Notify-driven redraws.
-	drawing *Window
+	drawing                      *Window
+	clock                        Clock
+	timers                       []*Timer
+	nextTimerSequence            uint64
+	updateSerial, lastTickUpdate uint64
+	ticking                      bool
+	tickTime                     time.Time
+	tickDrawn                    map[*Window]bool
 }
 
 // NewApp returns an App with a no-op stub platform, suitable for headless
@@ -83,11 +91,23 @@ func NewApp() *App { return NewAppWithPlatform(nil) }
 
 // NewAppWithPlatform returns an App driven by p. A nil p selects the stub
 // platform, which no-ops every call and hands out in-memory windows.
-func NewAppWithPlatform(p Platform) *App {
+func NewAppWithPlatform(p Platform) *App { return NewAppWithClock(p, nil) }
+
+// NewAppWithClock uses an explicit clock. Nil uses the platform Clock if
+// available, otherwise system time. Call Tick on the UI goroutine.
+func NewAppWithClock(p Platform, clock Clock) *App {
 	if p == nil {
 		p = stubPlatform{}
 	}
+	if clock == nil {
+		if c, ok := p.(Clock); ok {
+			clock = c
+		} else {
+			clock = systemClock{}
+		}
+	}
 	return &App{
+		clock:          clock,
 		platform:       p,
 		entities:       make(map[uint32]*entitySlot),
 		generation:     make(map[uint32]uint32),
@@ -107,6 +127,9 @@ func NewAppWithPlatform(p Platform) *App {
 func (a *App) Update(f func(*App)) {
 	if f == nil {
 		return
+	}
+	if a.pendingUpdates == 0 {
+		a.updateSerial++
 	}
 	a.pendingUpdates++
 	defer func() {
