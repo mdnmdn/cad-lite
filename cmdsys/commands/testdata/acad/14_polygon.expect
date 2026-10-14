@@ -1,0 +1,8 @@
+# POLYGON: Edge, Inscribed, Circumscribed
+# Expected state after running 14_polygon.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+lwpolyline closed 0,0 10,0 10,10 0,10
+lwpolyline closed 110,0 100,10 90,0 100,-10
+lwpolyline closed 210,17.3205080757 180,0 210,-17.3205080757
+count 3

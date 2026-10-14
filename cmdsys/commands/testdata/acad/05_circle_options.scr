@@ -1,0 +1,20 @@
+; centre and radius
+CIRCLE
+0,0
+10
+; centre and diameter
+CIRCLE
+50,0
+D
+10
+; 2P: two diameter endpoints
+CIRCLE
+2P
+100,0
+120,0
+; 3P: three points on the circle
+CIRCLE
+3P
+200,0
+210,10
+220,0

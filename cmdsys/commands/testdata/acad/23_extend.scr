@@ -1,0 +1,14 @@
+; EXTEND: select-all boundaries
+LINE
+0,0
+50,0
+
+LINE
+100,-50
+100,50
+
+; the end nearest the pick grows to the boundary
+EXTEND
+
+40,0
+

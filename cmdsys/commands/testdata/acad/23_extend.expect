@@ -1,0 +1,7 @@
+# EXTEND: select-all boundaries
+# Expected state after running 23_extend.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+line 0,0 100,0
+line 100,-50 100,50
+count 2

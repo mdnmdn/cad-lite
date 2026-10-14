@@ -1,0 +1,33 @@
+; SCALE: factor, Copy, Reference
+LINE
+0,0
+10,0
+
+SCALE
+L
+
+0,0
+2
+; Copy keeps the original
+LINE
+0,10
+10,10
+
+SCALE
+L
+
+0,10
+C
+3
+; Reference: factor = new length / reference length
+LINE
+0,20
+10,20
+
+SCALE
+L
+
+0,20
+R
+10
+25

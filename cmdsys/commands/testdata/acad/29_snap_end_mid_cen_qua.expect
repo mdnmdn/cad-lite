@@ -1,0 +1,10 @@
+# Typed object snaps END MID CEN QUA
+# Expected state after running 29_snap_end_mid_cen_qua.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+line 0,0 100,0
+circle 200,0 20
+line 50,0 200,0
+line 200,0 200,20
+line 100,0 100,30
+count 5

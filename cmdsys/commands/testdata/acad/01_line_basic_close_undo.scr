@@ -1,0 +1,15 @@
+; LINE: continued points, relative input, Undo, Close, Enter to end
+LINE
+0,0
+100,0
+@0,50
+; U removes the segment just drawn; the rubber band restarts at 100,0
+U
+100,100
+; C closes to the first point and ends the command
+C
+LINE
+200,0
+300,0
+@0,50
+

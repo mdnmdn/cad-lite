@@ -1,0 +1,15 @@
+# SETVAR and typed variable names feed command defaults
+# Expected state after running 33_sysvars.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+var CIRCLERAD 7.5
+var FILLETRAD 3
+var OFFSETDIST 4
+var ORTHOMODE 1
+circle 0,0 7.5
+line 100,0 200,0
+line 100,4 200,4
+line 303,0 400,0
+line 300,3 300,100
+arc 303,3 3 180 270
+count 6

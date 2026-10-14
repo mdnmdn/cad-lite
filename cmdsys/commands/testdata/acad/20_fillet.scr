@@ -1,0 +1,29 @@
+; FILLET: Radius, radius 0 corner
+LINE
+0,0
+100,0
+
+LINE
+0,0
+0,100
+
+; Radius, then pick the two lines
+FILLET
+R
+10
+50,0
+0,50
+; radius 0 trims or extends to a sharp corner
+LINE
+200,0
+250,0
+
+LINE
+260,10
+260,100
+
+FILLET
+R
+0
+225,0
+260,50

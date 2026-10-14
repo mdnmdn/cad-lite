@@ -1,0 +1,12 @@
+# -LAYER: New, Color, Make, OFF, LOck, Set
+# Expected state after running 32_layer_options.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+layer 0 color=7 on unlocked
+layer WALLS color=1 on unlocked
+layer DIMS color=3 on locked
+layer TEXT color=7 off
+current-layer 0
+line 0,0 10,0 layer=WALLS
+line 0,5 10,5 layer=0
+count 2

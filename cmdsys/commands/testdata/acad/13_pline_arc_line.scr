@@ -1,0 +1,9 @@
+; A switches to arc mode (tangent to the previous segment), L back to line mode
+PLINE
+0,0
+100,0
+A
+100,100
+L
+0,100
+C

@@ -1,0 +1,8 @@
+; <45 locks the direction to 45 degrees, then a bare number is a distance along it
+LINE
+0,0
+<45
+30
+<135
+20
+

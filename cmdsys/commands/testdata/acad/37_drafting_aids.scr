@@ -1,0 +1,14 @@
+; ORTHO GRID SNAP -OSNAP commands, typed points unaffected
+ORTHO
+ON
+GRID
+OFF
+-OSNAP
+END,MID
+SNAP
+ON
+; typed coordinates are never changed by ortho, snap or object snap
+LINE
+0,0
+10,7
+

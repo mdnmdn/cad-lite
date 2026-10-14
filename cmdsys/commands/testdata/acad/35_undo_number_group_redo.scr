@@ -1,0 +1,36 @@
+; UNDO n, BEgin/End, U, REDO
+LINE
+0,0
+10,0
+
+LINE
+0,10
+10,10
+
+LINE
+0,20
+10,20
+
+; UNDO with a count
+UNDO
+2
+LINE
+0,30
+10,30
+
+; a group is one undo step
+UNDO
+BE
+LINE
+0,40
+10,40
+
+CIRCLE
+5,5
+1
+UNDO
+E
+U
+; U then REDO restores the last undone step
+U
+REDO

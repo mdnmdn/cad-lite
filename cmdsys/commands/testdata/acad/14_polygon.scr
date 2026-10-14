@@ -1,0 +1,18 @@
+; Edge: the polygon is built counterclockwise from the edge
+POLYGON
+4
+E
+0,0
+10,0
+; Inscribed: the picked point is a vertex
+POLYGON
+4
+100,0
+I
+110,0
+; Circumscribed: the picked point is the middle of an edge
+POLYGON
+3
+200,0
+C
+210,0

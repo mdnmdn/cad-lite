@@ -1,0 +1,14 @@
+# DIST, AREA, ID results and variables
+# Expected state after running 39_inquiry_vars.scr in AutoCAD 2024/2025 from the preamble state.
+# (verify) message spacing in the ID output
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+message Distance = 5.0000
+message Area = 6.0000
+message Perimeter = 12.0000
+message X = 7.0000
+var DISTANCE 5
+var AREA 6
+var PERIMETER 12
+var LASTPOINT 7,8,0
+count 0

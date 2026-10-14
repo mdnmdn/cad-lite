@@ -1,0 +1,7 @@
+# UNDO n, BEgin/End, U, REDO
+# Expected state after running 35_undo_number_group_redo.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+line 0,0 10,0
+line 0,30 10,30
+count 2

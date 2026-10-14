@@ -1,0 +1,38 @@
+; TRIM: select-all edges, Fence
+LINE
+-50,0
+150,0
+
+LINE
+50,-10
+50,10
+
+; Enter at the cutting-edge prompt selects all objects as edges
+TRIM
+
+100,0
+
+LINE
+0,100
+100,100
+
+LINE
+0,110
+100,110
+
+LINE
+0,120
+100,120
+
+LINE
+50,90
+50,130
+
+; Fence: trims everything the fence crosses
+TRIM
+
+F
+75,95
+75,125
+
+

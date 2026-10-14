@@ -1,0 +1,11 @@
+; Error wording at bad input
+LINE
+abc
+0,0
+foo
+
+; negative radius is refused and asked again
+CIRCLE
+0,0
+-5
+5

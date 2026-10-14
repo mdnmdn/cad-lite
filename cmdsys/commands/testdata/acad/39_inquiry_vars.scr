@@ -1,0 +1,11 @@
+; DIST, AREA, ID results and variables
+DIST
+0,0
+3,4
+AREA
+0,0
+4,0
+4,3
+
+ID
+7,8

@@ -1,0 +1,12 @@
+# BREAK, BREAKATPOINT, JOIN, EXPLODE
+# Expected state after running 24_break_join_explode.scr in AutoCAD 2024/2025 from the preamble state.
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+line 0,0 20,0
+line 60,0 100,0
+line 0,50 50,50
+line 50,50 100,50
+line 0,100 100,100
+line 0,150 100,150
+line 100,150 100,200
+count 7

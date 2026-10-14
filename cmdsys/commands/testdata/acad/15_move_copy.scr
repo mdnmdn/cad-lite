@@ -1,0 +1,54 @@
+; L = last object; the empty line (Enter) ends the selection
+LINE
+0,0
+10,0
+
+MOVE
+L
+
+0,0
+5,5
+; Enter at the second point uses the base point as the displacement
+LINE
+0,20
+10,20
+
+MOVE
+L
+
+3,4
+
+; Displacement option
+LINE
+0,40
+10,40
+
+MOVE
+L
+
+D
+0,-10
+; COPY repeats until Enter
+LINE
+0,100
+10,100
+
+COPY
+L
+
+0,0
+0,10
+0,20
+
+; mOde Single ends after one copy
+LINE
+0,200
+10,200
+
+COPY
+L
+
+O
+S
+0,0
+0,10

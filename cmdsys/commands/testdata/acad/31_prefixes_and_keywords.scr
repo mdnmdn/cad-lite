@@ -1,0 +1,28 @@
+; _ = language-independent name, . = built-in name, _. both
+_LINE
+0,0
+10,0
+
+.LINE
+0,5
+10,5
+
+_.LINE
+0,10
+10,10
+
+; _ keyword, then a full-word keyword in lower case
+_CIRCLE
+50,0
+_D
+8
+CIRCLE
+100,0
+diameter
+8
+; mixed case, full word
+LINE
+0,20
+10,20
+10,30
+cLoSe

@@ -1,0 +1,24 @@
+; Undo drops the last vertex
+PLINE
+0,0
+50,0
+50,50
+U
+100,0
+
+; Width sets start and end width; Length draws a segment in the previous direction
+PLINE
+0,100
+W
+2
+2
+50,100
+L
+30
+
+; Close
+PLINE
+0,200
+100,200
+100,250
+C

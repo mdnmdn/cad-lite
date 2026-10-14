@@ -1,0 +1,11 @@
+# Error wording at bad input
+# Expected state after running 40_error_messages.scr in AutoCAD 2024/2025 from the preamble state.
+# (verify) exact wording of the first-point and radius messages
+source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
+go-draw: fail
+message Invalid point.
+message Point or option keyword required.
+message positive and nonzero
+circle 0,0 5
+count 1
+active none
