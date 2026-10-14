@@ -115,8 +115,12 @@ func TestUpdateButtonChecksAndInstallsThenRestarts(t *testing.T) {
 	h.clickID("update-install")
 	h.settle(func() bool { return h.ws.upd().phase == updReady })
 	u := h.ws.upd()
+	if !u.confirm || u.restart {
+		t.Fatalf("a clean drawing must still ask before restarting: restart=%v confirm=%v", u.restart, u.confirm)
+	}
+	h.clickID("update-restart-now")
 	if !u.restart || u.plan.Exe != rig.exe || u.confirm {
-		t.Errorf("clean drawing should restart at once: restart=%v confirm=%v plan=%+v", u.restart, u.confirm, u.plan)
+		t.Errorf("Restart and update: restart=%v confirm=%v plan=%+v", u.restart, u.confirm, u.plan)
 	}
 	if b, _ := os.ReadFile(rig.exe); string(b) != "NEW" {
 		t.Errorf("exe %q", b)
@@ -220,5 +224,14 @@ func TestNotesExcerpt(t *testing.T) {
 	}
 	if len(notesExcerpt(strings.Repeat("a\n", 50))) != notesMaxLines {
 		t.Error("not limited")
+	}
+}
+
+func TestRestartDialogWarnsOnlyWhenDirty(t *testing.T) {
+	if got := i18n.T(restartBodyKey(true), "2.0.0"); !strings.Contains(got, "unsaved") {
+		t.Errorf("dirty body %q", got)
+	}
+	if got := i18n.T(restartBodyKey(false), "2.0.0"); strings.Contains(got, "unsaved") {
+		t.Errorf("clean body %q", got)
 	}
 }

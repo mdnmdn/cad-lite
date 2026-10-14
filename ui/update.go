@@ -301,16 +301,11 @@ func (ws *Workspace) adoptUpdate(w *gpui.Window, cx *gpui.App, r *updResult) {
 	}
 }
 
-// finishInstall runs once the new version is on disk. A drawing without
-// edits restarts at once, so one press of Update does everything; one with
-// unsaved changes asks first (Session.Dirty: the drawing changed since it was created, opened or
-// saved).
-func (ws *Workspace) finishInstall(w *gpui.Window, cx *gpui.App) {
-	if ws.session.Dirty() {
-		ws.upd().confirm = true
-		return
-	}
-	ws.restartNow(w, cx)
+// finishInstall runs once the new version is on disk and always asks before
+// restarting; the dialog warns when the drawing has unsaved changes.
+func (ws *Workspace) finishInstall(w *gpui.Window, _ *gpui.App) {
+	ws.upd().confirm = true
+	w.Refresh()
 }
 
 // restartNow quits the application and asks the host to start the new
