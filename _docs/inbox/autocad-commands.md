@@ -702,13 +702,13 @@ Mode=Quick` → `Select object to trim or shift-select to extend or [Cutting edg
 Project/eRase]:`: every visible object is an edge; `Cutting edges` switches to explicit edges. In
 Quick mode a leading Enter ends the command, so a script that sends an Enter for "select all edges"
 needs `TRIMEXTENDMODE 0` (the corpus preamble sets it).
-**Today.** Quick-style: `Select object to trim [cuTting edges]`, Enter ends; `T` asks for edges.
+**Today.** Both modes (done 2026-10-14, CW-B3): Standard asks for the edges first (Enter = all), Quick takes every object and `cuTting edges` asks for an explicit set; `TRIMEXTENDMODE` picks the mode and `mOde` switches it. The pick loop has Fence, Crossing, Project, Edge, eRase and Undo; a fence or window removes the pieces it touches.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| TRIM-1 | `TRIMEXTENDMODE`: Standard-mode prompt order (edges first, Enter = all) and the Quick/Standard switch (`mOde`) | P1 | M | 22 |
-| TRIM-2 | `Fence`, `Crossing`, `eRase`, `Undo`, `Project`, `Edge` | P1 (Fence, Crossing, Undo) / P2 | M | 22 |
-| TRIM-3 | Shift+pick extends (needs modifier state, parity 5.2) | P2 | S | |
-| TRIM-4 | Keyword prompt text (`Cutting edges` for `cuTting edges`) | P3 | S | |
+| TRIM-1 | `TRIMEXTENDMODE`: Standard-mode prompt order (edges first, Enter = all) and the Quick/Standard switch (`mOde`) (done 2026-10-14, CW-B3) | P1 | M | 22 |
+| TRIM-2 | `Fence`, `Crossing`, `eRase`, `Undo`, `Project`, `Edge` (done 2026-10-14, CW-B3; Project is stored in `PROJMODE` and has no 2D effect) | P1 (Fence, Crossing, Undo) / P2 | M | 22 |
+| TRIM-3 | Shift+pick extends (needs modifier state, parity 5.2) (command side done 2026-10-14, CW-B3: a point whose `Input.Text` is `shift` swaps the verb; the session does not set it yet, open for the click path) | P2 | S | |
+| TRIM-4 | Keyword prompt text (`Cutting edges` for `cuTting edges`) (done 2026-10-14, CW-B3: the prompt shows the keyword label, `cuTting edges`, `Boundary edges`) | P3 | S | |
 
 #### EXTEND  (`EX`)
 
@@ -717,10 +717,10 @@ needs `TRIMEXTENDMODE 0` (the corpus preamble sets it).
 `Select object to extend or shift-select to trim or [Boundary edges/Crossing/mOde/Project/eRase]:`.
 The end nearest the pick grows to the next boundary; lines, arcs, open polylines (end segment),
 ellipses, splines. Closed or no boundary: `Object does not intersect an edge.`? *(verify V36)*.
-**Today.** Quick-style, Enter ends; pick extends, with own messages.
+**Today.** The shared TRIM engine (done 2026-10-14, CW-B3): Standard and Quick prompts, Fence, Crossing, Project, Edge, Undo, Shift-pick trims; EXTEND has no eRase in Standard mode.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| EXT-1 | As TRIM-1 and TRIM-2 (shared edge engine) | P1 | M | 23 |
+| EXT-1 | As TRIM-1 and TRIM-2 (shared edge engine) (done 2026-10-14, CW-B3) | P1 | M | 23 |
 
 #### BREAK  (`BR`)  and  BREAKATPOINT
 
@@ -729,12 +729,11 @@ break point or [First point]:`. `First point`: `Specify first break point:` `Spe
 point:`. The second point `@` breaks at a point (no gap). The part between the points is removed; a
 circle loses the arc ccw from the first to the second point. `BREAKATPOINT`: `Select object:` →
 `Specify break point:` splits into two (not for closed objects). Alias `BR`; none for BREAKATPOINT.
-**Today.** BREAK met incl. `First point`; `@` not accepted as "the same point" (typed `@` yields
-last point, equivalent). BREAKATPOINT missing.
+**Today.** BREAK met incl. `First point`; `@` is the same point through `LASTPOINT`. BREAKATPOINT met (done 2026-10-14, CW-B3).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| BRK-1 | `BREAKATPOINT` (one command over the split primitives) | P2 | S | 24 |
-| BRK-2 | `@` as second point (equivalent via `LASTPOINT` once defined) | P3 | S | 24 |
+| BRK-1 | `BREAKATPOINT` (one command over the split primitives) (done 2026-10-14, CW-B3) | P2 | S | 24 |
+| BRK-2 | `@` as second point (equivalent via `LASTPOINT` once defined) (done 2026-10-14, CW-B3) | P3 | S | 24 |
 
 #### JOIN  (`J`)  and  EXPLODE  (`X`)
 
@@ -743,11 +742,11 @@ last point, equivalent). BREAKATPOINT missing.
 arc, others → polyline; messages `1 line joined to source`, `2 objects joined`. `EXPLODE`: `Select
 objects:` → polylines to lines and arcs (width lost), messages `N objects were not exploded`?
 *(verify V39)*. Alias `J`, `X`.
-**Today.** Met (messages `N objects joined.` / `cannot be joined.`; `N objects exploded.`).
+**Today.** Met (done 2026-10-14, CW-B3): `N objects joined.` for several at once, `1 line joined to source` / `arc` / `object` after a source pick, `cLose` for a single arc; `N objects exploded.`.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| JOIN-1 | Typed selection options (W) and message wording | P1 (via G8-1) | - | 24 |
-| JOIN-2 | `cLose` for a single arc | P3 | S | |
+| JOIN-1 | Typed selection options (W) and message wording (done 2026-10-14, CW-B3) | P1 (via G8-1) | - | 24 |
+| JOIN-2 | `cLose` for a single arc (done 2026-10-14, CW-B3) | P3 | S | |
 
 #### STRETCH  (`S`)
 

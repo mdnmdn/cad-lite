@@ -85,6 +85,8 @@ func acadRun(scr, exp string) (fails []string, declared string) {
 	s := cmdsys.NewSession(doc.New(), &v, commands.NewRegistry())
 	// The corpus assumes the preamble: running object snaps and ortho off.
 	s.SnapOn, s.Ortho = false, false
+	// The preamble also sets Standard TRIM and EXTEND (TRIMEXTENDMODE 0): edges first, Enter = all.
+	_ = s.Vars().Set("TRIMEXTENDMODE", 0)
 	start := s.HistoryTotal()
 	s.Script(acadScriptText(scr))
 	hist := s.History()

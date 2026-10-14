@@ -110,9 +110,9 @@ Outcome today is `go-draw:` in each `.expect` (12 of 40 pass: scripts that exerc
 | `19_offset` | OFFSET: distance, Through, Erase | fail | OFFSET Erase |  |
 | `20_fillet` | FILLET: Radius, radius 0 corner | pass |  |  |
 | `21_chamfer` | CHAMFER: Distance | pass |  |  |
-| `22_trim` | TRIM: select-all edges, Fence | fail | TRIM select-all prompt, Fence |  |
-| `23_extend` | EXTEND: select-all boundaries | fail | EXTEND select-all prompt |  |
-| `24_break_join_explode` | BREAK, BREAKATPOINT, JOIN, EXPLODE | fail | BREAKATPOINT; JOIN and EXPLODE selection options |  |
+| `22_trim` | TRIM: select-all edges, Fence | pass | -- |  |
+| `23_extend` | EXTEND: select-all boundaries | pass | -- |  |
+| `24_break_join_explode` | BREAK, BREAKATPOINT, JOIN, EXPLODE | pass | -- |  |
 | `25_stretch` | STRETCH: crossing window | fail | STRETCH |  |
 | `26_array` | -ARRAY: rectangular and polar | fail | -ARRAY | yes |
 | `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | pass | -- |  |

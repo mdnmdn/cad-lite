@@ -8,11 +8,12 @@ import (
 	"go-draw/geom"
 )
 
-// registerTrim adds TRIM, EXTEND, BREAK, JOIN and EXPLODE and their aliases.
+// registerTrim adds TRIM, EXTEND, BREAK, BREAKATPOINT, JOIN and EXPLODE and their aliases.
 func registerTrim(r *cmdsys.Registry) {
-	r.Register("TRIM", func() cmdsys.Command { return &trimCmd{} })
-	r.Register("EXTEND", func() cmdsys.Command { return &extendCmd{} })
+	r.Register("TRIM", func() cmdsys.Command { return &edgeCmd{name: "TRIM"} })
+	r.Register("EXTEND", func() cmdsys.Command { return &edgeCmd{name: "EXTEND", extend: true} })
 	r.Register("BREAK", func() cmdsys.Command { return &breakCmd{} })
+	r.Register("BREAKATPOINT", func() cmdsys.Command { return &breakAtPointCmd{} })
 	r.Register("JOIN", func() cmdsys.Command { return &joinCmd{} })
 	r.Register("EXPLODE", func() cmdsys.Command { return &explodeCmd{} })
 	r.Alias("TR", "TRIM")
@@ -46,12 +47,6 @@ func pickEntity(ctx *cmdsys.Context, p geom.Vec2) (doc.Handle, doc.Entity, bool)
 	return h, e, e != nil
 }
 
-// shown reports whether e's layer is displayed.
-func shown(d *doc.Drawing, e doc.Entity) bool {
-	l := d.Layer(e.Common().Layer)
-	return l == nil || !l.Off
-}
-
 // editCurve returns the single curve of a LINE, CIRCLE, ARC or LWPOLYLINE.
 func editCurve(e doc.Entity) (geom.Curve, bool) {
 	switch e.(type) {
@@ -61,27 +56,6 @@ func editCurve(e doc.Entity) (geom.Curve, bool) {
 		}
 	}
 	return nil, false
-}
-
-// boundaryCurves returns the geometry of the visible entities among hs other than
-// skip; with hs nil it takes every entity near box.
-func boundaryCurves(ctx *cmdsys.Context, hs []doc.Handle, skip doc.Handle, box *geom.Box2) []geom.Curve {
-	if hs == nil {
-		if box != nil {
-			hs = ctx.Index.Query(*box)
-		} else {
-			hs = ctx.Doc.Handles()
-		}
-	}
-	var out []geom.Curve
-	for _, h := range hs {
-		e := ctx.Doc.Entity(h)
-		if h == skip || e == nil || !shown(ctx.Doc, e) {
-			continue
-		}
-		out = append(out, e.Geometry()...)
-	}
-	return out
 }
 
 // setGeometry stores c in e when their kinds match.
@@ -150,140 +124,6 @@ func replaceWith(ctx *cmdsys.Context, h doc.Handle, curves []geom.Curve) {
 			tx.Add(ne)
 		}
 	}
-}
-
-// --- TRIM ---------------------------------------------------------------
-
-type trimCmd struct {
-	base
-	edges    []doc.Handle // explicit cutting edges; nil means every visible entity
-	choosing bool
-}
-
-func (*trimCmd) Name() string { return "TRIM" }
-
-func (c *trimCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	p := &cmdsys.Prompt{Message: ctx.T("cmd.trim.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
-	if c.edges == nil {
-		p.Accepts |= cmdsys.InputKeyword
-		p.Keywords = []string{"cuTting edges"}
-	}
-	return p
-}
-
-func (c *trimCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return c.prompt(ctx) }
-
-func (c *trimCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	switch {
-	case c.choosing:
-		c.choosing = false
-		if len(in.Selection) > 0 {
-			c.edges = append([]doc.Handle(nil), in.Selection...)
-			ctx.SayPlural("cmd.common.msg.found", len(c.edges))
-		}
-		ctx.Selection.Clear()
-		return c.prompt(ctx)
-	case in.Kind == cmdsys.InputEnter:
-		return nil
-	case in.Kind == cmdsys.InputKeyword:
-		c.choosing = true
-		return &cmdsys.Prompt{Message: ctx.T("cmd.trim.prompt.select_edges"), Accepts: cmdsys.InputSelection}
-	case in.Kind == cmdsys.InputPoint:
-		c.trimAt(ctx, in.Point)
-	}
-	return c.prompt(ctx)
-}
-
-func (c *trimCmd) trimAt(ctx *cmdsys.Context, p geom.Vec2) {
-	h, e, ok := pickEntity(ctx, p)
-	if !ok {
-		ctx.Say("cmd.common.msg.no_object_at_point")
-		return
-	}
-	curve, ok := editCurve(e)
-	if !ok {
-		ctx.Say("cmd.trim.msg.cannot_trim")
-		return
-	}
-	tol := workTol(ctx)
-	box := curve.Bounds().Grow(tol)
-	var cutters []geom.Curve
-	if c.edges == nil {
-		cutters = boundaryCurves(ctx, nil, h, &box)
-	} else {
-		cutters = boundaryCurves(ctx, c.edges, h, nil)
-	}
-	var ts []float64
-	for _, cu := range cutters {
-		for _, q := range geom.Intersect(curve, cu, tol) {
-			ts = append(ts, curve.ClosestParam(q))
-		}
-	}
-	spans, ok := geom.TrimSpan(curve, ts, curve.ClosestParam(p))
-	if !ok {
-		ctx.Say("cmd.trim.msg.no_intersection")
-		return
-	}
-	var out []geom.Curve
-	for _, s := range spans {
-		if sc := geom.SubCurve(curve, s); sc != nil {
-			out = append(out, sc)
-		}
-	}
-	replaceWith(ctx, h, out)
-}
-
-// --- EXTEND -------------------------------------------------------------
-
-type extendCmd struct{ base }
-
-func (*extendCmd) Name() string { return "EXTEND" }
-
-func (*extendCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.extend.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
-}
-
-func (c *extendCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return c.prompt(ctx) }
-
-func (c *extendCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	if in.Kind == cmdsys.InputEnter {
-		return nil
-	}
-	if in.Kind == cmdsys.InputPoint {
-		c.extendAt(ctx, in.Point)
-	}
-	return c.prompt(ctx)
-}
-
-func (c *extendCmd) extendAt(ctx *cmdsys.Context, p geom.Vec2) {
-	h, e, ok := pickEntity(ctx, p)
-	if !ok {
-		ctx.Say("cmd.common.msg.no_object_at_point")
-		return
-	}
-	boundaries := boundaryCurves(ctx, nil, h, nil)
-	tol := workTol(ctx)
-	var nc geom.Curve
-	switch e := e.(type) {
-	case *doc.Line:
-		nc, ok = extendCurve(e.Geometry()[0], p, boundaries, tol)
-	case *doc.Arc:
-		nc, ok = extendCurve(e.Geometry()[0], p, boundaries, tol)
-	case *doc.LWPolyline:
-		if e.Closed {
-			ctx.Say("cmd.extend.msg.closed_polyline")
-			return
-		}
-		nc, ok = extendPolyline(e.Geometry()[0].(geom.Polyline), p, boundaries, tol)
-	default:
-		ctx.Say("cmd.extend.msg.cannot_extend")
-		return
-	}
-	if !ok {
-		ctx.Say("cmd.extend.msg.no_boundary")
-		return
-	}
-	replaceWith(ctx, h, []geom.Curve{nc})
 }
 
 // extendCurve extends the end of the Line or Arc c nearest p.
@@ -397,6 +237,54 @@ func (c *breakCmd) breakAt(ctx *cmdsys.Context, p1, p2 geom.Vec2) {
 	replaceWith(ctx, c.h, out)
 }
 
+// --- BREAKATPOINT -------------------------------------------------------
+
+// breakAtPointCmd splits an object in two at one point.
+type breakAtPointCmd struct {
+	base
+	h doc.Handle
+}
+
+func (*breakAtPointCmd) Name() string { return "BREAKATPOINT" }
+
+func (*breakAtPointCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint}
+}
+
+func (c *breakAtPointCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
+	if c.h == 0 {
+		h, e, ok := pickEntity(ctx, in.Point)
+		if !ok {
+			ctx.Say("cmd.common.msg.no_object_at_point")
+			return c.Start(ctx)
+		}
+		curve, ok := editCurve(e)
+		if !ok {
+			ctx.Say("cmd.break.msg.cannot_break")
+			return c.Start(ctx)
+		}
+		if geom.IsPeriodic(curve) {
+			ctx.Say("cmd.breakatpoint.msg.closed")
+			return nil
+		}
+		c.h = h
+		return &cmdsys.Prompt{Message: ctx.T("cmd.breakatpoint.prompt.point"), Accepts: cmdsys.InputPoint}
+	}
+	e := ctx.Doc.Entity(c.h)
+	if e == nil {
+		return nil
+	}
+	curve, ok := editCurve(e)
+	if !ok {
+		return nil
+	}
+	t := curve.ClosestParam(in.Point)
+	if spans := geom.KeepOutside(curve, t, t); len(spans) == 2 {
+		replaceWith(ctx, c.h, curvesOf(curve, spans))
+	}
+	return nil
+}
+
 // --- JOIN ---------------------------------------------------------------
 
 type joinCmd struct {
@@ -418,6 +306,10 @@ func (c *joinCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 
 func (c *joinCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	ctx.Selection.Clear()
+	if in.Kind == cmdsys.InputKeyword {
+		c.closeArc(ctx)
+		return nil
+	}
 	if len(in.Selection) == 0 {
 		if c.source {
 			return c.run(ctx)
@@ -429,6 +321,9 @@ func (c *joinCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		c.hs = append([]doc.Handle(nil), in.Selection...)
 		if len(c.hs) == 1 {
 			c.source = true
+			if _, arc := ctx.Doc.Entity(c.hs[0]).(*doc.Arc); arc {
+				return &cmdsys.Prompt{Message: ctx.T("cmd.join.prompt.select_arcs"), Accepts: cmdsys.InputSelection | cmdsys.InputKeyword, Keywords: []string{"Close"}}
+			}
 			return &cmdsys.Prompt{Message: ctx.T("cmd.join.prompt.select_others"), Accepts: cmdsys.InputSelection}
 		}
 		return c.run(ctx)
@@ -510,9 +405,27 @@ func (c *joinCmd) run(ctx *cmdsys.Context) *cmdsys.Prompt {
 		ctx.Tx().Erase(h)
 	}
 	replaceWith(ctx, c.hs[0], []geom.Curve{result})
-	n := len(members) - 1
-	ctx.SayPlural("cmd.join.msg.joined", n)
+	switch {
+	case !c.source:
+		ctx.SayPlural("cmd.join.msg.joined", len(members)-1)
+	case isLine(result):
+		ctx.SayPlural("cmd.join.msg.joined_line", len(members)-1)
+	case isArc(result):
+		ctx.SayPlural("cmd.join.msg.joined_arc", len(members)-1)
+	default:
+		ctx.SayPlural("cmd.join.msg.joined_source", len(members)-1)
+	}
 	return nil
+}
+
+// closeArc turns the source Arc into the Circle it lies on (the Close option).
+func (c *joinCmd) closeArc(ctx *cmdsys.Context) {
+	a, ok := ctx.Doc.Entity(c.hs[0]).(*doc.Arc)
+	if !ok {
+		return
+	}
+	replaceWith(ctx, c.hs[0], []geom.Curve{geom.Circle{C: a.Center, R: a.Radius}})
+	ctx.Say("cmd.join.msg.closed")
 }
 
 // mergeNodes folds collinear touching Lines and co-circular touching Arcs
@@ -614,6 +527,8 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 }
 
 func isArc(c geom.Curve) bool { _, ok := c.(geom.Arc); return ok }
+
+func isLine(c geom.Curve) bool { _, ok := c.(geom.Line); return ok }
 
 func ends(c geom.Curve) (geom.Vec2, geom.Vec2) {
 	t0, t1 := c.ParamRange()

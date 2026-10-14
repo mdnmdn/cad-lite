@@ -433,8 +433,7 @@ chamfer_too_large = "Le distanze di smusso sono troppo grandi per le linee."
 radius_too_large = "Il raggio è troppo grande per le linee."
 
 [cmd.trim.prompt]
-select_object = "Selezionare oggetto da tagliare"
-select_edges = "Selezionare bordi di taglio <seleziona tutto>"
+select_object = "Selezionare oggetto da tagliare o con Maiusc estendere"
 mode = "Inserire un'opzione di modalità di taglio"
 
 [cmd.trimext.prompt]
@@ -460,7 +459,7 @@ cannot_trim = "Impossibile tagliare questo oggetto."
 no_intersection = "L'oggetto non interseca un bordo."
 
 [cmd.extend.prompt]
-select_object = "Selezionare oggetto da estendere"
+select_object = "Selezionare oggetto da estendere o con Maiusc tagliare"
 mode = "Inserire un'opzione di modalità di estensione"
 
 [cmd.extend.msg]
@@ -504,7 +503,7 @@ joined_source_other = "%d oggetti uniti all'origine"
 closed = "Arco convertito in cerchio."
 
 [cmd.explode.prompt]
-select = "Selezionare oggetti da esplodere"
+select = "Selezionare oggetti"
 
 [cmd.explode.msg]
 refused_one = "%d oggetto non può essere esploso."

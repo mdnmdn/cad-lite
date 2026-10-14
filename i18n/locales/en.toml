@@ -432,8 +432,7 @@ chamfer_too_large = "Chamfer distances are too large for the lines."
 radius_too_large = "Radius is too large for the lines."
 
 [cmd.trim.prompt]
-select_object = "Select object to trim"
-select_edges = "Select cutting edges <select all>"
+select_object = "Select object to trim or shift-select to extend"
 mode = "Enter a trimming mode option"
 
 [cmd.trimext.prompt]
@@ -459,7 +458,7 @@ cannot_trim = "Cannot trim this object."
 no_intersection = "Object does not intersect an edge."
 
 [cmd.extend.prompt]
-select_object = "Select object to extend"
+select_object = "Select object to extend or shift-select to trim"
 mode = "Enter an extension mode option"
 
 [cmd.extend.msg]
@@ -503,7 +502,7 @@ joined_source_other = "%d objects joined to source"
 closed = "Arc converted to a circle."
 
 [cmd.explode.prompt]
-select = "Select objects to explode"
+select = "Select objects"
 
 [cmd.explode.msg]
 refused_one = "%d object cannot be exploded."

@@ -35,7 +35,7 @@ func TestTrimAliasesAndPrompt(t *testing.T) {
 	}
 	s.Escape()
 	s.Run("TRIM")
-	if got := s.Prompt(); got != "Select object to trim or [cuTting edges]:" {
+	if got := s.Prompt(); got != "Select object to trim or shift-select to extend or [cuTting edges/Crossing/mOde/Project/eRase/Undo]:" {
 		t.Fatalf("prompt = %q", got)
 	}
 }
@@ -235,13 +235,13 @@ func TestTrimCuttingEdges(t *testing.T) {
 		line(geom.V(90, -10), geom.V(90, 10)))
 	s.Run("TRIM")
 	s.Submit("T")
-	if got := s.Prompt(); got != "Select cutting edges <select all>:" {
+	if got := s.Prompt(); got != "Select objects or <select all>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Click(geom.V(30, 8), false)
 	s.Click(geom.V(70, 8), false)
 	s.Submit("")
-	if got := s.Prompt(); got != "Select object to trim:" {
+	if got := s.Prompt(); got != "Select object to trim or shift-select to extend or [cuTting edges/Crossing/mOde/Project/eRase/Undo]:" {
 		t.Fatalf("prompt after edges = %q", got)
 	}
 	// Only x=30 and x=70 cut; picking at 80 removes 70..100 (the x=90 line is
@@ -499,7 +499,7 @@ func TestJoinPromptsSourceThenObjects(t *testing.T) {
 	if s.Active() != "" || len(sortedLines(s)) != 1 {
 		t.Fatalf("lines = %v active=%q", dumpLines(sortedLines(s)), s.Active())
 	}
-	if got := lastLine(s); got != "1 object joined." {
+	if got := lastLine(s); got != "1 line joined to source" {
 		t.Fatalf("last = %q", got)
 	}
 }
