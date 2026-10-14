@@ -49,7 +49,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G15 | The operating system cursor is not hidden over the canvas; it needs a platform API. The crosshair can linger when the pointer leaves through the window edge, because the platform sends no leave event | [Drawing canvas](features/canvas.md) |
 | G16 | Layer table edits are not journalled, so they are not undoable and the render cache is cleared on every command-line submission (D11) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
 | G17 | Paper space and layouts, view rotation, UCS | [Product overview](product/overview.md) |
-| G18 | Native open and save dialogs | [DXF files](features/dxf-files.md) |
+| G18 | Typed OPEN and SAVEAS never show the native dialog (FILEDIA is a stored variable with no effect); the dialogs are reached only from the buttons and shortcuts | [DXF files](features/dxf-files.md) |
 | G20 | Command-line autocomplete, history recall and F1 help | [Command line](features/command-line.md) |
 
 ## Further items

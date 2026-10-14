@@ -17,6 +17,10 @@ import (
 // chrome around the canvas.
 type Workspace struct {
 	session *cmdsys.Session
+	// files is the handler OPEN and SAVE use; it also lists the extensions the file dialogs show.
+	files cmdsys.FileHandler
+	// dlg is the native file dialog state.
+	dlg     dialogState
 	view    *render.View
 	builder *render.Builder
 	input   *gpui.TextInput
@@ -50,7 +54,7 @@ const historyLines = 4
 // disables OPEN and SAVE (as in a browser build).
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	v := render.DefaultView(800, 600)
-	ws := &Workspace{view: &v, fitPending: d.Len() > 0}
+	ws := &Workspace{view: &v, files: files, fitPending: d.Len() > 0}
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
@@ -114,6 +118,7 @@ func (ws *Workspace) run(name string, w *gpui.Window) {
 var (
 	actionUndo      = gpui.NewAction("cad-undo")
 	actionRedo      = gpui.NewAction("cad-redo")
+	actionOpen      = gpui.NewAction("cad-open")
 	actionSave      = gpui.NewAction("cad-save")
 	actionSaveAs    = gpui.NewAction("cad-save-as")
 	actionSnap      = gpui.NewAction("cad-toggle-snap")
@@ -131,6 +136,8 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("cmd-z", actionUndo, "cad"),
 		gpui.NewKeyBinding("ctrl-y", actionRedo, "cad"),
 		gpui.NewKeyBinding("cmd-shift-z", actionRedo, "cad"),
+		gpui.NewKeyBinding("ctrl-o", actionOpen, "cad"),
+		gpui.NewKeyBinding("cmd-o", actionOpen, "cad"),
 		gpui.NewKeyBinding("ctrl-s", actionSave, "cad"),
 		gpui.NewKeyBinding("cmd-s", actionSave, "cad"),
 		gpui.NewKeyBinding("ctrl-shift-s", actionSaveAs, "cad"),
@@ -167,8 +174,9 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13).
 		OnAction(actionUndo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("U", w) }).
 		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
-		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("QSAVE", w) }).
-		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("SAVEAS", w) }).
+		OnAction(actionOpen, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.openFile(w) }).
+		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFile(w) }).
+		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFileAs(w) }).
 		OnAction(actionSnap, toggle(func() { s.SnapOn = !s.SnapOn })).
 		OnAction(actionOrtho, toggle(func() { s.Ortho = !s.Ortho })).
 		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).

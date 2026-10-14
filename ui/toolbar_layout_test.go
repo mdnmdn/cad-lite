@@ -63,6 +63,7 @@ func (r *tbRig) bounds(id string) (rect, bool) {
 }
 
 var toolbarGroupButtons = [][]string{
+	{"open", "save"},
 	{"line", "pline", "circle", "arc", "rect"},
 	{"dist", "area", "id"},
 	{"undo", "redo", "zoom"},

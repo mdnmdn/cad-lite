@@ -779,6 +779,18 @@ settings = "Opzioni"
 settings_tip = "Opzioni — tema, scala dell'interfaccia, ausili di disegno, lingua (Ctrl+, / OPZIONI)"
 agent = "Agente"
 agent_tip = "Agente IA — apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza (F2 / AGENTE)"
+open = "Apri"
+open_tip = "Apri — sceglie un file di disegno da aprire (Ctrl+O / APRI)"
+save = "Salva"
+save_tip = "Salva — salva il disegno nel suo file, o chiede dove quando non ne ha uno; clic destro per Salva con nome (Ctrl+S / QSAVE, Ctrl+Shift+S / SAVEAS)"
+
+[ui.file]
+open_title = "Apri disegno"
+save_title = "Salva disegno con nome"
+default_name = "disegno"
+filter_all_supported = "Tutti i file supportati"
+filter_all = "Tutti i file"
+filter_ext = "Disegno %s"
 
 [ui.panel]
 layers = "LAYER"

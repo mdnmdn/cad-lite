@@ -3,11 +3,11 @@ id: feat-dxf-files
 title: DXF files
 kind: feature
 status: current
-summary: Opening DXF and DWG drawings and saving DXF from the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
-read_when: you are changing OPEN, SAVE or the -open flag, which file types they accept, or how file problems are reported to the user
+summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
+read_when: you are changing OPEN, SAVE, the Open and Save buttons, the file dialogs or the -open flag, which file types they accept, or how file problems are reported to the user
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+code_anchors: [filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -28,8 +28,23 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
 - **QSAVE** (Ctrl+S) saves silently under the current path and asks for one only when the drawing
   has none. **SAVEAS** (Ctrl+Shift+S) and **SAVE** ask for the path, offering the current one as the default.
 - **A drawing opened from a DWG** has the `.dwg` path, which cannot be written (see below), so QSAVE
-  asks for a path instead of failing, and SAVE, SAVEAS and the `Save changes` question offer the same
-  name with `.dxf` as the default.
+  asks for a path instead of failing, the Save button shows the save dialog, and SAVE, SAVEAS, the
+  dialog and the `Save changes` question offer the same name with `.dxf` as the default.
+- **Open and Save buttons.** The leftmost toolbar group has Open (Ctrl+O) and Save (Ctrl+S); Save as
+  is a right click on Save and Ctrl+Shift+S. Open shows the system open dialog and, when a file is
+  chosen, runs OPEN with that path, so the `Save changes` question, the undo reset, the project path and
+  the agent history switch happen as for a typed OPEN. Save with a file runs QSAVE; Save without one, and
+  Save as, show the system save dialog (the current name, or `drawing`, pre-filled) and run SAVEAS with
+  the chosen path. Cancelling the dialog does nothing. One dialog is open at a time; the window stays
+  usable behind it.
+- **Dialog file types.** Open lists `All supported files` (every extension a registered reader reads),
+  one entry per extension (`DXF drawing`) and `All files`; a reader added to the registry (DWG) appears
+  with no UI change. Save lists one entry per extension a writer writes, and a name typed without an
+  extension gets the first one.
+- **Fallback.** Where no dialog can be shown (no `zenity` or `kdialog`, no display, a browser, a helper
+  that fails) the buttons run OPEN, QSAVE or SAVEAS on the command line, so the user types the path as
+  before. Typed OPEN, SAVE and SAVEAS always stay on the command line; the `FILEDIA` variable is stored
+  but does not change that.
 - **NEW** discards the drawing for an empty one, forgets the path and does not touch files. **CLOSE** does
   the same (Cad-lite has one drawing).
 - **Unsaved changes.** The session keeps a modified counter: every committed command, undo and redo adds
@@ -92,6 +107,7 @@ A failure ends the command and leaves the drawing as it was:
 | Extension with no reader or writer | `Open failed: no reader for ".xyz" files`, or `Save failed: no writer for ".xyz" files` |
 | Save to a `.dwg` path | `Save failed: DWG writing is not supported; save as .dxf` |
 | Path not writable | `Save failed: <operating system message>` |
+| Dialog helper missing or failing | no message; the command line asks for the path |
 
 With `-open`, a failure prints the error and exits with a non-zero status. In a build with no file
 handler (the browser), OPEN and SAVE print `File commands are not available on this platform.`
@@ -102,6 +118,9 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
 - Interface: `cmdsys.FileHandler` (`Open`, `Save`), implemented by `fileio.Registry`; the session
   receives it through `Session.SetFiles`. A handler that also has `WritablePath(path) string`
   (`Registry` does) tells the file commands which name a read-only format can be saved under.
+  receives it through `Session.SetFiles`. `fileio.Registry.ReadExtensions` and `WriteExtensions` feed the
+  dialog filters. `ui.FileDialog` (`Open`, `Save`) is what the workspace shows dialogs with, installed by
+  `Workspace.SetFileDialog`; `cmd/cad` installs `filedialog.System{}` for the window, not for `-png`.
 - Document: a successful open calls `Context.ReplaceDrawing`, which cancels the running command and clears the selection.
 
 ## Implementation
@@ -114,6 +133,17 @@ in `fileio/format.go` picks the codec by extension; `fileio/dxf.Codec` reads and
 `.dxf`. `cmd/cad`
 builds the registry, opens `-open` before creating the workspace and calls
 `Workspace.FitOnFirstFrame`.
+
+`ui/filedialog.go` holds the button wiring: `Workspace.openFile`, `saveFile` and `saveFileAs` call
+`startDialog`, which runs the `ui.FileDialog` on a goroutine and polls its answer with a `gpui.Window.After`
+timer, so no gpui state is touched off the UI goroutine (the pattern of the agent discovery probe).
+`pollDialog` then runs OPEN or SAVEAS and submits the path, or falls back to the command on any error
+other than `filedialog.ErrCancelled`. `openFilters` and `saveFilters` build the type lists from the
+registry. The `filedialog` package (core, no gpui) builds one helper command per system, as pure
+functions tested on any OS, and runs it without cgo: `osascript` (`choose file`, `choose file name`) on
+macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs on Windows, `zenity
+--file-selection`, else `kdialog --getopenfilename`, on Linux and the BSDs when `DISPLAY` or
+`WAYLAND_DISPLAY` is set. A browser build returns `ErrUnavailable`.
 
 ## Failure
 
@@ -137,5 +167,4 @@ builds the registry, opens `-open` before creating the workspace and calls
 
 - Write newer DXF versions so unknown entities of classes R12 lacks survive a save.
 - Write DWG, and read more DWG entities (TEXT, INSERT and blocks first).
-- A native open and save dialog.
 - Browser file access through the browser's own APIs.

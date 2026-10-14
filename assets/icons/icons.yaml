@@ -189,6 +189,14 @@ categories:
       goal: the layer can be edited, an open padlock
       keywords: [unlock, unlocked, open padlock]
 
+  file:
+    file-open:
+      goal: choose a drawing file to open, an open folder
+      keywords: [open, folder, load, browse, file]
+    file-save:
+      goal: write the drawing to its file, a floppy disk
+      keywords: [save, floppy, disk, write, store]
+
   app:
     app-settings:
       goal: open the settings panel

@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, crosshair a
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/toolbar_layout.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/toolbar_layout.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -101,7 +101,7 @@ class (`LINE × 3`); a single selected entity also shows its layer and handle. T
 
 ### Toolbar
 
-Each button is an icon over a 10px label, in groups separated by a rule: Line, Polyline, Circle, Arc,
+Each button is an icon over a 10px label, in groups separated by a rule: Open, Save; Line, Polyline, Circle, Arc,
 Rect; Dist, Area, ID point; Undo, Redo, Zoom; Move, Copy, Rotate, Scale, Erase; Mirror, Offset,
 Fillet, Chamfer; Trim, Extend, Break, Join, Explode; and at the right end the `AI` agent toggle and
 the gear `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or
@@ -109,11 +109,13 @@ the gear `Settings` button, which opens the [settings](settings.md) panel (also 
 row, and as the window narrows whole groups wrap onto a second and a third row. A group is never
 split across rows and nothing clips or overlaps; the agent and settings group sits at the right
 end of whichever row it lands on. A button runs its command as if typed, and the button of the running
-command is highlighted. Every button shows its command's icon from the
-[icon pipeline](../tech/ui-framework.md); a command without a button (LAYER, LIST, NEW, OPEN, SAVE,
+command is highlighted. Open and Save, the leftmost group, are the exception: they show the system file
+dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. Their tooltips come from
+`ui.toolbar.open_tip` and `ui.toolbar.save_tip`. Every button shows its command's icon from the
+[icon pipeline](../tech/ui-framework.md); a command without a button (LAYER, LIST, NEW,
 MEASUREGEOM) is still reached by typing it.
 
-The first row starts with a brand that depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`):
+The first row starts with a brand, which leads the file group, that depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`):
 macOS shows the application icon (32px, the 32 and 64 px window icons drawn 1:1 at UI scale 1 and
 2), Windows shows nothing and the buttons start at the row's left padding (the window frame
 carries icon and title), and Linux and the web show the `Cad-lite` wordmark. `CADLITE_BRAND=mac|win|text`
@@ -159,7 +161,8 @@ controls) wraps onto a second line at the right.
 (layers and properties), then `commandArea`, then `statusBar`. `ui/toolbar_layout.go` builds the toolbar: `Workspace.toolbarGroups` lists the groups and
 `Workspace.toolbar` puts each in a no-shrink row `Div` inside a `FlexWrap` row, so gpui wraps between
 groups only (the right-end group has an auto left margin). `Workspace.button` builds a toolbar
-button around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `statusBar` does
+button around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, `Workspace.fileButton`
+(`ui/filedialog.go`) builds Open and Save with their own tooltips, and `statusBar` does
 the same for the toggles. User-visible text goes through `i18n.T` (`ui.*` keys); `Workspace.Render`
 installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app whenever the theme
 changes. `ui/brand.go` holds the toolbar brand: `Brand`, `BrandForOS`, and a colour bitmap element that paints

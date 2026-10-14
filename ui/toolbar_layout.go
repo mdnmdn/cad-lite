@@ -16,23 +16,28 @@ type toolGroup struct {
 	right bool
 }
 
-// toolbarGroups returns the toolbar's groups in order: drawing (led by the
-// brand), measuring, history and zoom, the three modify groups, and the
+// toolbarGroups returns the toolbar's groups in order: files (led by the
+// brand), drawing, measuring, history and zoom, the three modify groups, and the
 // window buttons. Commands without a short caption of their own show their
 // display name.
 func (ws *Workspace) toolbarGroups() []toolGroup {
-	draw := []gpui.IntoElement{}
+	file := []gpui.IntoElement{}
 	if b := ws.brand(); b != nil {
-		draw = append(draw, b)
+		file = append(file, b)
 	}
-	draw = append(draw,
+	file = append(file,
+		ws.fileButton("open", tb("open"), tb("open_tip"), icons.FileOpen, ws.openFile, nil),
+		ws.fileButton("save", tb("save"), tb("save_tip"), icons.FileSave, ws.saveFile, ws.saveFileAs),
+	)
+	draw := []gpui.IntoElement{
 		ws.button("line", tb("line"), "LINE", icons.DrawLine),
 		ws.button("pline", tb("pline"), "PLINE", icons.DrawPolyline),
 		ws.button("circle", tb("circle"), "CIRCLE", icons.DrawCircle),
 		ws.button("arc", tb("arc"), "ARC", icons.DrawArc),
 		ws.button("rect", tb("rect"), "RECTANG", icons.DrawRectangle),
-	)
+	}
 	return []toolGroup{
+		{id: "file", elements: file, divider: true},
 		{id: "draw", elements: draw, divider: true},
 		{id: "measure", divider: true, elements: []gpui.IntoElement{
 			ws.button("dist", tb("dist"), "DIST", icons.MeasureDistance),

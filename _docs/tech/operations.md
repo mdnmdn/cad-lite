@@ -110,6 +110,11 @@ logged and the defaults apply) and saves it, with the window size, when the wind
   `apt-get install -y xvfb xdotool x11-utils imagemagick ffmpeg` (`ffmpeg` only for `-video`). The
   harness does not exercise HiDPI scales, the clipboard, IME or window resizing; say which
   interactive behaviour was not run.
+- The Open and Save dialogs (`filedialog`) run helper programs and need no cgo: `osascript` on macOS and
+  PowerShell on Windows ship with the system; on Linux and the BSDs they need `zenity` or `kdialog` and a
+  display, and without them the buttons fall back to the command line. Agent shells have neither, so the
+  dialogs are tested through pure command builders and a fake dialog; a real dialog is never opened by
+  tests.
 - Fonts come from the operating system (the library searches the standard font directories). Where
   there are none, in a minimal container or the browser (`js/wasm`, always), the library uses its
   bundled Go Regular and Go Bold faces (Latin, Greek and Cyrillic only), so text still renders.

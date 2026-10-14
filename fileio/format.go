@@ -45,6 +45,30 @@ func (r *Registry) AddReader(rd Reader) { r.readers = append(r.readers, rd) }
 // AddWriter registers a writer.
 func (r *Registry) AddWriter(w Writer) { r.writers = append(r.writers, w) }
 
+// ReadExtensions returns every extension a registered reader reads, lower-case with the dot,
+// sorted and without duplicates.
+func (r *Registry) ReadExtensions() []string {
+	var all []string
+	for _, rd := range r.readers {
+		all = append(all, rd.Extensions()...)
+	}
+	return uniqueSorted(all)
+}
+
+// WriteExtensions returns every extension a registered writer writes, in the same form.
+func (r *Registry) WriteExtensions() []string {
+	var all []string
+	for _, w := range r.writers {
+		all = append(all, w.Extensions()...)
+	}
+	return uniqueSorted(all)
+}
+
+func uniqueSorted(in []string) []string {
+	slices.Sort(in)
+	return slices.Compact(in)
+}
+
 func ext(path string) string { return strings.ToLower(filepath.Ext(path)) }
 
 // Open reads the file at path with the reader registered for its extension.

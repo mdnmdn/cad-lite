@@ -62,7 +62,7 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 
 1. **Dependencies point down.** A package imports only packages in layers below it. `geom` imports
    nothing of the project; `spatial` and `doc` import `geom`; `fileio` imports `doc`; `render`
-   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it. `i18n` imports nothing of the project (it is a leaf, builds for `js/wasm`) and is imported by `cmdsys`, `cmdsys/commands`, `fileio`, `settings`, `ui` and `cmd/cad`. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports Cad-lite.
+   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it, `filedialog` (a leaf over the standard library, which runs the system dialog programs) included. `i18n` imports nothing of the project (it is a leaf, builds for `js/wasm`) and is imported by `cmdsys`, `cmdsys/commands`, `fileio`, `settings`, `ui` and `cmd/cad`. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports Cad-lite.
 2. **The core never sees the screen.** `geom`, `doc`, `spatial`, `fileio`, `render` and `cmdsys`
    never import `internal/gpui`, ebiten or any graphics package. Only `render/gpuirender`, `ui` and
    `cmd/` import `internal/gpui`, and only `cmd/` imports `internal/gpui/ebitenplatform`.

@@ -22,6 +22,7 @@ import (
 	"cad-lite/appenv"
 	"cad-lite/assets/appicon"
 	"cad-lite/doc"
+	"cad-lite/filedialog"
 	"cad-lite/fileio"
 	"cad-lite/fileio/dwg"
 	"cad-lite/fileio/dxf"
@@ -102,6 +103,7 @@ func main() {
 	if *png == "" {
 		ws.EnableUpdates()
 		ws.EnableAgentDiscovery()
+		ws.SetFileDialog(filedialog.System{})
 		if err := ws.LoadSettings(); err != nil {
 			log.Printf("settings: %v", err)
 		}

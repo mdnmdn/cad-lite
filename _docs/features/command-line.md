@@ -88,8 +88,9 @@ Shortcuts, active anywhere in the window:
 |---|---|
 | Ctrl+Z, Cmd+Z | U (undo one step) |
 | Ctrl+Y, Cmd+Shift+Z | REDO |
-| Ctrl+S, Cmd+S | QSAVE |
-| Ctrl+Shift+S, Cmd+Shift+S | SAVEAS |
+| Ctrl+O, Cmd+O | OPEN, through the system file dialog when there is one |
+| Ctrl+S, Cmd+S | QSAVE; the save dialog first when the drawing has no file |
+| Ctrl+Shift+S, Cmd+Shift+S | SAVEAS, through the system file dialog when there is one |
 | F2 | Agent panel on or off |
 | F3 | Object snap on or off |
 | F7 | Grid on or off |
