@@ -2,7 +2,7 @@
 # Expected state after running 06_circle_ttr.scr in AutoCAD 2024/2025 from the preamble state.
 # (verify) which tangent circle TTR picks
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: fail
+go-draw: pass
 line 0,0 100,0
 line 0,0 0,100
 circle 10,10 10

@@ -92,3 +92,7 @@ New lines are appended below this heading.
 | G51 | gpui `text.go` uses the deprecated `ClusterIndex` (staticcheck SA1019); fixing it needs a `go-text/typesetting` bump | [UI framework](tech/ui-framework.md) |
 | G52 | Promote the random-script fuzz to a `go test -fuzz` target with `NaN` and `1e308` tokens in the pool, and add a fuzz target for the DXF reader | [Testing](tech/testing.md) |
 | G53 | The Italian terms marked `(verify)` in `i18n/locales/it.toml` (36 entries) need a review by a CAD-fluent Italian speaker; `cadmcp` relies on the session being English for agents, so an agent never sees them | [Drawing and editing commands](features/drawing-and-editing.md), [Agent integration](tech/agent-integration.md) |
+| G54 | Updates: the checksum list lives in the same release as the archive, so it detects corruption but not a tampered release; sign the archives (minisign or cosign) and verify in `updater` | [Updates](features/updates.md) |
+| G55 | Updates: delta updates and a rollback to the `.old` copy are not implemented | [Updates](features/updates.md) |
+| G56 | Updates: the restart prompt uses the undo depth as a stand-in for "unsaved changes" until the drawing has a dirty flag (see G50); a status-bar notice is not wired (only the gear badge) | [Updates](features/updates.md) |
+| G57 | Updates: a real install and relaunch on Windows and macOS is untested (tests simulate the layouts on Linux); macOS in `/Applications` for a non-admin user falls back to the release page | [Updates](features/updates.md) |

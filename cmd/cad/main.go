@@ -82,6 +82,14 @@ func main() {
 		}
 	}
 	ws := ui.NewWorkspace(d, files)
+	ws.SetVersion(version)
+	// Deferred first, so it runs last: after the settings are saved and the agent is closed,
+	// start the version an in-app update installed.
+	defer func() {
+		if err := ws.RelaunchIfPending(); err != nil {
+			log.Printf("update: restart: %v", err)
+		}
+	}()
 	defer ws.CloseAgent()
 	// fatal stops the agent subprocess first: log.Fatal and os.Exit skip deferred calls.
 	fatal := func(v ...any) { ws.CloseAgent(); log.Fatal(v...) }
@@ -89,6 +97,7 @@ func main() {
 		ws.SetProjectPath(*open)
 	}
 	if *png == "" {
+		ws.EnableUpdates()
 		if err := ws.LoadSettings(); err != nil {
 			log.Printf("settings: %v", err)
 		}

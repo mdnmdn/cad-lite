@@ -3,23 +3,80 @@
 package commands
 
 import (
+	"math"
+
 	"go-draw/cmdsys"
 	"go-draw/doc"
 	"go-draw/geom"
 	"go-draw/render"
 )
 
+// The draw commands keep their remembered defaults as session variables: CIRCLERAD (the radius
+// CIRCLE offers), PLINEWID (the width PLINE starts with) and POLYSIDES (the side count POLYGON
+// offers) are AutoCAD's own; the DRAW_ ones are command memory AutoCAD keeps outside the
+// variable list (RECTANG's chamfer, fillet, width, elevation, thickness, length and area, and
+// POLYGON's last inscribed/circumscribed choice). Being session variables, two sessions never
+// share them.
+func init() {
+	cmdsys.RegisterVarGroup(func(_ *cmdsys.Session, v *cmdsys.Vars) {
+		v.Register(cmdsys.Var{Name: "CIRCLERAD", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "PLINEWID", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "POLYSIDES", Kind: cmdsys.VarInt, Default: 4, Min: 3, Max: 1024})
+		v.Register(cmdsys.Var{Name: "DRAW_POLYCIRCUMSCRIBED", Kind: cmdsys.VarInt, Default: 0, Min: 0, Max: 1})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTCHAMFER1", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTCHAMFER2", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTFILLET", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTWIDTH", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTELEVATION", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTTHICKNESS", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTLENGTH", Kind: cmdsys.VarReal, Default: 10.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTDEPTH", Kind: cmdsys.VarReal, Default: 10.0})
+		v.Register(cmdsys.Var{Name: "DRAW_RECTAREA", Kind: cmdsys.VarReal, Default: 100.0})
+	})
+}
+
+// kwShortcut returns the typed shortcut of keyword id in the session's language: the capitals of
+// its label, or its first letter. Prompt defaults that name a keyword print it this way (<I>).
+func kwShortcut(ctx *cmdsys.Context, id string) string {
+	label := ctx.Translator().KeywordLabel(id)
+	var caps []rune
+	for _, r := range label {
+		if r >= 'A' && r <= 'Z' || r >= 'À' && r <= 'Þ' {
+			caps = append(caps, r)
+		}
+	}
+	if len(caps) > 0 {
+		return string(caps)
+	}
+	for _, r := range label {
+		return string(r)
+	}
+	return id
+}
+
+// distDefault returns a distance default for a prompt, nil when v is not positive.
+func distDefault(v float64) *cmdsys.Input {
+	if v > 0 {
+		return &cmdsys.Input{Kind: cmdsys.InputDistance, Value: v}
+	}
+	return nil
+}
+
 // --- LINE ---------------------------------------------------------------
 
 type lineCmd struct {
 	pts   []geom.Vec2
 	added []doc.Handle
+	// tangent is set after Enter at the first prompt continued an arc: the next input is the
+	// length of a line tangent to it.
+	tangent    float64
+	needLength bool
 }
 
 func (*lineCmd) Name() string { return "LINE" }
 
 func (c *lineCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.line.prompt.first_point"), Accepts: cmdsys.InputPoint}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.line.prompt.first_point"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 }
 
 func (c *lineCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
@@ -32,27 +89,72 @@ func (c *lineCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	return p
 }
 
+// lastEndIsArc reports whether the last line or arc a command made is an arc ending at p.
+func lastEndIsArc(ctx *cmdsys.Context, p geom.Vec2) bool {
+	h, ok := ctx.LastEntity()
+	if !ok {
+		return false
+	}
+	a, ok := ctx.Doc.Entity(h).(*doc.Arc)
+	if !ok {
+		return false
+	}
+	g := geom.Arc{C: a.Center, R: a.Radius, Start: a.StartAngle, End: a.EndAngle}
+	return g.StartPoint().Near(p, 1e-6) || g.EndPoint().Near(p, 1e-6)
+}
+
+// addSegment draws the line a-b and records its end for Enter-continue.
+func (c *lineCmd) addSegment(ctx *cmdsys.Context, a, b geom.Vec2) {
+	c.added = append(c.added, ctx.Tx().Add(&doc.Line{Start: a, End: b}))
+	ctx.SetLastEnd(b, b.Sub(a).Angle())
+}
+
 func (c *lineCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
+	if c.needLength {
+		if in.Kind != cmdsys.InputDistance || in.Value == 0 {
+			return c.lengthPrompt(ctx)
+		}
+		start := c.pts[0]
+		c.needLength = false
+		end := start.Polar(in.Value, c.tangent)
+		c.addSegment(ctx, start, end)
+		c.pts = append(c.pts, end)
+		return c.prompt(ctx)
+	}
 	switch {
+	case in.Kind == cmdsys.InputEnter && len(c.pts) == 0:
+		// Continue from the end of the last line or arc, else from the last point.
+		p, tan, ok := ctx.LastEnd()
+		if !ok {
+			p = ctx.LastPoint()
+		}
+		c.pts = append(c.pts, p)
+		if ok && lastEndIsArc(ctx, p) {
+			c.tangent, c.needLength = tan, true
+			return c.lengthPrompt(ctx)
+		}
+		return c.prompt(ctx)
 	case in.Kind == cmdsys.InputEnter:
 		return nil
 	case in.Keyword == "Undo":
 		if len(c.added) == 0 {
-			if len(c.pts) > 0 {
-				c.pts = c.pts[:0]
-			}
+			c.pts = c.pts[:0]
 			return c.Start(ctx)
 		}
 		ctx.Tx().Erase(c.added[len(c.added)-1])
 		c.added = c.added[:len(c.added)-1]
 		c.pts = c.pts[:len(c.pts)-1]
+		if n := len(c.added); n > 0 {
+			ctx.SetLastEnd(c.pts[len(c.pts)-1], c.pts[len(c.pts)-1].Sub(c.pts[len(c.pts)-2]).Angle())
+		}
 		return c.prompt(ctx)
 	case in.Keyword == "Close":
-		ctx.Tx().Add(&doc.Line{Start: c.pts[len(c.pts)-1], End: c.pts[0]})
+		last, first := c.pts[len(c.pts)-1], c.pts[0]
+		c.addSegment(ctx, last, first)
 		return nil
 	case in.Kind == cmdsys.InputPoint:
 		if n := len(c.pts); n > 0 {
-			c.added = append(c.added, ctx.Tx().Add(&doc.Line{Start: c.pts[n-1], End: in.Point}))
+			c.addSegment(ctx, c.pts[n-1], in.Point)
 		}
 		c.pts = append(c.pts, in.Point)
 		return c.prompt(ctx)
@@ -60,197 +162,31 @@ func (c *lineCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	return c.prompt(ctx)
 }
 
+func (c *lineCmd) lengthPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.line.prompt.length"), Accepts: cmdsys.InputDistance, Base: pt(c.pts[0])}
+}
+
 func (c *lineCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	if n := len(c.pts); n > 0 {
-		dl.Polyline([]geom.Vec2{c.pts[n-1], cur}, PreviewColor, 1, false)
+	n := len(c.pts)
+	if n == 0 {
+		return
 	}
+	if c.needLength {
+		dl.Polyline([]geom.Vec2{c.pts[0], c.pts[0].Polar(math.Max(cur.Dist(c.pts[0]), 0), c.tangent)}, PreviewColor, 1, false)
+		return
+	}
+	dl.Polyline([]geom.Vec2{c.pts[n-1], cur}, PreviewColor, 1, false)
 }
 
 func (*lineCmd) Cancel(*cmdsys.Context) {}
 
-// --- PLINE --------------------------------------------------------------
-
-type plineCmd struct {
-	pts []geom.Vec2
-}
-
-func (*plineCmd) Name() string { return "PLINE" }
-
-func (c *plineCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.pline.prompt.start_point"), Accepts: cmdsys.InputPoint}
-}
-
-func (c *plineCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	p := &cmdsys.Prompt{Message: ctx.T("cmd.pline.prompt.next_point"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter | cmdsys.InputKeyword, Base: pt(c.pts[len(c.pts)-1]), Keywords: []string{"Undo"}}
-	if len(c.pts) >= 3 {
-		p.Keywords = []string{"Close", "Undo"}
-	}
-	return p
-}
-
-func (c *plineCmd) finish(ctx *cmdsys.Context, closed bool) *cmdsys.Prompt {
-	if len(c.pts) >= 2 {
-		ctx.Tx().Add(&doc.LWPolyline{Points: c.pts, Closed: closed})
-	}
-	return nil
-}
-
-func (c *plineCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	switch {
-	case in.Kind == cmdsys.InputEnter:
-		return c.finish(ctx, false)
-	case in.Keyword == "Close":
-		return c.finish(ctx, true)
-	case in.Keyword == "Undo":
-		c.pts = c.pts[:len(c.pts)-1]
-		if len(c.pts) == 0 {
-			return c.Start(ctx)
-		}
-	case in.Kind == cmdsys.InputPoint:
-		c.pts = append(c.pts, in.Point)
-	}
-	return c.prompt(ctx)
-}
-
-func (c *plineCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	if len(c.pts) > 0 {
-		dl.Polyline(append(append([]geom.Vec2(nil), c.pts...), cur), PreviewColor, 1, false)
-	}
-}
-
-// Cancel keeps the polyline drawn so far, as AutoCAD does.
-func (c *plineCmd) Cancel(ctx *cmdsys.Context) { c.finish(ctx, false) }
-
-// --- CIRCLE -------------------------------------------------------------
-
-type circleCmd struct {
-	base
-	center   *geom.Vec2
-	diameter bool
-}
-
-func (*circleCmd) Name() string { return "CIRCLE" }
-
-func (c *circleCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.circle.prompt.center"), Accepts: cmdsys.InputPoint}
-}
-
-func (c *circleCmd) radiusPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	if c.diameter {
-		return &cmdsys.Prompt{Message: ctx.T("cmd.circle.prompt.diameter"), Accepts: cmdsys.InputDistance, Base: c.center}
-	}
-	return &cmdsys.Prompt{Message: ctx.T("cmd.circle.prompt.radius"), Accepts: cmdsys.InputDistance | cmdsys.InputKeyword, Keywords: []string{"Diameter"}, Base: c.center}
-}
-
-func (c *circleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	switch {
-	case c.center == nil:
-		c.center = pt(in.Point)
-		return c.radiusPrompt(ctx)
-	case in.Keyword == "Diameter":
-		c.diameter = true
-		return c.radiusPrompt(ctx)
-	case in.Kind == cmdsys.InputDistance:
-		r := in.Value
-		if c.diameter {
-			r /= 2
-		}
-		if r <= 0 {
-			ctx.Say("cmd.common.msg.positive")
-			return c.radiusPrompt(ctx)
-		}
-		ctx.Tx().Add(&doc.Circle{Center: *c.center, Radius: r})
-		return nil
-	}
-	return c.radiusPrompt(ctx)
-}
-
-func (c *circleCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	if c.center == nil {
-		return
-	}
-	r := cur.Dist(*c.center)
-	if c.diameter {
-		r /= 2
-	}
-	dl.Curve(geom.Circle{C: *c.center, R: r}, previewTol(ctx), PreviewColor, 1)
-	dl.Polyline([]geom.Vec2{*c.center, cur}, PreviewColor.WithAlpha(120), 0, false)
-}
-
-// --- ARC (three points) -------------------------------------------------
-
-type arcCmd struct {
-	base
-	pts []geom.Vec2
-}
-
-func (*arcCmd) Name() string { return "ARC" }
-
-func (c *arcCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.arc.prompt.start_point"), Accepts: cmdsys.InputPoint}
-}
-
-func (c *arcCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	c.pts = append(c.pts, in.Point)
-	switch len(c.pts) {
-	case 1:
-		return &cmdsys.Prompt{Message: ctx.T("cmd.arc.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: pt(c.pts[0])}
-	case 2:
-		return &cmdsys.Prompt{Message: ctx.T("cmd.arc.prompt.end_point"), Accepts: cmdsys.InputPoint, Base: pt(c.pts[1])}
-	}
-	a, ok := doc.ArcFrom3Points(c.pts[0], c.pts[1], c.pts[2])
-	if !ok {
-		ctx.Say("cmd.arc.msg.collinear")
-		return nil
-	}
-	ctx.Tx().Add(&doc.Arc{Center: a.C, Radius: a.R, StartAngle: a.Start, EndAngle: a.End})
-	return nil
-}
-
-func (c *arcCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	switch len(c.pts) {
-	case 1:
-		dl.Polyline([]geom.Vec2{c.pts[0], cur}, PreviewColor, 1, false)
-	case 2:
-		if a, ok := doc.ArcFrom3Points(c.pts[0], c.pts[1], cur); ok {
-			dl.Curve(a, previewTol(ctx), PreviewColor, 1)
-		}
-	}
-}
-
-// --- RECTANG ------------------------------------------------------------
-
-type rectCmd struct {
-	base
-	first *geom.Vec2
-}
-
-func (*rectCmd) Name() string { return "RECTANG" }
-
-func (c *rectCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.rectang.prompt.first_corner"), Accepts: cmdsys.InputPoint}
-}
-
-func (c *rectCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	if c.first == nil {
-		c.first = pt(in.Point)
-		return &cmdsys.Prompt{Message: ctx.T("cmd.rectang.prompt.other_corner"), Accepts: cmdsys.InputPoint, Base: c.first}
-	}
-	ctx.Tx().Add(&doc.LWPolyline{Points: rectPts(*c.first, in.Point), Closed: true})
-	return nil
-}
-
-func (c *rectCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	if c.first != nil {
-		dl.Polyline(rectPts(*c.first, cur), PreviewColor, 1, true)
-	}
-}
-
-// registerDraw adds the draw commands.
+// registerDraw adds the draw commands (draw.go, pline.go, circle.go, arc.go, rect.go) and, from
+// polygon.go and point.go, POLYGON.
 func registerDraw(r *cmdsys.Registry) {
 	r.Register("LINE", func() cmdsys.Command { return &lineCmd{} })
 	r.Register("PLINE", func() cmdsys.Command { return &plineCmd{} })
 	r.Register("CIRCLE", func() cmdsys.Command { return &circleCmd{} })
 	r.Register("ARC", func() cmdsys.Command { return &arcCmd{} })
 	r.Register("RECTANG", func() cmdsys.Command { return &rectCmd{} })
+	registerPolygon(r)
 }

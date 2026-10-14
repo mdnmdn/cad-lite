@@ -70,6 +70,43 @@ nearest = "Nearest"
 generic = "Snap"
 
 [kw]
+project = "Project"
+erase = "eRase"
+boundary_edges = "Boundary edges"
+extend = "Extend"
+no_extend = "No extend"
+none = "None"
+ucs = "Ucs"
+view = "View"
+quick = "Quick"
+standard = "Standard"
+center = "Center"
+end = "End"
+chord_length = "chord Length"
+direction = "Direction"
+length = "Length"
+width = "Width"
+arc = "Arc"
+halfwidth = "Halfwidth"
+arc_angle = "Angle"
+pline_center = "CEnter"
+close_arc = "CLose"
+line = "Line"
+second_pt = "Second pt"
+chamfer = "Chamfer"
+elevation = "Elevation"
+fillet = "Fillet"
+thickness = "Thickness"
+rect_area = "Area"
+dimensions = "Dimensions"
+rotation = "Rotation"
+pick_points = "Pick points"
+edge = "Edge"
+inscribed_in_circle = "Inscribed in circle|Inscribed"
+circumscribed_about_circle = "Circumscribed about circle|Circumscribed"
+3p = "3P"
+2p = "2P"
+ttr = "Ttr (tan tan radius)|Ttr"
 close = "Close"
 undo = "Undo"
 yes = "Yes"
@@ -100,6 +137,18 @@ remove = "Remove"
 multiple = "Multiple"
 auto = "AUto"
 single = "SIngle"
+displacement = "Displacement"
+mode = "mOde"
+single_mode = "Single"
+array = "Array"
+copy = "Copy"
+reference = "Reference"
+points = "Points"
+fit = "Fit"
+rectangular = "Rectangular"
+polar = "Polar|po"
+path = "PAth"
+base = "Base"
 
 [cmd.select.prompt]
 first_corner = "Specify first corner"
@@ -121,14 +170,35 @@ invalid = "Invalid selection"
 expects = "Expects a point or Window/Last/Crossing/BOX/ALL/Fence/WPolygon/CPolygon/Group/Add/Remove/Multiple/Previous/Undo/AUto/SIngle"
 
 [cmd.line.prompt]
+length = "Specify line length"
 first_point = "Specify first point"
 next_point = "Specify next point"
 
 [cmd.pline.prompt]
+arc_endpoint = "Specify endpoint of arc"
+start_width = "Specify starting width"
+end_width = "Specify ending width"
+start_halfwidth = "Specify starting half-width"
+end_halfwidth = "Specify ending half-width"
+length = "Specify length of line segment"
+included_angle = "Specify included angle"
+center = "Specify center point of arc"
+chord_length = "Specify length of chord"
+direction = "Specify the tangent direction for the start point of arc"
+radius = "Specify radius of arc"
+second_point = "Specify second point on arc"
+chord_direction = "Specify direction of chord for arc"
 start_point = "Specify start point"
 next_point = "Specify next point"
 
 [cmd.circle.prompt]
+first_point = "Specify first point on circle"
+second_point = "Specify second point on circle"
+third_point = "Specify third point on circle"
+diameter_first = "Specify first end point of circle's diameter"
+diameter_second = "Specify second end point of circle's diameter"
+tangent_first = "Specify point on object for first tangent of circle"
+tangent_second = "Specify point on object for second tangent of circle"
 center = "Specify center point for circle"
 diameter = "Specify diameter of circle"
 radius = "Specify radius of circle"
@@ -141,16 +211,61 @@ no_object_found = "No object found."
 no_object_at_point = "No object found at that point."
 
 [cmd.arc.prompt]
+center = "Specify center point of arc"
+included_angle = "Specify included angle"
+chord_length = "Specify length of chord"
+tangent_direction = "Specify tangent direction for the start point of arc"
+radius = "Specify radius of arc"
 start_point = "Specify start point of arc"
 second_point = "Specify second point of arc"
 end_point = "Specify end point of arc"
 
 [cmd.arc.msg]
+no_solution = "No arc fits those values."
 collinear = "The points are collinear; no arc was drawn."
 
 [cmd.rectang.prompt]
+chamfer_first = "Specify first chamfer distance for rectangles"
+chamfer_second = "Specify second chamfer distance for rectangles"
+fillet = "Specify fillet radius for rectangles"
+width = "Specify line width for rectangles"
+elevation = "Specify the elevation for rectangles"
+thickness = "Specify the thickness for rectangles"
+length = "Specify length for rectangles"
+dim_width = "Specify width for rectangles"
+area = "Enter area of rectangle in current units"
+based_on = "Calculate rectangle dimensions based on"
+enter_length = "Enter rectangle length"
+enter_width = "Enter rectangle width"
+rotation = "Specify rotation angle"
+rot_first = "Specify first point"
+rot_second = "Specify second point"
 first_corner = "Specify first corner point"
 other_corner = "Specify other corner point"
+
+[cmd.pline.msg]
+current_width = "Current line-width is %s"
+width_negative = "The width must not be negative."
+no_arc = "No arc fits those values."
+
+[cmd.circle.msg]
+collinear = "The points are collinear; no circle was drawn."
+no_tangent_object = "No line, circle or arc found at that point."
+no_ttr = "Circle does not exist."
+
+[cmd.rectang.msg]
+negative = "The value must not be negative."
+
+[cmd.polygon.prompt]
+sides = "Enter number of sides"
+center = "Specify center of polygon"
+option = "Enter an option"
+radius = "Specify radius of circle"
+edge_first = "Specify first endpoint of edge"
+edge_second = "Specify second endpoint of edge"
+
+[cmd.polygon.msg]
+sides = "Requires an integer between 3 and 1024."
 
 [cmd.common.prompt]
 select_objects = "Select objects"
@@ -161,6 +276,43 @@ base_point = "Specify base point"
 second_point = "Specify second point"
 scale_factor = "Specify scale factor"
 rotation_angle = "Specify rotation angle"
+second_point_or = "Specify second point or"
+displacement = "Specify displacement <0.0000, 0.0000, 0.0000>"
+use_first = "use first point as displacement"
+copy_mode = "Enter a copy mode option"
+array_items = "Enter number of items to array"
+rotate_ref = "Specify the reference angle"
+rotate_new = "Specify the new angle"
+scale_ref = "Specify reference length"
+scale_new = "Specify new length"
+first_point = "Specify first point"
+
+[cmd.modify.msg]
+rotate_header = "Current positive angle in UCS:  ANGDIR=counterclockwise  ANGBASE=0"
+rotate_copy = "Rotating a copy of the selected objects."
+scale_copy = "Scaling a copy of the selected objects."
+
+[cmd.array.prompt]
+type = "Enter array type"
+type_cli = "Enter the type of array"
+rows = "Enter the number of rows (---)"
+columns = "Enter the number of columns (|||)"
+row_dist = "Enter the distance between rows or specify unit cell (---)"
+col_dist = "Specify the distance between columns (|||)"
+cell = "Specify opposite corner of unit cell"
+center = "Specify center point of array"
+items = "Enter the number of items in the array"
+fill = "Specify the angle to fill (+=ccw, -=cw)"
+rotate = "Rotate arrayed objects as they are copied?"
+
+[cmd.array.msg]
+type = "Type = %s  Associative = No"
+path = "ARRAYPATH is not supported: arrays are made as explicit copies, Rectangular or Polar."
+count = "Requires an integer value of at least 1 (items: 2) and at most 32767."
+too_many = "Too many copies: the array would exceed the limit."
+
+[cmd.oops.msg]
+nothing = "Nothing to restore."
 
 [cmd.undo.msg]
 everything_undone = "Everything has been undone."
@@ -282,15 +434,36 @@ radius_too_large = "Radius is too large for the lines."
 [cmd.trim.prompt]
 select_object = "Select object to trim"
 select_edges = "Select cutting edges <select all>"
+mode = "Enter a trimming mode option"
+
+[cmd.trimext.prompt]
+select_edges = "Select objects or <select all>"
+erase = "Select objects to erase or <exit>"
+edge_mode = "Enter an implied edge extension mode"
+project = "Enter a projection option"
+
+[cmd.trimext.msg]
+settings = "Current settings: Projection=%s, Edge=%s"
+settings_quick = "Current settings: Projection=%s, Edge=%s, Mode=Quick"
+nothing_to_undo = "Nothing to undo."
+
+[cmd.trimext.word]
+none = "None"
+ucs = "UCS"
+view = "View"
+extend = "Extend"
 
 [cmd.trim.msg]
+select_edges = "Select cutting edges ..."
 cannot_trim = "Cannot trim this object."
 no_intersection = "Object does not intersect an edge."
 
 [cmd.extend.prompt]
 select_object = "Select object to extend"
+mode = "Enter an extension mode option"
 
 [cmd.extend.msg]
+select_edges = "Select boundary edges ..."
 closed_polyline = "Cannot extend a closed polyline."
 cannot_extend = "Cannot extend this object."
 no_boundary = "No boundary edge in the extension of that end."
@@ -299,6 +472,12 @@ no_boundary = "No boundary edge in the extension of that end."
 second_point = "Specify second break point"
 first_point = "Specify first break point"
 
+[cmd.breakatpoint.prompt]
+point = "Specify break point"
+
+[cmd.breakatpoint.msg]
+closed = "Cannot break a closed object at a single point."
+
 [cmd.break.msg]
 cannot_break = "Cannot break this object."
 circle_one_point = "Cannot break a circle at a single point."
@@ -306,6 +485,7 @@ circle_one_point = "Cannot break a circle at a single point."
 [cmd.join.prompt]
 select_source = "Select source object or multiple objects to join at once"
 select_others = "Select objects to join to source"
+select_arcs = "Select arcs to join to source"
 
 [cmd.join.msg]
 cannot_join_source = "Cannot join the source object."
@@ -314,6 +494,13 @@ skipped_other = "%d objects cannot be joined."
 joined_one = "%d object joined."
 joined_other = "%d objects joined."
 none_joined = "0 objects joined."
+joined_line_one = "%d line joined to source"
+joined_line_other = "%d lines joined to source"
+joined_arc_one = "%d arc joined to source"
+joined_arc_other = "%d arcs joined to source"
+joined_source_one = "%d object joined to source"
+joined_source_other = "%d objects joined to source"
+closed = "Arc converted to a circle."
 
 [cmd.explode.prompt]
 select = "Select objects to explode"
@@ -567,7 +754,7 @@ open_release_tip = "Open release page — shows the release on GitHub, to downlo
 badge_tip = "Update available — version %s; open the settings to install it"
 restart_title = "Restart to finish the update?"
 restart_body = "Version %s is installed. go-draw restarts now. This drawing has edits that may not be saved; unsaved changes are lost."
-restart_now = "Restart now"
+restart_now = "Restart and update"
 restart_now_tip = "Restart now — closes go-draw and opens the new version"
 restart_later = "Later"
 restart_later_tip = "Later — keeps working; the new version starts the next time you open go-draw"
@@ -592,15 +779,21 @@ aliases = ["C"]
 
 [cmd.arc]
 name = "Arc"
-desc = "Draws an arc through three points"
-tip = "Arc — draws an arc through three points (ARC / A)"
+desc = "Draws an arc from points, centre, angle, chord length, radius or direction"
+tip = "Arc — draws an arc from points, centre, angle, chord length, radius or direction (ARC / A)"
 aliases = ["A"]
 
 [cmd.rectang]
 name = "Rectangle"
-desc = "Draws a rectangle from two opposite corners"
-tip = "Rectangle — draws a rectangle from two opposite corners (RECTANG / REC)"
+desc = "Draws a rectangle from two corners or its dimensions, with optional chamfer, fillet or width"
+tip = "Rectangle — draws a rectangle from two corners or its dimensions, with optional chamfer, fillet or width (RECTANG / REC)"
 aliases = ["REC"]
+
+[cmd.polygon]
+name = "Polygon"
+desc = "Draws a regular polygon from its centre and radius, or from one edge"
+tip = "Polygon — draws a regular polygon from its centre and radius, or from one edge (POLYGON / POL)"
+aliases = ["POL"]
 
 [cmd.erase]
 name = "Erase"
@@ -745,6 +938,12 @@ name = "Break"
 desc = "Breaks an object between two points"
 tip = "Break — breaks an object between two points (BREAK / BR)"
 aliases = ["BR"]
+
+[cmd.breakatpoint]
+name = "Break at point"
+desc = "Splits an object in two at one point"
+tip = "Break at point — splits an object in two at one point (BREAKATPOINT)"
+aliases = []
 
 [cmd.join]
 name = "Join"

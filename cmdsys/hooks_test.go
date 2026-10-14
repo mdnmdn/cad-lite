@@ -71,8 +71,8 @@ func TestLastEntityAndPrevious(t *testing.T) {
 		if p := ctx.LastPoint(); p != geom.V(10, 10) {
 			t.Errorf("LastPoint = %v", p)
 		}
-		if _, _, ok := ctx.LastEnd(); ok {
-			t.Error("LastEnd is unset until a draw command records it")
+		if p, tan, ok := ctx.LastEnd(); !ok || p != geom.V(10, 10) || tan != math.Pi/2 {
+			t.Errorf("LastEnd = %v, %v, %v; LINE records its end and direction", p, tan, ok)
 		}
 	})
 	hs := s.Drawing().Handles()

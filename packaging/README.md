@@ -10,8 +10,9 @@ a bundle built here matches a released one apart from signing.
 | Linux | `linux/bundle.sh` | `linux/go-draw-<v>-linux-<arch>.tar.gz` | `just bundle-linux` |
 
 Version: `$VERSION`, else the tag (`v1.2.3` gives `1.2.3`), else `git describe`. A non-semver value
-(an untagged build) stamps `0.0.0` into the numeric fields. `-X main.version` is added only when
-`cmd/cad/main.go` declares a `version` variable; it does not today.
+(an untagged build) stamps `0.0.0` into the numeric fields. `-X main.version` is added when
+`cmd/cad/main.go` declares a `version` variable, which it does; the in-app updater compares it with
+the release tag. CI builds stamp `0.0.0-ci+<shortsha>`.
 
 ## Pure-Go cross builds
 
@@ -50,7 +51,8 @@ before the Inno Setup step when a certificate exists.
 ## Releasing
 
 Push a tag `v*` (`git tag v0.2.0 && git push origin v0.2.0`). `release.yml` builds all platforms,
-and the `publish` job attaches everything plus `SHA256SUMS.txt` to a GitHub Release with generated
+and the `publish` job attaches everything plus `SHA256SUMS.txt` (the in-app updater verifies its
+download against it and installs from the `.zip` and `.tar.gz`, never the `-setup.exe` or `.dmg`) to a GitHub Release with generated
 notes; a tag containing `-` is a prerelease. Run from the Actions tab (`workflow_dispatch`) to
 build artifacts without a tag; on a tag ref a manual run creates a draft release.
 

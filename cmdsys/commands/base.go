@@ -49,7 +49,8 @@ func (s *selecting) begin(ctx *cmdsys.Context) bool {
 	return true
 }
 
-// take accepts a selection response; it returns false when it was empty.
+// take accepts a selection response; it returns false when it was empty. The "N found" count is
+// printed by the selection prompt as each pick is added, so it is not repeated here.
 func (s *selecting) take(ctx *cmdsys.Context, in cmdsys.Input) bool {
 	s.hs = in.Selection
 	ctx.Selection.Clear()
@@ -57,7 +58,6 @@ func (s *selecting) take(ctx *cmdsys.Context, in cmdsys.Input) bool {
 		return false
 	}
 	ctx.SetPrevious(s.hs)
-	ctx.SayPlural("cmd.common.msg.found", len(s.hs))
 	return true
 }
 

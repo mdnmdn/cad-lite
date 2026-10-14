@@ -74,6 +74,7 @@ var tables = map[string]map[string]bool{
 	"appearance": {"theme": true, "ui_scale": true, "language": true},
 	"drawing":    {"grid": true, "osnap": true, "ortho": true, "wheel": true},
 	"agent":      {"default": true},
+	"update":     {"auto_check": true, "last_check": true},
 	"window":     {"width": true, "height": true},
 }
 
@@ -156,6 +157,18 @@ func Parse(data []byte) (Settings, []string, error) {
 				} else {
 					bad(full, "a string", v)
 				}
+			case "update.auto_check":
+				if x, ok := v.(bool); ok {
+					s.AutoUpdate = x
+				} else {
+					bad(full, "a boolean", v)
+				}
+			case "update.last_check":
+				if x, ok := v.(time.Time); ok {
+					s.LastUpdateCheck = x
+				} else {
+					bad(full, "a date and time", v)
+				}
 			case "window.width", "window.height":
 				x, ok := v.(int64)
 				if !ok {
@@ -224,6 +237,11 @@ func Marshal(s Settings) []byte {
 		"wheel = "+quote(s.Wheel))
 	section("agent", "default: the harness the agent panel selects (empty: first installed).",
 		"default = "+quote(s.DefaultAgent))
+	update := []string{"auto_check = " + strconv.FormatBool(s.AutoUpdate)}
+	if !s.LastUpdateCheck.IsZero() {
+		update = append(update, "last_check = "+s.LastUpdateCheck.UTC().Format(time.RFC3339))
+	}
+	section("update", "auto_check: look for a new release now and then. last_check: when the last check finished (set by the app).", update...)
 	section("window", "last window size in logical pixels; 0 means unset.",
 		"width = "+strconv.Itoa(s.Window.Width),
 		"height = "+strconv.Itoa(s.Window.Height))

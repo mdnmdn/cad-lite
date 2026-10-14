@@ -7,8 +7,8 @@ summary: The settings panel (theme, UI scale, drawing defaults, mouse wheel, def
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, cmd/cad/main.go]
-depends_on: [tech-ui-framework, tech-operations, feat-canvas]
+code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, cmd/cad/main.go]
+depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
 
@@ -49,9 +49,11 @@ behaviour and the default agent. Changes show at once and are saved to a TOML fi
   `Workspace.WheelMode` reports it to the canvas.
 - **Agent.** The default harness (`auto`, `opencode`, `claude`, `codex`); `auto` leaves the choice to
   the first one found on `PATH`.
+- **About and updates.** The version, the time of the last check, the automatic-check switch, a status
+  line, *Check for updates* and, when a release waits, *Update*. Everything about it is in [Updates](updates.md).
 - **Saving.** Every change is written about half a second after the last one, and on close, with the
   window's size. The panel footer shows where the file is, or that settings are kept in memory.
-  `Reset to defaults` restores every value but keeps unknown keys and the stored window size.
+  `Reset to defaults` restores every value but keeps unknown keys, the stored window size and the last update check.
 - **Loading.** The file is read at startup. A missing file gives the defaults. A value of the wrong
   type or out of range is replaced (the UI scale is clamped to 0.75 to 2.0 and snapped to 0.05, window
   sides to 320 to 16384) and one warning per value shows in the panel footer. An unknown theme name falls back to `dark`.
@@ -70,6 +72,8 @@ The file is `go-draw/settings.toml` in the OS user config folder, or `$GODRAW_CO
 | `drawing.grid`, `drawing.osnap`, `drawing.ortho` | boolean | true, true, false |
 | `drawing.wheel` | `auto`, `zoom`, `pan` | `auto` |
 | `agent.default` | harness name, or empty | empty |
+| `update.auto_check` | boolean | true |
+| `update.last_check` | timestamp, written by the app | unset |
 | `window.width`, `window.height` | logical pixels, 0 for unset | 1280, 800 |
 
 The file starts with a comment header and a comment per table; comments a user adds are not kept.
@@ -105,6 +109,7 @@ applies on the first frame. The wording of the warnings is in `i18n/locales` (`s
 - [Operations](../tech/operations.md) — where the file lives and `GODRAW_CONFIG_DIR`
 - [Drawing canvas](canvas.md) — the wheel, grid and the status-bar toggles
 - [Agent panel](agent-panel.md) — the harness the default agent selects
+- [Updates](updates.md) — the About and updates section
 
 ## Next steps
 

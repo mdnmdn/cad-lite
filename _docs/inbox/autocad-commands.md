@@ -425,8 +425,8 @@ prompt).
 Enter at first point: `Invalid input.`
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| LINE-1 | Enter at the first prompt continues from `LASTPOINT`/the last line end | P1 | S | 02 |
-| LINE-2 | After an ARC, Enter starts tangent to it with the length prompt | P3 | S | 08 |
+| LINE-1 | Enter at the first prompt continues from `LASTPOINT`/the last line end (done 2026-10-14, CW-A) | P1 | S | 02 |
+| LINE-2 | After an ARC, Enter starts tangent to it with the length prompt (done 2026-10-14, CW-A) | P3 | S | 08 |
 | LINE-3 | A single line is committed per segment but Esc keeps them (met); `U` at the first prompt when nothing is drawn restarts (met) | - | - | 01 |
 
 #### PLINE  (`PL`)
@@ -455,9 +455,9 @@ Alias `PL`. `PEDIT` is the editor (2.2 P3 list).
 Lines only; the document model has no widths.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| PLINE-1 | `Arc` mode with the 8 sub-options (bulges exist in `doc.LWPolyline`) | P1 | L | 13 |
-| PLINE-2 | `Width`/`Halfwidth` (needs per-vertex widths in `doc.LWPolyline`, `fileio/dxf`, render: cross-owner `doc` change) | P1 | M | 12 |
-| PLINE-3 | `Length`, and `Close` listed from the third vertex only (met) | P2 | S | 12 |
+| PLINE-1 | `Arc` mode with the 8 sub-options (bulges exist in `doc.LWPolyline`) (done 2026-10-14, CW-A) | P1 | L | 13 |
+| PLINE-2 | `Width`/`Halfwidth` (needs per-vertex widths in `doc.LWPolyline`, `fileio/dxf`, render: cross-owner `doc` change) (done 2026-10-14, CW-A: widths in the data only; DXF and render still ignore them) | P1 | M | 12 |
+| PLINE-3 | `Length`, and `Close` listed from the third vertex only (met) (done 2026-10-14, CW-A) | P2 | S | 12 |
 | PLINE-4 | A one-segment PLINE with Enter creates an LWPOLYLINE of two points (met) | - | - | |
 
 #### CIRCLE  (`C`)
@@ -478,11 +478,11 @@ default radius *(verify V13)*. Alias `C`.
 **Today.** Centre, radius or `[Diameter]`; radius refused when ≤ 0.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| CIRC-1 | `3P`, `2P` keywords at the centre prompt | P1 | S | 05 |
-| CIRC-2 | `Ttr` (tangent circle to two lines/arcs/circles: `geom` solver) | P1 | M | 06 |
-| CIRC-3 | Default radius `<r>` from `CIRCLERAD`; Enter accepts it | P2 | S | 33 |
+| CIRC-1 | `3P`, `2P` keywords at the centre prompt (done 2026-10-14, CW-A) | P1 | S | 05 |
+| CIRC-2 | `Ttr` (tangent circle to two lines/arcs/circles: `geom` solver) (done 2026-10-14, CW-A) | P1 | M | 06 |
+| CIRC-3 | Default radius `<r>` from `CIRCLERAD`; Enter accepts it (done 2026-10-14, CW-A) | P2 | S | 33 |
 | CIRC-4 | TTT / `3P` with `TAN` snaps (needs the TAN snap, WP3) | P3 | M | |
-| CIRC-5 | Typed `TAN` / the Diameter default `<2r>` | P3 | S | |
+| CIRC-5 | Typed `TAN` / the Diameter default `<2r>` (Diameter default `<2r>` done 2026-10-14, CW-A; typed `TAN` open) | P3 | S | |
 
 #### ARC  (`A`)
 
@@ -507,9 +507,9 @@ Ctrl key reverses the direction in some methods. Alias `A`.
 **Today.** Three points only.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| ARC-1 | `Center` keyword and Start-Center-End/Angle/Length | P1 | M | 07 |
-| ARC-2 | `End` keyword and Start-End-Angle/Direction/Radius | P1 | M | 08 |
-| ARC-3 | Center-first (`ARC C`), Enter continue | P2 | S | 08 |
+| ARC-1 | `Center` keyword and Start-Center-End/Angle/Length (done 2026-10-14, CW-A) | P1 | M | 07 |
+| ARC-2 | `End` keyword and Start-End-Angle/Direction/Radius (done 2026-10-14, CW-A) | P1 | M | 08 |
+| ARC-3 | Center-first (`ARC C`), Enter continue (done 2026-10-14, CW-A) | P2 | S | 08 |
 | ARC-4 | Collinear 3 points message (`The points are collinear; no arc was drawn.` vs AutoCAD, which prints nothing and cancels) *(verify)* | P3 | S | |
 
 #### RECTANG  (`REC`)
@@ -533,10 +533,10 @@ Alias `REC` (and `RECT`? *verify V12*).
 **Today.** Two corners; 4-vertex closed polyline.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| RECT-1 | `Dimensions` | P2 | S | 09 |
-| RECT-2 | `Chamfer`, `Fillet` (8-vertex polyline, bulges) with session memory | P2 | M | 10, 11 |
-| RECT-3 | `Rotation`, `Area` | P3 | M | |
-| RECT-4 | `Width`, `Elevation`, `Thickness` (needs widths: PLINE-2) | P3 | S | |
+| RECT-1 | `Dimensions` (done 2026-10-14, CW-A) | P2 | S | 09 |
+| RECT-2 | `Chamfer`, `Fillet` (8-vertex polyline, bulges) with session memory (done 2026-10-14, CW-A) | P2 | M | 10, 11 |
+| RECT-3 | `Rotation`, `Area` (done 2026-10-14, CW-A) | P3 | M | |
+| RECT-4 | `Width`, `Elevation`, `Thickness` (needs widths: PLINE-2) (done 2026-10-14, CW-A: Width fills `LWPolyline.Widths`; Elevation and Thickness are stored only) | P3 | S | |
 
 #### POLYGON  (`POL`)
 
@@ -550,7 +550,7 @@ closed LWPOLYLINE. Alias `POL`.
 **Today.** None.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| POLY-1 | Whole command (a closed polyline factory over `geom`) | P2 | S | 14 |
+| POLY-1 | Whole command (a closed polyline factory over `geom`) (done 2026-10-14, CW-A) | P2 | S | 14 |
 
 #### ELLIPSE `EL` and POINT `PO` (blocked by G7)
 
@@ -573,7 +573,7 @@ erase; the Delete key erases a pre-selection (parity plan). Alias `E`.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
 | ERASE-1 | Typed selection options | P1 | - | 27, 28 |
-| ERASE-2 | `OOPS` | P3 | S | |
+| ERASE-2 | `OOPS` (done 2026-10-14, CW-B1: `commands/oops.go`; restores the last ERASE with new handles) | P3 | S | |
 
 #### MOVE  (`M`)
 
@@ -583,7 +583,7 @@ second point or <use first point as displacement>:` (Enter: the base point *is* 
 **Today.** Base point, second point.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| MOVE-1 | Enter at second point = displacement from the first; `Displacement` option | P1 | S | 15 |
+| MOVE-1 | Enter at second point = displacement from the first; `Displacement` option (done 2026-10-14, CW-B1) | P1 | S | 15 |
 
 #### COPY  (`CO`, `CP`)
 
@@ -596,8 +596,8 @@ keep layer and properties; handles are new. Alias `CO`, `CP` *(verify V18)*.
 **Today.** Base point, repeated second points until Enter.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| COPY-1 | `Displacement`, `mOde`, `Undo`, `Exit`, Enter-as-displacement | P2 | S | 15 |
-| COPY-2 | `Array` | P3 | M | |
+| COPY-1 | `Displacement`, `mOde`, `Undo`, `Exit`, Enter-as-displacement (done 2026-10-14, CW-B1) | P2 | S | 15 |
+| COPY-2 | `Array` (done 2026-10-14, CW-B1: count includes the original, `Fit` toggle) | P3 | M | |
 
 #### ROTATE  (`RO`)
 
@@ -609,8 +609,8 @@ rotation is new − reference. A pick measures the angle from the base point. Al
 **Today.** Base point, angle (typed or picked).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| ROT-1 | `Copy`, `Reference` (with the two-point forms) | P1 | S | 16 |
-| ROT-2 | `ANGBASE`, `ANGDIR` honoured, the header line printed | P3 | S | |
+| ROT-1 | `Copy`, `Reference` (with the two-point forms) (done 2026-10-14, CW-B1) | P1 | S | 16 |
+| ROT-2 | `ANGBASE`, `ANGDIR` honoured, the header line printed (header printed 2026-10-14, CW-B1; `ANGBASE` and `ANGDIR` are not honoured: the angle variables wait for the units package) | P3 | S | |
 
 #### SCALE  (`SC`)
 
@@ -621,7 +621,7 @@ value.` *(verify V9)*. Alias `SC`.
 **Today.** Base, factor (typed or the click distance), non-positive refused.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| SCALE-1 | `Copy`, `Reference` | P1 | S | 17 |
+| SCALE-1 | `Copy`, `Reference` (done 2026-10-14, CW-B1) | P1 | S | 17 |
 
 #### MIRROR  (`MI`)
 
@@ -779,7 +779,7 @@ objects as they are copied? [Yes/No] <Y>:` *(verify V24)*. Alias `AR`.
 **Today.** Missing.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| ARR-1 | Non-associative rectangular and polar arrays with the `-ARRAY` prompt sequence and `ARRAYRECT`/`ARRAYPOLAR` taking counts and spacing (explicit copies) | P1 | M | 26 |
+| ARR-1 | Non-associative rectangular and polar arrays with the `-ARRAY` prompt sequence and `ARRAYRECT`/`ARRAYPOLAR` taking counts and spacing (explicit copies) (done 2026-10-14, CW-B1: `commands/array.go`) | P1 | M | 26 |
 | ARR-2 | Associative arrays, `ARRAYPATH`, grips (need a new array entity: not planned) | P3 | L | |
 
 ### 2.3 History and view
@@ -799,7 +799,7 @@ Not undoable: selection, view, system variables (except those stored in the draw
 |---|---|---|---|---|
 | UNDO-1 | `UNDO n`; `Mark`/`Back`; `BEgin`/`End` (needs journal marks and groups in `doc`: cross-owner, small API) | P2 | M | 34, 35 |
 | UNDO-2 | `U` names the undone command; `UNDO` is a distinct command; the U alias maps to `U` | P3 | S | 35 |
-| UNDO-3 | `MREDO`, `OOPS` | P3 | S | |
+| UNDO-3 | `MREDO`, `OOPS` (`OOPS` done 2026-10-14, CW-B1) | P3 | S | |
 | UNDO-4 | Undo of variable changes: not required | - | - | |
 
 #### ZOOM  (`Z`)

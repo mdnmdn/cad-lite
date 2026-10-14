@@ -217,6 +217,9 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 		p.fireLanguage()
 		ws.refreshPlaceholders()
 	}
+	if next.AutoUpdate != old.AutoUpdate {
+		ws.armAutoCheck(w, updateFirstDelay)
+	}
 	if next.Grid != old.Grid || next.OSnap != old.OSnap || next.Ortho != old.Ortho {
 		ws.applyDrawingDefaults()
 	}
@@ -311,7 +314,8 @@ func (ws *Workspace) mountSettings(cx *gpui.App, root *gpui.Div) *gpui.Div {
 		ws.win.SetUIScale(float32(p.cur.UIScale))
 		p.pendingScale = false
 	}
+	ws.startUpdates(ws.win)
 	return root.Relative().
 		OnAction(actionSettings, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.ToggleSettings(w) }).
-		Child(ws.settingsOverlay(cx))
+		Child(ws.settingsOverlay(cx), ws.updateOverlay())
 }

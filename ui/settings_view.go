@@ -22,12 +22,15 @@ const (
 
 // settingsButton is the toolbar's gear button that opens the panel.
 func (ws *Workspace) settingsButton() *gpui.Div {
-	b := gpui.NewDiv().ID("tool-settings").FlexCol().ItemsCenter().Gap(2).Px_(10).Py_(4).Rounded(4).Tooltip(i18n.T("ui.toolbar.settings_tip")).
+	b := gpui.NewDiv().ID("tool-settings").FlexCol().ItemsCenter().Gap(2).Px_(10).Py_(4).Rounded(4).Tooltip(ws.settingsTip()).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.ToggleSettings(w) }).
 		Child(NewIcon(icons.AppSettings, toolIconSize, uiText), gpui.NewText(tb("settings")).TextSize(10))
 	if ws.prefs().open {
 		b.Bg(uiAccent)
+	}
+	if _, ok := ws.UpdateAvailable(); ok {
+		b.Relative().Child(ws.updateBadge())
 	}
 	return b
 }
@@ -51,7 +54,7 @@ func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 	maxW := float32(w.Bounds().Size.W) - 2*settingsMargin
 
 	body := gpui.NewDiv().ID("settings-body").FlexCol().Gap(18).Px_(20).Pb(20).Flex1().MinH(0).OverflowYScroll().
-		Child(ws.appearanceSection(), ws.drawingSection(), ws.agentSection(), ws.settingsFooter())
+		Child(ws.appearanceSection(), ws.drawingSection(), ws.agentSection(), ws.updateSection(), ws.settingsFooter())
 
 	card := gpui.NewDiv().ID("settings-card").TrackFocus(p.focus).FlexCol().
 		SizeW(settingsWidth).MaxW(maxW).MaxH(maxH).
@@ -314,7 +317,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 		ws.smallButton("settings-reset", i18n.T("ui.settings.reset"), i18n.T("ui.settings.reset_tip"), func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
-				d.Extra, d.Window = s.Extra, s.Window
+				d.Extra, d.Window, d.LastUpdateCheck = s.Extra, s.Window, s.LastUpdateCheck
 				*s = d
 			})
 		}).Px_(12),

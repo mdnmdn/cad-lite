@@ -65,6 +65,43 @@ nearest = "Vicino"
 generic = "Snap"
 
 [kw]
+project = "Proietta"
+erase = "Cancella"
+boundary_edges = "Bordi limite"
+extend = "Estendi"
+no_extend = "Non estendi"
+none = "Nessuno"
+ucs = "Ucs"
+view = "Vista"
+quick = "Rapida"
+standard = "Standard"
+center = "Centro"
+end = "Fine"
+chord_length = "Lunghezza corda"
+direction = "Direzione"
+length = "Lunghezza"
+width = "LArghezza"
+arc = "ARco"
+halfwidth = "Metà larghezza"
+arc_angle = "ANgolo"
+pline_center = "CEntro"
+close_arc = "CHiudi"
+line = "Linea"
+second_pt = "Secondo punto"
+chamfer = "SMusso"
+elevation = "Elevazione"
+fillet = "Raccordo"
+thickness = "SPessore"
+rect_area = "Area"
+dimensions = "Dimensioni"
+rotation = "Rotazione"
+pick_points = "Punti"
+edge = "Lato"
+inscribed_in_circle = "Inscritto nel cerchio|Inscritto"
+circumscribed_about_circle = "Circoscritto intorno al cerchio|Circoscritto"
+3p = "3P"
+2p = "2P"
+ttr = "Ttr (tangente tangente raggio)|Ttr"
 close = "Chiudi"
 undo = "Annulla"
 yes = "Sì|Si"
@@ -99,6 +136,18 @@ remove = "RImuovi"
 multiple = "Multiplo"
 auto = "AUto"
 single = "SIngolo"
+displacement = "Spostamento"
+mode = "mOdalità"
+single_mode = "Singola"
+array = "Serie"
+copy = "Copia"
+reference = "Riferimento"
+points = "Punti"
+fit = "Adatta"
+rectangular = "Rettangolare"
+polar = "Polare|po"
+path = "PErcorso"
+base = "Base"
 
 [cmd.select.prompt]
 first_corner = "Specificare primo angolo"
@@ -120,14 +169,35 @@ invalid = "Selezione non valida"
 expects = "Previsto un punto o Finestra/Ultimo/Incrocio/BOX/TUtto/Recinto/FPoligono/IPoligono/Gruppo/AGgiungi/RImuovi/Multiplo/PRecedente/Annulla/AUto/SIngolo"
 
 [cmd.line.prompt]
+length = "Specificare lunghezza della linea"
 first_point = "Specificare primo punto"
 next_point = "Specificare punto successivo"
 
 [cmd.pline.prompt]
+arc_endpoint = "Specificare punto finale dell'arco"
+start_width = "Specificare larghezza iniziale"
+end_width = "Specificare larghezza finale"
+start_halfwidth = "Specificare semilarghezza iniziale"
+end_halfwidth = "Specificare semilarghezza finale"
+length = "Specificare lunghezza del segmento di linea"
+included_angle = "Specificare angolo incluso"
+center = "Specificare centro dell'arco"
+chord_length = "Specificare lunghezza della corda"
+direction = "Specificare la direzione tangente per il punto iniziale dell'arco"
+radius = "Specificare raggio dell'arco"
+second_point = "Specificare secondo punto dell'arco"
+chord_direction = "Specificare direzione della corda dell'arco"
 start_point = "Specificare punto iniziale"
 next_point = "Specificare punto successivo"
 
 [cmd.circle.prompt]
+first_point = "Specificare primo punto sul cerchio"
+second_point = "Specificare secondo punto sul cerchio"
+third_point = "Specificare terzo punto sul cerchio"
+diameter_first = "Specificare primo estremo del diametro del cerchio"
+diameter_second = "Specificare secondo estremo del diametro del cerchio"
+tangent_first = "Specificare punto sull'oggetto per la prima tangente del cerchio"
+tangent_second = "Specificare punto sull'oggetto per la seconda tangente del cerchio"
 center = "Specificare punto centrale del cerchio"
 diameter = "Specificare diametro del cerchio"
 radius = "Specificare raggio del cerchio"
@@ -140,16 +210,61 @@ no_object_found = "Nessun oggetto trovato."
 no_object_at_point = "Nessun oggetto trovato in quel punto."
 
 [cmd.arc.prompt]
+center = "Specificare centro dell'arco"
+included_angle = "Specificare angolo incluso"
+chord_length = "Specificare lunghezza della corda"
+tangent_direction = "Specificare direzione tangente per il punto iniziale dell'arco"
+radius = "Specificare raggio dell'arco"
 start_point = "Specificare punto iniziale dell'arco"
 second_point = "Specificare secondo punto dell'arco"
 end_point = "Specificare punto finale dell'arco"
 
 [cmd.arc.msg]
+no_solution = "Nessun arco corrisponde a questi valori."
 collinear = "I punti sono allineati; nessun arco disegnato."
 
 [cmd.rectang.prompt]
+chamfer_first = "Specificare prima distanza di smusso per i rettangoli"
+chamfer_second = "Specificare seconda distanza di smusso per i rettangoli"
+fillet = "Specificare raggio di raccordo per i rettangoli"
+width = "Specificare larghezza di linea per i rettangoli"
+elevation = "Specificare la quota per i rettangoli"
+thickness = "Specificare lo spessore per i rettangoli"
+length = "Specificare lunghezza per i rettangoli"
+dim_width = "Specificare larghezza per i rettangoli"
+area = "Immettere area del rettangolo nelle unità correnti"
+based_on = "Calcolare le dimensioni del rettangolo in base a"
+enter_length = "Immettere lunghezza del rettangolo"
+enter_width = "Immettere larghezza del rettangolo"
+rotation = "Specificare angolo di rotazione"
+rot_first = "Specificare primo punto"
+rot_second = "Specificare secondo punto"
 first_corner = "Specificare primo angolo"
 other_corner = "Specificare angolo opposto"
+
+[cmd.pline.msg]
+current_width = "Larghezza di linea corrente: %s"
+width_negative = "La larghezza non deve essere negativa."
+no_arc = "Nessun arco corrisponde a questi valori."
+
+[cmd.circle.msg]
+collinear = "I punti sono allineati; nessun cerchio disegnato."
+no_tangent_object = "Nessuna linea, cerchio o arco trovato in quel punto."
+no_ttr = "Il cerchio non esiste."
+
+[cmd.rectang.msg]
+negative = "Il valore non deve essere negativo."
+
+[cmd.polygon.prompt]
+sides = "Immettere numero di lati"
+center = "Specificare centro del poligono"
+option = "Immettere un'opzione"
+radius = "Specificare raggio del cerchio"
+edge_first = "Specificare primo estremo del lato"
+edge_second = "Specificare secondo estremo del lato"
+
+[cmd.polygon.msg]
+sides = "Richiede un intero tra 3 e 1024."
 
 [cmd.common.prompt]
 select_objects = "Selezionare oggetti"
@@ -160,6 +275,43 @@ base_point = "Specificare punto base"
 second_point = "Specificare secondo punto"
 scale_factor = "Specificare fattore di scala"
 rotation_angle = "Specificare angolo di rotazione"
+second_point_or = "Specificare secondo punto o"
+displacement = "Specificare spostamento <0.0000, 0.0000, 0.0000>"
+use_first = "usare il primo punto come spostamento"
+copy_mode = "Inserire un'opzione di modalità di copia"
+array_items = "Inserire il numero di elementi della serie"
+rotate_ref = "Specificare l'angolo di riferimento"
+rotate_new = "Specificare il nuovo angolo"
+scale_ref = "Specificare la lunghezza di riferimento"
+scale_new = "Specificare la nuova lunghezza"
+first_point = "Specificare primo punto"
+
+[cmd.modify.msg]
+rotate_header = "Angolo positivo corrente nel SCU:  ANGDIR=antiorario  ANGBASE=0"
+rotate_copy = "Rotazione di una copia degli oggetti selezionati."
+scale_copy = "Scala di una copia degli oggetti selezionati."
+
+[cmd.array.prompt]
+type = "Inserire il tipo di serie"
+type_cli = "Inserire il tipo di serie"
+rows = "Inserire il numero di righe (---)"
+columns = "Inserire il numero di colonne (|||)"
+row_dist = "Inserire la distanza tra le righe o specificare la cella unitaria (---)"
+col_dist = "Specificare la distanza tra le colonne (|||)"
+cell = "Specificare l'angolo opposto della cella unitaria"
+center = "Specificare il centro della serie"
+items = "Inserire il numero di elementi della serie"
+fill = "Specificare l'angolo da riempire (+=antiorario, -=orario)"
+rotate = "Ruotare gli oggetti della serie durante la copia?"
+
+[cmd.array.msg]
+type = "Tipo = %s  Associativa = No"
+path = "ARRAYPATH non è supportato: le serie sono copie esplicite, Rettangolari o Polari."
+count = "Richiesto un intero di almeno 1 (elementi: 2) e al massimo 32767."
+too_many = "Troppe copie: la serie supererebbe il limite."
+
+[cmd.oops.msg]
+nothing = "Niente da ripristinare."
 
 [cmd.undo.msg]
 everything_undone = "Tutto è stato annullato."
@@ -283,15 +435,36 @@ radius_too_large = "Il raggio è troppo grande per le linee."
 [cmd.trim.prompt]
 select_object = "Selezionare oggetto da tagliare"
 select_edges = "Selezionare bordi di taglio <seleziona tutto>"
+mode = "Inserire un'opzione di modalità di taglio"
+
+[cmd.trimext.prompt]
+select_edges = "Selezionare oggetti o <seleziona tutto>"
+erase = "Selezionare oggetti da cancellare o <esci>"
+edge_mode = "Inserire una modalità di estensione implicita dei bordi"
+project = "Inserire un'opzione di proiezione"
+
+[cmd.trimext.msg]
+settings = "Impostazioni correnti: Proiezione=%s, Bordo=%s"
+settings_quick = "Impostazioni correnti: Proiezione=%s, Bordo=%s, Modalità=Rapida"
+nothing_to_undo = "Niente da annullare."
+
+[cmd.trimext.word]
+none = "Nessuno"
+ucs = "SCU"
+view = "Vista"
+extend = "Estendi"
 
 [cmd.trim.msg]
+select_edges = "Selezionare bordi di taglio ..."
 cannot_trim = "Impossibile tagliare questo oggetto."
 no_intersection = "L'oggetto non interseca un bordo."
 
 [cmd.extend.prompt]
 select_object = "Selezionare oggetto da estendere"
+mode = "Inserire un'opzione di modalità di estensione"
 
 [cmd.extend.msg]
+select_edges = "Selezionare bordi limite ..."
 closed_polyline = "Impossibile estendere una polilinea chiusa."
 cannot_extend = "Impossibile estendere questo oggetto."
 no_boundary = "Nessun bordo limite nel prolungamento di quell'estremità."
@@ -300,6 +473,12 @@ no_boundary = "Nessun bordo limite nel prolungamento di quell'estremità."
 second_point = "Specificare secondo punto di interruzione"
 first_point = "Specificare primo punto di interruzione"
 
+[cmd.breakatpoint.prompt]
+point = "Specificare punto di interruzione"
+
+[cmd.breakatpoint.msg]
+closed = "Impossibile spezzare un oggetto chiuso in un solo punto."
+
 [cmd.break.msg]
 cannot_break = "Impossibile spezzare questo oggetto."
 circle_one_point = "Impossibile spezzare un cerchio in un solo punto."
@@ -307,6 +486,7 @@ circle_one_point = "Impossibile spezzare un cerchio in un solo punto."
 [cmd.join.prompt]
 select_source = "Selezionare oggetto di origine o più oggetti da unire insieme"
 select_others = "Selezionare oggetti da unire all'origine"
+select_arcs = "Selezionare archi da unire all'origine"
 
 [cmd.join.msg]
 cannot_join_source = "Impossibile unire l'oggetto di origine."
@@ -315,6 +495,13 @@ skipped_other = "%d oggetti non possono essere uniti."
 joined_one = "%d oggetto unito."
 joined_other = "%d oggetti uniti."
 none_joined = "0 oggetti uniti."
+joined_line_one = "%d linea unita all'origine"
+joined_line_other = "%d linee unite all'origine"
+joined_arc_one = "%d arco unito all'origine"
+joined_arc_other = "%d archi uniti all'origine"
+joined_source_one = "%d oggetto unito all'origine"
+joined_source_other = "%d oggetti uniti all'origine"
+closed = "Arco convertito in cerchio."
 
 [cmd.explode.prompt]
 select = "Selezionare oggetti da esplodere"
@@ -600,16 +787,22 @@ aliases = ["CERCHIO"]
 
 [cmd.arc]
 name = "Arco"
-desc = "Disegna un arco passante per tre punti"
-tip = "Arco — disegna un arco passante per tre punti (ARCO / A)"
+desc = "Disegna un arco da punti, centro, angolo, lunghezza della corda, raggio o direzione"
+tip = "Arco — disegna un arco da punti, centro, angolo, lunghezza della corda, raggio o direzione (ARCO / A)"
 aliases = ["ARCO"]
 
 [cmd.rectang]
 name = "Rettangolo"
-desc = "Disegna un rettangolo da due angoli opposti"
-tip = "Rettangolo — disegna un rettangolo da due angoli opposti (RETTANGOLO / REC)"
+desc = "Disegna un rettangolo da due angoli o dalle dimensioni, con smusso, raccordo o larghezza opzionali"
+tip = "Rettangolo — disegna un rettangolo da due angoli o dalle dimensioni, con smusso, raccordo o larghezza opzionali (RETTANGOLO / REC)"
 # (verify)
 aliases = ["RETTANGOLO", "RETTANG"]
+
+[cmd.polygon]
+name = "Poligono"
+desc = "Disegna un poligono regolare dal centro e dal raggio, o da un lato"
+tip = "Poligono — disegna un poligono regolare dal centro e dal raggio, o da un lato (POLIGONO / POL)"
+aliases = ["POLIGONO"]
 
 [cmd.erase]
 name = "Cancella"
@@ -771,6 +964,12 @@ desc = "Spezza un oggetto tra due punti"
 tip = "Spezza — spezza un oggetto tra due punti (SPEZZA / BR)"
 # (verify)
 aliases = ["SPEZZA"]
+
+[cmd.breakatpoint]
+name = "Spezza in punto"
+desc = "Divide un oggetto in due in un solo punto"
+tip = "Spezza in punto — divide un oggetto in due in un solo punto (SPEZZAINPUNTO)"
+aliases = ["SPEZZAINPUNTO"]
 
 [cmd.join]
 name = "Unisci"

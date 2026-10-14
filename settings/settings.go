@@ -11,6 +11,7 @@ package settings
 import (
 	"math"
 	"strings"
+	"time"
 
 	"go-draw/i18n"
 )
@@ -82,6 +83,10 @@ type Settings struct {
 	// DefaultAgent names the harness the agent panel selects; empty means the
 	// first one installed.
 	DefaultAgent string
+	// AutoUpdate turns the periodic background check for a new release on or off.
+	AutoUpdate bool
+	// LastUpdateCheck is when the last check for a release finished; zero means never.
+	LastUpdateCheck time.Time
 	// Window is the size to open the window at.
 	Window Window
 	// Extra round-trips keys this version does not know. Top-level keys are
@@ -92,13 +97,14 @@ type Settings struct {
 // Default returns the settings of a fresh install.
 func Default() Settings {
 	return Settings{
-		Theme:    DefaultTheme,
-		Language: LangAuto,
-		UIScale:  1,
-		Grid:     true,
-		OSnap:    true,
-		Wheel:    WheelAuto,
-		Window:   Window{Width: 1280, Height: 800},
+		Theme:      DefaultTheme,
+		Language:   LangAuto,
+		UIScale:    1,
+		Grid:       true,
+		OSnap:      true,
+		Wheel:      WheelAuto,
+		AutoUpdate: true,
+		Window:     Window{Width: 1280, Height: 800},
 	}
 }
 

@@ -55,8 +55,13 @@ func parseKeyword(v string) kwEntry {
 	return e
 }
 
-// shortcutOf returns the capital letters of kw, or its upper-cased first letter.
+// shortcutOf returns the capital letters of kw, or its upper-cased first letter. A keyword that
+// starts with a digit ("3P", "2P") is its own shortcut: its capitals alone would be the same
+// letter for both.
 func shortcutOf(kw string) string {
+	if r := []rune(kw); len(r) > 0 && unicode.IsDigit(r[0]) {
+		return strings.ToUpper(kw)
+	}
 	var b strings.Builder
 	for _, r := range kw {
 		if unicode.IsUpper(r) {
@@ -155,7 +160,30 @@ func keywordMatches(e kwEntry, t string) bool {
 var KeywordGroups = map[string][]string{
 	"LINE/PLINE next point": {"Close", "Undo"},
 	"LINE/PLINE (no close)": {"Undo"},
+	"TRIM standard":         {"Fence", "Crossing", "Project", "Edge", "eRase", "Undo"},
+	"TRIM quick":            {"cuTting edges", "Crossing", "mOde", "Project", "eRase", "Undo"},
+	"EXTEND standard":       {"Fence", "Crossing", "Project", "Edge", "Undo"},
+	"EXTEND quick":          {"Boundary edges", "Crossing", "mOde", "Project", "eRase", "Undo"},
+	"TRIM/EXTEND edge mode": {"Extend", "No extend"},
+	"TRIM/EXTEND project":   {"None", "Ucs", "View"},
+	"TRIM/EXTEND mode":      {"Quick", "Standard"},
 	"CIRCLE radius":         {"Diameter"},
+	"CIRCLE center":         {"3P", "2P", "Ttr"},
+	"PLINE line mode":       {"Arc", "Close", "Halfwidth", "Length", "Undo", "Width"},
+	"PLINE arc mode":        {"Arc angle", "Pline center", "Close arc", "Direction", "Halfwidth", "Line", "Radius", "Second pt", "Undo", "Width"},
+	"PLINE arc angle end":   {"Pline center", "Radius"},
+	"PLINE arc radius end":  {"Arc angle"},
+	"PLINE arc center end":  {"Arc angle", "Length"},
+	"ARC start":             {"Center"},
+	"ARC second point":      {"Center", "End"},
+	"ARC center end":        {"Angle", "chord Length"},
+	"ARC end center":        {"Angle", "Direction", "Radius"},
+	"RECTANG first corner":  {"Chamfer", "Elevation", "Fillet", "Thickness", "Width"},
+	"RECTANG other corner":  {"Rect area", "Dimensions", "Rotation"},
+	"RECTANG area basis":    {"Length", "Width"},
+	"RECTANG rotation":      {"Pick points"},
+	"POLYGON center":        {"Edge"},
+	"POLYGON option":        {"Inscribed in circle", "Circumscribed about circle"},
 	"MIRROR erase source":   {"Yes", "No"},
 	"OFFSET distance":       {"Through"},
 	"OFFSET select/side":    {"Exit"},
@@ -167,4 +195,15 @@ var KeywordGroups = map[string][]string{
 	"BREAK second point":    {"First point"},
 	"TRIM select":           {"cuTting edges"},
 	"MEASUREGEOM option":    {"Distance", "Radius", "Angle", "ARea"},
+	"MOVE/COPY base point":  {"Displacement"},
+	"COPY base point":       {"Displacement", "mOde"},
+	"COPY mode":             {"Single mode", "Multiple"},
+	"COPY second point":     {"Array"},
+	"COPY repeat":           {"Array", "Exit", "Undo"},
+	"COPY array end":        {"Fit"},
+	"ROTATE/SCALE value":    {"Copy", "Reference"},
+	"ROTATE/SCALE new":      {"Points"},
+	"ARRAY type":            {"Rectangular", "PAth", "Polar"},
+	"-ARRAY type":           {"Rectangular", "Polar"},
+	"ARRAY polar center":    {"Base"},
 }

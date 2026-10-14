@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDefaults(t *testing.T) {
@@ -210,5 +211,36 @@ func TestPathDefaultsToUserConfigDir(t *testing.T) {
 		if err != nil || p != "/xdg/go-draw/settings.toml" {
 			t.Fatalf("Path = %q, %v", p, err)
 		}
+	}
+}
+
+func TestUpdateSettings(t *testing.T) {
+	d := Default()
+	if !d.AutoUpdate || !d.LastUpdateCheck.IsZero() {
+		t.Fatalf("defaults: %+v", d)
+	}
+	if strings.Contains(string(Marshal(d)), "last_check =") {
+		t.Error("an unset last_check is written")
+	}
+	d.AutoUpdate = false
+	d.LastUpdateCheck = time.Date(2026, 10, 14, 9, 30, 0, 0, time.UTC)
+	text := Marshal(d)
+	if !strings.Contains(string(text), "[update]") || !strings.Contains(string(text), "last_check = 2026-10-14T09:30:00Z") {
+		t.Fatalf("file:\n%s", text)
+	}
+	got, warn, err := Parse(text)
+	if err != nil || len(warn) != 0 {
+		t.Fatal(warn, err)
+	}
+	if got.AutoUpdate || !got.LastUpdateCheck.Equal(d.LastUpdateCheck) {
+		t.Errorf("round trip: %+v", got)
+	}
+	_, warn, _ = Parse([]byte("[update]\nauto_check = \"yes\"\nlast_check = 5\n"))
+	if len(warn) != 2 {
+		t.Errorf("wrong types give %d warnings: %v", len(warn), warn)
+	}
+	s, _, _ := Parse([]byte("[update]\nchannel = \"beta\"\n"))
+	if !s.AutoUpdate || s.Extra["update.channel"] != "beta" || !strings.Contains(string(Marshal(s)), `channel = "beta"`) {
+		t.Errorf("unknown key in update not kept: %+v", s.Extra)
 	}
 }

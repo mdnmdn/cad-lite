@@ -2,6 +2,6 @@
 # Expected state after running 11_rectang_fillet.scr in AutoCAD 2024/2025 from the preamble state.
 # (verify) start vertex of a filleted rectangle (the harness accepts any rotation)
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: fail
+go-draw: pass
 lwpolyline closed 10,0 90,0/0.4142135624 100,10 100,40/0.4142135624 90,50 10,50/0.4142135624 0,40 0,10/0.4142135624
 count 1

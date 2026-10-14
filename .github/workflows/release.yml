@@ -126,6 +126,8 @@ jobs:
           pattern: release-*
           path: dist
           merge-multiple: true
+      # The in-app updater verifies its download against this file (updater.ChecksumFiles),
+      # so it must list every archive; keep the name.
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS.txt

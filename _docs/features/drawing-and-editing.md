@@ -7,7 +7,7 @@ summary: Every built-in command with its prompts and aliases, how selection, obj
 read_when: you are adding or changing a command, an alias, or what a click does while a command runs
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/commands/select.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/snap.go]
+code_anchors: [cmdsys/commands/array.go, cmdsys/commands/oops.go, cmdsys/commands/draw.go, cmdsys/commands/pline.go, cmdsys/commands/circle.go, cmdsys/commands/arc.go, cmdsys/commands/arcgeom.go, cmdsys/commands/rect.go, cmdsys/commands/polygon.go, geom/tangent.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/commands/select.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/snap.go]
 depends_on: [tech-command-system, tech-document-model]
 review_cycle: monthly
 ---
@@ -30,16 +30,19 @@ on a typed keyword forces the English one.
 
 | Command | Aliases | Prompts and behaviour |
 |---|---|---|
-| LINE | L | First point, then next points `[Undo]`, `[Close/Undo]` from the third point; each segment is a separate line. Enter ends; Undo removes the last segment; Close draws back to the first point and ends |
-| PLINE | PL | Start point, then next points `[Undo]` / `[Close/Undo]`; one polyline is created when the command ends (Enter, Close or Escape) |
-| CIRCLE | C | Center, then radius `[Diameter]`; a click gives the distance from the centre |
-| ARC | A | Start, second and end point; the arc passes through all three. Collinear points draw nothing |
-| RECTANG | REC | Two opposite corners; a closed four-vertex polyline |
-| ERASE | E | Erases the selection |
-| MOVE | M | Selection, base point, second point |
-| COPY | CO, CP | Selection, base point, then second points until Enter, one copy each |
-| ROTATE | RO | Selection, base point, rotation angle (typed degrees, or a click measured from the base) |
-| SCALE | SC | Selection, base point, scale factor (typed, or the click's distance from the base) |
+| LINE | L | First point (Enter continues from the last line or arc end, else `LASTPOINT`; after an arc it asks `Specify line length:` for a tangent line), then next points `[Undo]`, `[Close/Undo]` from the third point; each segment is a separate line. Enter ends; Undo removes the last segment; Close draws back to the first point and ends. Each segment records the end and direction for the next Enter-continue |
+| PLINE | PL | Start point (prints `Current line-width is …`, starting from `PLINEWID`), then `[Arc/Close/Halfwidth/Length/Undo/Width]` (Close from the third vertex). Width and Halfwidth ask start then end width and apply to later segments (stored in `LWPolyline.Widths`; the renderer and the DXF codec do not use them yet); Length draws along the previous direction; Undo drops a segment. Arc mode `[Angle/CEnter/CLose/Direction/Halfwidth/Line/Radius/Second pt/Undo/Width]` draws a tangent arc to the point by default and the Angle, CEnter, Direction, Radius and Second pt sequences otherwise, as bulges; Line returns to line mode. One polyline is created when the command ends (Enter, Close or Escape) |
+| CIRCLE | C | Center, then radius `[Diameter] <CIRCLERAD>` (Enter takes the remembered radius; a click gives the distance from the centre). `3P`, `2P` and `Ttr` at the first prompt: three points, two diameter ends, or two tangent objects (line, circle, arc or polyline segment) and a radius, choosing the solution nearest the picks (`geom.NearestTangentCircle`; `Circle does not exist.` when none) |
+| ARC | A | Start `[Center]` (Enter continues tangent from the last line or arc end), then second point `[Center/End]` and end point (three points; collinear points draw nothing). Start-Center-End/`[Angle/chord Length]`, Start-End-`[Angle/Direction/Radius]` and Center-first sequences; a positive angle, chord or radius is the minor arc counter-clockwise, a negative one clockwise or major |
+| RECTANG | REC | First corner `[Chamfer/Elevation/Fillet/Thickness/Width]`, then other corner `[Area/Dimensions/Rotation]`. Chamfer and Fillet cancel each other, Width, Elevation and Thickness stay set for later RECTANGs (session variables `DRAW_RECT*`). Dimensions and Area fix the size and the pick chooses the quadrant; Rotation takes an angle or `[Pick points]`. A closed polyline of 4 vertices, 8 with chamfer or fillet (bulge tan(π/8)); too big a chamfer or fillet draws a plain rectangle |
+| POLYGON | POL | `Enter number of sides <POLYSIDES>` (3 to 1024), then centre `[Edge]` and `[Inscribed in circle/Circumscribed about circle] <I>` (remembered) and the radius: a click puts a vertex (inscribed) or an edge midpoint (circumscribed) at the point, a typed radius gives a horizontal bottom edge. `Edge` takes two endpoints and builds counter-clockwise from them. A closed polyline |
+| ERASE | E | Erases the selection. The set is remembered for OOPS |
+| OOPS | — | Restores the objects the last ERASE removed (layer and properties kept, new handles), once, as one undo step; `Nothing to restore.` when there is none |
+| MOVE | M | Selection, `Specify base point or [Displacement] <Displacement>:`, then `Specify second point or <use first point as displacement>:`. Enter at the second point moves by the base point taken as a vector; `Displacement` (or Enter at the base prompt) asks `Specify displacement <0.0000, 0.0000, 0.0000>:` for a vector |
+| COPY | CO, CP | As MOVE, with `[Displacement/mOde]` at the base point and `[Array]`, then `[Array/Exit/Undo] <Exit>` after the first copy: second points make one copy each until Enter or `Exit`; `Undo` takes the last copy back; Enter at the first second-point prompt copies by the base point as a vector. `mOde` `[Single/Multiple]` sets `COPYMODE` (Single ends after one copy). `Array` asks `Enter number of items to array <2>:` (the original counts) then `Specify second point or [Fit]:`: the second point is the spacing, or with `Fit` the position of the last item. Copies keep layer and properties |
+| ROTATE | RO | Prints `Current positive angle in UCS:  ANGDIR=counterclockwise  ANGBASE=0` (the two variables are not honoured), selection, base point, `Specify rotation angle or [Copy/Reference] <0>:` (typed degrees, or a click measured from the base). `Copy` keeps the originals and asks again. `Reference` asks the reference angle (a number, or two points) and `Specify the new angle or [Points] <0>:` (a number, a click from the base, or `Points`: two points); the rotation is new minus reference |
+| SCALE | SC | Selection, base point, `Specify scale factor or [Copy/Reference] <1>:` (typed, or the click's distance from the base). `Copy` keeps the originals. `Reference` asks the reference length (a number, or two points) and `Specify new length or [Points] <1>:`; the factor is new over reference. Zero or negative values are refused |
+| ARRAY, ARRAYRECT, ARRAYPOLAR, -ARRAY | AR, -AR | Explicit, non-associative copies (go-draw has no array object). `-ARRAY`: selection, `[Rectangular/Polar] <R>`; rectangular asks rows, columns, `distance between rows or specify unit cell` (two corners) and the column distance (a distance is skipped for a single row or column; negative goes down or left); polar asks `center point of array or [Base]`, the number of items (2 or more), `angle to fill (+=ccw, -=cw) <360>` (360 spreads the items over the circle, less puts the last on the fill angle) and `Rotate arrayed objects as they are copied? <Y>` (No translates the base point around the centre, the selection's centre by default). `ARRAY` first asks `[Rectangular/PAth/Polar]` (PAth is refused), `ARRAYRECT` and `ARRAYPOLAR` skip the type and print `Type = … Associative = No`; all share the `-ARRAY` prompts. At most 100000 copies. The last point of each command, a click or typed point, becomes `LASTPOINT` |
 | UNDO | U | Undoes the last command; `Everything has been undone.` when nothing is left |
 | REDO | — | Redoes the last undone command |
 | ZOOM | Z | A window by two corners, or `[Extents/Window]`; Enter is Extents |
@@ -115,7 +118,7 @@ with their handles. Selections, view changes and layer table edits are not undoa
 
 The draw commands are in `cmdsys/commands/draw.go` (`lineCmd`, `plineCmd`, `circleCmd`, `arcCmd`,
 `rectCmd`), the modify commands in `modify.go` (`eraseCmd`, `moveCmd` for MOVE and COPY,
-`transformCmd` for ROTATE and SCALE, all sharing `selecting`), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, the construct commands in `construct.go` (`mirrorCmd`, `offsetCmd`, `cornerCmd` for FILLET and CHAMFER, on `geom/offset.go` and `geom/fillet.go`), the trim family in `trim.go` (`trimCmd`, `extendCmd`, `breakCmd`, `joinCmd`, `explodeCmd`, on `geom/split.go`), and one file per remaining group: `view.go` (ZOOM, `ZoomExtents`), `layer.go`, `inquiry.go` (DIST, ID, LIST),
+`transformCmd` for ROTATE and SCALE, all sharing `selecting`), `array.go` (`arrayCmd`) and `oops.go` (`rememberErased`, OOPS), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, the construct commands in `construct.go` (`mirrorCmd`, `offsetCmd`, `cornerCmd` for FILLET and CHAMFER, on `geom/offset.go` and `geom/fillet.go`), the trim family in `trim.go` (`trimCmd`, `extendCmd`, `breakCmd`, `joinCmd`, `explodeCmd`, on `geom/split.go`), and one file per remaining group: `view.go` (ZOOM, `ZoomExtents`), `layer.go`, `inquiry.go` (DIST, ID, LIST),
 `files.go` (NEW, OPEN, SAVE), `undo.go` (UNDO, REDO). `register.go` holds `Register`, which calls one `registerX` per
 file, and `aliases.go` the `Aliases` text; `base.go` holds the helpers every command shares (`base`, `selecting`,
 `immediate`). Snaps, picking and box selection are
@@ -144,8 +147,7 @@ snap like any point click.
 
 ## Next steps
 
-- STRETCH, ARRAY and MATCHPROP.
+- STRETCH and MATCHPROP; associative arrays and ARRAYPATH.
 - FILLET and CHAMFER on arcs, circles and polylines; the TRIM, Multiple and Undo options of OFFSET, FILLET and CHAMFER.
 - Grip editing and a properties palette.
 - Polar tracking, object snap tracking, and the Perpendicular, Tangent and Extension snaps.
-- PLINE arc segments.

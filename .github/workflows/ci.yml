@@ -41,6 +41,10 @@ jobs:
           go vet ./...
           go test -race ./...
       - run: go run ./tools/docs lint
+      - name: Build the desktop app with a stamped version
+        run: |
+          go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/go-draw" ./cmd/cad
+          test "$("$RUNNER_TEMP/go-draw" -version)" = "go-draw 0.0.0-ci+${GITHUB_SHA::7}"
       - name: Build for the browser
         run: GOOS=js GOARCH=wasm go build -o "$RUNNER_TEMP/cad.wasm" ./cmd/cad
 
@@ -82,7 +86,7 @@ jobs:
           go-version-file: go.mod
       - name: Build the app
         shell: bash
-        run: go build -o "$RUNNER_TEMP/go-draw" ./cmd/cad
+        run: go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/go-draw" ./cmd/cad
       # Only packages that need no window; the UI tests render with the real gpui stack.
       - name: Test pure packages
         run: go test ./geom/... ./doc/... ./spatial/... ./fileio/... ./cmdsys/... ./render

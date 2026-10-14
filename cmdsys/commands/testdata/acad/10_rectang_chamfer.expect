@@ -2,6 +2,6 @@
 # Expected state after running 10_rectang_chamfer.scr in AutoCAD 2024/2025 from the preamble state.
 # (verify) start vertex of a chamfered rectangle (the harness accepts any rotation)
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: fail
+go-draw: pass
 lwpolyline closed 5,0 95,0 100,5 100,45 95,50 5,50 0,45 0,5
 count 1

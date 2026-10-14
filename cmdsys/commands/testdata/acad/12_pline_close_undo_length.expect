@@ -2,7 +2,7 @@
 # Expected state after running 12_pline_close_undo_length.scr in AutoCAD 2024/2025 from the preamble state.
 # (verify) L (Length) draws collinear with the previous segment
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: fail
+go-draw: pass
 lwpolyline open 0,0 50,0 100,0
 lwpolyline open 0,100 50,100 80,100
 lwpolyline closed 0,200 100,200 100,250

@@ -43,6 +43,10 @@ plurals, localized command keywords and command aliases. It imports nothing of t
 
 The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenplatform` as its display backend.
 
+`updater` is a second stdlib-only leaf: it finds, downloads, verifies and installs GitHub releases and
+restarts the application. Only `ui` and `cmd/cad` use it; it imports nothing of the project. See
+[Updates](../features/updates.md).
+
 AI agents attach on the side: `cadmcp` exposes the drawing as MCP tools on top of `cmdsys`, and the
 nested module `agentmanager` runs the agent CLIs and the MCP server; `ui` hosts the chat panel that
 joins them. `agentmanager` imports nothing from go-draw. See [Agent integration](agent-integration.md).

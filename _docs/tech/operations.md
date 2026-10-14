@@ -7,7 +7,7 @@ summary: How to build, run, test and render go-draw, build the browser binary, a
 read_when: you need a build, run, test or docs command, or you are changing one
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [settings/file.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, .github/workflows/release.yml, .github/workflows/ci.yml]
+code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -126,6 +126,19 @@ share `packaging/lib.sh`, so a `just bundle-*` recipe builds what the workflow r
 (gofmt, vet, tests, the `agentmanager` module with `-race`, docs lint, the wasm build), `gui` (the
 real-window scenarios under Xvfb) and `cross` (a `CGO_ENABLED=0` build and the pure-package tests on
 Windows and macOS).
+
+### Release steps and update assets
+
+1. Push a tag `vX.Y.Z` (a tag with `-` is a pre-release and is never offered by the [updater](../features/updates.md)).
+2. `packaging/lib.sh` turns the tag into the version and every bundle script links it with
+   `-ldflags "-X main.version=X.Y.Z"` (also into `Info.plist` and the Windows version resource).
+   CI stamps `0.0.0-ci+<shortsha>` so its binaries show where they came from.
+3. The release carries, per platform: `go-draw-X.Y.Z-windows-<amd64|arm64>.zip` and
+   `go-draw-X.Y.Z-windows-<arch>-setup.exe`, `go-draw-X.Y.Z-macos-universal.zip` and `.dmg`,
+   `go-draw-X.Y.Z-linux-amd64.tar.gz`, and `SHA256SUMS.txt` (sha256sum format, every file). The
+   updater installs from the zips and the tar.gz and verifies them against `SHA256SUMS.txt`; renaming
+   an asset means changing `updater.AssetName` too.
+4. `GODRAW_NO_UPDATE=1` turns the in-app update checks off.
 
 ## Related docs
 

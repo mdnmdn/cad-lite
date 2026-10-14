@@ -494,7 +494,7 @@ func (h *sHarness) settingsBubble() bool {
 }
 
 func TestSettingsControlsHaveTooltips(t *testing.T) {
-	h := openSettingsApp(t)
+	h := openSettingsWS(t, NewWorkspace(doc.New(), nil), 900, 1000, 1) // tall: the footer sits below the updates section
 	h.openPanel()
 	for _, id := range []string{"settings-close", "theme-light", "ui-scale-down", "ui-scale-up", "ui-scale-reset",
 		"lang-it", "set-grid", "set-osnap", "set-ortho", "wheel-pan", "agent-claude", "settings-reset"} {
