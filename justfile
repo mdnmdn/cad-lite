@@ -1,10 +1,14 @@
 # go-draw tasks. Each recipe is a plain command, so `just` is optional.
 
-# gofmt, vet and test everything
-check:
+# gofmt, vet and test everything, including the nested agentmanager module
+check: check-agentmanager
     test -z "$(gofmt -l .)"
     go vet ./...
     go test ./...
+
+# gofmt, vet and test the nested agentmanager module (not covered by ./... from the root)
+check-agentmanager:
+    cd agentmanager && test -z "$(gofmt -l .)" && go vet ./... && go test ./...
 
 # run the desktop app
 run *args:

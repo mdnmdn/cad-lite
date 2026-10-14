@@ -28,7 +28,8 @@ commit. Read `_docs/_meta/authoring.md` first; it is short and self-sufficient.*
 5. **Style.** A doc comment on every exported identifier; comments elsewhere only when the reason
    is non-obvious.
 6. **Verification before done.** `gofmt -l .` prints nothing, `go vet ./...`, `go test ./...` and
-   `go run ./tools/docs lint` pass. Run `go mod tidy` after adding an import.
+   `go run ./tools/docs lint` pass; also `just check-agentmanager` (`cd agentmanager && go vet ./... &&
+   go test ./...`, the nested module). Run `go mod tidy` after adding an import.
 7. **Bug fixes get a regression test** that fails first.
 8. **Rendering changes are checked visually.** Render with `go run ./cmd/cad -png _tmp/x.png`
    (see `_docs/tech/operations.md` for flags) before and after, and look at the images.
