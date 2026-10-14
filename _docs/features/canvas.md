@@ -116,7 +116,7 @@ Every clickable control carries a tooltip that appears after the pointer rests o
 what it does, shortcut or alias), the gear and agent buttons, the layer rows (make current), the
 visibility pills and the colour swatches, the status bar toggles and the coordinates readout, and
 every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
-languages. The bubble follows the theme (`tooltipStyle`) and stays on one line.
+languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and grows to the wrapped height.
 
 ### Status bar
 

@@ -105,8 +105,8 @@ registry holds them weakly).
 `tooltipStyle(Theme)` in `ui/theme.go`: `Field` fill, `Border` outline, `Text` colour, gpui's default
 size and 500 ms delay. `Workspace.Render` hands it to `App.SetTooltipStyle` on the first frame and
 again whenever the current theme differs from the one last applied, so a theme switch restyles the
-bubbles. The style leaves `MaxWidth` at zero: gpui sizes a wrapped bubble one line high, so tips stay
-on one line and are clamped to the window.
+bubbles. The style sets `MaxWidth` to 320: longer text wraps at that width and the bubble grows to the
+wrapped height (`\n` is a hard break, as in "Name (CMD)\nDescription"); it is clamped to the window.
 
 ## UI scale
 

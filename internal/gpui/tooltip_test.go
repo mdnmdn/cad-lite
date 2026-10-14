@@ -195,3 +195,37 @@ func TestTooltipStyleDelay(t *testing.T) {
 		t.Fatal("custom delay ignored")
 	}
 }
+
+func TestTooltipWrappedTextBubbleCoversAllLines(t *testing.T) {
+	long := "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron"
+	build := func(text string) func() gpui.IntoElement {
+		return func() gpui.IntoElement {
+			return gpui.NewDiv().SizeFull().Child(gpui.NewDiv().SizeWH(60, 30).Bg(gpui.Blue500).Tooltip(text))
+		}
+	}
+	height := func(text string, maxW float32) gpui.Bounds {
+		r := newTipRig(t, 400, 300, build(text))
+		st := r.app.TooltipStyle()
+		st.MaxWidth = maxW
+		r.app.SetTooltipStyle(st)
+		r.move(10, 10)
+		r.advance(t, 600*time.Millisecond)
+		b, ok := r.bubble()
+		if !ok {
+			t.Fatal("tooltip not shown")
+		}
+		return b
+	}
+	one := height("Alpha", 120)
+	wrapped := height(long, 120)
+	if wrapped.Width() > 121 {
+		t.Fatalf("bubble wider than MaxWidth: %v", wrapped)
+	}
+	if wrapped.Height() < one.Height()*3 {
+		t.Fatalf("bubble %v (one line %v) does not cover the wrapped lines", wrapped, one)
+	}
+	hard := height("one\ntwo", 0)
+	if hard.Height() < one.Height()+10 {
+		t.Fatalf("newline is not a hard break: %v vs %v", hard, one)
+	}
+}

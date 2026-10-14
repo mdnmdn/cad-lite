@@ -41,12 +41,12 @@ func (r *tipRig) hover(x, y gpui.Pixels, wait time.Duration) {
 	}
 }
 
-// bubble reports whether the themed tooltip bubble is in the scene: a one-line
-// quad with the theme's border colour and a width no button has.
+// bubble reports whether the themed tooltip bubble is in the scene: a
+// tooltip-sized quad with the theme's border colour and a width no button has.
 func (r *tipRig) bubble() bool {
 	th := ui.CurrentTheme()
 	for _, q := range r.hw.Window().Scene().Quads {
-		if q.BorderColor == th.Border && q.Bounds.Size.W > 150 && q.Bounds.Size.H < 40 {
+		if q.BorderColor == th.Border && q.Bounds.Size.W > 150 && q.Bounds.Size.H < 80 {
 			return true
 		}
 	}

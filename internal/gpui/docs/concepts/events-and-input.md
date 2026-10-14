@@ -85,7 +85,8 @@ update.
 pointer wins. After the pointer rests on it for `TooltipStyle.Delay` (a move
 restarts the wait) a bubble appears below the pointer, painted above the whole
 tree and clamped inside the window; flipped above the pointer near the bottom
-edge. It never takes input. It hides when the pointer leaves, on mouse down,
+edge. Text wraps at `TooltipStyle.MaxWidth` and the bubble grows to the wrapped
+height; `\n` is a hard line break. It never takes input. It hides when the pointer leaves, on mouse down,
 scroll and key press, and stays hidden until the pointer re-enters the element.
 
 Style the bubble app-wide with `App.SetTooltipStyle` (colours, font size,

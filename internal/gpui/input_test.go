@@ -217,3 +217,22 @@ func TestTextInputFocusedHeightAndCaret(t *testing.T) {
 		}
 	}
 }
+
+func TestTextInputSetPlaceholderRerenders(t *testing.T) {
+	p := gpui.NewHeadlessPlatform()
+	app := gpui.NewAppWithPlatform(p)
+	in := gpui.NewTextInput("a")
+	if err := app.OpenWindow(gpui.WindowOptions{Width: 300, Height: 80}, func(*gpui.Window, *gpui.App) gpui.EntityRoot {
+		return gpui.RenderFunc(func(w *gpui.Window, cx *gpui.App) gpui.IntoElement { return in.Render(w, cx) })
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w := p.Windows()[0].Window()
+	p.Windows()[0].Pixels()
+	n := len(w.Scene().Sprites)
+	in.SetPlaceholder("a much longer placeholder")
+	p.Windows()[0].Pixels()
+	if got := len(w.Scene().Sprites); got <= n {
+		t.Fatalf("placeholder not re-rendered: %d sprites before, %d after", n, got)
+	}
+}

@@ -131,6 +131,15 @@ func newAgentPanel(ws *Workspace) *AgentPanel {
 	return p
 }
 
+// refreshPlaceholders re-reads the placeholders from the catalog after a
+// language change.
+func (ws *Workspace) refreshPlaceholders() {
+	ws.input.SetPlaceholder(i18n.T("ui.cmdline.placeholder"))
+	if ws.agent != nil {
+		ws.agent.input.SetPlaceholder(i18n.T("ui.agent.input_placeholder"))
+	}
+}
+
 // AgentPanel returns the workspace's agent chat panel, creating it on first
 // use; nothing agent related exists before that.
 func (ws *Workspace) AgentPanel() *AgentPanel {

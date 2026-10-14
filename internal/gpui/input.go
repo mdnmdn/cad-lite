@@ -65,6 +65,15 @@ func (t *TextInput) SetText(s string) {
 	}
 }
 
+// SetPlaceholder replaces the placeholder text and refreshes the window if the
+// field has been rendered.
+func (t *TextInput) SetPlaceholder(s string) {
+	t.placeholder = s
+	if t.win != nil {
+		t.win.Refresh()
+	}
+}
+
 // FocusHandle returns the handle the field renders with, allocating it from
 // the App on first use. It is only valid after Render has run at least once.
 func (t *TextInput) FocusHandle() *FocusHandle { return t.focus }

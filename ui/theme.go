@@ -58,8 +58,6 @@ func themeField(in *gpui.TextInput) *gpui.TextInput {
 func tooltipStyle(t Theme) gpui.TooltipStyle {
 	s := gpui.DefaultTooltipStyle()
 	s.Background, s.Border, s.Foreground = t.Field, t.Border, t.Text
-	// gpui sizes a wrapped bubble one line high, so tips stay on one line
-	// (the bubble is still clamped to the window).
-	s.MaxWidth = 0
+	s.MaxWidth = 320
 	return s
 }

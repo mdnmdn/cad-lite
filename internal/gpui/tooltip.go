@@ -178,6 +178,9 @@ func (w *Window) paintTooltip(cx *App) {
 		return
 	}
 	Layout(node, Available{})
+	if node.Rect.Size.W >= Pixels(maxW) {
+		Layout(node, UnboundedHeight(maxW))
+	}
 	sz := node.Rect.Size
 	x, y := t.pos.X, t.pos.Y+Pixels(st.Offset)
 	if y+sz.H > win.Height() {

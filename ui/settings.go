@@ -130,6 +130,7 @@ func (ws *Workspace) applySettings(s settings.Settings, w *gpui.Window) {
 	ws.applyAppearance(w)
 	ws.applyDrawingDefaults()
 	p.fireLanguage()
+	ws.refreshPlaceholders()
 	if h := s.DefaultAgent; h != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(h), "")
 	}
@@ -182,6 +183,7 @@ func (ws *Workspace) SetLanguageHandler(f func(lang string)) {
 	p.onLanguage = f
 	if f != nil {
 		f(p.cur.Language)
+		ws.refreshPlaceholders()
 	}
 }
 
@@ -213,6 +215,7 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 	if next.Language != old.Language {
 		i18n.Set(i18n.FromSetting(next.Language))
 		p.fireLanguage()
+		ws.refreshPlaceholders()
 	}
 	if next.Grid != old.Grid || next.OSnap != old.OSnap || next.Ortho != old.Ortho {
 		ws.applyDrawingDefaults()

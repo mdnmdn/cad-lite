@@ -777,6 +777,8 @@ func (a *App) TooltipStyle() TooltipStyle
   `Offset` below the pointer with its left edge at the pointer, flipped above
   the pointer if it would overflow the bottom, then clamped inside
   `Window.Bounds()`; its width is capped at min(`MaxWidth`, window width).
+- Text wraps at that cap and the bubble is sized to the wrapped height (every
+  line is inside the bubble); `"\n"` in the text is a hard line break.
 - Style values are logical pixels inside the tree, so `Window.UIScale` applies.
   Text uses the default font family; the style has no font family field.
 
@@ -811,6 +813,8 @@ func (a *App) TooltipStyle() TooltipStyle
   `Offset` below the pointer with its left edge at the pointer, flipped above
   the pointer if it would overflow the bottom, then clamped inside
   `Window.Bounds()`; its width is capped at min(`MaxWidth`, window width).
+- Text wraps at that cap and the bubble is sized to the wrapped height (every
+  line is inside the bubble); `"\n"` in the text is a hard line break.
 - Style values are logical pixels inside the tree, so `Window.UIScale` applies.
   Text uses the default font family; the style has no font family field.
 
@@ -1352,6 +1356,9 @@ func NewTextInput(placeholder string) *TextInput
 // Text returns the current value.
 func (t *TextInput) Text() string
 func (t *TextInput) SetText(s string)
+// SetPlaceholder replaces the placeholder text and refreshes the window if
+// the field has been rendered.
+func (t *TextInput) SetPlaceholder(s string)
 func (t *TextInput) FocusHandle() *FocusHandle
 // Render returns the element to render; it emits TextSubmitted on Enter. It
 // returns IntoElement (not Element) so it composes directly inside Child.
