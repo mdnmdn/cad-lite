@@ -32,8 +32,14 @@ DPI, long paths) and version info. `bundle.sh` runs `go-winres make` (install wi
 Go links it automatically for that GOARCH. The `.syso` files are generated and deleted when the
 script exits; do not commit them. The exe is linked with `-H=windowsgui`, so it has no console.
 
-The installer (`cad-lite.iss`) is per-user, no admin, with optional desktop icon and `.dxf`
-association. Build by hand: `iscc /DMyAppVersion=1.2.3 /DMyArch=amd64 packaging\windows\cad-lite.iss`.
+The installer (`cad-lite.iss`) is per-user and needs no admin (`/ALLUSERS` on the command line
+installs per machine into Program Files). It installs `cad-lite.exe` into `{autopf}\Cad-lite`, with
+an optional desktop icon, and registers the shell integration: the `CadLite.Drawing` file type,
+Cad-lite in "Open with" for `.dxf` and `.dwg`, the default program for `.dxf` (task, ticked) and `.dwg`
+(task, unticked), and an "Open in Cad-lite" right-click entry (task, ticked). The registry keys, the
+uninstall rules and the `cad-lite.exe "<path>"` contract are in `_docs/tech/operations.md`
+(Windows installer). ISCC runs only on Windows, so a `.iss` change is checked by the `release`
+workflow or by hand. Build by hand: `iscc /DMyAppVersion=1.2.3 /DMyArch=amd64 packaging\windows\cad-lite.iss`.
 
 ## macOS signing and notarization
 

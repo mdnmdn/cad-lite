@@ -4,10 +4,10 @@ title: DXF files
 kind: feature
 status: current
 summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the command line and the -open flag, how warnings and errors are reported, and where the lossy edges are.
-read_when: you are changing OPEN, SAVE, the Open and Save buttons, the file dialogs or the -open flag, which file types they accept, or how file problems are reported to the user
+read_when: you are changing OPEN, SAVE, the Open and Save buttons, the file dialogs or the -open flag, which file types they accept, how file problems are reported to the user, or the Windows file associations
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+code_anchors: [packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -80,6 +80,22 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   again when R12 has its class. Entities of classes R12 lacks (SPLINE, MTEXT, HATCH, ELLIPSE and
   custom classes) are left out of the saved file, with a warning that names each one. The
   `list_entities` agent tool lists them with `unknown: true`.
+
+### Opening from Windows Explorer
+
+The Windows installer registers Cad-lite with the shell; the keys are listed in
+[Operations](../tech/operations.md).
+
+- Double-clicking a `.dxf` file opens it in Cad-lite when the installer's *Open .dxf files with
+  Cad-lite by default* box was ticked (it is by default) and the user has not picked another program
+  in Explorer. `.dwg` files become Cad-lite's only when *Open .dwg files with Cad-lite by default* is
+  ticked (it is not by default).
+- Cad-lite is always listed under "Open with" for `.dxf` and `.dwg`, and in Settings → Default apps.
+- *Add "Open in Cad-lite" to the right-click menu* (ticked by default) adds that entry to `.dxf` and
+  `.dwg` files whatever program opens them.
+- Each of these starts `cad-lite.exe "<path>"`: the path as the first argument opens the drawing as
+  `-open` does.
+- Uninstalling removes all of it and gives a default back only while it is still Cad-lite's.
 
 ### Warnings
 
