@@ -41,7 +41,7 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	ws.session.SetFiles(files)
 	ws.attach(d)
 	ws.session.OnDrawing(ws.attach)
-	ws.input = gpui.NewTextInput("Type a command")
+	ws.input = themeField(gpui.NewTextInput("Type a command"))
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
 	ws.input.OnChange(func(text string, w *gpui.Window, _ *gpui.App) {
@@ -267,7 +267,7 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement) *gpui.Div {
 		lines,
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(8).Px_(10).Py_(6).Child(
 			gpui.NewText(ws.session.Prompt()).FontWeight(700).FlexShrink(0),
-			gpui.NewDiv().Flex1().FlexCol().TextColor(gpui.Gray900).Child(cmdline),
+			gpui.NewDiv().Flex1().FlexCol().Child(cmdline),
 		),
 	)
 }

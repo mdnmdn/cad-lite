@@ -18,7 +18,7 @@ go mod tidy
 
 Requires Go 1.26+. There is no cgo, and all drawing is done by a CPU
 rasterizer; ebiten only presents the finished pixels. A system font is
-needed for text (see [concepts/text.md](concepts/text.md); `GPUI_FONT` points
+used for text when present, else the bundled Go font (see [concepts/text.md](concepts/text.md); `GPUI_FONT` points
 at a specific file). Try the repo itself first:
 
 ```

@@ -268,13 +268,11 @@ func (a *App) OpenWindow(o WindowOptions, build func(*Window, *App) EntityRoot) 
 }
 
 // defaultShaper returns the App's shared shaper, creating it on first use. It
-// is nil when no system font is available.
+// uses the bundled fallback face when no system font is available.
 func (a *App) defaultShaper() *Shaper {
 	if !a.shaperInit {
 		a.shaperInit = true
-		if DefaultFontPath() != "" {
-			a.shaper = NewShaper(NewFontManager())
-		}
+		a.shaper = NewShaper(NewFontManager())
 	}
 	return a.shaper
 }

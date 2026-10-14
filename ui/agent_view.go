@@ -91,7 +91,7 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App) *gpui.Div {
 
 	send := p.button("agent-send", "Send", true, func(w *gpui.Window) { p.Send(p.input.Text(), w) })
 	row := gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Child(
-		gpui.NewDiv().Flex1().MinW(0).FlexCol().TextColor(gpui.Gray900).Child(input), send)
+		gpui.NewDiv().Flex1().MinW(0).FlexCol().Child(input), send)
 	if p.tr.Running() {
 		row.Child(p.button("agent-cancel", "Cancel", false, p.Cancel))
 	}

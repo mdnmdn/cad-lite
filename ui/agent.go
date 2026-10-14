@@ -89,7 +89,7 @@ func newAgentPanel(ws *Workspace) *AgentPanel {
 	p := &AgentPanel{
 		ws:       ws,
 		open:     harnesses.Open,
-		input:    gpui.NewTextInput("Ask the agent"),
+		input:    themeField(gpui.NewTextInput("Ask the agent")),
 		scroll:   gpui.NewScrollHandle(),
 		expanded: map[int]bool{},
 	}

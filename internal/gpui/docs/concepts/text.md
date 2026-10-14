@@ -7,10 +7,11 @@ import `x/image` and `go-text/typesetting`.
 ## Font discovery
 
 `FontManager` loads and caches fonts. `App` creates one shared `Shaper` (and
-`FontManager`) lazily on first use; if no system font is found the shaper is
-`nil`, `Window.TextMeasurer()` returns `nil`, and text elements fall back to a
-crude estimator for layout (0.55 em per rune, greedy wrap at spaces) and paint
-nothing.
+`FontManager`) lazily on first use. If no system font is found (a minimal container,
+`js/wasm`) the shaper uses the bundled Go Regular and Bold faces, so text still
+renders; `GPUI_NO_SYSTEM_FONTS=1` forces that on any machine. Only a window
+given a `nil` measurer falls back to a crude estimator for layout (0.55 em per
+rune, greedy wrap at spaces) and paints nothing.
 
 `DefaultFontPath()` resolves the default sans-serif file:
 

@@ -46,14 +46,12 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G9 | Grips and a properties palette; the properties panel is read-only | [Drawing canvas](features/canvas.md) |
 | G10 | Polar tracking, object snap tracking, and the Perpendicular, Tangent and Extension snaps | [Command system](tech/command-system.md) |
 | G11 | PLINE arc segments | [Drawing and editing commands](features/drawing-and-editing.md) |
-| G12 | Browser build: gpui has no bundled fallback font, so text is blank in wasm; file open and save need browser APIs; the file registry is operating-system based | [Operations](tech/operations.md), [DXF files](features/dxf-files.md) |
+| G12 | Browser build: file open and save need browser APIs; the file registry is operating-system based | [Operations](tech/operations.md), [DXF files](features/dxf-files.md) |
 | G13 | Base-layer caching, the answer to R1 | [Rendering](tech/rendering.md) |
-| G14 | `TextInput` cannot be themed; the command line field is white | [UI framework](tech/ui-framework.md) |
 | G15 | The operating system cursor is not hidden over the canvas; it needs a platform API | [Drawing canvas](features/canvas.md) |
 | G16 | Layer table edits are not journalled, so they are not undoable and the render cache is cleared on every command-line submission (D11) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
 | G17 | Paper space and layouts, view rotation, UCS | [Product overview](product/overview.md) |
 | G18 | Native open and save dialogs | [DXF files](features/dxf-files.md) |
-| G19 | `TestTextInputCaretUsesFullShapedLineAtBothScales` in `internal/gpui` fails on Linux font sets | [Operations](tech/operations.md) |
 | G20 | Command-line autocomplete, history recall and F1 help | [Command line](features/command-line.md) |
 
 ## Further items

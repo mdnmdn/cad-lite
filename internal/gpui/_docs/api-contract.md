@@ -1285,7 +1285,23 @@ func (t *TextInput) OnChange(f func(string, *Window, *App)) *TextInput
 // OnEscape replaces Escape's default (blur) while any callback is registered:
 // the callbacks run and the field keeps focus.
 func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput
+// Style applies f to the field's box div after the defaults (white Bg, 1px
+// Gray300 border, Rounded 6, P 8), so f may override background, border,
+// padding, text colour/size and a focused border via Div.Focus. The text
+// colour also colours the caret. A later call replaces the earlier function;
+// a nil result from f keeps the div unchanged.
+func (t *TextInput) Style(f func(*Div) *Div) *TextInput
+// PlaceholderColor sets the placeholder colour (default Gray500).
+func (t *TextInput) PlaceholderColor(c Rgba) *TextInput
+// SelectionColor sets the selection highlight fill (default Blue500 at 25%).
+func (t *TextInput) SelectionColor(c Rgba) *TextInput
 ```
+
+Theming follows GPUI's element-styling model rather than per-property setters:
+the field's box is a `Div`, so `Style` hands it to the caller. Only the two
+colours that are not div properties (placeholder text, selection fill) get
+setters. With no `Style`, `PlaceholderColor` or `SelectionColor` call the
+rendering is unchanged.
 
 `TextInput` implements `PlatformInputHandler` internally. It is **not** an
 `Entity[T]` for the POC — it is a plain struct the root view owns by value, so
@@ -1811,7 +1827,8 @@ and `Present`s to the HeadlessWindow, which keeps the pixels. `HeadlessWindow` i
 no `FrameRequester`; `RequestFrame` only sets a pending flag, so redraws never
 re-enter an in-flight event dispatch. Text shaping is not
 headless-specific: every window created through `App.OpenWindow` gets the
-App's shared `Shaper` (one `FontManager` per App) when `DefaultFontPath() != ""`;
+App's shared `Shaper` (one `FontManager` per App), which falls back to the
+bundled Go Regular/Bold faces when no system font exists;
 `Window.SetTextMeasurer` overrides it and `Window.TextMeasurer()` returns it.
 
 Headless time starts at Unix epoch UTC and changes only through Advance.
@@ -1835,7 +1852,15 @@ type FontManager struct{ /* ... */ }
 func NewFontManager() *FontManager
 // DefaultFontPath resolves the platform's default sans font. Honors the
 // GPUI_FONT environment variable. Candidate lists per runtime.GOOS.
+// It returns "" when none exists or when system fonts are disabled (always on
+// js/wasm; elsewhere when GPUI_NO_SYSTEM_FONTS is non-empty); the FontManager
+// then resolves the default font to the bundled Go Regular face (and bold to
+// Go Bold), from golang.org/x/image/font/gofont. System fonts stay preferred
+// everywhere else, so existing renders are unchanged.
 func DefaultFontPath() string
+// NoSystemFontsEnv names GPUI_NO_SYSTEM_FONTS: when non-empty, system font
+// discovery (default, named families, fallback) is skipped.
+const NoSystemFontsEnv = "GPUI_NO_SYSTEM_FONTS"
 // Face resolves family by name against the system font directories (file-name
 // match, regular and bold files, cached; generic names "monospace", "serif",
 // "sans-serif"); unknown or "" families use the default font.
@@ -1885,7 +1910,7 @@ func (s *Shaper) ShapeWrappedScaled(text string, ts TextStyle, maxWidth, scale f
 ```
 
 `font.go`/`text.go` may import `github.com/go-text/typesetting/...` and
-`golang.org/x/image/font/sfnt`, `golang.org/x/image/vector`, `golang.org/x/image/math/fixed`.
+`golang.org/x/image/font/sfnt`, `golang.org/x/image/font/gofont/{goregular,gobold}`, `golang.org/x/image/vector`, `golang.org/x/image/math/fixed`.
 
 Default font resolution order (first existing path wins), overridable with the
 `GPUI_FONT` env var:

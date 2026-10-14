@@ -38,13 +38,22 @@ hover/focus colour and strikethrough cascade at paint time.
 ## Font discovery
 
 ```text
-func DefaultFontPath() string      // GPUI_FONT (if it names an existing file), else a per-OS candidate list; "" when none exists
+func DefaultFontPath() string      // GPUI_FONT (if it names an existing file), else a per-OS candidate list; "" when none exists or system fonts are disabled
+const NoSystemFontsEnv = "GPUI_NO_SYSTEM_FONTS"
 var ErrNoFont error                // "gpui: no usable system font found"
 ```
 
-Text APIs degrade gracefully (zero metrics, empty slices) when no font is
-found rather than panicking. `GPUI_FONT=/path/to/font.ttf` overrides the
-default.
+`GPUI_FONT=/path/to/font.ttf` overrides the default.
+
+When no system font is found, text still renders: the library bundles Go
+Regular and Go Bold (`golang.org/x/image/font/gofont`) and uses them as the
+default and bold faces. On `js/wasm` there are no system fonts, so the bundled
+faces are always used. Setting `GPUI_NO_SYSTEM_FONTS` to any non-empty value
+does the same on any platform (default, named families and fallback lookups
+skip the system), which gives identical glyphs everywhere and is what the font
+tests use. Go fonts cover Latin, Greek and Cyrillic; other scripts show
+missing-glyph boxes in the bundled face. System fonts remain preferred
+elsewhere. `ErrNoFont` is returned only if the bundled font fails to load.
 
 ## FontManager and Font
 
@@ -52,7 +61,7 @@ default.
 func NewFontManager() *FontManager       // safe for concurrent use
 
 func (m *FontManager) Load(path string) (*Font, error)                    // parse a font file; .ttc yields the first face; cached by path
-func (m *FontManager) DefaultFont() (*Font, error)                        // platform default; ErrNoFont when none
+func (m *FontManager) DefaultFont() (*Font, error)                        // platform default, else the bundled Go Regular
 func (m *FontManager) DefaultFace(size float32, weight int) (*Font, error)  // Face with the empty family
 func (m *FontManager) Face(family string, size float32, weight int) (*Font, error)
 func (m *FontManager) Fallback(r rune, size float32, weight int) *Font    // first system fallback font with a glyph for r, or nil

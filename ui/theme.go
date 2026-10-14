@@ -33,7 +33,22 @@ var (
 	uiMuted    = gpui.RgbaOf(140, 150, 162, 255)
 	uiAccent   = gpui.RgbaOf(59, 130, 246, 255)
 	uiOn       = gpui.RgbaOf(96, 165, 250, 255)
+	uiField    = gpui.RgbaOf(24, 28, 33, 255)
+	uiSelect   = gpui.RgbaOf(59, 130, 246, 110)
 	uiOK       = gpui.RgbaOf(74, 190, 110, 255)
 	uiWarn     = gpui.RgbaOf(235, 175, 60, 255)
 	uiErr      = gpui.RgbaOf(235, 90, 90, 255)
 )
+
+// themeField styles a gpui.TextInput as a dark field: uiField fill, uiBorder
+// outline that turns uiAccent while focused, uiText text and caret, uiMuted
+// placeholder and a uiSelect selection.
+func themeField(in *gpui.TextInput) *gpui.TextInput {
+	return in.
+		Style(func(d *gpui.Div) *gpui.Div {
+			return d.Bg(uiField).Border(1, uiBorder).TextColor(uiText).
+				Focus(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(1, uiAccent) })
+		}).
+		PlaceholderColor(uiMuted).
+		SelectionColor(uiSelect)
+}

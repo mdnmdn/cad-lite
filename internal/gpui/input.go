@@ -36,6 +36,10 @@ type TextInput struct {
 	measurerVersion, metricsVersion uint64
 	metrics                         []inputCaretStop
 
+	style          func(*Div) *Div
+	placeholderCol *Rgba
+	selectionCol   *Rgba
+
 	onSubmit []func(string, *Window, *App)
 	onChange []func(string, *Window, *App)
 	onEscape []func(*Window, *App)
@@ -64,6 +68,29 @@ func (t *TextInput) SetText(s string) {
 // FocusHandle returns the handle the field renders with, allocating it from
 // the App on first use. It is only valid after Render has run at least once.
 func (t *TextInput) FocusHandle() *FocusHandle { return t.focus }
+
+// Style registers a function applied to the field's box after the defaults
+// (white background, 1px gray border, rounded 6, padding 8), so it can
+// override any of them: background, border, padding, text colour and size,
+// and a focused border through Div.Focus. The text colour set here also
+// colours the caret. Calling Style again replaces the previous function.
+func (t *TextInput) Style(f func(*Div) *Div) *TextInput {
+	t.style = f
+	return t
+}
+
+// PlaceholderColor sets the colour of the placeholder text (default Gray500).
+func (t *TextInput) PlaceholderColor(c Rgba) *TextInput {
+	t.placeholderCol = &c
+	return t
+}
+
+// SelectionColor sets the fill of the selection highlight (default Blue500 at
+// 25% opacity).
+func (t *TextInput) SelectionColor(c Rgba) *TextInput {
+	t.selectionCol = &c
+	return t
+}
 
 // OnSubmit registers a callback invoked with the current text when the user
 // presses Enter while the field is focused.
@@ -103,7 +130,11 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 	}
 	var label IntoElement
 	if t.text == "" {
-		label = NewText(inputDisplayText(t.placeholder)).TextColor(Gray500).FlexShrink(0)
+		ph := Gray500
+		if t.placeholderCol != nil {
+			ph = *t.placeholderCol
+		}
+		label = NewText(inputDisplayText(t.placeholder)).TextColor(ph).FlexShrink(0)
 	} else {
 		label = NewText(inputDisplayText(t.text)).FlexShrink(0)
 	}
@@ -120,6 +151,11 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 		OnMouseDown(t.onMouseDown).
 		OnKeyDown(t.onKeyDown).
 		Child(label)
+	if t.style != nil {
+		if d := t.style(div); d != nil {
+			div = d
+		}
+	}
 	return inputElement{div: div, ti: t}
 }
 
@@ -270,9 +306,13 @@ func (e inputElement) paintSelection(w *Window) {
 	w.PushClip(t.content)
 	defer w.PopClip()
 	top := t.textOrigin.Y
+	sel := Blue500.Opacity(0.25)
+	if t.selectionCol != nil {
+		sel = *t.selectionCol
+	}
 	if t.sel.Range.Start != t.sel.Range.End {
 		start, end := t.advance(t.sel.Range.Start), t.advance(t.sel.Range.End)
-		w.PaintQuad(Quad{Bounds: Bounds{Origin: Point{X: t.textOrigin.X + start, Y: top}, Size: Size{W: maxPixels(0, end-start), H: lh}}, Background: BackgroundSolid, Fill: Blue500.Opacity(0.25)})
+		w.PaintQuad(Quad{Bounds: Bounds{Origin: Point{X: t.textOrigin.X + start, Y: top}, Size: Size{W: maxPixels(0, end-start), H: lh}}, Background: BackgroundSolid, Fill: sel})
 	}
 	w.PaintQuad(Quad{Bounds: Bounds{Origin: Point{X: t.textOrigin.X + t.advance(tiCaret(t)), Y: top}, Size: Size{W: 2, H: lh}}, Background: BackgroundSolid, Fill: t.textStyle.Color})
 }

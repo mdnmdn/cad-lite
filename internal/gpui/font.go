@@ -12,6 +12,8 @@ import (
 
 	tsfont "github.com/go-text/typesetting/font"
 	"golang.org/x/image/font"
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 )
@@ -20,6 +22,35 @@ import (
 // machine. Text APIs that depend on a font degrade gracefully (zero metrics,
 // empty slices) instead of panicking when they encounter it.
 var ErrNoFont = errors.New("gpui: no usable system font found")
+
+// Pseudo-paths naming the bundled Go fonts in the FontManager caches.
+const (
+	bundledRegularPath = "gpui:bundled/goregular"
+	bundledBoldPath    = "gpui:bundled/gobold"
+)
+
+// NoSystemFontsEnv is the environment variable that, when non-empty, makes
+// the library ignore every system font and use only the bundled fallback
+// face. It exists for deterministic renders and for testing the fallback.
+const NoSystemFontsEnv = "GPUI_NO_SYSTEM_FONTS"
+
+// systemFontsDisabled reports whether system font discovery is switched off:
+// always on js, where no font directories exist, and on request through
+// NoSystemFontsEnv.
+func systemFontsDisabled() bool {
+	return runtime.GOOS == "js" || os.Getenv(NoSystemFontsEnv) != ""
+}
+
+// bundledFontData returns the embedded font bytes for a bundled pseudo-path.
+func bundledFontData(path string) []byte {
+	switch path {
+	case bundledRegularPath:
+		return goregular.TTF
+	case bundledBoldPath:
+		return gobold.TTF
+	}
+	return nil
+}
 
 // Font is an opaque loaded font face: a parsed, immutable font file bound to
 // the size and weight it will be rendered at. Fonts are produced by a
@@ -71,8 +102,12 @@ func NewFontManager() *FontManager {
 // DefaultFontPath resolves the platform's default sans-serif font file. The
 // GPUI_FONT environment variable takes precedence when it names an existing
 // file. Otherwise a per-GOOS candidate list is walked and the first existing
-// path is returned. It returns "" when no candidate exists.
+// path is returned. It returns "" when no candidate exists or system fonts are
+// disabled; the FontManager then uses the bundled Go Regular face.
 func DefaultFontPath() string {
+	if systemFontsDisabled() {
+		return ""
+	}
 	if p := os.Getenv("GPUI_FONT"); p != "" {
 		if _, err := os.Stat(p); err == nil {
 			return p
@@ -136,9 +171,12 @@ func (m *FontManager) loadLocked(path string) (*Font, error) {
 		}
 		return f, nil
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("gpui: read font %q: %w", path, err)
+	data := bundledFontData(path)
+	if data == nil {
+		var err error
+		if data, err = os.ReadFile(path); err != nil {
+			return nil, fmt.Errorf("gpui: read font %q: %w", path, err)
+		}
 	}
 	f, err := parseFontData(data, path)
 	if err != nil {
@@ -196,7 +234,9 @@ func parseFontData(data []byte, path string) (*Font, error) {
 }
 
 // DefaultFont returns the platform default font, loading and memoizing it on
-// first use. It returns ErrNoFont when no system font could be found.
+// first use. When no system font can be found, or system fonts are disabled,
+// it is the bundled Go Regular face; ErrNoFont is returned only if even that
+// fails to load.
 func (m *FontManager) DefaultFont() (*Font, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -205,7 +245,7 @@ func (m *FontManager) DefaultFont() (*Font, error) {
 	}
 	path := DefaultFontPath()
 	if path == "" {
-		return nil, ErrNoFont
+		path = bundledRegularPath
 	}
 	f, err := m.loadLocked(path)
 	if err != nil {
@@ -282,7 +322,7 @@ func (m *FontManager) defaultLocked() (*Font, error) {
 	}
 	path := DefaultFontPath()
 	if path == "" {
-		return nil, ErrNoFont
+		path = bundledRegularPath
 	}
 	f, err := m.loadLocked(path)
 	if err != nil {
@@ -308,6 +348,10 @@ func (m *FontManager) boldLocked(base *Font) *Font {
 
 // findBoldLocked probes boldCandidates for base. Callers must hold m.mu.
 func (m *FontManager) findBoldLocked(base *Font) *Font {
+	if base.path == bundledRegularPath {
+		f, _ := m.loadLocked(bundledBoldPath)
+		return f
+	}
 	for _, p := range boldCandidates(base.path) {
 		if p == "" || p == base.path {
 			continue
@@ -422,6 +466,9 @@ func (m *FontManager) fontIndexLocked() map[string]string {
 		return m.index
 	}
 	m.index = make(map[string]string)
+	if systemFontsDisabled() {
+		return m.index
+	}
 	for _, dir := range fontDirs() {
 		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
@@ -541,7 +588,11 @@ func (m *FontManager) Fallback(r rune, size float32, weight int) *Font {
 	defer m.mu.Unlock()
 	if !m.fbLoaded {
 		m.fbLoaded = true
-		for _, p := range fallbackCandidates() {
+		var cands []string
+		if !systemFontsDisabled() {
+			cands = fallbackCandidates()
+		}
+		for _, p := range cands {
 			if _, err := os.Stat(p); err == nil {
 				m.fallback = append(m.fallback, p)
 			}

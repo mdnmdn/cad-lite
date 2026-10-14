@@ -78,10 +78,14 @@ go run ./cmd/cad -png _tmp/snap.png -demo -script "LINE 25,25" -hover 195.6,25.4
 - The interactive window needs a display and a GPU-capable ebiten backend. Agent shells usually have
   neither, and ebiten fails at startup there; verify with the headless tests and `-png` renders, and
   say which interactive behaviour was not run.
-- Fonts come from the operating system (the library searches the standard font directories). A
-  machine without them, a browser among them, renders no text.
-- One `internal/gpui` test, `TestTextInputCaretUsesFullShapedLineAtBothScales`, depends on the
-  installed fonts and fails on Linux font sets; it is tracked in the backlog.
+- Fonts come from the operating system (the library searches the standard font directories). Where
+  there are none, in a minimal container or the browser (`js/wasm`, always), the library uses its
+  bundled Go Regular and Go Bold faces (Latin, Greek and Cyrillic only), so text still renders.
+  `GPUI_NO_SYSTEM_FONTS=1` forces that on any machine, for renders that must not depend on the
+  installed fonts. The bundled fonts add about 0.3 MB to the wasm binary.
+- `TestTextInputCaretUsesFullShapedLineAtBothScales` samples one caret pixel, which depends on the
+  font's fractional advances; it runs on the bundled font (`GPUI_NO_SYSTEM_FONTS`) and so does not
+  vary with the installed fonts.
 
 ## Related docs
 

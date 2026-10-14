@@ -342,6 +342,7 @@ func TestTextInputCaretCacheUsesCurrentMeasurerAndStyle(t *testing.T) {
 }
 
 func TestTextInputCaretUsesFullShapedLineAtBothScales(t *testing.T) {
+	t.Setenv(gpui.NoSystemFontsEnv, "1")
 	for _, scale := range []float32{1, 2} {
 		ti := gpui.NewTextInput("")
 		ti.SetText("AVATAR")

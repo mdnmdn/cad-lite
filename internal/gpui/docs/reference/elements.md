@@ -148,7 +148,20 @@ struct and call `Render` every frame. Setters that mutate it call
 | `OnChange(f func(string, *Window, *App)) *TextInput` | Called on every edit made through input dispatch. |
 | `OnSubmit(f func(string, *Window, *App)) *TextInput` | Called with the text on Enter while focused. |
 | `OnEscape(f func(*Window, *App)) *TextInput` | Called on Escape while focused. With any callback registered the field keeps focus; without one, Escape blurs it. |
+| `Style(f func(*Div) *Div) *TextInput` | Applied to the field's box after the defaults (white background, 1 px `Gray300` border, `Rounded(6)`, `P(8)`), so it can override them. Set background, border, padding and text colour/size here; the text colour also colours the caret; `Div.Focus` styles the focused border. A later call replaces the earlier one. |
+| `PlaceholderColor(c Rgba) *TextInput` | Placeholder colour (default `Gray500`). |
+| `SelectionColor(c Rgba) *TextInput` | Selection highlight fill (default `Blue500` at 25% opacity). |
 | `FocusHandle() *FocusHandle` | The field's handle; valid only after `Render` has run once. |
+
+```go
+dark := gpui.RgbaOf(24, 28, 33, 255)
+in := gpui.NewTextInput("Search").
+	Style(func(d *gpui.Div) *gpui.Div {
+		return d.Bg(dark).Border(1, gpui.Gray700).TextColor(gpui.Gray100).
+			Focus(func(s *gpui.StyledMixin) *gpui.StyledMixin { return s.Border(1, gpui.Blue500) })
+	}).
+	PlaceholderColor(gpui.Gray500)
+```
 
 It also implements `PlatformInputHandler`
 ([platform.md](platform.md#text-input-surface)): `TextForRange`,
