@@ -189,10 +189,11 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		return func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { f(); w.Refresh() }
 	}
 	s := ws.session
-	return ws.withSettings(cx, gpui.NewDiv().KeyContext("cad").
-		FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13).
-		OnAction(actionUndo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("U", w) }).
-		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
+	root := gpui.NewDiv().KeyContext("cad").FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13)
+	for command, action := range commandKeys {
+		root.OnAction(action, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run(command, w) })
+	}
+	return ws.withSettings(cx, root.
 		OnAction(actionOpen, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.openFile(w) }).
 		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFile(w) }).
 		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFileAs(w) }).

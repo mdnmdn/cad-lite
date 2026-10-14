@@ -102,7 +102,9 @@ registry holds them weakly).
 ## Tooltips
 
 `Div.Tooltip(text)` is set on every button and clickable control; the text comes from the catalog
-(`i18n.T("ui.*_tip")`, `i18n.Command(name).Tip`). The bubble style is one function of the theme,
+(`i18n.T("ui.*_tip")`) or, for a button that runs a command, is composed from the command's name
+and description and its keyboard hint (`Workspace.commandTip` in `ui/tooltip.go`; the convention is in
+the [canvas](../features/canvas.md) document). The bubble style is one function of the theme,
 `tooltipStyle(Theme)` in `ui/theme.go`: `Field` fill, `Border` outline, `Text` colour, gpui's default
 size and 500 ms delay. `Workspace.Render` hands it to `App.SetTooltipStyle` on the first frame and
 again whenever the current theme differs from the one last applied, so a theme switch restyles the

@@ -762,12 +762,12 @@ history_tip = "Recent commands — lists the commands you ran lately; click one 
 history_empty = "No commands yet"
 
 [ui.toolbar]
-settings_tip = "Settings — theme, UI scale, drawing aids, language (Ctrl+, / OPTIONS)"
+settings_tip = "Theme, UI scale, drawing aids, language"
 agent_tip = "AI agent — opens the agent panel: describe a drawing in words and the agent draws it (F2 / AI)"
 ribbon_collapse_tip = "Collapse the ribbon — hides the command buttons; the commands stay on the command line"
 ribbon_expand_tip = "Show the ribbon — the Draw, Modify and Utilities buttons"
-open_tip = "Open — choose a drawing file to open (Ctrl+O / OPEN)"
-save_tip = "Save — saves the drawing to its file, or asks where when it has none; right-click for Save as (Ctrl+S / QSAVE, Ctrl+Shift+S / SAVEAS)"
+open_tip = "Chooses a drawing file to open"
+save_tip = "Saves the drawing to its file, or asks where when it has none; right-click for Save as (%s)"
 
 [ui.ribbon]
 draw = "Draw"
@@ -1035,55 +1035,46 @@ restart_later_tip = "Later — keeps working; the new version starts the next ti
 [cmd.line]
 name = "Line"
 desc = "Draws straight segments between the points you pick"
-tip = "Line — draws straight segments between the points you pick (LINE / L)"
 aliases = ["L"]
 
 [cmd.pline]
 name = "Polyline"
 desc = "Draws a connected chain of line and arc segments as one object"
-tip = "Polyline — draws a connected chain of line and arc segments as one object (PLINE / PL)"
 aliases = ["PL"]
 
 [cmd.circle]
 name = "Circle"
 desc = "Draws a circle from its centre and radius or diameter"
-tip = "Circle — draws a circle from its centre and radius or diameter (CIRCLE / C)"
 aliases = ["C"]
 
 [cmd.arc]
 name = "Arc"
 desc = "Draws an arc from points, centre, angle, chord length, radius or direction"
-tip = "Arc — draws an arc from points, centre, angle, chord length, radius or direction (ARC / A)"
 aliases = ["A"]
 
 [cmd.rectang]
 name = "Rectangle"
 desc = "Draws a rectangle from two corners or its dimensions, with optional chamfer, fillet or width"
-tip = "Rectangle — draws a rectangle from two corners or its dimensions, with optional chamfer, fillet or width (RECTANG / REC)"
 aliases = ["REC"]
 
 [cmd.polygon]
 name = "Polygon"
 desc = "Draws a regular polygon from its centre and radius, or from one edge"
-tip = "Polygon — draws a regular polygon from its centre and radius, or from one edge (POLYGON / POL)"
 aliases = ["POL"]
 
 [cmd.erase]
 name = "Erase"
 desc = "Removes the selected objects from the drawing"
-tip = "Erase — removes the selected objects from the drawing (ERASE / E)"
 aliases = ["E"]
 
 [cmd.move]
 name = "Move"
 desc = "Moves the selected objects without changing them"
-tip = "Move — moves the selected objects without changing them (MOVE / M)"
 aliases = ["M"]
 
 [cmd.stretch]
 name = "Stretch"
 desc = "Stretches the objects crossed by a window, moving the vertices and endpoints inside it"
-tip = "Stretch — stretches the objects crossed by a window, moving the vertices and endpoints inside it (STRETCH / S)"
 aliases = ["S"]
 
 [cmd.multiple.prompt]
@@ -1095,175 +1086,146 @@ hint = "Select objects to stretch by crossing-window or crossing-polygon..."
 [cmd.copy]
 name = "Copy"
 desc = "Duplicates the selected objects, leaving the originals in place"
-tip = "Copy — duplicates the selected objects, leaving the originals in place (COPY / CO)"
 aliases = ["CO", "CP"]
 
 [cmd.rotate]
 name = "Rotate"
 desc = "Turns the selected objects around a base point"
-tip = "Rotate — turns the selected objects around a base point (ROTATE / RO)"
 aliases = ["RO"]
 
 [cmd.scale]
 name = "Scale"
 desc = "Makes the selected objects bigger or smaller about a base point"
-tip = "Scale — makes the selected objects bigger or smaller about a base point (SCALE / SC)"
 aliases = ["SC"]
 
 [cmd.undo]
 name = "Undo"
 desc = "Takes back changes, or sets an undo mark or group"
-tip = "Undo — takes back changes, or sets an undo mark or group (UNDO)"
 aliases = []
 
 [cmd.u]
 name = "Undo"
 desc = "Takes back the last change"
-tip = "Undo — takes back the last change (Ctrl+Z / U)"
 aliases = ["U"]
 
 [cmd.redo]
 name = "Redo"
 desc = "Brings back the change that was just taken back"
-tip = "Redo — brings back the change that was just taken back (Ctrl+Y / REDO)"
 aliases = []
 
 [cmd.zoom]
 name = "Zoom"
 desc = "Fits the view to the drawing or to a window you pick"
-tip = "Zoom — fits the view to the drawing or to a window you pick (ZOOM / Z)"
 aliases = ["Z"]
 
 [cmd.layer]
 name = "Layer"
 desc = "Makes a layer current, or creates it as name=color"
-tip = "Layer — makes a layer current, or creates it as name=color (LAYER / LA)"
 aliases = ["LA"]
 
 [cmd.dist]
 name = "Distance"
 desc = "Measures the distance and angle between two points"
-tip = "Distance — measures the distance and angle between two points (DIST / DI)"
 aliases = ["DI"]
 
 [cmd.area]
 name = "Area"
 desc = "Measures the area and perimeter of points or of an object"
-tip = "Area — measures the area and perimeter of points or of an object (AREA / AA)"
 aliases = ["AA"]
 
 [cmd.measuregeom]
 name = "Measure geometry"
 desc = "Measures distance, radius, angle or area"
-tip = "Measure geometry — measures distance, radius, angle or area (MEASUREGEOM / MEA)"
 aliases = ["MEA"]
 
 [cmd.units]
 name = "Units"
 desc = "Sets the length and angle formats, their precision and the direction of angle 0"
-tip = "Units — sets the length and angle formats, their precision and the direction of angle 0 (UNITS / UN)"
 aliases = ["UN"]
 
 [cmd.id]
 name = "ID point"
 desc = "Reports the coordinates of a picked point"
-tip = "ID point — reports the coordinates of a picked point (ID)"
 aliases = []
 
 [cmd.list]
 name = "List"
 desc = "Lists the properties of the selected objects"
-tip = "List — lists the properties of the selected objects (LIST / LI)"
 aliases = ["LI"]
 
 [cmd.new]
 name = "New"
 desc = "Starts a new, empty drawing"
-tip = "New — starts a new, empty drawing (NEW)"
 aliases = []
 
 [cmd.open]
 name = "Open"
 desc = "Opens a drawing from a file"
-tip = "Open — opens a drawing from a file (OPEN)"
 aliases = []
 
 [cmd.save]
 name = "Save"
 desc = "Saves the drawing to a file"
-tip = "Save — saves the drawing to a file (SAVE)"
 aliases = []
 
 [cmd.mirror]
 name = "Mirror"
 desc = "Creates a mirrored copy of the selected objects about a line"
-tip = "Mirror — creates a mirrored copy of the selected objects about a line (MIRROR / MI)"
 aliases = ["MI"]
 
 [cmd.offset]
 name = "Offset"
 desc = "Creates a parallel copy of an object at a distance or through a point"
-tip = "Offset — creates a parallel copy of an object at a distance or through a point (OFFSET / O)"
 aliases = ["O"]
 
 [cmd.fillet]
 name = "Fillet"
 desc = "Rounds the corner between two objects with a radius"
-tip = "Fillet — rounds the corner between two objects with a radius (FILLET / F)"
 aliases = ["F"]
 
 [cmd.chamfer]
 name = "Chamfer"
 desc = "Bevels the corner between two lines with two distances"
-tip = "Chamfer — bevels the corner between two lines with two distances (CHAMFER / CHA)"
 aliases = ["CHA"]
 
 [cmd.trim]
 name = "Trim"
 desc = "Trims objects at the cutting edges you pick"
-tip = "Trim — trims objects at the cutting edges you pick (TRIM / TR)"
 aliases = ["TR"]
 
 [cmd.extend]
 name = "Extend"
 desc = "Extends objects up to the boundary edges"
-tip = "Extend — extends objects up to the boundary edges (EXTEND / EX)"
 aliases = ["EX"]
 
 [cmd.break]
 name = "Break"
 desc = "Breaks an object between two points"
-tip = "Break — breaks an object between two points (BREAK / BR)"
 aliases = ["BR"]
 
 [cmd.breakatpoint]
 name = "Break at point"
 desc = "Splits an object in two at one point"
-tip = "Break at point — splits an object in two at one point (BREAKATPOINT)"
 aliases = []
 
 [cmd.join]
 name = "Join"
 desc = "Joins objects that touch end to end into one"
-tip = "Join — joins objects that touch end to end into one (JOIN / J)"
 aliases = ["J"]
 
 [cmd.explode]
 name = "Explode"
 desc = "Breaks a compound object into its parts"
-tip = "Explode — breaks a compound object into its parts (EXPLODE / X)"
 aliases = ["X"]
 
 [cmd.ai]
 name = "AI agent"
 desc = "Asks the AI agent, or shows and hides the agent panel"
-tip = "AI agent — asks the AI agent, or shows and hides the agent panel (F2 / AI)"
 aliases = ["AGENT"]
 
 [cmd.options]
 name = "Options"
 desc = "Opens the settings panel"
-tip = "Options — opens the settings panel (Ctrl+, / OPTIONS)"
 aliases = ["OP"]
 
 [cmd.options.msg]

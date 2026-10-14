@@ -51,7 +51,7 @@ REDO reverses a whole `UNDO n`. When a command ends the session names the undo s
 (`Drawing.NameLastStep`), so `U` can print the command it undid.
 
 **Registry.** `cmdsys.Registry` maps upper-case names and aliases to command factories.
-`Registry.LoadAliases` reads `ALIAS,*COMMAND` lines in the `acad.pgp` format.
+`Registry.LoadAliases` reads `ALIAS,*COMMAND` lines in the `acad.pgp` format. `Registry.AliasesOf` lists the aliases of one command, shortest first; the toolbar tooltips read their keyboard hint from it.
 
 ## Rules
 

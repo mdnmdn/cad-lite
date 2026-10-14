@@ -171,7 +171,7 @@ func (ws *Workspace) updateBadge() gpui.IntoElement {
 
 // settingsTip is the gear button's tooltip, with the update notice appended.
 func (ws *Workspace) settingsTip() string {
-	tip := i18n.T("ui.toolbar.settings_tip")
+	tip := toolTip(i18n.CommandName("OPTIONS"), ws.keyHint(actionSettings, "OPTIONS"), tb("settings_tip"))
 	if rel, ok := ws.UpdateAvailable(); ok {
 		tip += "\n" + i18n.T("ui.update.badge_tip", rel.Version)
 	}

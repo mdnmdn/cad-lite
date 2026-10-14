@@ -1,6 +1,6 @@
 // Package i18n is Cad-lite's internationalisation foundation: English and Italian message
 // catalogs, language selection and detection, plurals, localized command-line keywords and the
-// per-command metadata (display name, description, tooltip, typed aliases).
+// per-command metadata (display name, description, typed aliases).
 //
 // It is a leaf package: pure Go, no imports from the rest of Cad-lite, no ebiten or gpui, and it
 // builds for GOOS=js. cmdsys, cadmcp, fileio, settings and ui may all import it.

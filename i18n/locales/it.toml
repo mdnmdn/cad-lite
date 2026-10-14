@@ -763,12 +763,12 @@ history_tip = "Comandi recenti — elenca i comandi eseguiti da poco; fai clic s
 history_empty = "Ancora nessun comando"
 
 [ui.toolbar]
-settings_tip = "Opzioni — tema, scala dell'interfaccia, ausili di disegno, lingua (Ctrl+, / OPZIONI)"
+settings_tip = "Tema, scala dell'interfaccia, ausili di disegno, lingua"
 agent_tip = "Agente IA — apre il pannello dell'agente: descrivi un disegno a parole e l'agente lo realizza (F2 / AGENTE)"
 ribbon_collapse_tip = "Comprimi la barra multifunzione — nasconde i pulsanti dei comandi; i comandi restano sulla riga di comando"
 ribbon_expand_tip = "Mostra la barra multifunzione — i pulsanti Disegna, Modifica e Utilità"
-open_tip = "Apri — sceglie un file di disegno da aprire (Ctrl+O / APRI)"
-save_tip = "Salva — salva il disegno nel suo file, o chiede dove quando non ne ha uno; clic destro per Salva con nome (Ctrl+S / QSAVE, Ctrl+Shift+S / SAVEAS)"
+open_tip = "Sceglie un file di disegno da aprire"
+save_tip = "Salva il disegno nel suo file, o chiede dove quando non ne ha uno; clic destro per Salva con nome (%s)"
 
 [ui.ribbon]
 draw = "Disegna"
@@ -1040,56 +1040,47 @@ restart_later_tip = "Più tardi — continua a lavorare; la nuova versione parte
 [cmd.line]
 name = "Linea"
 desc = "Disegna segmenti di retta tra i punti indicati"
-tip = "Linea — disegna segmenti di retta tra i punti indicati (LINEA / L)"
 aliases = ["LINEA"]
 
 [cmd.pline]
 name = "Polilinea"
 desc = "Disegna una catena di segmenti connessi come un unico oggetto"
-tip = "Polilinea — disegna una catena di segmenti connessi come un unico oggetto (POLILINEA / PL)"
 aliases = ["POLILINEA"]
 
 [cmd.circle]
 name = "Cerchio"
 desc = "Disegna un cerchio dal centro e dal raggio o diametro"
-tip = "Cerchio — disegna un cerchio dal centro e dal raggio o diametro (CERCHIO / C)"
 aliases = ["CERCHIO"]
 
 [cmd.arc]
 name = "Arco"
 desc = "Disegna un arco da punti, centro, angolo, lunghezza della corda, raggio o direzione"
-tip = "Arco — disegna un arco da punti, centro, angolo, lunghezza della corda, raggio o direzione (ARCO / A)"
 aliases = ["ARCO"]
 
 [cmd.rectang]
 name = "Rettangolo"
 desc = "Disegna un rettangolo da due angoli o dalle dimensioni, con smusso, raccordo o larghezza opzionali"
-tip = "Rettangolo — disegna un rettangolo da due angoli o dalle dimensioni, con smusso, raccordo o larghezza opzionali (RETTANGOLO / REC)"
 # (verify)
 aliases = ["RETTANGOLO", "RETTANG"]
 
 [cmd.polygon]
 name = "Poligono"
 desc = "Disegna un poligono regolare dal centro e dal raggio, o da un lato"
-tip = "Poligono — disegna un poligono regolare dal centro e dal raggio, o da un lato (POLIGONO / POL)"
 aliases = ["POLIGONO"]
 
 [cmd.erase]
 name = "Cancella"
 desc = "Rimuove dal disegno gli oggetti selezionati"
-tip = "Cancella — rimuove dal disegno gli oggetti selezionati (CANCELLA / E)"
 aliases = ["CANCELLA"]
 
 [cmd.move]
 name = "Sposta"
 desc = "Sposta gli oggetti selezionati senza modificarli"
-tip = "Sposta — sposta gli oggetti selezionati senza modificarli (SPOSTA / M)"
 aliases = ["SPOSTA"]
 
 [cmd.stretch]
 name = "Stira"
 desc = "Stira gli oggetti intersecati da una finestra, spostando i vertici e gli estremi al suo interno"
-tip = "Stira — stira gli oggetti intersecati da una finestra, spostando i vertici e gli estremi al suo interno (STIRA / S)"
 aliases = ["STIRA"]
 
 [cmd.multiple.prompt]
@@ -1101,51 +1092,43 @@ hint = "Selezionare gli oggetti da stirare con una finestra di selezione interse
 [cmd.copy]
 name = "Copia"
 desc = "Duplica gli oggetti selezionati lasciando gli originali al loro posto"
-tip = "Copia — duplica gli oggetti selezionati lasciando gli originali al loro posto (COPIA / CO)"
 aliases = ["COPIA"]
 
 [cmd.rotate]
 name = "Ruota"
 desc = "Ruota gli oggetti selezionati attorno a un punto base"
-tip = "Ruota — ruota gli oggetti selezionati attorno a un punto base (RUOTA / RO)"
 aliases = ["RUOTA"]
 
 [cmd.scale]
 name = "Scala"
 desc = "Ingrandisce o riduce gli oggetti selezionati rispetto a un punto base"
-tip = "Scala — ingrandisce o riduce gli oggetti selezionati rispetto a un punto base (SCALA / SC)"
 aliases = ["SCALA"]
 
 [cmd.undo]
 name = "Annulla"
 desc = "Annulla le modifiche, oppure imposta un segno o un gruppo di annullamento"
-tip = "Annulla — annulla le modifiche, oppure imposta un segno o un gruppo di annullamento (ANNULLA)"
 aliases = ["ANNULLA"]
 
 [cmd.u]
 name = "Annulla"
 desc = "Annulla l'ultima modifica"
-tip = "Annulla — annulla l'ultima modifica (Ctrl+Z / U)"
 aliases = ["U"]
 
 [cmd.redo]
 # (verify)
 name = "Ripeti"
 desc = "Ripristina la modifica appena annullata"
-tip = "Ripeti — ripristina la modifica appena annullata (Ctrl+Y / RIPETI)"
 # (verify)
 aliases = ["RIPETI", "RIPRISTINA"]
 
 [cmd.zoom]
 name = "Zoom"
 desc = "Adatta la vista al disegno o a una finestra indicata"
-tip = "Zoom — adatta la vista al disegno o a una finestra indicata (ZOOM / Z)"
 aliases = []
 
 [cmd.layer]
 name = "Layer"
 desc = "Imposta un layer come corrente, o lo crea come nome=colore"
-tip = "Layer — imposta un layer come corrente, o lo crea come nome=colore (LAYER / LA)"
 # (verify)
 aliases = ["LIVELLO"]
 
@@ -1153,20 +1136,17 @@ aliases = ["LIVELLO"]
 # (verify)
 name = "Distanza"
 desc = "Misura la distanza e l'angolo tra due punti"
-tip = "Distanza — misura la distanza e l'angolo tra due punti (DISTANZA / DI)"
 aliases = ["DISTANZA"]
 
 [cmd.area]
 name = "Area"
 desc = "Misura l'area e il perimetro di punti o di un oggetto"
-tip = "Area — misura l'area e il perimetro di punti o di un oggetto (AREA / AA)"
 aliases = []
 
 [cmd.measuregeom]
 # (verify)
 name = "Misura geometria"
 desc = "Misura distanza, raggio, angolo o area"
-tip = "Misura geometria — misura distanza, raggio, angolo o area (MISURAGEOM / MEA)"
 # (verify)
 aliases = ["MISURAGEOM"]
 
@@ -1174,109 +1154,93 @@ aliases = ["MISURAGEOM"]
 # (verify)
 name = "Unità"
 desc = "Imposta i formati di lunghezza e angolo, la precisione e la direzione dell'angolo 0"
-tip = "Unità — imposta i formati di lunghezza e angolo, la precisione e la direzione dell'angolo 0 (UNITA / UN)"
 aliases = ["UNITA"]
 
 [cmd.id]
 # (verify)
 name = "ID punto"
 desc = "Riporta le coordinate di un punto indicato"
-tip = "ID punto — riporta le coordinate di un punto indicato (ID)"
 aliases = []
 
 [cmd.list]
 # (verify)
 name = "Elenca"
 desc = "Elenca le proprietà degli oggetti selezionati"
-tip = "Elenca — elenca le proprietà degli oggetti selezionati (ELENCA / LI)"
 # (verify)
 aliases = ["ELENCA"]
 
 [cmd.new]
 name = "Nuovo"
 desc = "Inizia un nuovo disegno vuoto"
-tip = "Nuovo — inizia un nuovo disegno vuoto (NUOVO)"
 # (verify)
 aliases = ["NUOVO"]
 
 [cmd.open]
 name = "Apri"
 desc = "Apre un disegno da file"
-tip = "Apri — apre un disegno da file (APRI)"
 # (verify)
 aliases = ["APRI"]
 
 [cmd.save]
 name = "Salva"
 desc = "Salva il disegno in un file"
-tip = "Salva — salva il disegno in un file (SALVA)"
 # (verify)
 aliases = ["SALVA"]
 
 [cmd.mirror]
 name = "Specchio"
 desc = "Crea una copia speculare degli oggetti selezionati rispetto a una linea"
-tip = "Specchio — crea una copia speculare degli oggetti selezionati rispetto a una linea (SPECCHIO / MI)"
 # (verify)
 aliases = ["SPECCHIO"]
 
 [cmd.offset]
 name = "Offset"
 desc = "Crea una copia parallela di un oggetto a una distanza o passante per un punto"
-tip = "Offset — crea una copia parallela di un oggetto a una distanza o passante per un punto (OFFSET / O)"
 aliases = []
 
 [cmd.fillet]
 name = "Raccordo"
 desc = "Raccorda lo spigolo tra due oggetti con un raggio"
-tip = "Raccordo — raccorda lo spigolo tra due oggetti con un raggio (RACCORDO / F)"
 aliases = ["RACCORDO"]
 
 [cmd.chamfer]
 name = "Smusso"
 desc = "Smussa lo spigolo tra due linee con due distanze"
-tip = "Smusso — smussa lo spigolo tra due linee con due distanze (SMUSSO / CHA)"
 # (verify)
 aliases = ["SMUSSO", "CIMATURA", "SMUSSA"]
 
 [cmd.trim]
 name = "Taglia"
 desc = "Taglia gli oggetti in corrispondenza dei bordi di taglio indicati"
-tip = "Taglia — taglia gli oggetti in corrispondenza dei bordi di taglio indicati (TAGLIA / TR)"
 # (verify)
 aliases = ["TAGLIA"]
 
 [cmd.extend]
 name = "Estendi"
 desc = "Estende gli oggetti fino ai bordi limite"
-tip = "Estendi — estende gli oggetti fino ai bordi limite (ESTENDI / EX)"
 # (verify)
 aliases = ["ESTENDI"]
 
 [cmd.break]
 name = "Spezza"
 desc = "Spezza un oggetto tra due punti"
-tip = "Spezza — spezza un oggetto tra due punti (SPEZZA / BR)"
 # (verify)
 aliases = ["SPEZZA"]
 
 [cmd.breakatpoint]
 name = "Spezza in punto"
 desc = "Divide un oggetto in due in un solo punto"
-tip = "Spezza in punto — divide un oggetto in due in un solo punto (SPEZZAINPUNTO)"
 aliases = ["SPEZZAINPUNTO"]
 
 [cmd.join]
 name = "Unisci"
 desc = "Unisce in un solo oggetto gli oggetti che si toccano estremità con estremità"
-tip = "Unisci — unisce in un solo oggetto gli oggetti che si toccano estremità con estremità (UNISCI / J)"
 # (verify)
 aliases = ["UNISCI"]
 
 [cmd.explode]
 name = "Esplodi"
 desc = "Scompone un oggetto composto nelle sue parti"
-tip = "Esplodi — scompone un oggetto composto nelle sue parti (ESPLODI / X)"
 # (verify)
 aliases = ["ESPLODI"]
 
@@ -1284,14 +1248,12 @@ aliases = ["ESPLODI"]
 # (verify)
 name = "Agente IA"
 desc = "Interroga l'agente IA, o mostra e nasconde il pannello dell'agente"
-tip = "Agente IA — interroga l'agente IA, o mostra e nasconde il pannello dell'agente (F2 / AI)"
 # (verify)
 aliases = ["AGENTE", "IA"]
 
 [cmd.options]
 name = "Opzioni"
 desc = "Apre il pannello delle opzioni"
-tip = "Opzioni — apre il pannello delle opzioni (Ctrl+, / OPZIONI)"
 # (verify)
 aliases = ["OPZIONI"]
 

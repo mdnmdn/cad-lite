@@ -51,7 +51,7 @@ func Placeholders(s string) []string {
 //   - the English and Italian key sets, array keys included, are identical;
 //   - every key has the same placeholders in every language, and no value is empty;
 //   - "_one" and "_other" plural forms come in pairs;
-//   - every command in Commands has name, desc, tip and aliases, and aliases collide neither
+//   - every command in Commands has name, desc and aliases, and aliases collide neither
 //     with a canonical command name nor with another command's alias;
 //   - every keyword in KeywordGroups exists in every language and its shortcuts and names do not
 //     collide with a sibling's.
@@ -111,7 +111,7 @@ func verifyCommands() []string {
 	owner := map[string]string{}
 	for _, l := range Langs {
 		for _, c := range Commands {
-			for _, f := range []string{"name", "desc", "tip"} {
+			for _, f := range []string{"name", "desc"} {
 				if !Has(l, cmdKey(c, f)) {
 					p = append(p, fmt.Sprintf("%s: missing %s", l, cmdKey(c, f)))
 				}

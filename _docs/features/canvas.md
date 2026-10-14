@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, crosshair a
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/toolbar_layout.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/titlebar.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -151,8 +151,9 @@ the file name, or `Untitled` while the drawing has no file, and a dot before the
 changes (`Session.Dirty`); its tooltip gives the path. The agent button is filled while the panel is
 open and carries a dot while a session is live (amber when a background tab wants attention). Open and Save show the
 system file dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. Undo and
-Redo run `U` and `REDO` with the command tips; the Open, Save, agent and Settings tooltips are
-`ui.toolbar.open_tip`, `save_tip`, `agent_tip` and `settings_tip`.
+Redo run `U` and `REDO` and show the command tooltips (see Tooltips); Open, Save and Settings show the
+same kind of tooltip, their description from `ui.toolbar.open_tip`, `save_tip` and `settings_tip`
+(Save's names Save as and its keys), and the agent button shows `ui.toolbar.agent_tip`.
 
 The brand depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`): Linux and the web show the
 application icon and the bold `Cad-lite` wordmark, macOS shows the icon alone (32 px, the 32 and 64 px
@@ -170,7 +171,7 @@ Polyline, Circle and Arc, and Rectangle as a small one (icon left of label). **M
 buttons in two rows and seven columns: Move, Rotate, Mirror, Offset, Chamfer, Extend, Join over Copy,
 Scale, Erase, Fillet, Trim, Break, Explode. **Utilities** is two columns of two: Distance, Area and ID point,
 Zoom. Labels are the commands' display names in the interface language; a button runs its command as if typed, shows
-the command's tip as its tooltip and, while its command runs, takes the soft accent fill and text. A command
+the command's tooltip (see Tooltips) and, while its command runs, takes the soft accent fill and text. A command
 without a button (LAYER, LIST, NEW, MEASUREGEOM) is still reached by typing it.
 
 The ribbon reflows with the window width: on a wide window the groups share one row, and as the window
@@ -182,8 +183,14 @@ wide, Draw and Utilities are the first row and Modify the second.
 ### Tooltips
 
 Every clickable control carries a tooltip that appears after the pointer rests on it for 500 ms
-(`gpui.Div.Tooltip`): ribbon and title bar buttons show the command's tip (`i18n.Command(name).Tip`: title,
-what it does, shortcut or alias), the gear and agent buttons, the layer rows (make current), the
+(`gpui.Div.Tooltip`); it hides when the pointer leaves the control and on a click, and stays hidden
+until the pointer leaves. Ribbon and title bar command buttons, Open, Save and the gear show two
+lines: the command's display name with its keyboard hint in brackets, then its description —
+`Line (L)`, `Undo (Ctrl+Z / U)`, `Save (Ctrl+S / QSAVE)`, `Linea (L)` in Italian. The hint is
+composed, never written in the catalog: the key comes from the binding in `Bindings` (the Cmd form on
+macOS, the Ctrl form elsewhere) and the typed part is the command's shortest registered alias
+(`Registry.AliasesOf`), or the command itself when no alias is shorter, so a hint always names
+something that works. The agent button, the layer rows (make current), the layer rows (make current), the
 visibility pills and the colour swatches, the document chip, the viewport label, the zoom buttons, the layer `+`,
 the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the layout tabs, the status bar toggles and the coordinates readout, and
 every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
@@ -224,10 +231,13 @@ canvas column (`canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.g
 and `collapseButton` elements, and `layoutSettings`, `applyLayout` and `persistLayout`, which move the layout
 to and from `settings.Layout`; `sidePanel` measures its own height from a `gpui.ScrollHandle` of the previous frame. `ui/toolbar_layout.go` builds the ribbon:
 `Workspace.ribbonGroups` lists the groups, `ribbonLarge`, `ribbonSmall` and `smallColumns` build the
-buttons around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `Workspace.ribbon` puts each group in
+buttons around `ui.NewIcon` (`ui/icon.go`) with `Workspace.commandTip` as the tooltip, and `Workspace.ribbon` puts each group in
 a no-shrink `Div` inside a `FlexWrap` row, so gpui wraps between groups only. `ui/chrome.go` holds
 the type scale, `iconButton`, `monoText` and the dividers shared by the chrome; `mix` in `ui/theme.go` derives the soft
-accent fill. `Workspace.fileButton` (`ui/filedialog.go`) builds Open and Save with their own tooltips, and
+accent fill. `Workspace.fileButton` (`ui/filedialog.go`) builds Open and Save with `openTip` and `saveTip`.
+`ui/tooltip.go` composes the button tooltips: `commandTip`, `keyHint` (shortcut, then `typedName`),
+`shortcutTable` and `keystrokeLabel` (binding to `Ctrl+Shift+S`), and `commandKeys`, the commands a key
+runs directly, from which `Workspace.Render` also registers the key handlers.
 `toggleChip` and `layoutTab` in `ui/statusbar.go` build the status bar. User-visible text goes through `i18n.T`
 (`ui.*` keys); `Workspace.Render` installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app
 whenever the theme changes. `ui/brand.go` holds the title bar brand: `Brand`, `BrandForOS`, and a colour bitmap

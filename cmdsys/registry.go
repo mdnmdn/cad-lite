@@ -65,6 +65,25 @@ func (r *Registry) Names() []string {
 	return out
 }
 
+// AliasesOf returns the aliases that run command name, shortest first and alphabetical within a
+// length. It is the table a keyboard hint is read from, so a hint never repeats an alias by hand.
+func (r *Registry) AliasesOf(name string) []string {
+	n := strings.ToUpper(name)
+	var out []string
+	for a, c := range r.aliases {
+		if c == n {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if len(out[i]) != len(out[j]) {
+			return len(out[i]) < len(out[j])
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
 // Complete returns the command names and aliases starting with prefix.
 func (r *Registry) Complete(prefix string) []string {
 	p := strings.ToUpper(prefix)
