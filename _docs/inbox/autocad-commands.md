@@ -198,7 +198,7 @@ Missing or invalid pieces: `1,x` → `Invalid point.` and the prompt is asked ag
 previous point is valid in AutoCAD (`LASTPOINT` starts at 0,0,0); go-draw prints an error
 (`ErrNoBase`).
 
-**Typed object snaps.** At a point prompt, a snap name (or a comma list) arms an override for the
+**Typed object snaps.** *Done (WP3) except APP, EXT, PAR, NOD, INS, QUI, GCE, TT (recognised, print `not supported`) and the deferral of PER/TAN at a first point.* At a point prompt, a snap name (or a comma list) arms an override for the
 *next pick only*; the prompt then asks the object (`of`, or the specific wording) and the next token
 is the pick. Case-insensitive, three letters suffice.
 
@@ -373,7 +373,7 @@ marked ✓ (script 40).
 
 | Id | Gap | Pri | Eff | Owner (section 4) | Corpus |
 |---|---|---|---|---|---|
-| G1-1 | Accept `_`, `.`, `_.` prefixes (strip; `.` bypasses user aliases); `-NAME` as separate commands; `MULTIPLE` **Done** except `MULTIPLE`: prefixes, `-_NAME`, `RegisterCLI` and Italian `-NAME` resolve (CW-G) | P1 | S | CW-G | 31 |
+| G1-1 | Accept `_`, `.`, `_.` prefixes (strip; `.` bypasses user aliases); `-NAME` as separate commands; **Done** (`MULTIPLE` too, WP4, `commands/multiple.go`): prefixes, `-_NAME`, `RegisterCLI` and Italian `-NAME` resolve (CW-G) | P1 | S | CW-G | 31 |
 | G1-2 | `_X` keyword matching at every prompt (exists in `i18n.MatchKeywords`; verify wired into `ParseInput`) **Done**: wired in `ParseInputIn` (CW-G verified) | P1 | S | CW-G / i18n | 31 |
 | G2-1 | Transparent command frames (`'`, `>>`, resume the prompt) **Done** (CW-G, `cmdsys/transparent.go`) | P2 | M | CW-G | 36 |
 | G3-1 | Prompt default formatting `<10.0000>`, Yes/No `<N>`, LUPREC | P3 | S | CW-C | 39 |
@@ -384,7 +384,7 @@ marked ✓ (script 40).
 | G7-2 | Typed object snaps END MID CEN INT QUA NEA (P1), PER TAN EXT APP FROM M2P NON TT NOD PAR INS (P2) | P1 / P2 | M | WP3 | 29, 30 |
 | G8-1 | Typed selection options W C WP CP F BOX ALL L P R A U M AU SI | P1 | M | WP2 | 15-18, 22-28 | **done** (WP2; 18 and 28 newly pass, the rest wait on their command owners)
 | G8-2 | Selection memory (`Previous`), "N found, M total" messages, `Invalid selection` text | P2 | S | WP2 | 28 | **done** |
-| G9-1 | `Session.Script` comments (`;`) and final-newline rule; SCRIPT/RSCRIPT/RESUME/DELAY **Done** except `RESUME` (CW-G) | P1 | S | CW-G | all |
+| G9-1 | `Session.Script` comments (`;`) and final-newline rule; SCRIPT/RSCRIPT/RESUME/DELAY **Done** except `RESUME`, which stays open: a script runs synchronously and Esc cannot interrupt it (CW-G) | P1 | S | CW-G | all |
 | G10-1 | `SETVAR`, variables typed by name, `SETVAR ?`, the 1.11 registry, stored no-ops **Done** (CW-G, `cmdsys/sysvars.go`; angle variables stay with the units package) | P1 | M | CW-G | 33 |
 | G10-2 | Initial variable set persistent through `settings/` (read its API when it lands) | P3 | S | CW-G | |
 
@@ -610,7 +610,7 @@ rotation is new − reference. A pick measures the angle from the base point. Al
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
 | ROT-1 | `Copy`, `Reference` (with the two-point forms) (done 2026-10-14, CW-B1) | P1 | S | 16 |
-| ROT-2 | `ANGBASE`, `ANGDIR` honoured, the header line printed (header printed 2026-10-14, CW-B1; `ANGBASE` and `ANGDIR` are not honoured: the angle variables wait for the units package) | P3 | S | |
+| ROT-2 | `ANGBASE`, `ANGDIR` honoured, the header line printed **Done** (CW-B1 header, CW-C variables and typed angles) | P3 | S | |
 
 #### SCALE  (`SC`)
 
@@ -628,10 +628,10 @@ value.` *(verify V9)*. Alias `SC`.
 **AutoCAD.** `Select objects:` → `Specify first point of mirror line:` → `Specify second point of
 mirror line:` → `Erase source objects? [Yes/No] <N>:`. The reflection keeps layer and colour; arcs
 stay ccw, polyline bulges flip. `MIRRTEXT` irrelevant (no text). Alias `MI`.
-**Today.** Met (prompt text `Erase source objects [Yes/No] <No>:`, default printed `No`).
+**Today.** Met (done 2026-10-14, CW-B2).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| MIRR-1 | Prompt wording and `<N>` default (cosmetic) | P3 | S | 18 |
+| MIRR-1 | Prompt wording and `<N>` default (cosmetic) (done 2026-10-14, CW-B2: `Erase source objects? [Yes/No] <N>:`) | P3 | S | 18 |
 
 #### OFFSET  (`O`)
 
@@ -645,12 +645,12 @@ select. `Through`: the distance is replaced by `Specify through point or [Exit/M
 distance can be given as two points. Lines, circles, arcs, polylines, (also xlines, splines).
 `Requires a positive and nonzero value.` for ≤ 0 *(verify V9)*. The variable holding Erase/Layer
 *(verify V37)*. Alias `O`.
-**Today.** Distance (typed / two points / `Through`), `Exit`, remembered distance; polylines mitre.
+**Today.** Met except `OFFSETGAPTYPE` (done 2026-10-14, CW-B2): the settings line, `Through`/`Erase`/`Layer`, `Exit`/`Multiple`/`Undo`, per-session `OFFSETDIST` (-1 after Through), `OFFSETERASE` and `OFFSETLAYER` (my choice of names for V37), polyline widths kept when the vertex count survives; polylines mitre.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| OFFS-1 | `Erase`, `Layer` options (the offset lands on the source layer today) | P2 | S | 19 |
-| OFFS-2 | `Multiple`, `Undo` | P2 | S | |
-| OFFS-3 | `OFFSETDIST` as a variable (default `<d>`, -1 for Through) and per session | P1 | S | 33 |
+| OFFS-1 | `Erase`, `Layer` options (done 2026-10-14, CW-B2) | P2 | S | 19 |
+| OFFS-2 | `Multiple`, `Undo` (done 2026-10-14, CW-B2: Multiple offsets from the newest copy; Undo puts an erased source back as a new object) | P2 | S | |
+| OFFS-3 | `OFFSETDIST` as a variable (default `<d>`, -1 for Through) and per session (done 2026-10-14, CW-B2) | P1 | S | 33 |
 | OFFS-4 | `OFFSETGAPTYPE` (fillet/chamfer gaps on closed polylines) | P3 | M | |
 
 #### FILLET  (`F`)
@@ -662,14 +662,14 @@ distance can be given as two points. Lines, circles, arcs, polylines, (also xlin
 filleted`). `mUltiple`: repeat. `Undo`. Shift while picking the second object applies radius 0 for
 that corner. Works on lines, arcs, circles, polylines, xlines, rays, splines; parallel lines need
 radius ≥ half the gap or fail. Variables `FILLETRAD`, `TRIMMODE`. Alias `F`.
-**Today.** Two lines; `Radius`; trims/extends; messages for parallel lines and too-large radius.
+**Today.** Two lines (done 2026-10-14, CW-B2): `Undo`, `Polyline` (every vertex between straight segments, widths interpolated), `Radius`, `Trim`/No trim (`TRIMMODE`), `Multiple`, second-prompt `[Radius]`, shift-pick radius 0 on the command side (`Input.Text` `shift`; the session does not set it); messages for parallel lines and too-large radius. Arcs, circles and line+arc pairs are open (no geom fillet on arcs).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| FIL-1 | `Trim`, `mUltiple`, `Undo`, `Polyline` | P2 | M | |
+| FIL-1 | `Trim`, `mUltiple`, `Undo`, `Polyline` (done 2026-10-14, CW-B2) | P2 | M | |
 | FIL-2 | Lines + arcs/circles/polylines (needs `geom` fillet on arcs) | P2 | L | |
-| FIL-3 | `FILLETRAD` per session as a variable | P1 | S | 20, 33 |
-| FIL-4 | Shift-pick radius 0 (needs modifier state, parity 5.2) | P3 | S | |
-| FIL-5 | Second prompt keyword `[Radius]` | P3 | S | |
+| FIL-3 | `FILLETRAD` per session as a variable (done 2026-10-14, CW-B2) | P1 | S | 20, 33 |
+| FIL-4 | Shift-pick radius 0 (needs modifier state, parity 5.2) (command side done 2026-10-14, CW-B2: a point whose `Input.Text` is `shift`; the session does not set it yet, open for the click path) | P3 | S | |
+| FIL-5 | Second prompt keyword `[Radius]` (done 2026-10-14, CW-B2) | P3 | S | |
 
 #### CHAMFER  (`CHA`)
 
@@ -680,12 +680,12 @@ chamfer distance <b>:` (the first applies to the first line picked). `Angle`: `S
 the first line <c>:` `Specify chamfer angle from the first line <d>:`. `Method`: `Enter trim
 method [Distance/Angle] <Distance>:`. Variables `CHAMFERA/B/C/D`, `CHAMMODE`, `TRIMMODE`. Alias
 `CHA`. Lines, polylines, xlines, rays.
-**Today.** Two lines, `Distance`, remembered distances, sharp corner at 0,0.
+**Today.** Lines and polylines (done 2026-10-14, CW-B2): `Undo`, `Polyline`, `Distance`, `Angle` (`CHAMFERC`, `CHAMFERD` in degrees), `Trim`, `mEthod` (`CHAMMODE`), `Multiple`, remembered distances, sharp corner at 0,0, second-prompt options, shift-pick on the command side. Xlines and rays are open.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| CHA-1 | `Angle`, `Method`, `Trim`, `Undo`, `Multiple`, `Polyline` | P2 | M | |
-| CHA-2 | `CHAMFERA/B` as variables per session | P1 | S | 21 |
-| CHA-3 | Polylines and non-line objects | P3 | M | |
+| CHA-1 | `Angle`, `Method`, `Trim`, `Undo`, `Multiple`, `Polyline` (done 2026-10-14, CW-B2) | P2 | M | |
+| CHA-2 | `CHAMFERA/B` as variables per session (done 2026-10-14, CW-B2) | P1 | S | 21 |
+| CHA-3 | Polylines and non-line objects (polylines done 2026-10-14, CW-B2; xlines, rays open) | P3 | M | |
 
 #### TRIM  (`TR`)
 
@@ -758,7 +758,7 @@ arcs keep the radius while the endpoints move (the centre adjusts) *(verify V40)
 **Today.** Missing (parity plan: grips WP4 owns the command, `cmdsys/commands/stretch.go`).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| STR-1 | The command (crossing window, base/second point, `Displacement`) | P1 | M | 25 |
+| STR-1 | The command (crossing window, base/second point, `Displacement`) (done 2026-10-14, WP4) | P1 | M | 25 |
 
 #### ARRAY  (`AR`), ARRAYRECT, ARRAYPOLAR, ARRAYPATH, -ARRAY
 
@@ -796,9 +796,9 @@ Not undoable: selection, view, system variables (except those stored in the draw
 **Today.** `U` and `UNDO` are one command (`Drawing.Undo`); REDO; `Doc.Undo` per command.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| UNDO-1 | `UNDO n`; `Mark`/`Back`; `BEgin`/`End` (needs journal marks and groups in `doc`: cross-owner, small API) | P2 | M | 34, 35 |
-| UNDO-2 | `U` names the undone command; `UNDO` is a distinct command; the U alias maps to `U` | P3 | S | 35 |
-| UNDO-3 | `MREDO`, `OOPS` (`OOPS` done 2026-10-14, CW-B1) | P3 | S | |
+| UNDO-1 | `UNDO n`; `Mark`/`Back`; `BEgin`/`End` (needs journal marks and groups in `doc`: cross-owner, small API) (done 2026-10-14, CW-E: `commands/undo.go`) | P2 | M | 34, 35 |
+| UNDO-2 | `U` names the undone command; `UNDO` is a distinct command; the U alias maps to `U` (done 2026-10-14, CW-E) | P3 | S | 35 |
+| UNDO-3 | `MREDO`, `OOPS` (`OOPS` done 2026-10-14, CW-B1; `MREDO` done 2026-10-14, CW-E) | P3 | S | |
 | UNDO-4 | Undo of variable changes: not required | - | - | |
 
 #### ZOOM  (`Z`)
@@ -815,8 +815,8 @@ saved views; `Scale`: `Enter a scale factor (nX or nXP):`; `Object`: `Select obj
 `Previous`, `Scale`, `Object`, numeric scale, transparent use, view stack.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| ZOOM-1 | `All`, `Center`, `Scale` and a typed scale (`2`, `.5X`), `Object`, `In`/`Out` | P1 | M | |
-| ZOOM-2 | `Previous` (a view stack of ~10 views, shared with PAN and the wheel) | P1 | M | |
+| ZOOM-1 | `All`, `Center`, `Scale` and a typed scale (`2`, `.5X`), `Object`, `In`/`Out` (done 2026-10-14, CW-D; `In`/`Out` are not AutoCAD prompt options and were not added) | P1 | M | |
+| ZOOM-2 | `Previous` (a view stack of ~10 views, shared with PAN and the wheel) (done 2026-10-14, CW-D: `render/viewstack.go`) | P1 | M | |
 | ZOOM-3 | Transparent `'ZOOM` | P2 | M (with CW-G frames) | 36 |
 | ZOOM-4 | `Dynamic` | P3 | M | |
 | ZOOM-5 | The semantics of a bare number relative to "the full view" with no limits *(verify V22)* | P3 | S | |
@@ -829,12 +829,12 @@ the first was a displacement). Transparent. Aliases `P`, `-P`.
 **Today.** Missing (drag and wheel pan work in the UI).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| PAN-1 | `PAN` (enter real-time pan: mouse drags pan until Enter/Esc) and `-PAN` | P1 | S | |
+| PAN-1 | `PAN` (enter real-time pan: mouse drags pan until Enter/Esc) and `-PAN` (done 2026-10-14, CW-D: both ask the two-point form; no real-time mode) | P1 | S | |
 
 #### REGEN `RE`, REDRAW
 
 **AutoCAD.** No prompt. `REGEN` rebuilds geometry caches; `REGENALL`; `REDRAW` refreshes. Prints nothing.
-**Today.** Missing. | **Gap.** `REGEN`/`REDRAW`/`REGENALL` as no-ops that repaint (P2, S, CW-D).
+**Today.** `REGEN`, `REGENALL`, `REDRAW`, `REDRAWALL` are silent no-ops (done 2026-10-14, CW-D).
 
 ### 2.4 Layers and properties
 
@@ -864,11 +864,11 @@ may not contain `< > / \ " : ; ? * | , = \``.
 (no Frozen, linetype, lineweight, plot, description). The UI layer panel changes the same fields.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| LAY-1 | `-LAYER` with `?`, Make, Set, New, ON, OFF, Color, LOck, Unlock | P1 | M | 32 |
-| LAY-2 | Comma lists, wildcards, the `Really want ... off?` prompt, the refusal messages | P1 | S | 32 |
-| LAY-3 | `Freeze`/`Thaw` (needs `Frozen` in `doc.Layer`, render and select behaviour: cross-owner `doc`) | P2 | M | |
-| LAY-4 | `Ltype`, `LWeight`, `Plot`, `Description` (blocked by G7: linetype/lineweight model) | P3 | M | |
-| LAY-5 | `LAYER` (no dash) = focus the layers panel; keep today's `name=color` form hidden as an extension | P2 | S | |
+| LAY-1 | `-LAYER` with `?`, Make, Set, New, ON, OFF, Color, LOck, Unlock (done 2026-10-14, CW-D) | P1 | M | 32 |
+| LAY-2 | Comma lists, wildcards, the `Really want ... off?` prompt, the refusal messages (done 2026-10-14, CW-D; wording of the refusals is unverified, V23) | P1 | S | 32 |
+| LAY-3 | `Freeze`/`Thaw` (needs `Frozen` in `doc.Layer`, render and select behaviour: cross-owner `doc`) (done 2026-10-14, CW-D: render, snap, pick, extents and DXF read it through `doc.Layer.Visible`) | P2 | M | |
+| LAY-4 | `Ltype`, `LWeight`, `Plot`, `Description` (blocked by G7: linetype/lineweight model) (done 2026-10-14, CW-D as layer fields and DXF data; nothing draws a linetype or lineweight yet) | P3 | M | |
+| LAY-5 | `LAYER` (no dash) = focus the layers panel; keep today's `name=color` form hidden as an extension (open: no panel-focus hook exists; `LAYER` keeps its text form) | P2 | S | |
 
 #### MATCHPROP  (`MA`)
 
@@ -876,7 +876,7 @@ may not contain `< > / \ " : ; ? * | , = \``.
 Thickness Transparency Plotstyle Dim Text Hatch Polyline Viewport Table Material Shadow display
 Multileader` → `Select destination object(s) or [Settings]:` repeated until Enter. `Settings` opens a
 dialog (not scriptable). Copies colour, layer, linetype, scale, lineweight *(verify V34)*. Alias `MA`.
-**Today.** Missing. Gap: P2, S (layer and colour today; the rest with G7); corpus 38.
+**Today.** `MATCHPROP` copies colour and layer, with `Settings` as a typed toggle (`MATCHPROPSET`); the rest waits for G7 (done 2026-10-14, CW-D; corpus 38 passes).
 
 #### PROPERTIES `PR`/`CH`/`MO`, CHPROP, CHANGE
 
@@ -885,8 +885,7 @@ editor: `Select objects:` → `Enter property to change [Color/LAyer/LType/ltSca
 TRansparency/Material/Annotative]:` (each asks its value, then repeats until Enter): `Enter new color
 [Truecolor/COlorbook] <BYLAYER>:`, `Enter new layer name <cur>:` (the layer must exist). `CHANGE` edits
 points and properties (`Properties` option). Whether a `-PROPERTIES` form exists *(verify V33)*.
-**Today.** Read-only side panel; no command. Gap: `CHPROP` (Color, LAyer first): P2, S; `CHANGE` P3;
-`PROPERTIES` toggle is parity WP1/WP4. Corpus 38.
+**Today.** `CHPROP` Color and LAyer (done 2026-10-14, CW-D; corpus 38 passes); `CHANGE` P3 and the other CHPROP options wait for G7; `PROPERTIES` toggle is parity WP1/WP4. Read-only side panel.
 
 #### COLOR  (`COL`), LINETYPE  (`LT`), LTSCALE  (`LTS`), LWEIGHT  (`LW`)
 
@@ -898,7 +897,7 @@ dialog, or the variable directly. New objects get these properties.
 **Today.** Entities have a layer and a colour (ACI) only; new entities use the current layer and `ByLayer`.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| PROP-1 | `-COLOR` and `CECOLOR` (current object colour used by `Txn.Add`) | P2 | S | |
+| PROP-1 | `-COLOR` and `CECOLOR` (current object colour used by `Txn.Add`) (done 2026-10-14, CW-D: `Drawing.CurrentColor`; also `LTSCALE`) | P2 | S | |
 | PROP-2 | `LINETYPE`, `LTSCALE`, `LWEIGHT` (blocked by G7: no linetype, no lineweight on entities) | P3 | L | |
 
 #### PURGE  (`PU`)  and  -PURGE
@@ -908,7 +907,7 @@ dialog, or the variable directly. New objects get these properties.
 SHapes/textSTyles/Tablestyles/Visualstyles/Regapps/Zero-length geometry/Empty text objects/Orphaned
 data/All]:` → `Enter name(s) to purge <*>:` → `Verify each name to be purged? [Yes/No] <Y>:` →
 `Deleted layer "X".`; layer `0`, the current layer and layers holding objects are kept *(verify V41)*.
-**Today.** Missing. Gap: `-PURGE LAyers/Zero-length geometry/All` P3, S. Corpus: none.
+**Today.** `-PURGE` and `PURGE` with `LAyers`, `Zero-length geometry`, `All` (done 2026-10-14, CW-D). Corpus: none.
 
 ### 2.5 Inquiry
 
@@ -924,13 +923,13 @@ Alias `DI`.
 **Today.** `Distance = d,  Angle = a°,  Delta X = ...,  Delta Y = ...` with trimmed decimals; `[Multiple points]` adds `Distance = total`.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| DIST-1 | Output format (`Angle in XY Plane`, `Delta Z`, 4 decimals) and `DISTANCE` | P2 | S | 39 |
+| DIST-1 | Output format (`Angle in XY Plane`, `Delta Z`, 4 decimals) and `DISTANCE` **Done** (CW-C) | P2 | S | 39 |
 
 #### ID
 
 **AutoCAD.** `Specify point:` → `X = 7.0000  Y = 8.0000  Z = 0.0000`; sets `LASTPOINT` (so a following `@`
 works). Transparent. Alias `ID`.
-**Today.** `X = 7     Y = 8` (trimmed). | **Gap.** Format and `LASTPOINT`: P2, S, corpus 39.
+**Today.** Done (CW-C): `X = 7.0000  Y = 8.0000  Z = 0.0000`, `LASTPOINT` set. | **Gap.** None.
 
 #### AREA  (`AA`)
 
@@ -942,8 +941,8 @@ Sets `AREA`, `PERIMETER`. Alias `AA`.
 **Today.** Corners, `Object`; no Add/Subtract/Arc/Length/Undo; output with trimmed decimals.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| AREA-1 | `Add area`, `Subtract area`, `eXit`, running total | P2 | M | |
-| AREA-2 | `AREA`/`PERIMETER` variables, 4-decimal output | P2 | S | 39 |
+| AREA-1 | `Add area`, `Subtract area`, `eXit`, running total **Done** (CW-C; `eXit` is the shared `Exit` keyword, shortcut E) | P2 | M | |
+| AREA-2 | `AREA`/`PERIMETER` variables, 4-decimal output **Done** (CW-C) | P2 | S | 39 |
 | AREA-3 | `Arc`/`Length`/`Undo` while digitising | P3 | M | |
 
 #### MEASUREGEOM  (`MEA`)
@@ -955,7 +954,7 @@ measurement, the same prompt with `eXit` until the user exits *(verify V27)*; `R
 **Today.** One measurement per run, no `eXit`, `Radius`/`Angle`/`ARea`/`Distance` done.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| MEAS-1 | Loop until `eXit`; `Mode`; Volume (2D: n/a) | P3 | S | |
+| MEAS-1 | Loop until `eXit` **Done** (CW-C); `Mode`, `Quick`, Volume (2D: n/a) open | P3 | S | |
 
 #### LIST  (`LI`, `LS`)
 
@@ -963,7 +962,7 @@ measurement, the same prompt with `eXit` until the user exits *(verify V27)*; `R
 `Handle = 3A` / `from point, X=  0.0000  Y=  0.0000  Z=  0.0000` / `to point, X= 10.0000 ...` / `Length =
 10.0000,  Angle in XY Plane =  0` / `Delta X = ...` *(verify V35)*. Closed polylines add `Area`, `Perimeter`.
 Aliases `LI`, `LS`.
-**Today.** One-line-per-property form, no `Space`, no `LS`. | **Gap.** Format and `LS`: P3, S. Corpus: none (free text).
+**Today.** Done (CW-C): the AutoCAD block form with `Space`, `Handle`, coordinates, and `LS`. | **Gap.** None. Corpus: none (free text).
 
 ### 2.6 Drawing aids and settings
 
@@ -976,26 +975,25 @@ form `OSMODE` typed by value (`OSMODE 3`) is equivalent. Prompt text *(verify V3
 **Today.** `Session.Snaps` / `SnapOn` (F3, status bar); no command; bit layout differs.
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| OS-1 | `-OSNAP` and the `OSMODE` variable with AutoCAD's bit values (translate to the internal `SnapMode`) | P1 | S | 37 |
+| OS-1 | `-OSNAP` and the `OSMODE` variable with AutoCAD's bit values (translate to the internal `SnapMode`) **Done** (WP3: `SnapMode` now uses the OSMODE bits, `OSMODE` is live) | P1 | S | 37 |
 
 #### ORTHO
 
 **AutoCAD.** `Enter mode [ON/OFF] <OFF>:`; sets `ORTHOMODE`; F8 toggles; also turns polar off.
-**Today.** F8 / status bar. | **Gap.** `ORTHO` and `ORTHOMODE`: P1, S, corpus 37.
+**Today.** F8 / status bar, `ORTHO` and `ORTHOMODE` **done** (WP3).
 
 #### GRID  (`GR`)
 
 **AutoCAD.** `Specify grid spacing(X) or [ON/OFF/Snap/Major/aDaptive/Limits/Follow/Aspect] <10.0000>:`: a number sets
 `GRIDUNIT`, `nX` is a multiple of the snap, `ON`/`OFF` set `GRIDMODE`, `Snap` locks to snap spacing, `Major`:
 `Specify major grid line frequency <5>:`. F7.
-**Today.** F7 toggles `Workspace.Grid`; spacing is a power-of-ten policy. | **Gap.** Variable and command: P1, S;
-`GRIDUNIT` honoured by the renderer: P2, S (WP3). Corpus 37.
+**Today.** Done (WP3): `GRID` (ON/OFF/Snap/Major/Aspect, `nX`; no Limits/aDaptive/Follow), `GRIDMODE`, `GRIDUNIT`, `GRIDMAJOR`, F7; the renderer honours the unit and major frequency (`Session.Grid` replaced `Workspace.Grid`).
 
 #### SNAP  (`SN`)
 
 **AutoCAD.** `Specify snap spacing or [ON/OFF/Aspect/Legacy/Style/Type] <10.0000>:`; `Aspect`: `Specify horizontal spacing <10>:`
 `Specify vertical spacing <10>:`; `Style` `[Standard/Isometric]`; `Type` `[Polar/Grid]`. F9. Sets `SNAPMODE`, `SNAPUNIT`, `SNAPANG`.
-**Today.** Not implemented (parity plan WP3 builds snap-to-grid). | **Gap.** Command and variables: P1, M, corpus 37.
+**Today.** Done (WP3): `SNAP` (ON/OFF/Aspect/Style/Type; no Legacy), `SNAPMODE`, `SNAPUNIT`, snap-to-grid in `Hover`, F9. Style and Type are stored only.
 
 #### UNITS  (`UN`)  and  -UNITS  (`-UN`)
 
@@ -1005,8 +1003,7 @@ of decimal point (0 to 8) <4>:` → `Systems of angle measure: ... Enter choice,
 fractional places for display of angles (0 to 8) <0>:` → `Systems of angle direction: ... Enter choice, 1 to 5 <1>:` → `Direction for
 angle 0:`/`Do you want angle measured clockwise? [Yes/No] <N>:` *(verify V42)*. Sets `LUNITS`, `LUPREC`, `AUNITS`, `AUPREC`,
 `ANGBASE`, `ANGDIR`. `INSUNITS` is set by the dialog / `-INSUNITS`. Transparent.
-**Today.** `Header.InsUnits` only; output precision is fixed. | **Gap.** `-UNITS` decimal/degrees and
-`LUPREC`/`AUPREC` applied to all printing: P2, M. (Architectural/engineering/fractional: P3.)
+**Today.** Done (CW-C): `UNITS` and `-UNITS` run the command-line prompts; `LUNITS`, `LUPREC`, `AUNITS`, `AUPREC`, `ANGBASE`, `ANGDIR`, `INSUNITS`, `UNITMODE` are variables; `Context.Fmt`/`FmtAngle` honour them (all five length and angle formats) in DIST, ID, AREA, LIST, MEASUREGEOM, ROTATE's header; typed angles honour `AUNITS`, `ANGBASE`, `ANGDIR`. | **Gap.** Other commands still print with `FormatNumber` and prompt defaults (`<10>`) are unformatted (G3-1 open); `UNITMODE` and the polar `d<a` form ignore the angle variables.
 
 #### SETVAR
 
@@ -1037,8 +1034,8 @@ same for all. Aliases: none for these (Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctr
 (`Session.FilePath`).
 | Id | Gap | Pri | Eff | Corpus |
 |---|---|---|---|---|
-| FILE-1 | `QSAVE` (silent when `FilePath` is set), `SAVEAS`, `Session.Modified()` (D-I), `NEW`/`OPEN`/`QUIT` ask `Save changes?` | P1 | S | |
-| FILE-2 | `QUIT`/`EXIT`/`CLOSE` (host callbacks) | P1 | S | |
+| FILE-1 | `QSAVE` (silent when `FilePath` is set), `SAVEAS`, `Session.Modified()` (D-I), `NEW`/`OPEN`/`QUIT` ask `Save changes?` (done 2026-10-14, CW-E: `cmdsys/dirty.go`, `commands/files.go`; `DBMOD` is 0 or 1) | P1 | S | |
+| FILE-2 | `QUIT`/`EXIT`/`CLOSE` (host callbacks) (done 2026-10-14, CW-E: `Session.SetQuitHandler`; the host installs it, and the window close button does not ask: the gpui platform has no close hook) | P1 | S | |
 | FILE-3 | `SAVE` semantics and the DXF version prompt | P3 | S | |
 
 ### 2.8 Selection
@@ -1070,7 +1067,7 @@ dimension aliases, STYLE `ST`, XLINE `XL`, SPLINE `SPL`) are in the parity plan 
 | Alias | Command | Today | Add with |
 |---|---|---|---|
 | `L` `PL` `C` `A` `REC` `E` `M` `CO` `CP` `RO` `SC` `MI` `O` `F` `CHA` `TR` `EX` `BR` `J` `X` `Z` `LA` `DI` `AA` `MEA` `LI` | the commands in section 2 | present | |
-| `U` | `U` (single undo) | present (runs UNDO) | CW-E, with the UNDO/U split |
+| `U` | `U` (single undo) | done (CW-E: its own command) | |
 | `ID` | `ID` | a command name, no alias needed | |
 | `LS` | LIST | missing | CW-C |
 | `POL` | POLYGON | missing | CW-A |
@@ -1255,13 +1252,13 @@ unless `GODRAW_ACAD_CORPUS` is `report`, `1` (compare with each file's `go-draw:
 | `16_rotate` | ROTATE: angle, Copy, Reference | fail | `L` selection; ROTATE Copy, Reference |  |
 | `17_scale` | SCALE: factor, Copy, Reference | fail | `L` selection; SCALE Copy, Reference |  |
 | `18_mirror` | MIRROR: keep and erase source | pass | `L` selection |  |
-| `19_offset` | OFFSET: distance, Through, Erase | fail | OFFSET Erase |  |
+| `19_offset` | OFFSET: distance, Through, Erase | pass |  |  |
 | `20_fillet` | FILLET: Radius, radius 0 corner | pass |  |  |
 | `21_chamfer` | CHAMFER: Distance | pass |  |  |
 | `22_trim` | TRIM: select-all edges, Fence | fail | TRIM select-all prompt, Fence |  |
 | `23_extend` | EXTEND: select-all boundaries | fail | EXTEND select-all prompt |  |
 | `24_break_join_explode` | BREAK, BREAKATPOINT, JOIN, EXPLODE | fail | BREAKATPOINT; JOIN and EXPLODE selection options |  |
-| `25_stretch` | STRETCH: crossing window | fail | STRETCH |  |
+| `25_stretch` | STRETCH: crossing window | pass | STRETCH |  |
 | `26_array` | -ARRAY: rectangular and polar | fail | -ARRAY | yes |
 | `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | pass | W, C, WP, CP |  |
 | `28_select_last_previous_fence_remove_single` | Selection: L, P, ALL+R, F, SI | pass | L, P, ALL, R, F, SI |  |
@@ -1270,8 +1267,8 @@ unless `GODRAW_ACAD_CORPUS` is `report`, `1` (compare with each file's `go-draw:
 | `31_prefixes_and_keywords` | _ and . prefixes, keyword spellings | fail | `_` and `.` prefixes |  |
 | `32_layer_options` | -LAYER: New, Color, Make, OFF, LOck, Set | fail | -LAYER |  |
 | `33_sysvars` | SETVAR and typed variable names feed command defaults | fail | SETVAR, variables by name |  |
-| `34_undo_mark_back` | UNDO Mark and Back | fail | UNDO Mark/Back |  |
-| `35_undo_number_group_redo` | UNDO n, BEgin/End, U, REDO | fail | UNDO n, BEgin/End |  |
+| `34_undo_mark_back` | UNDO Mark and Back | pass |  |  |
+| `35_undo_number_group_redo` | UNDO n, BEgin/End, U, REDO | pass |  |  |
 | `36_transparent_zoom` | Transparent 'ZOOM inside LINE | fail | transparent commands |  |
 | `37_drafting_aids` | ORTHO GRID SNAP -OSNAP commands, typed points unaffected | fail | ORTHO, GRID, SNAP, -OSNAP |  |
 | `38_matchprop_chprop` | MATCHPROP and CHPROP | fail | MATCHPROP, CHPROP |  |

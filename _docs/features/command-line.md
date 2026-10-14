@@ -86,12 +86,15 @@ Shortcuts, active anywhere in the window:
 
 | Keys | Action |
 |---|---|
-| Ctrl+Z, Cmd+Z | UNDO |
+| Ctrl+Z, Cmd+Z | U (undo one step) |
 | Ctrl+Y, Cmd+Shift+Z | REDO |
+| Ctrl+S, Cmd+S | QSAVE |
+| Ctrl+Shift+S, Cmd+Shift+S | SAVEAS |
 | F2 | Agent panel on or off |
 | F3 | Object snap on or off |
 | F7 | Grid on or off |
 | F8 | Ortho on or off |
+| F9 | Snap to the snap grid on or off |
 | Ctrl+E | Zoom to extents |
 | Ctrl+, , Cmd+, | Settings panel on or off (the `OPTIONS` command opens it too) |
 

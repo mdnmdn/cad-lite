@@ -88,10 +88,14 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 	w.pair(0, "TABLE")
 	w.pair(2, "LAYER")
 	w.int(70, len(d.Layers()))
+	loaded := loadedLinetypes(d)
 	for _, l := range d.Layers() {
 		w.pair(0, "LAYER")
 		w.pair(2, l.Name)
 		flags := 0
+		if l.Frozen {
+			flags |= 1
+		}
 		if l.Locked {
 			flags |= 4
 		}
@@ -101,12 +105,26 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 			c = -c
 		}
 		w.int(62, c)
-		w.pair(6, "CONTINUOUS")
+		lt := "CONTINUOUS"
+		if loaded[strings.ToUpper(l.Linetype)] {
+			lt = l.Linetype
+		}
+		w.pair(6, lt)
+		if l.NoPlot || l.Lineweight != 0 || l.Description != "" {
+			// R12 has no plot flag, lineweight or description: they ride along as extended data of
+			// the application GODRAW_LAYER, which the reader restores.
+			w.pair(1001, layerApp)
+			w.int(1070, boolInt(l.NoPlot))
+			w.int(1070, l.Lineweight)
+			w.pair(1000, l.Description)
+		}
 	}
 	w.pair(0, "ENDTAB")
-	for _, t := range []string{"STYLE", "VIEW", "UCS", "APPID", "DIMSTYLE"} {
+	for _, t := range []string{"STYLE", "VIEW", "UCS"} {
 		w.rawTable(d, t)
 	}
+	w.appidTable(d)
+	w.rawTable(d, "DIMSTYLE")
 	w.pair(0, "ENDSEC")
 
 	if len(d.Preserved.Blocks) > 0 {
@@ -235,6 +253,46 @@ func (w *writer) block(warns []string, b doc.RawRecord) []string {
 		ps = ps[n:]
 	}
 	return warns
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// loadedLinetypes returns the upper-cased names of the linetypes the written LTYPE table defines.
+func loadedLinetypes(d *doc.Drawing) map[string]bool {
+	m := map[string]bool{"CONTINUOUS": true}
+	for _, r := range d.Preserved.Tables["LTYPE"] {
+		m[strings.ToUpper(r.Name())] = true
+	}
+	return m
+}
+
+// appidTable writes the APPID table: the preserved records plus GODRAW_LAYER when a layer
+// carries extended data.
+func (w *writer) appidTable(d *doc.Drawing) {
+	rs := d.Preserved.Tables["APPID"]
+	need := false
+	for _, l := range d.Layers() {
+		if l.NoPlot || l.Lineweight != 0 || l.Description != "" {
+			need = true
+		}
+	}
+	if !need {
+		w.rawTable(d, "APPID")
+		return
+	}
+	w.pair(0, "TABLE")
+	w.pair(2, "APPID")
+	w.int(70, len(rs)+1)
+	w.records(rs)
+	w.pair(0, "APPID")
+	w.pair(2, layerApp)
+	w.int(70, 0)
+	w.pair(0, "ENDTAB")
 }
 
 // rawTable writes the preserved records of table name as a table, or

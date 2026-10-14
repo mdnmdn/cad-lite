@@ -25,6 +25,9 @@ type Session struct {
 	Ortho bool
 	// Aperture is the pick and snap radius in logical pixels.
 	Aperture float64
+	// aids is the drafting-aid state of aids.go and override.go: grid, snap-to-grid, typed
+	// object snap overrides.
+	aids aidState
 
 	active  Command
 	prompt  *Prompt
@@ -57,6 +60,8 @@ type Session struct {
 	onDrawing []func(*doc.Drawing)
 	onPath    []func(string)
 	filePath  string
+	// files is the modified counter and undo state of dirty.go.
+	files *fileState
 }
 
 // HistoryLimit caps the number of history lines kept.
@@ -66,7 +71,8 @@ const HistoryLimit = 200
 func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 	s := &Session{registry: reg, Snaps: DefaultSnaps, SnapOn: true, Aperture: 8,
 		vars: NewVars(), mem: &lastState{}, prev: &selMemory{}}
-	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath,
+	s.files = newFileState(func() string { return s.filePath })
+	s.ctx = Context{files: s.files, View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath,
 		vars: s.vars, last: s.mem, prev: s.prev, script: s.queueScript}
 	installCommandLine(s)
 	s.SetDrawing(d)
@@ -172,6 +178,7 @@ func (s *Session) SetDrawing(d *doc.Drawing) {
 	s.ctx.Index.Build(d)
 	s.ctx.Selection.Clear()
 	s.prev.hs = nil
+	s.files.attach(d)
 	ix := s.ctx.Index
 	sel := s.ctx.Selection
 	d.OnChange(func(cs doc.ChangeSet) {
@@ -275,8 +282,12 @@ func (s *Session) next(p *Prompt) {
 
 func (s *Session) finish() {
 	if s.ctx.txn != nil {
-		if cs := s.ctx.txn.Commit(); len(cs.Added) > 0 {
+		cs := s.ctx.txn.Commit()
+		if len(cs.Added) > 0 {
 			s.ctx.SetLastEntity(cs.Added[len(cs.Added)-1])
+		}
+		if !cs.Empty() && s.active != nil {
+			s.ctx.Doc.NameLastStep(s.active.Name())
 		}
 		s.ctx.txn = nil
 	}

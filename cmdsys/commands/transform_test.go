@@ -135,7 +135,7 @@ func TestCopyModeSingle(t *testing.T) {
 	s := newSession(t)
 	xfeed(s, "LINE", "0,0", "10,0", "")
 	xfeed(s, "COPY", "L", "", "O")
-	if p := s.Prompt(); p != "Enter a copy mode option or [Single/Multiple] <Multiple>:" {
+	if p := s.Prompt(); p != "Enter a copy mode option [Single/Multiple] <Multiple>:" {
 		t.Fatalf("prompt %q", p)
 	}
 	xfeed(s, "S")
@@ -324,7 +324,7 @@ func TestArrayRectangular(t *testing.T) {
 	s := newSession(t)
 	xfeed(s, "LINE", "0,0", "1,0", "")
 	xfeed(s, "-ARRAY", "L", "")
-	if p := s.Prompt(); p != "Enter the type of array or [Rectangular/Polar] <R>:" {
+	if p := s.Prompt(); p != "Enter the type of array [Rectangular/Polar] <R>:" {
 		t.Fatalf("prompt %q", p)
 	}
 	xfeed(s, "R")
@@ -378,7 +378,7 @@ func TestArrayPolar(t *testing.T) {
 		t.Fatalf("prompt %q", p)
 	}
 	xfeed(s, "")
-	if p := s.Prompt(); !strings.HasPrefix(p, "Rotate arrayed objects as they are copied? or [Yes/No] <Y>") {
+	if p := s.Prompt(); !strings.HasPrefix(p, "Rotate arrayed objects as they are copied? [Yes/No] <Y>") {
 		t.Fatalf("prompt %q", p)
 	}
 	xfeed(s, "")
@@ -412,7 +412,7 @@ func TestArrayCommands(t *testing.T) {
 	s = newSession(t)
 	xfeed(s, "LINE", "0,0", "1,0", "")
 	xfeed(s, "AR", "L", "")
-	if p := s.Prompt(); p != "Enter array type or [Rectangular/PAth/Polar] <Rectangular>:" {
+	if p := s.Prompt(); p != "Enter array type [Rectangular/PAth/Polar] <Rectangular>:" {
 		t.Fatalf("prompt %q", p)
 	}
 	xfeed(s, "PA")

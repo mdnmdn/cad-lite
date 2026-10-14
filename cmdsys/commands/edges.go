@@ -34,11 +34,9 @@ const (
 	kwStandard = "Standard"
 )
 
-// shiftPick is the Input.Text of a point picked with Shift held, which swaps TRIM and EXTEND for
-// that pick. The session does not set it yet; a host that tracks the modifier does.
-const shiftPick = "shift"
-
-func shiftPicked(in cmdsys.Input) bool { return in.Text == shiftPick }
+// shiftPicked reports a point picked with Shift held (Input.Shift), which swaps TRIM and EXTEND
+// for that pick.
+func shiftPicked(in cmdsys.Input) bool { return in.Shift }
 
 type edgeStage int
 
@@ -241,7 +239,7 @@ func (c *edgeCmd) objectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 
 func keywordPrompt(msg string, def string, kws ...string) *cmdsys.Prompt {
 	return &cmdsys.Prompt{Message: msg, Accepts: cmdsys.InputKeyword, Keywords: kws,
-		Default: &cmdsys.Input{Kind: cmdsys.InputKeyword, Keyword: def}}
+		Default: &cmdsys.Input{Kind: cmdsys.InputKeyword, Keyword: def}, NoOr: true}
 }
 
 // --- input --------------------------------------------------------------

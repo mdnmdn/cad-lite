@@ -39,9 +39,9 @@ the installation and the restart follow without further action.
 - **Update.** The button downloads the archive for this platform, checks its sha256 against
   `SHA256SUMS.txt` of the same release (a missing list, a missing entry or a mismatch refuses to install),
   replaces the installation and restarts. The status line shows the percentage, then "installing".
-- **Restart.** Without edits in the drawing the application quits and starts the new version at once.
-  The application has no unsaved-changes flag, so a drawing whose undo history is not empty is taken as
-  possibly unsaved: a dialog offers *Restart and update* or *Later* (the new version then starts at the next launch).
+- **Restart.** With no unsaved changes the application quits and starts the new version at once.
+  A drawing with unsaved changes (`Session.Dirty`: changed since it was created, opened or saved) gets a
+  dialog that offers *Restart and update* or *Later* (the new version then starts at the next launch).
   Settings are saved and the agent closed before the new process starts, and the new process gets the
   arguments of the old one.
 - **Installing.** Windows: the running `go-draw.exe` is renamed to `go-draw.exe.old`, the new one

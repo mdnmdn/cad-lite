@@ -35,11 +35,16 @@ Zero means "no object". The model-space block record is `doc.ModelSpace`, the ow
 segment; it is nil today, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
 
 **Colour.** An entity's `Color` is an AutoCAD Color Index from 1 to 255, or `doc.ByLayer` (256),
-which a transaction assigns when the colour is unset.
+which a transaction assigns when the colour is unset: `Drawing.CurrentColor` (`CECOLOR`) when it is
+set to 1–255, otherwise `ByLayer`.
 
-**Layers.** `doc.Layer` has a name, a colour index and the `Off` and `Locked` flags, plus the stored
-fields `Frozen`, `NoPlot`, `Linetype`, `Lineweight` and `Description`, which the layer commands will
-honour (render, snap and selection do not read `Frozen` yet). Layer "0"
+**Layers.** `doc.Layer` has a name, a colour index, the `Off`, `Locked` and `Frozen` flags, `NoPlot`,
+`Linetype` (a name; "" is CONTINUOUS), `Lineweight` (hundredths of a mm; 0 is the default) and
+`Description`. Whether a layer's entities are drawn, snapped and picked is one rule in
+`doc/layerstate.go`: `Layer.Visible` (not off, not frozen) and `Layer.Editable` (visible and unlocked),
+reached for an entity as `Drawing.EntityVisible` and `EntityEditable`; render, snap and selection all
+call them, so a new layer flag is honoured by changing that file. `Drawing.RemoveLayer` deletes an
+unreferenced layer (never "0" or the current one). Layer "0"
 always exists. `Drawing.CurrentLayer` is the layer new entities go on. Layer table edits are direct
 and not journalled.
 
@@ -82,8 +87,9 @@ on top.
 `journal.go` adds the hooks the UNDO commands use, all over the same steps: `Drawing.Mark` pushes a marker at
 the current depth and `UndoToMark` undoes back to the latest one (a marker the history has been undone
 past is dropped); `BeginGroup` and `EndGroup` merge the transactions committed between them into one undo
-step (groups nest; only the outermost end merges); `UndoN` and `RedoN` step several times; `UndoDepth` and
-`HasMark` report state. A group or open transaction refuses `UndoToMark`.
+step (groups nest; only the outermost end merges); `UndoN` and `RedoN` step several times; `UndoDepth`,
+`RedoDepth` and `HasMark` report state. `NameLastStep` and `UndoName` carry the command name of a step, which
+the session records when a command ends, so `U` can name what it undid. A group or open transaction refuses `UndoToMark`.
 
 `Drawing.AbortOpen` aborts the open transaction if there is one, and does nothing otherwise. A host uses
 it to recover when a panic left a transaction open (`cmdsys.Session.guard`, `cadmcp`).

@@ -120,7 +120,7 @@ func TestMirrorPromptsAndErrors(t *testing.T) {
 		t.Fatalf("coincident points not rejected: %q\n%s", s.Prompt(), history(s))
 	}
 	s.Submit("5,0")
-	if got := s.Prompt(); !strings.Contains(got, "Erase source objects") || !strings.Contains(got, "[Yes/No] <No>") {
+	if got := s.Prompt(); !strings.Contains(got, "Erase source objects? [Yes/No] <N>") {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Escape()
@@ -173,15 +173,15 @@ func TestOffsetRemembersLastDistanceAndPrompts(t *testing.T) {
 	addEntities(t, s, &doc.Line{Start: geom.V(0, 0), End: geom.V(100, 0)})
 	s.Script("OFFSET 7 50,0 50,5 ")
 	s.Submit("OFFSET")
-	if got := s.Prompt(); got != "Specify offset distance or [Through] <7>:" {
+	if got := s.Prompt(); got != "Specify offset distance or [Through/Erase/Layer] <7>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("")
-	if got := s.Prompt(); got != "Select object to offset or [Exit] <Exit>:" {
+	if got := s.Prompt(); got != "Select object to offset or [Exit/Undo] <Exit>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("50,0")
-	if got := s.Prompt(); got != "Specify point on side to offset or [Exit] <Exit>:" {
+	if got := s.Prompt(); got != "Specify point on side to offset or [Exit/Multiple/Undo] <Exit>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("50,9")
@@ -485,7 +485,7 @@ func TestChamferDefaultsAndSecondDistanceDefault(t *testing.T) {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("")
-	if got := s.Prompt(); got != "Select first line or [Distance]:" {
+	if got := s.Prompt(); got != "Select first line or [Undo/Polyline/Distance/Angle/Trim/mEthod/Multiple]:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Script("50,0 0,50")

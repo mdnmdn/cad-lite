@@ -6,8 +6,8 @@ import "strings"
 // metadata. Verify requires name, desc, tip and aliases for each, in every language.
 var Commands = []string{
 	"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "POLYGON", "ERASE", "MOVE", "COPY", "ROTATE", "SCALE",
-	"UNDO", "REDO", "ZOOM", "LAYER", "DIST", "AREA", "MEASUREGEOM", "ID", "LIST", "NEW", "OPEN",
-	"SAVE", "MIRROR", "OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "BREAKATPOINT", "JOIN", "EXPLODE",
+	"UNDO", "U", "REDO", "ZOOM", "LAYER", "DIST", "AREA", "MEASUREGEOM", "ID", "LIST", "UNITS", "NEW", "OPEN",
+	"SAVE", "MIRROR", "OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "BREAKATPOINT", "JOIN", "EXPLODE", "STRETCH",
 	"AI", "OPTIONS",
 }
 

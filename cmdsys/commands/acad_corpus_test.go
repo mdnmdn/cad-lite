@@ -488,6 +488,9 @@ func acadVar(s *cmdsys.Session, name string) (string, bool) {
 	if name == "VIEWCTR" { // a point is "x,y,z" in AutoCAD
 		return cmdsys.FormatPoint(s.View().Center) + ",0", true
 	}
+	if d, ok := s.Vars().Lookup(name); ok && d.Kind == cmdsys.VarPoint {
+		return cmdsys.FormatPoint(s.Vars().Point(name)) + ",0", true
+	}
 	if s.Vars().Has(name) {
 		return s.Vars().String(name), true
 	}

@@ -154,7 +154,7 @@ func TestItalianPluralsAndWholeSentences(t *testing.T) {
 		t.Fatalf("singular form: last = %q", got)
 	}
 	s.Run("RACCORDO")
-	if got := s.Prompt(); !strings.HasPrefix(got, "Selezionare primo oggetto o [Raggio]") {
+	if got := s.Prompt(); !strings.HasPrefix(got, "Selezionare primo oggetto o [Annulla/Polilinea/Raggio/Taglia/Multiplo]") {
 		t.Fatalf("FILLET prompt = %q", got)
 	}
 }

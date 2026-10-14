@@ -247,6 +247,9 @@ func readTables(d *doc.Drawing, objs []object) {
 			if o.typ == "LTYPE" && strings.EqualFold(o.str(2), "CONTINUOUS") {
 				continue
 			}
+			if o.typ == "APPID" && strings.EqualFold(o.str(2), layerApp) {
+				continue
+			}
 			r := doc.RawRecord{Pairs: rawPairs(o)}
 			bumpSeed(d, r.Pairs)
 			if d.Preserved.Tables == nil {
@@ -321,8 +324,49 @@ func readLayer(d *doc.Drawing, o object) {
 	if color >= 1 && color <= 255 {
 		l.Color = color
 	}
-	l.Locked = o.int(70)&4 != 0
+	flags := o.int(70)
+	l.Locked = flags&4 != 0
+	l.Frozen = flags&1 != 0
+	if lt := o.str(6); !strings.EqualFold(lt, "CONTINUOUS") {
+		l.Linetype = lt
+	}
+	// R2000 and later write the plot flag (290) and lineweight (370) natively; the R12 writer here
+	// keeps them in extended data of GODRAW_LAYER (see layerApp).
+	if o.has(290) {
+		l.NoPlot = o.int(290) == 0
+	}
+	if o.has(370) && o.int(370) > 0 {
+		l.Lineweight = o.int(370)
+	}
+	readLayerXData(l, o)
 }
+
+// readLayerXData restores the fields the writer put in GODRAW_LAYER extended data: the plot flag,
+// the lineweight and the description, in that order.
+func readLayerXData(l *doc.Layer, o object) {
+	in := false
+	ints := 0
+	for _, p := range o.pairs {
+		switch {
+		case p.code == 1001:
+			in = strings.TrimSpace(p.val) == layerApp
+		case !in:
+		case p.code == 1070:
+			v, _ := strconv.Atoi(strings.TrimSpace(p.val))
+			if ints == 0 {
+				l.NoPlot = v != 0
+			} else if ints == 1 {
+				l.Lineweight = v
+			}
+			ints++
+		case p.code == 1000:
+			l.Description = p.val
+		}
+	}
+}
+
+// layerApp is the application name of the layer extended data (see the writer).
+const layerApp = "GODRAW_LAYER"
 
 func common(o object) doc.EntityCommon {
 	c := doc.EntityCommon{Layer: o.str(8), Color: doc.ByLayer}

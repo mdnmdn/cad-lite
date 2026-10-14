@@ -27,8 +27,6 @@ type Workspace struct {
 	win         *gpui.Window
 
 	canvas canvasState
-	// Grid toggles the background grid (F7).
-	Grid bool
 	// WheelZoom makes a precise (trackpad) vertical scroll zoom instead of
 	// pan, so the plain wheel always zooms as in AutoCAD. Ctrl+wheel zooms
 	// and Shift+wheel pans either way.
@@ -48,7 +46,7 @@ const historyLines = 4
 // disables OPEN and SAVE (as in a browser build).
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	v := render.DefaultView(800, 600)
-	ws := &Workspace{view: &v, Grid: true, fitPending: d.Len() > 0}
+	ws := &Workspace{view: &v, fitPending: d.Len() > 0}
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
@@ -112,9 +110,12 @@ func (ws *Workspace) run(name string, w *gpui.Window) {
 var (
 	actionUndo      = gpui.NewAction("cad-undo")
 	actionRedo      = gpui.NewAction("cad-redo")
+	actionSave      = gpui.NewAction("cad-save")
+	actionSaveAs    = gpui.NewAction("cad-save-as")
 	actionSnap      = gpui.NewAction("cad-toggle-snap")
 	actionOrtho     = gpui.NewAction("cad-toggle-ortho")
 	actionGrid      = gpui.NewAction("cad-toggle-grid")
+	actionSnapGrid  = gpui.NewAction("cad-toggle-snap-grid")
 	actionZoomExtnt = gpui.NewAction("cad-zoom-extents")
 	actionAgent     = gpui.NewAction("cad-toggle-agent")
 )
@@ -126,9 +127,14 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("cmd-z", actionUndo, "cad"),
 		gpui.NewKeyBinding("ctrl-y", actionRedo, "cad"),
 		gpui.NewKeyBinding("cmd-shift-z", actionRedo, "cad"),
+		gpui.NewKeyBinding("ctrl-s", actionSave, "cad"),
+		gpui.NewKeyBinding("cmd-s", actionSave, "cad"),
+		gpui.NewKeyBinding("ctrl-shift-s", actionSaveAs, "cad"),
+		gpui.NewKeyBinding("cmd-shift-s", actionSaveAs, "cad"),
 		gpui.NewKeyBinding("f3", actionSnap, "cad"),
 		gpui.NewKeyBinding("f7", actionGrid, "cad"),
 		gpui.NewKeyBinding("f8", actionOrtho, "cad"),
+		gpui.NewKeyBinding("f9", actionSnapGrid, "cad"),
 		gpui.NewKeyBinding("ctrl-e", actionZoomExtnt, "cad"),
 		gpui.NewKeyBinding("f2", actionAgent, "cad"),
 	}, settingsBindings()...)
@@ -155,12 +161,15 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	s := ws.session
 	return ws.withSettings(cx, gpui.NewDiv().KeyContext("cad").
 		FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13).
-		OnAction(actionUndo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("UNDO", w) }).
+		OnAction(actionUndo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("U", w) }).
 		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
+		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("QSAVE", w) }).
+		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("SAVEAS", w) }).
 		OnAction(actionSnap, toggle(func() { s.SnapOn = !s.SnapOn })).
 		OnAction(actionOrtho, toggle(func() { s.Ortho = !s.Ortho })).
 		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).
-		OnAction(actionGrid, toggle(func() { ws.Grid = !ws.Grid })).
+		OnAction(actionGrid, toggle(func() { s.SetGrid(!s.Grid()) })).
+		OnAction(actionSnapGrid, toggle(func() { s.SetSnapGrid(!s.SnapGrid()) })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
 		Child(
 			ws.toolbar(),
@@ -220,7 +229,7 @@ func (ws *Workspace) toolbar() *gpui.Div {
 		ws.button("area", tb("area"), "AREA", icons.MeasureArea),
 		ws.button("id", "", "ID", icons.MeasureIdPoint),
 		separator(),
-		ws.button("undo", tb("undo"), "UNDO", icons.EditUndo),
+		ws.button("undo", tb("undo"), "U", icons.EditUndo),
 		ws.button("redo", tb("redo"), "REDO", icons.EditRedo),
 		ws.button("zoom", tb("zoom"), "ZOOM", icons.ViewZoomWindow),
 		gpui.NewDiv().Flex1(),
@@ -262,6 +271,9 @@ func (ws *Workspace) sidePanel() *gpui.Div {
 		stateCol := uiText
 		if l.Off {
 			state, stateCol = i18n.T("ui.layers.off"), uiMuted
+		}
+		if l.Frozen {
+			state, stateCol = i18n.T("ui.layers.frozen"), uiMuted
 		}
 		vis := gpui.NewDiv().ID("layer-vis-" + l.Name).Px_(6).Rounded(3).Bg(uiPanelAlt).Tooltip(i18n.T("ui.layers.visibility_tip")).
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
@@ -346,12 +358,22 @@ func (ws *Workspace) statusBar() *gpui.Div {
 	}
 	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
 		gpui.NewDiv().SizeW(170).Tooltip(i18n.T("ui.status.coords_tip")).Child(gpui.NewText(coords)),
-		flag("grid", i18n.T("ui.status.grid"), i18n.T("ui.status.grid_tip"), icons.ViewGrid, ws.Grid, func() { ws.Grid = !ws.Grid }),
+		flag("grid", i18n.T("ui.status.grid"), i18n.T("ui.status.grid_tip"), icons.ViewGrid, s.Grid(), func() { s.SetGrid(!s.Grid()) }),
 		flag("snap", i18n.T("ui.status.osnap"), i18n.T("ui.status.osnap_tip"), icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
 		flag("ortho", i18n.T("ui.status.ortho"), i18n.T("ui.status.ortho_tip"), icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
 		gpui.NewDiv().Flex1(),
+		ws.modifiedMark(),
 		gpui.NewText(i18n.T("ui.status.summary", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted),
 	)
+}
+
+// modifiedMark is the status bar's "unsaved changes" star: empty while the drawing is clean.
+func (ws *Workspace) modifiedMark() *gpui.Div {
+	d := gpui.NewDiv().ID("status-modified")
+	if ws.session.Dirty() {
+		d.Tooltip(i18n.T("ui.status.modified_tip")).Child(gpui.NewText("*").FontWeight(700).TextColor(uiOn))
+	}
+	return d
 }
 
 func gpuiColor(c render.Color) gpui.Rgba { return gpui.RgbaOf(c.R, c.G, c.B, c.A) }

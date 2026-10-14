@@ -40,11 +40,8 @@ func (b *Builder) Invalidate(cs doc.ChangeSet) {
 // InvalidateAll drops every cached item, e.g. after a layer colour changes.
 func (b *Builder) InvalidateAll() { clear(b.cache) }
 
-// Visible reports whether the entity's layer is on.
-func (b *Builder) Visible(e doc.Entity) bool {
-	l := b.d.Layer(e.Common().Layer)
-	return l == nil || !l.Off
-}
+// Visible reports whether the entity's layer is on and thawed.
+func (b *Builder) Visible(e doc.Entity) bool { return b.d.EntityVisible(e) }
 
 // EntityColor resolves an entity's colour: ByLayer through its layer, and
 // ACI 7 to black or white against the background.

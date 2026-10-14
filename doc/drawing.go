@@ -52,6 +52,9 @@ type Drawing struct {
 	Preserved Preserved
 	// CurrentLayer is the layer new entities go on ($CLAYER).
 	CurrentLayer string
+	// CurrentColor is the colour new entities get ($CECOLOR): an AutoCAD Color Index (1–255), or
+	// 0 or ByLayer for the layer's colour.
+	CurrentColor int
 
 	layers   []*Layer
 	entities map[Handle]Entity

@@ -68,8 +68,46 @@ quadrant = "Quadrant"
 intersection = "Intersection"
 nearest = "Nearest"
 generic = "Snap"
+node = "Node"
+insertion = "Insertion"
+perpendicular = "Perpendicular"
+tangent = "Tangent"
+of = "%s of"
+from_base = "Base point"
+from_offset = "<Offset>"
+m2p_first = "First point of mid"
+m2p_second = "Second point of mid"
+unsupported = "Object snap %s is not supported."
+none_found = "No object snap found."
 
 [kw]
+zall = "All"
+scale = "Scale"
+make = "Make"
+set = "Set"
+new = "New"
+color = "Color"
+ltype = "Ltype|LT"
+lweight = "LWeight"
+plot = "Plot"
+no_plot = "No plot"
+freeze = "Freeze"
+thaw = "Thaw"
+lock = "LOck"
+unlock = "Unlock"
+description = "Description"
+settings = "Settings"
+chlayer = "LAyer"
+layers = "LAyers"
+zero_length_geometry = "Zero-length geometry"
+_ = "?"
+snap = "Snap"
+major = "Major"
+aspect = "Aspect"
+style = "Style"
+type = "Type"
+isometric = "Isometric"
+grid = "Grid"
 project = "Project"
 erase = "eRase"
 boundary_edges = "Boundary edges"
@@ -136,6 +174,15 @@ add = "Add"
 remove = "Remove"
 multiple = "Multiple"
 auto = "AUto"
+control = "Control"
+begin = "BEgin"
+mark = "Mark"
+back = "Back"
+one = "One"
+combine = "Combine"
+on = "ON"
+off = "OFF"
+cancel = "Cancel"
 single = "SIngle"
 displacement = "Displacement"
 mode = "mOde"
@@ -149,6 +196,17 @@ rectangular = "Rectangular"
 polar = "Polar|po"
 path = "PAth"
 base = "Base"
+add_area = "Add area"
+subtract_area = "Subtract area"
+polyline = "Polyline"
+trim = "Trim"
+no_trim = "No trim"
+erase_offset = "Erase"
+layer = "Layer"
+current = "Current"
+source = "Source"
+method = "mEthod"
+chamfer_angle = "Angle"
 
 [cmd.select.prompt]
 first_corner = "Specify first corner"
@@ -288,7 +346,9 @@ scale_new = "Specify new length"
 first_point = "Specify first point"
 
 [cmd.modify.msg]
-rotate_header = "Current positive angle in UCS:  ANGDIR=counterclockwise  ANGBASE=0"
+rotate_header = "Current positive angle in UCS:  ANGDIR=%s  ANGBASE=%s"
+angdir_ccw = "counterclockwise"
+angdir_cw = "clockwise"
 rotate_copy = "Rotating a copy of the selected objects."
 scale_copy = "Scaling a copy of the selected objects."
 
@@ -316,19 +376,70 @@ nothing = "Nothing to restore."
 
 [cmd.undo.msg]
 everything_undone = "Everything has been undone."
+undone = "%s"
+disabled = "UNDO is turned off (UNDO Control None)."
+positive = "Enter a whole number of 1 or more."
+no_group = "There is no UNDO Begin group to end."
+
+[cmd.undo.prompt]
+count = "Enter the number of operations to undo"
+auto = "Enter UNDO Auto mode"
+control = "Enter an UNDO control option"
+back_all = "This will undo everything. OK"
+
+[cmd.mredo.prompt]
+count = "Enter number of actions to redo"
 
 [cmd.redo.msg]
 nothing_to_redo = "Nothing to redo."
 
 [cmd.zoom.prompt]
+center = "Specify center point"
+height = "Enter magnification or height"
+scale = "Enter a scale factor (nX or nXP)"
 corner = "Specify corner of window"
 first_corner = "Specify first corner"
 opposite_corner = "Specify opposite corner"
 
 [cmd.layer.prompt]
+pick = "Select object whose layer to use"
+option = "Enter an option"
+list = "Enter layer name(s) to list"
+make = "Enter name for new layer (becomes the current layer)"
+set = "Enter layer name to make current or <select object>"
+new = "Enter name list for new layer(s)"
+names_on = "Enter layer name(s) to turn on or <select object>"
+names_off = "Enter layer name(s) to turn off or <select object>"
+names_freeze = "Enter layer name(s) to freeze or <select object>"
+names_thaw = "Enter layer name(s) to thaw or <select object>"
+names_lock = "Enter layer name(s) to lock or <select object>"
+names_unlock = "Enter layer name(s) to unlock or <select object>"
+color = "New color (1-255 or a name)"
+ltype = "Enter loaded linetype name or [?]"
+lweight = "Enter lineweight in mm (0.00 to 2.11) or DEFAULT"
+plot = "Plot flag"
+desc_name = "Enter name of the layer to describe"
+description = "Enter description of layer %s"
+color_names = "Enter name list of layer(s) for color %d"
+ltype_names = "Enter name list of layer(s) for this linetype"
+lweight_names = "Enter name list of layer(s) for this lineweight"
+plot_names = "Enter name list of layer(s) for this plot flag"
+really_off = "Really want layer %s (the CURRENT layer) off?"
 name = "Layer name to make current, or name=color <%s>"
 
 [cmd.layer.msg]
+row = "%-24s %-14s %3d  %s"
+current = "Current layer: %s"
+not_found = "Cannot find layer %q."
+nothing_picked = "No object found there."
+freeze_current = "Layer %q is the CURRENT layer and cannot be frozen."
+set_frozen = "Layer %q is frozen and cannot be made current."
+bad_name = "Invalid layer name. A name cannot be empty or contain < > / \\ \" : ; ? * | , = `"
+exists = "Layer %q already exists."
+bad_lineweight = "Invalid lineweight. Use a standard value in mm (0.05, 0.09, 0.13 ... 2.11) or DEFAULT."
+ltype_header = "Loaded linetypes:"
+ltype_not_loaded = "Linetype %q is not loaded."
+list_header = "Layer name               State          Color  Linetype"
 bad_color = "Color must be an AutoCAD Color Index from 1 to 255."
 created = "Layer %q created."
 
@@ -339,20 +450,36 @@ second_point = "Specify second point"
 
 [cmd.dist.msg]
 total = "Distance = %s"
-result = "Distance = %s,  Angle = %s°,  Delta X = %s,  Delta Y = %s"
+result = "Distance = %s,  Angle in XY Plane = %s,  Angle from XY Plane = %s"
+delta = "Delta X = %s,  Delta Y = %s,  Delta Z = %s"
 
 [cmd.id.prompt]
 point = "Specify point"
 
 [cmd.id.msg]
-result = "X = %s     Y = %s"
+result = "X = %s  Y = %s  Z = %s"
 
 [cmd.list.msg]
-header = "%s  Layer: %q  Handle = %s"
-line = "    from point %s  to point %s  Length = %s"
-circle = "    center point %s  radius %s"
-arc = "    center point %s  radius %s  start angle %s°  end angle %s°"
-polyline = "    %d vertices  closed: %s  length %s"
+header = "%s  Layer: %q"
+space = "                Space: Model space"
+handle = "                Handle = %s"
+from_point = "from point, X=%s  Y=%s  Z=%s"
+to_point = "  to point, X=%s  Y=%s  Z=%s"
+line_length = "Length = %s,  Angle in XY Plane = %s"
+delta = "      Delta X = %s,  Delta Y = %s,  Delta Z = %s"
+center = "center point, X=%s  Y=%s  Z=%s"
+radius = "radius %s"
+circumference = "circumference %s"
+area = "area %s"
+perimeter = "perimeter %s"
+length = "length %s"
+start_angle = "start angle %s"
+end_angle = "end angle %s"
+arc_length = "length %s"
+open = "Open"
+closed = "Closed"
+constant_width = "Constant width %s"
+at_point = "at point  X=%s  Y=%s  Z=%s"
 
 [cmd.area.prompt]
 first_corner = "Specify first corner point"
@@ -362,6 +489,7 @@ next_corner = "Specify next corner point or press ENTER for total"
 result = "Area = %s, Perimeter = %s"
 result_object = "Area = %s, %s = %s"
 no_area = "Object has no area."
+total = "Total area = %s"
 
 [cmd.area.label]
 circumference = "Circumference"
@@ -384,7 +512,39 @@ second_line = "Select second line"
 [cmd.angle.msg]
 select_object = "Select an arc, a circle or a line."
 select_line = "Select a line."
-result = "Angle = %s°"
+result = "Angle = %s"
+
+[cmd.units.prompt]
+length_format = "Enter choice, 1 to 5"
+decimals = "Enter number of digits to right of decimal point (0 to 8)"
+denominator = "Enter denominator of smallest fraction to display (1, 2, 4, 8, 16, 32, 64, 128, or 256)"
+angle_format = "Enter choice, 1 to 5"
+angle_places = "Enter number of fractional places for display of angles (0 to 8)"
+base = "Enter direction for angle 0"
+clockwise = "Do you want angle measured clockwise?"
+
+[cmd.units.msg]
+report_formats = "Report formats:  (Examples)"
+length_1 = "1. Scientific      1.55E+01"
+length_2 = "2. Decimal         15.50"
+length_3 = "3. Engineering     1'-3.50\""
+length_4 = "4. Architectural   1'-3 1/2\""
+length_5 = "5. Fractional      15 1/2"
+angle_systems = "Systems of angle measure:  (Examples)"
+angle_1 = "1. Decimal degrees          45.0000"
+angle_2 = "2. Degrees/minutes/seconds  45d00'00\""
+angle_3 = "3. Grads                    50.0000g"
+angle_4 = "4. Radians                  0.7854r"
+angle_5 = "5. Surveyor's units         N 45d0'0\" E"
+direction_systems = "Direction for angle 0:"
+direction_east = "    East     3 o'clock      0d"
+direction_north = "    North   12 o'clock     90d"
+direction_west = "    West     9 o'clock    180d"
+direction_south = "    South    6 o'clock    270d"
+range_1_5 = "Requires an integer value between 1 and 5."
+range_0_8 = "Requires an integer value between 0 and 8."
+bad_denominator = "Requires a power of 2 from 1 to 256."
+bad_angle = "Requires a valid angle."
 
 [cmd.measuregeom.prompt]
 option = "Enter an option"
@@ -392,7 +552,7 @@ option = "Enter an option"
 [cmd.mirror.prompt]
 first_point = "Specify first point of mirror line"
 second_point = "Specify second point of mirror line"
-erase_source = "Erase source objects"
+erase_source = "Erase source objects?"
 
 [cmd.mirror.msg]
 points_differ = "The two points of the mirror line must differ."
@@ -403,9 +563,14 @@ second_point = "Specify second point"
 select = "Select object to offset"
 side = "Specify point on side to offset"
 through = "Specify through point"
+erase = "Erase source object after offsetting?"
+layer = "Enter layer option for offset objects"
 
 [cmd.offset.msg]
-positive_distance = "Requires a positive, nonzero distance."
+layer_source = "Source"
+layer_current = "Current"
+next_object = "next object"
+settings = "Current settings: Erase source=%s  Layer=%s  OFFSETGAPTYPE=%d"
 nothing_found = "Nothing found at that point."
 cannot_offset = "Cannot offset this object."
 degenerate = "The offset would have a zero or negative radius; nothing was created."
@@ -414,15 +579,30 @@ through_on_object = "The through point lies on the object; nothing was created."
 [cmd.corner.prompt]
 select_first_object = "Select first object"
 select_first_line = "Select first line"
-select_second_object = "Select second object"
-select_second_line = "Select second line"
+select_second_object = "Select second object or shift-select to apply corner"
+select_second_line = "Select second line or shift-select to apply corner"
+select_polyline = "Select 2D polyline"
+chamfer_len = "Specify chamfer length on the first line"
+chamfer_ang = "Specify chamfer angle from the first line"
+trim_mode = "Enter Trim mode option"
+method = "Enter trim method"
 fillet_radius = "Specify fillet radius"
 chamfer_d1 = "Specify first chamfer distance"
 chamfer_d2 = "Specify second chamfer distance"
 
 [cmd.corner.msg]
-chamfer_settings = "(TRIM mode) Current chamfer Dist1 = %s, Dist2 = %s"
-fillet_settings = "Current settings: Mode = TRIM, Radius = %s"
+mode_trim = "TRIM"
+mode_notrim = "NOTRIM"
+chamfer_settings = "(%s mode) Current chamfer Dist1 = %s, Dist2 = %s"
+chamfer_settings_angle = "(%s mode) Current chamfer Length = %s, Angle = %s"
+fillet_settings = "Current settings: Mode = %s, Radius = %s"
+not_polyline = "Not a 2D polyline."
+filleted_one = "%d line was filleted"
+filleted_other = "%d lines were filleted"
+chamfered_one = "%d line was chamfered"
+chamfered_other = "%d lines were chamfered"
+too_short_one = "%d was too short"
+too_short_other = "%d were too short"
 non_negative = "Requires a non-negative distance."
 nothing_found = "Nothing found at that point."
 supports_two_lines = "%s supports two lines."
@@ -518,10 +698,13 @@ open_failed = "Open failed: %v"
 opened = "Opened %s (%d entities)."
 more_warnings = "... and %d more warnings."
 warning = "Warning: %s"
+quit_unavailable = "Quitting is not available on this platform."
+untitled = "Untitled"
 
 [cmd.file.prompt]
 open_path = "Enter path of drawing to open"
 save_path = "Enter path of drawing to save"
+save_changes = "Save changes to %s?"
 
 [cmd.ai.msg]
 unavailable = "The AI agent is not available on this platform."
@@ -585,6 +768,7 @@ layers = "LAYERS"
 properties = "PROPERTIES"
 
 [ui.layers]
+frozen = "frozen"
 on = "on"
 off = "off"
 visibility_tip = "Layer visibility — click to show or hide this layer"
@@ -599,6 +783,7 @@ layer = "Layer: %s"
 handle = "Handle: %s"
 
 [ui.status]
+modified_tip = "Unsaved changes — the drawing differs from its saved file"
 coords_tip = "Cursor position — model units"
 grid = "GRID"
 grid_tip = "Grid — shows or hides the drawing grid (F7)"
@@ -806,6 +991,18 @@ desc = "Moves the selected objects without changing them"
 tip = "Move — moves the selected objects without changing them (MOVE / M)"
 aliases = ["M"]
 
+[cmd.stretch]
+name = "Stretch"
+desc = "Stretches the objects crossed by a window, moving the vertices and endpoints inside it"
+tip = "Stretch — stretches the objects crossed by a window, moving the vertices and endpoints inside it (STRETCH / S)"
+aliases = ["S"]
+
+[cmd.multiple.prompt]
+name = "Enter command name to repeat"
+
+[cmd.stretch.msg]
+hint = "Select objects to stretch by crossing-window or crossing-polygon..."
+
 [cmd.copy]
 name = "Copy"
 desc = "Duplicates the selected objects, leaving the originals in place"
@@ -825,6 +1022,12 @@ tip = "Scale — makes the selected objects bigger or smaller about a base point
 aliases = ["SC"]
 
 [cmd.undo]
+name = "Undo"
+desc = "Takes back changes, or sets an undo mark or group"
+tip = "Undo — takes back changes, or sets an undo mark or group (UNDO)"
+aliases = []
+
+[cmd.u]
 name = "Undo"
 desc = "Takes back the last change"
 tip = "Undo — takes back the last change (Ctrl+Z / U)"
@@ -865,6 +1068,12 @@ name = "Measure geometry"
 desc = "Measures distance, radius, angle or area"
 tip = "Measure geometry — measures distance, radius, angle or area (MEASUREGEOM / MEA)"
 aliases = ["MEA"]
+
+[cmd.units]
+name = "Units"
+desc = "Sets the length and angle formats, their precision and the direction of angle 0"
+tip = "Units — sets the length and angle formats, their precision and the direction of angle 0 (UNITS / UN)"
+aliases = ["UN"]
 
 [cmd.id]
 name = "ID point"
@@ -970,3 +1179,85 @@ aliases = ["OP"]
 
 [cmd.options.msg]
 unavailable = "Settings are not available."
+
+[cmd.ortho.prompt]
+mode = "Enter mode"
+
+[cmd.grid.prompt]
+spacing = "Specify grid spacing(X)"
+major = "Specify major grid line frequency"
+horizontal = "Specify horizontal spacing"
+vertical = "Specify vertical spacing"
+
+[cmd.snap.prompt]
+spacing = "Specify snap spacing"
+horizontal = "Specify horizontal spacing"
+vertical = "Specify vertical spacing"
+style = "Enter snap grid style"
+type = "Enter snap type"
+
+[cmd.osnap.prompt]
+modes = "Enter list of object snap modes"
+
+[cmd.osnap.msg]
+current = "Current osnap modes: %s"
+invalid = "Invalid object snap mode: %s"
+
+[cmd.aids.msg]
+positive = "Requires a positive non-zero value."
+invalid_value = "Invalid value."
+
+[cmd.layer.state]
+on = "On"
+off = "Off"
+frozen = "Frozen"
+locked = "Locked"
+noplot = "NoPlot"
+
+[cmd.pan.prompt]
+base = "Specify base point or displacement"
+second = "Specify second point or <use first point as displacement>"
+
+[cmd.zoom.msg]
+bad_scale = "Enter a number, or a scale factor such as 2, 0.5X or 2XP."
+no_previous = "No previous view saved."
+
+[cmd.matchprop.prompt]
+source = "Select source object"
+dest = "Select destination object(s)"
+settings = "Enter setting to switch"
+
+[cmd.matchprop.setting]
+color = "Color"
+layer = "Layer"
+
+[cmd.matchprop.msg]
+no_object = "No object found there."
+settings = "Current active settings = %s"
+locked_one = "%d object is on a locked layer and was not changed."
+locked_other = "%d objects are on locked layers and were not changed."
+
+[cmd.chprop.prompt]
+property = "Enter property to change"
+color = "Enter new color (1-255 or a name)"
+layer = "Enter new layer name"
+
+[cmd.color.prompt]
+color = "New object color (1-255, a name, or BYLAYER)"
+
+[cmd.ltscale.prompt]
+factor = "Enter new linetype scale factor"
+
+[cmd.ltscale.msg]
+positive = "Requires a positive non-zero value."
+
+[cmd.purge.prompt]
+type = "Enter type of unused objects to purge"
+names = "Enter name(s) to purge"
+verify = "Verify each name to be purged?"
+each = "Purge layer %q?"
+
+[cmd.purge.msg]
+deleted = "Deleted layer %q."
+zero_length_one = "%d zero-length object deleted."
+zero_length_other = "%d zero-length objects deleted."

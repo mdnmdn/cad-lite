@@ -65,6 +65,7 @@ func (d *Drawing) EndGroup() {
 				merged.After[h] = a
 			}
 		}
+		merged.Name = steps[0].Name
 		j.undo = append(j.undo[:j.groupStart], merged)
 	}
 	j.dropMarks()
@@ -89,6 +90,25 @@ func (d *Drawing) RedoN(n int) int {
 		done++
 	}
 	return done
+}
+
+// RedoDepth returns the number of steps that can be redone.
+func (d *Drawing) RedoDepth() int { return len(d.journal.redo) }
+
+// NameLastStep records name (a command name) on the latest undo step, for UndoName.
+func (d *Drawing) NameLastStep(name string) {
+	if j := &d.journal; len(j.undo) > 0 {
+		j.undo[len(j.undo)-1].Name = name
+	}
+}
+
+// UndoName returns the name of the step Undo would revert next, or "" when there is none or it
+// was not named.
+func (d *Drawing) UndoName() string {
+	if j := &d.journal; len(j.undo) > 0 {
+		return j.undo[len(j.undo)-1].Name
+	}
+	return ""
 }
 
 // UndoDepth returns the number of steps that can be undone.

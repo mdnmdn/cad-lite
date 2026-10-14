@@ -59,7 +59,7 @@ Later items draw over earlier ones.
 
 | Item | Rule |
 |---|---|
-| Grid | F7 or the GRID flag toggles it. Lines sit every power of ten model units that is at least 16 px apart; every tenth line is stronger. It is omitted when more than 400 lines would show |
+| Grid | F7 or the GRID flag toggles it. Lines sit every `GRIDUNIT` (x and y), widened by powers of ten until at least 16 px apart; every `GRIDMAJOR`-th (5) line is stronger. It is omitted when more than 400 lines would show |
 | Entities | Visible entities, on layers that are on, in their layer or entity colour; ACI 7 contrasts with the background |
 | Hover highlight | The entity under the pickbox, in a lighter blue and thicker. Absent while a command asks for a point, while a box is dragged, and for selected entities |
 | Selection highlight | Selected entities, in blue and thicker |
@@ -67,7 +67,7 @@ Later items draw over earlier ones.
 | Selection box | A **window** (left to right) is blue; a **crossing** (right to left) is green. It appears after the pointer moves 4 px from the press |
 | UCS icon | Red X and green Y axes in the bottom-left corner, a fixed 36 px long |
 | Crosshair and pickbox | Full-height and full-width hairlines through the cursor, with a small square pickbox at the cursor when no point is being asked for. While a point is asked for, the crosshair sits on the snapped point and there is no pickbox |
-| Snap marker | While a point is asked for and a snap applies: a square for endpoint, a triangle for midpoint, a circle for centre, a diamond for quadrant, an X for intersection, an hourglass for nearest |
+| Snap marker | While a point is asked for and a snap applies: a square for endpoint, a triangle for midpoint, a circle for centre, a diamond for quadrant, an X for intersection, an hourglass for nearest, a right angle for perpendicular, a circle on a line for tangent |
 
 The crosshair, pickbox and the status-bar coordinates show only while a real pointer position is
 known and over the canvas. Before the pointer first moves in the window, and after it leaves the
@@ -85,7 +85,7 @@ the operating system cursor shows beside the crosshair.
 
 ### Layers panel
 
-Each layer shows its colour swatch, its name and an `on` or `off` button. The current layer's name
+Each layer shows its colour swatch, its name and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
 is bold. Clicking a row makes that layer current. Clicking the button toggles the layer off or on;
 entities on an off layer are neither drawn nor selectable.
 

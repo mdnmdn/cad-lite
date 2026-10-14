@@ -7,7 +7,7 @@ summary: The command model, the session state machine, typed-input parsing, the 
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
+code_anchors: [cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -36,10 +36,19 @@ handler through `cmdsys.Context`. `Context.Tx` opens the command's transaction o
 default, and an optional `Base` point. `Prompt.StringIn` renders AutoCAD's form:
 `Specify next point or [Close/Undo] <default>:`, in the language of the translator it is given
 (`Prompt.String` uses `i18n.Current()`). A keyword is its English id (`eXit`); the shortcut, the
-label shown and the matching come from the `i18n` catalog, see Language below.
+label shown and the matching come from the `i18n` catalog, see Language below. `Prompt.NoOr` drops the
+`or` before the keywords, which AutoCAD omits in its `Enter a ... option [A/B] <A>:` prompts.
 
 **Input kinds.** Point, distance, angle (radians internally, degrees typed), keyword, selection,
 text, integer and Enter. `cmdsys.Input` carries the response.
+
+**File and history state** (`cmdsys/dirty.go`). Each session counts the changes published by its drawing's
+change listener (a committed transaction, an undo, a redo): `Session.Modified`, `Dirty`, `MarkSaved`, and the
+read-only variable `DBMOD`. The counter is reset when the drawing is replaced (`SetDrawing`) and by a save.
+The host reads `Dirty` for its title, status and restart decisions and installs `SetQuitHandler` for QUIT and
+EXIT. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
+REDO reverses a whole `UNDO n`. When a command ends the session names the undo step after it
+(`Drawing.NameLastStep`), so `U` can print the command it undid.
 
 **Registry.** `cmdsys.Registry` maps upper-case names and aliases to command factories.
 `Registry.LoadAliases` reads `ALIAS,*COMMAND` lines in the `acad.pgp` format.
@@ -109,8 +118,8 @@ default that changes nothing.
   variable), `Names`, `String`, `Subscribe` and `Session.OnVarChange`. `Register` panics on a duplicate
   name. A package registers its variables from an `init` in its own file with `RegisterVarGroup`;
   `NewSession` runs the groups. `sysvars.go` registers the live ones (`ORTHOMODE`, `APERTURE`,
-  `LASTPOINT`, `CLAYER`, which read and write session state) and `LUPREC`, `AUPREC`; `commands/construct.go`
-  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, so the construct defaults are per session.
+  `LASTPOINT`, `CLAYER`, which read and write session state) and `LUPREC`, `AUPREC`; `commands/units.go` registers `LUNITS`, `AUNITS`, `ANGBASE`, `ANGDIR`, `UNITMODE` and `INSUNITS` (live on the drawing header); `commands/construct.go`
+  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, `CHAMFERD`, `OFFSETERASE`, `OFFSETLAYER`, so the construct defaults are per session (`TRIMMODE`, `CHAMFERC`, `CHAMMODE` are the stored placeholders the session registers).
   After every group ran, `registerStoredVars` adds what section 1.11 of the AutoCAD specification lists and
   nobody registered: **stored placeholders** that read back what was set (`MIRRTEXT`, `FILEDIA`, `DIMSCALE`
   and also names a package will own, such as `OSMODE`, `CIRCLERAD`, `CECOLOR`), and live read-only state
@@ -151,8 +160,13 @@ default that changes nothing.
   level and then the outermost command. `Session.TransparentDepth` reports the nesting; `CMDNAMES` joins the
   stack with `'`. A transparent command must not open a transaction (it would commit as a step of its own). The
   repeat command (`Enter` at `Command:`) is not changed by a transparent one.
-- **Number formatting** (`format.go`). `Context.Fmt` and `FmtAngle` honour `LUPREC` and `AUPREC`; the
-  defaults print exactly what `FormatNumber` does.
+- **Number formatting** (`format.go`). `Context.Fmt` prints a length in the `LUNITS` format with `LUPREC`
+  decimals (decimal keeps trailing zeros: `5.0000`; scientific, engineering and architectural in inches,
+  fractional); `FmtAngle` prints a direction measured from `ANGBASE` in the `ANGDIR` sense and `FmtAngleRel` an
+  angle between two things, both in the `AUNITS` format with `AUPREC` places (default degrees, no decimals).
+  `FormatLength` and `FormatAngle` are the pure functions. `ANGBASE` is stored in degrees. A typed angle at an
+  angle prompt goes through `angleInputFilter` (`input.go`, text order `TextOrderPointForms+2`), which reads
+  `ParseAngleText` and applies `ANGBASE` and `ANGDIR`; with the defaults a plain number is untouched.
 - **Wording** (`wording.go`). Catalog-key constants for the session's own messages and `InputErrorKey`,
   the one place that maps a parse error and a prompt to its sentence: a point prompt with keywords says
   `Point or option keyword required.`, a distance prompt `Requires numeric distance or second point.`, an angle prompt
@@ -188,11 +202,12 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 
 ```
 pointer (window px) → ui: canvas-local px → View.ToModel → model point
-  → Session.Hover: object snap (if on and the prompt takes a point, distance or angle)
-                   else ortho (if on and the prompt has a Base)   → Session.Cursor
+  → Session.Hover: pending typed override (override.go), else running object snap (if on),
+                   else the snap grid (SNAPMODE), then ortho (if on and the prompt has a Base)   → Session.Cursor
   → Session.Click: point prompt → the cursor as a point
                    distance / angle prompt with a Base → measured from the Base
-                   selection prompt or idle → pick (Shift removes)
+                   point prompt answers carry Input.Shift when Shift is held
+                   selection prompt or idle → pick (Shift removes; plain click removes in Remove mode)
 ```
 
 Object snap wins over ortho. Typed coordinates are never snapped or constrained.
@@ -210,18 +225,28 @@ and considers:
 | Center | Circle and arc centres |
 | Quadrant | The 0°, 90°, 180° and 270° points of circles, and of arcs where they lie on the arc |
 | Intersection | Every pairwise crossing of the candidate curves |
+| Perpendicular, Tangent | Feet and tangent points from the prompt's `Base` (`FindSnapFrom`); nothing without a base |
 | Nearest | The closest point on any candidate, only when nothing else is in range |
 
 The closest point within the aperture wins; on a tie the mode listed first wins. Entities on layers
-that are off are ignored. `cmdsys.DefaultSnaps` enables every mode except Nearest; F3 toggles them
-all (`Session.SnapOn`).
+that are off or frozen are ignored. `cmdsys.DefaultSnaps` enables every mode except Nearest; F3 toggles them
+all (`Session.SnapOn`). `SnapMode` bits are AutoCAD's `OSMODE` values; the `OSMODE` variable (aids.go) is
+`Snaps` plus 16384 when `SnapOn` is off, and `GRIDMODE`, `SNAPMODE`, `GRIDUNIT`, `SNAPUNIT` read and write
+the grid state (`Session.Grid`, `SnapGrid`, `GridSpacing`, `SnapSpacing`).
+
+**Typed overrides** (`override.go`, text stage `TextOrderSnap`). `cmdsys.FindTyped` resolves one: the objects within
+the aperture of the pick are candidates, and the nearest listed snap point on them wins wherever it lies
+(`INT` needs both curves within the aperture). A name arms an `overrideState` on the session and swaps in a
+substitute prompt (`MID of:`, `Base point:`, `<Offset>:`); the next click or typed point (read as the pick
+position) is resolved, FROM and M2P chain, and the command's own prompt is restored before the answer reaches
+it. State whose substitute prompt has been replaced (Escape, the command moved on) is dropped.
 
 ## Selection
 
 `cmdsys.Pick` returns the entity whose curves come closest to the point within the aperture, the
 newest on a tie. `cmdsys.SelectBox` selects by box: dragged left to right it is a **window**
 (entities entirely inside); right to left it is a **crossing** (entities inside or touching, tested
-on their tessellation). Entities on locked or off layers are not selectable. The selection set is
+on their tessellation). Entities on locked, off or frozen layers are not selectable (`doc.Layer.Editable`). The selection set is
 `cmdsys.Selection`; it drops handles that leave the document.
 
 `Session.HistoryTotal` is the monotonic count of lines ever printed; `Session.History` keeps the last

@@ -153,6 +153,7 @@ func main() {
 			signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 			go func() { <-sig; cx.Quit() }()
 		}
+		ws.Session().SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		opts := gpui.WindowOptions{Width: float32(*width), Height: float32(*height), Title: "go-draw", Resizable: true}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
@@ -184,6 +185,7 @@ func renderPNG(ws *ui.Workspace, path string, w, h int, scale float32, hover str
 	p.SetScaleFactor(scale)
 	var hw *gpui.HeadlessWindow
 	err := p.Run(func(cx *gpui.App) {
+		ws.Session().SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		opts := gpui.WindowOptions{Width: float32(w), Height: float32(h), Title: "go-draw"}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {

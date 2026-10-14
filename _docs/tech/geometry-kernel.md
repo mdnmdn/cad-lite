@@ -7,7 +7,7 @@ summary: The numeric policy, the curve types and operations of geom, and the spa
 read_when: you are adding a curve type or a geometric operation, comparing floats, or querying entities by location
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/offset.go, geom/fillet.go, geom/split.go, geom/tol.go, spatial/index.go]
+code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/offset.go, geom/fillet.go, geom/filletpoly.go, geom/split.go, geom/tol.go, spatial/index.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -57,6 +57,7 @@ Operations:
 | Signed area of a polygon or a bulged polyline (closed by its chord) | `geom.PolygonArea`, `geom.PolylineArea`, `geom.ArcSegmentArea` | AREA, MEASUREGEOM |
 | Parallel offset of a line, circle, arc or polyline; positive is left of the direction of travel (outward for a circle or arc); `ok` is false for a radius that reaches zero or a degenerate polyline | `geom.OffsetLine`, `OffsetCircle`, `OffsetArc`, `OffsetPolyline` | OFFSET |
 | Round or bevel the corner of two lines, keeping the picked sides: a `Corner` with each line's retained far end and new join point and a tangent `Arc` or a `Bevel`, neither for a sharp corner; `ErrParallel` and `ErrTooLarge` refuse | `geom.FilletLines`, `ChamferLines` | FILLET, CHAMFER |
+| Cut the corners of a polyline at every vertex between two straight segments with an arc (`FilletCut`) or a bevel (`ChamferCut`, `ChamferAngleDistance` for length and angle), skipping a cut that does not fit and interpolating the segment widths; `CornerWedge` is the angle between two picked lines | `geom.CutPolyline`, `CornerWedge` | FILLET, CHAMFER `Polyline`, CHAMFER `Angle` |
 | Which spans of a curve survive a trim at the cut parameters, or a break between two; sub-curves and splits of a curve or polyline | `geom.TrimSpan`, `KeepOutside`, `SubCurve`, `SubPolyline`, `SplitCurve` | TRIM, BREAK |
 | Convert a bulged polyline segment to its arc and back | `geom.ArcFromBulge`, `BulgeFromArc` | polyline splitting, JOIN |
 | Flatten a polyline into `Piece`s (a line or arc, forwards or reversed), chain pieces end to end within a tolerance, rebuild a polyline | `geom.PolylinePieces`, `ChainPieces`, `PolylineFromPieces` | JOIN |

@@ -19,6 +19,8 @@ type View struct {
 	Scale float64
 	// Width and Height are the viewport size in logical pixels.
 	Width, Height float64
+	// Saved is the stack of previous views (ZOOM Previous); History creates it on first use.
+	Saved *ViewStack
 }
 
 // MinScale and MaxScale bound zooming.

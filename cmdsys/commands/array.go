@@ -71,10 +71,10 @@ func (c *arrayCmd) typePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	c.stage = arType
 	if c.name == "-ARRAY" {
 		return &cmdsys.Prompt{Message: ctx.T("cmd.array.prompt.type_cli"), Accepts: cmdsys.InputKeyword,
-			Keywords: []string{"Rectangular", kwPolar}, Default: defaultLetter(ctx, "Rectangular")}
+			Keywords: []string{"Rectangular", kwPolar}, Default: defaultLetter(ctx, "Rectangular"), NoOr: true}
 	}
 	return &cmdsys.Prompt{Message: ctx.T("cmd.array.prompt.type"), Accepts: cmdsys.InputKeyword,
-		Keywords: []string{"Rectangular", "PAth", kwPolar}, Default: defaultKeyword("Rectangular")}
+		Keywords: []string{"Rectangular", "PAth", kwPolar}, Default: defaultKeyword("Rectangular"), NoOr: true}
 }
 
 func (c *arrayCmd) countPrompt(ctx *cmdsys.Context, stage arrayStage, key string) *cmdsys.Prompt {
@@ -119,7 +119,7 @@ func (c *arrayCmd) fillPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 func (c *arrayCmd) rotatePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	c.stage = arRotate
 	return &cmdsys.Prompt{Message: ctx.T("cmd.array.prompt.rotate"), Accepts: cmdsys.InputKeyword,
-		Keywords: []string{"Yes", "No"}, Default: defaultLetter(ctx, "Yes")}
+		Keywords: []string{"Yes", "No"}, Default: defaultLetter(ctx, "Yes"), NoOr: true}
 }
 
 func (c *arrayCmd) rowDistPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {

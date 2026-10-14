@@ -7,7 +7,7 @@ click 1240 22
 wait 300
 shot panel
 expect-diff before panel
-click 562 210
+click 562 140
 wait 300
 shot light
 expect-diff panel light
@@ -17,7 +17,7 @@ shot light_closed
 key ctrl+comma
 wait 300
 shot reopened
-click 430 210
+click 430 140
 wait 300
 key Escape
 wait 300

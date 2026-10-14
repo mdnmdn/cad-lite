@@ -107,25 +107,25 @@ Outcome today is `go-draw:` in each `.expect` (12 of 40 pass: scripts that exerc
 | `16_rotate` | ROTATE: angle, Copy, Reference | fail | `L` selection; ROTATE Copy, Reference |  |
 | `17_scale` | SCALE: factor, Copy, Reference | fail | `L` selection; SCALE Copy, Reference |  |
 | `18_mirror` | MIRROR: keep and erase source | pass | -- |  |
-| `19_offset` | OFFSET: distance, Through, Erase | fail | OFFSET Erase |  |
+| `19_offset` | OFFSET: distance, Through, Erase | pass |  |  |
 | `20_fillet` | FILLET: Radius, radius 0 corner | pass |  |  |
 | `21_chamfer` | CHAMFER: Distance | pass |  |  |
 | `22_trim` | TRIM: select-all edges, Fence | pass | -- |  |
 | `23_extend` | EXTEND: select-all boundaries | pass | -- |  |
 | `24_break_join_explode` | BREAK, BREAKATPOINT, JOIN, EXPLODE | pass | -- |  |
-| `25_stretch` | STRETCH: crossing window | fail | STRETCH |  |
+| `25_stretch` | STRETCH: crossing window | pass | STRETCH |  |
 | `26_array` | -ARRAY: rectangular and polar | fail | -ARRAY | yes |
 | `27_select_window_crossing_polygon` | Selection: W, C, WP, CP | pass | -- |  |
 | `28_select_last_previous_fence_remove_single` | Selection: L, P, ALL+R, F, SI | pass | -- |  |
-| `29_snap_end_mid_cen_qua` | Typed object snaps END MID CEN QUA | fail | typed object snaps |  |
-| `30_snap_int_nea_per_from_m2p` | Typed snaps INT NEA PER FROM M2P NON | fail | typed object snaps |  |
+| `29_snap_end_mid_cen_qua` | Typed object snaps END MID CEN QUA | pass | -- |  |
+| `30_snap_int_nea_per_from_m2p` | Typed snaps INT NEA PER FROM M2P NON | pass | -- |  |
 | `31_prefixes_and_keywords` | _ and . prefixes, keyword spellings | fail | `_` and `.` prefixes |  |
 | `32_layer_options` | -LAYER: New, Color, Make, OFF, LOck, Set | fail | -LAYER |  |
 | `33_sysvars` | SETVAR and typed variable names feed command defaults | pass | -- |  |
-| `34_undo_mark_back` | UNDO Mark and Back | fail | UNDO Mark/Back |  |
-| `35_undo_number_group_redo` | UNDO n, BEgin/End, U, REDO | fail | UNDO n, BEgin/End |  |
+| `34_undo_mark_back` | UNDO Mark and Back | pass |  |  |
+| `35_undo_number_group_redo` | UNDO n, BEgin/End, U, REDO | pass |  |  |
 | `36_transparent_zoom` | Transparent 'ZOOM inside LINE | pass | -- |  |
-| `37_drafting_aids` | ORTHO GRID SNAP -OSNAP commands, typed points unaffected | fail | ORTHO, GRID, SNAP, -OSNAP |  |
+| `37_drafting_aids` | ORTHO GRID SNAP -OSNAP commands, typed points unaffected | pass | -- |  |
 | `38_matchprop_chprop` | MATCHPROP and CHPROP | fail | MATCHPROP, CHPROP |  |
 | `39_inquiry_vars` | DIST, AREA, ID results and variables | fail | DIST/AREA/ID variables, precision | yes |
 | `40_error_messages` | Error wording at bad input | pass | -- | yes |

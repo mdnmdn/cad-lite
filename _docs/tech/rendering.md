@@ -7,7 +7,7 @@ summary: How entities become pixels — the view, camera-relative coordinates, t
 read_when: you are changing what or how the canvas draws, adding a display primitive, or chasing jitter or a stale render
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [render/view.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go]
+code_anchors: [render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go]
 depends_on: [tech-architecture, tech-document-model]
 review_cycle: quarterly
 ---
@@ -29,6 +29,11 @@ viewport y-down. `ToScreen` and `ToModel` convert; `ZoomAt` zooms about a viewpo
 the model point under it fixed; `PanBy` moves by pixels; `Fit` frames a box. Scale is clamped to
 `[MinScale, MaxScale]`. `View` does not react to a viewport resize; the canvas does (it rescales so the
 visible box stays visible, see [Drawing canvas](../features/canvas.md)).
+`View.Saved` is the stack of the last 10 views behind `ZOOM Previous` (`render/viewstack.go`,
+created by `View.History`). A command that changes the view calls `Save` before and `Settle` after
+(`changeView` in `cmdsys/commands/view.go`); `Settle` remembers the view the command left, so the next
+`Save` or `Pop` notices a change made elsewhere (wheel, drag) and keeps it as a step of its own,
+without the UI having to call the stack.
 
 **Camera-relative coordinates.** `View.ToScreen` subtracts `Center` in `float64` before scaling, and
 `gpuirender` narrows to `float32` only after that. Large coordinates (survey data in the millions)
@@ -59,7 +64,7 @@ AutoCAD's values, 10–249 follow the palette's hue and shade layout closely but
 `ui.Workspace.paintCanvas` builds each frame in this order, so later items draw on top:
 
 1. the canvas background and the grid;
-2. the visible entities: `spatial.Index.Query(View.Visible())`, layers that are off skipped;
+2. the visible entities: `spatial.Index.Query(View.Visible())`, layers that are off or frozen skipped (`Drawing.EntityVisible`);
 3. the hover highlight, then the selection highlight (the entities' items recoloured and thickened);
 4. the active command's preview (`Session.Overlay`);
 5. the box-selection rectangle;

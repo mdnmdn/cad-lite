@@ -68,4 +68,5 @@ func registerScript(r *cmdsys.Registry) {
 		r.Register(n, func() cmdsys.Command { return &scriptCmd{name: n} })
 	}
 	r.Alias("SCR", "SCRIPT")
+	registerMultiple(r)
 }

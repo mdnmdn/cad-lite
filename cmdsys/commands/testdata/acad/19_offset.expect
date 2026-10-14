@@ -1,7 +1,7 @@
 # OFFSET: distance, Through, Erase
 # Expected state after running 19_offset.scr in AutoCAD 2024/2025 from the preamble state.
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: fail
+go-draw: pass
 line 0,0 100,0
 line 0,10 100,10
 circle 200,0 20

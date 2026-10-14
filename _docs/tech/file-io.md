@@ -41,7 +41,7 @@ Warnings and errors are localized sentences (`dxf.warn.*`, `dxf.err.*` and `file
 | Section | What is read |
 |---|---|
 | HEADER | `$HANDSEED`, `$INSUNITS`, `$CLAYER`; every other variable is kept in `Header.Extra` |
-| TABLES | `LAYER` records: name, colour (negative means off), the locked flag |
+| TABLES | `LAYER` records: name, colour (negative means off), the frozen (1) and locked (4) flags, the linetype name (6), and the plot flag (290) and lineweight (370) of newer versions; the `GODRAW_LAYER` extended data (below) |
 | ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, and 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline` |
 
 Entity handles (code 5), layers (8) and colours (62) are kept. Every other entity class, and 3D
@@ -58,7 +58,7 @@ is read as 0, with one warning that counts them, so the drawing never holds a no
 
 **Writing** emits R12 (`AC1009`), the most widely readable version, in this order: the header
 (`$ACADVER`, `$CLAYER`, `$HANDLING`, `$HANDSEED`), the `CONTINUOUS` linetype followed by the
-preserved linetypes, the layer table with colours and the off and locked states, the other preserved
+preserved linetypes, the layer table with colours and the off, frozen and locked states and the linetype name (only when the LTYPE table defines it, else `CONTINUOUS`; R12 has no plot flag, lineweight or description, so a layer with any of them carries them as extended data of the application `GODRAW_LAYER`, registered in the APPID table, which the reader restores and does not preserve), the other preserved
 tables, the preserved blocks, and the entities with their handles. An `LWPolyline` is written as
 `POLYLINE`/`VERTEX`/`SEQEND`; the vertex and sequence-end records take handles above the drawing's
 seed, which are not part of the document. Header variables the document does not model are not

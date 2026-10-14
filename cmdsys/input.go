@@ -3,6 +3,7 @@ package cmdsys
 import (
 	"errors"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -42,6 +43,9 @@ type Input struct {
 	Keyword   string
 	Text      string
 	Selection []doc.Handle
+	// Shift is set on a point picked with the Shift key held (Session.Click's remove flag at a
+	// point prompt); TRIM and EXTEND swap their action for such a pick.
+	Shift bool
 }
 
 // Prompt is what a command asks for next, as shown on the command line.
@@ -60,6 +64,9 @@ type Prompt struct {
 	// Base is the rubber-band origin: relative coordinates, ortho, direct
 	// distance entry and click distances measure from it.
 	Base *geom.Vec2
+	// NoOr drops the "or" before the keywords, as AutoCAD does in "Enter a ... option [A/B] <A>:"
+	// prompts: "Enter a copy mode option [Single/Multiple] <Multiple>:".
+	NoOr bool
 }
 
 // String renders the prompt as AutoCAD does, in the current language:
@@ -72,7 +79,11 @@ func (p *Prompt) StringIn(t i18n.Translator) string {
 	var b strings.Builder
 	b.WriteString(p.Message)
 	if len(p.Keywords) > 0 && p.Accepts&InputKeyword != 0 {
-		b.WriteString(" " + t.T("input.or") + " [")
+		if p.NoOr {
+			b.WriteString(" [")
+		} else {
+			b.WriteString(" " + t.T("input.or") + " [")
+		}
 		b.WriteString(t.PromptKeywords(p.Keywords))
 		b.WriteString("]")
 	}
@@ -287,6 +298,7 @@ func installCommandLine(s *Session) {
 	s.AddTextHandler(TextOrderTransparent, transparentStage)
 	s.AddTextHandler(TextOrderPointForms, angleOverrideStage)
 	s.AddTextFilter(TextOrderPointForms+1, pointFormsFilter)
+	s.AddTextFilter(TextOrderPointForms+2, angleInputFilter)
 }
 
 // pointPrompt reports whether the session waits at a prompt that takes a point.
@@ -344,4 +356,104 @@ func (s *Session) enterEnds(err error, text string) bool {
 	s.guard(func() { s.active.Cancel(&s.ctx) })
 	s.finish()
 	return true
+}
+
+var (
+	angleDMSRe  = regexp.MustCompile(`^(\d+(?:\.\d*)?|\.\d+)(?:d(?:(\d+(?:\.\d*)?|\.\d+)')?(?:(\d+(?:\.\d*)?|\.\d+)")?)?$`)
+	angleUnitRe = regexp.MustCompile(`^(\d+(?:\.\d*)?|\.\d+)([gr])$`)
+	bearingRe   = regexp.MustCompile(`^([ns])(.+?)([ew])$`)
+)
+
+// ParseAngleText reads a typed angle in any of the AutoCAD forms and returns it in radians,
+// measured from the X axis and not yet adjusted for ANGBASE or ANGDIR: 45, 12.5d, 12d30'15",
+// 50g, 0.8r, and a surveyor's bearing N 45d E. A bare number is read in the AUNITS system
+// (grads for 2, radians for 3, degrees otherwise); a suffix always names its own unit.
+func ParseAngleText(text string, aunits int) (float64, bool) {
+	t := strings.ToLower(strings.Join(strings.Fields(text), ""))
+	if t == "" {
+		return 0, false
+	}
+	neg := false
+	if t[0] == '-' || t[0] == '+' {
+		neg, t = t[0] == '-', t[1:]
+	}
+	var deg float64
+	switch {
+	case bearingRe.MatchString(t):
+		m := bearingRe.FindStringSubmatch(t)
+		a, ok := parseDMS(m[2])
+		if !ok {
+			return 0, false
+		}
+		switch {
+		case m[1] == "n" && m[3] == "e":
+			deg = 90 - a
+		case m[1] == "n":
+			deg = 90 + a
+		case m[3] == "w":
+			deg = 270 - a
+		default:
+			deg = 270 + a
+		}
+	case angleUnitRe.MatchString(t):
+		m := angleUnitRe.FindStringSubmatch(t)
+		v, _ := strconv.ParseFloat(m[1], 64)
+		deg = v
+		if m[2] == "g" {
+			deg = v * 0.9
+		} else {
+			deg = v * 180 / math.Pi
+		}
+	default:
+		if v, err := parseFloat(t); err == nil {
+			deg = v
+			switch aunits {
+			case AUnitsGrads:
+				deg = v * 0.9
+			case AUnitsRadians:
+				deg = v * 180 / math.Pi
+			}
+		} else if v, ok := parseDMS(t); ok {
+			deg = v
+		} else {
+			return 0, false
+		}
+	}
+	if neg {
+		deg = -deg
+	}
+	return deg * math.Pi / 180, true
+}
+
+// parseDMS reads 12d30'15" (degrees, optional minutes and seconds) into degrees.
+func parseDMS(t string) (float64, bool) {
+	m := angleDMSRe.FindStringSubmatch(t)
+	if m == nil {
+		return 0, false
+	}
+	f := func(s string) float64 { v, _ := strconv.ParseFloat(s, 64); return v }
+	return f(m[1]) + f(m[2])/60 + f(m[3])/3600, true
+}
+
+// angleInputFilter turns an angle typed at an angle prompt into the degrees from the X axis the
+// parser reads: it understands the AUNITS systems and the d ' " g r suffixes, and applies ANGBASE
+// and ANGDIR (a typed 30 with ANGBASE 90 is the direction 120). With the defaults a plain
+// number passes through untouched.
+func angleInputFilter(s *Session, text string) string {
+	if s.active == nil || s.prompt == nil || s.prompt.Accepts&InputAngle == 0 || s.prompt.Accepts&InputDistance != 0 {
+		return text
+	}
+	aunits, base, dir := s.vars.Int("AUNITS"), s.vars.Real("ANGBASE"), s.vars.Int("ANGDIR")
+	if _, err := parseFloat(strings.TrimSpace(text)); err == nil && aunits <= AUnitsDMS && base == 0 && dir == 0 {
+		return text
+	}
+	rad, ok := ParseAngleText(text, aunits)
+	if !ok {
+		return text
+	}
+	deg := rad * 180 / math.Pi
+	if dir == 1 {
+		deg = -deg
+	}
+	return strconv.FormatFloat(deg+base, 'g', -1, 64)
 }

@@ -393,7 +393,7 @@ func TestSettingsClicksOnPanelDoNotCloseIt(t *testing.T) {
 	if !h.ws.SettingsOpen() {
 		t.Fatal("clicking a control closed the panel")
 	}
-	if h.ws.Grid {
+	if h.ws.Session().Grid() {
 		t.Fatal("grid toggle did not apply")
 	}
 	if h.ws.Settings().Grid {

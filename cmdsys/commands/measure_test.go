@@ -38,12 +38,27 @@ func wantLast(t *testing.T, s *cmdsys.Session, want string) {
 	}
 }
 
+// wantMeasured checks a MEASUREGEOM result line, then leaves with eXit: the command loops.
+func wantMeasured(t *testing.T, s *cmdsys.Session, want string) {
+	t.Helper()
+	if !historyHas(s, want) {
+		t.Fatalf("history lacks %q:\n%s", want, strings.Join(s.History(), "\n"))
+	}
+	if s.Active() != "MEASUREGEOM" {
+		t.Fatalf("MEASUREGEOM ended after one measurement (active %q)", s.Active())
+	}
+	s.Submit("E")
+	if s.Active() != "" {
+		t.Fatalf("still in %s after Exit", s.Active())
+	}
+}
+
 func TestAreaPoints(t *testing.T) {
 	s := newSession(t)
 	s.Script("AREA 0,0 10,0 10,5 ")
-	wantLast(t, s, "Area = 25, Perimeter = 26.1803")
+	wantLast(t, s, "Area = 25.0000, Perimeter = 26.1803")
 	s.Script("AA 0,0 4,0 4,3 0,3 ")
-	if got := lastLine(s); got != "Area = 12, Perimeter = 14" {
+	if got := lastLine(s); got != "Area = 12.0000, Perimeter = 14.0000" {
 		t.Fatalf("alias AA: %q", got)
 	}
 	if len(entities[*doc.Line](s)) != 0 {
@@ -54,7 +69,7 @@ func TestAreaPoints(t *testing.T) {
 func TestAreaPointsClockwiseAndPrompt(t *testing.T) {
 	s := newSession(t)
 	s.Run("AREA")
-	if got := s.Prompt(); got != "Specify first corner point or [Object]:" {
+	if got := s.Prompt(); got != "Specify first corner point or [Object/Add area/Subtract area]:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Script("0,0 0,3 4,3")
@@ -66,7 +81,7 @@ func TestAreaPointsClockwiseAndPrompt(t *testing.T) {
 		t.Fatalf("base = %v", b)
 	}
 	s.Submit("")
-	wantLast(t, s, "Area = 6, Perimeter = 12")
+	wantLast(t, s, "Area = 6.0000, Perimeter = 12.0000")
 }
 
 func TestAreaPreview(t *testing.T) {
@@ -128,7 +143,7 @@ func TestAreaObjectOpenShapesCloseByChord(t *testing.T) {
 	)
 	s.Script("AREA O")
 	s.Click(geom.V(2, 0), false)
-	wantLast(t, s, "Area = 6, Perimeter = 7")
+	wantLast(t, s, "Area = 6.0000, Perimeter = 7.0000")
 	s.Script("AREA O")
 	s.Click(geom.V(100, 2), false)
 	wantLast(t, s, "Area = "+cmdsys.FormatNumber(2*math.Pi)+", Perimeter = "+cmdsys.FormatNumber(2*math.Pi))
@@ -149,11 +164,11 @@ func TestAreaObjectLineAndMiss(t *testing.T) {
 func TestMeasureGeomDistance(t *testing.T) {
 	s := newSession(t)
 	s.Run("MEA")
-	if got := s.Prompt(); got != "Enter an option or [Distance/Radius/Angle/ARea] <Distance>:" {
+	if got := s.Prompt(); got != "Enter an option [Distance/Radius/Angle/ARea/Exit] <Distance>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Script(" 0,0 3,4")
-	wantLast(t, s, "Distance = 5,  Angle = 53.1301°,  Delta X = 3,  Delta Y = 4")
+	wantMeasured(t, s, "Delta X = 3.0000,  Delta Y = 4.0000,  Delta Z = 0.0000")
 }
 
 func TestMeasureGeomRadius(t *testing.T) {
@@ -165,7 +180,7 @@ func TestMeasureGeomRadius(t *testing.T) {
 		t.Fatalf("line: %q", got)
 	}
 	s.Click(geom.V(0, 7), false)
-	wantLast(t, s, "Radius = 7, Diameter = 14")
+	wantMeasured(t, s, "Radius = 7.0000, Diameter = 14.0000")
 }
 
 func TestMeasureGeomAngleTwoLines(t *testing.T) {
@@ -178,11 +193,11 @@ func TestMeasureGeomAngleTwoLines(t *testing.T) {
 	s.Script("MEA A")
 	s.Click(geom.V(10, 0), false)
 	s.Click(geom.V(0, 10), false)
-	wantLast(t, s, "Angle = 90°")
+	wantMeasured(t, s, "Angle = 90°")
 	s.Script("MEA A")
 	s.Click(geom.V(10, 0), false)
 	s.Click(geom.V(10, 10), false)
-	wantLast(t, s, "Angle = 45°")
+	wantMeasured(t, s, "Angle = 45°")
 }
 
 func TestMeasureGeomAngleOppositeSide(t *testing.T) {
@@ -194,7 +209,7 @@ func TestMeasureGeomAngleOppositeSide(t *testing.T) {
 	s.Script("MEA A")
 	s.Click(geom.V(-10, 0), false)
 	s.Click(geom.V(10, 10), false)
-	wantLast(t, s, "Angle = 135°")
+	wantMeasured(t, s, "Angle = 135°")
 }
 
 func TestMeasureGeomAngleArcAndVertex(t *testing.T) {
@@ -202,11 +217,11 @@ func TestMeasureGeomAngleArcAndVertex(t *testing.T) {
 	addEntities(t, s, &doc.Arc{Center: geom.V(0, 0), Radius: 10, StartAngle: math.Pi / 6, EndAngle: math.Pi / 2})
 	s.Script("MEA A")
 	s.Click(geom.V(0, 10), false)
-	wantLast(t, s, "Angle = 60°")
+	wantMeasured(t, s, "Angle = 60°")
 	s.Script("MEA A  100,100 110,100 100,110")
-	wantLast(t, s, "Angle = 90°")
+	wantMeasured(t, s, "Angle = 90°")
 	s.Script("MEA A 200,200 210,200 @10<60")
-	wantLast(t, s, "Angle = 60°")
+	wantMeasured(t, s, "Angle = 60°")
 }
 
 func TestMeasureGeomAngleCircle(t *testing.T) {
@@ -215,17 +230,17 @@ func TestMeasureGeomAngleCircle(t *testing.T) {
 	s.Script("MEA A")
 	s.Click(geom.V(10, 0), false)
 	s.Script("0,10")
-	wantLast(t, s, "Angle = 90°")
+	wantMeasured(t, s, "Angle = 90°")
 }
 
 func TestMeasureGeomArea(t *testing.T) {
 	s := newSession(t)
 	s.Script("MEA AR 0,0 6,0 6,2 ")
-	wantLast(t, s, "Area = 6, Perimeter = 14.3246")
+	wantMeasured(t, s, "Area = 6.0000, Perimeter = 14.3246")
 	addEntities(t, s, &doc.Circle{Center: geom.V(0, 0), Radius: 1})
 	s.Script("MEA AR O")
 	s.Click(geom.V(1, 0), false)
-	wantLast(t, s, "Area = 3.1416, Circumference = 6.2832")
+	wantMeasured(t, s, "Area = 3.1416, Circumference = 6.2832")
 }
 
 func TestDistMultiple(t *testing.T) {
@@ -235,9 +250,9 @@ func TestDistMultiple(t *testing.T) {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Script("M 0,0 3,4 3,10 ")
-	wantLast(t, s, "Distance = 11")
+	wantLast(t, s, "Distance = 11.0000")
 	s.Script("DI 0,0 3,4")
-	if !strings.HasPrefix(lastLine(s), "Distance = 5,") {
+	if !historyHas(s, "Distance = 5.0000,  Angle in XY Plane = 53,") {
 		t.Fatalf("default DIST changed: %q", lastLine(s))
 	}
 }

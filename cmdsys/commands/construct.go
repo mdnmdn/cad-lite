@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"math"
 
 	"go-draw/cmdsys"
@@ -12,15 +11,29 @@ import (
 
 // The settings the construct commands remember between runs are system variables of the session
 // (AutoCAD keeps them the same way, and two sessions never share them): OFFSETDIST (negative
-// means Through), FILLETRAD, CHAMFERA and CHAMFERB.
+// means Through), FILLETRAD, CHAMFERA and CHAMFERB, plus OFFSETERASE and OFFSETLAYER (the Erase and
+// Layer options of OFFSET) and CHAMFERD (the angle of CHAMFER's Angle method, in degrees). TRIMMODE,
+// CHAMFERC and CHAMMODE are stored placeholders registered by the session.
 func init() {
 	cmdsys.RegisterVarGroup(func(_ *cmdsys.Session, v *cmdsys.Vars) {
 		v.Register(cmdsys.Var{Name: "OFFSETDIST", Kind: cmdsys.VarReal, Default: -1.0})
 		v.Register(cmdsys.Var{Name: "FILLETRAD", Kind: cmdsys.VarReal, Default: 0.0})
 		v.Register(cmdsys.Var{Name: "CHAMFERA", Kind: cmdsys.VarReal, Default: 0.0})
 		v.Register(cmdsys.Var{Name: "CHAMFERB", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "OFFSETERASE", Kind: cmdsys.VarInt, Default: 0, Min: 0, Max: 1})
+		v.Register(cmdsys.Var{Name: "OFFSETLAYER", Kind: cmdsys.VarInt, Default: 0, Min: 0, Max: 1})
+		if !v.Has("CHAMFERD") {
+			v.Register(cmdsys.Var{Name: "CHAMFERD", Kind: cmdsys.VarReal, Default: 0.0})
+		}
 	})
 }
+
+// Keyword ids whose catalog label differs from the id (kw.erase_offset shows "Erase", kw.chamfer_angle
+// shows "Angle"): the ids stay distinct from the selection and TRIM keywords of the same slug.
+const (
+	kwEraseOffset  = "Erase offset"
+	kwChamferAngle = "Chamfer angle"
+)
 
 // pickAperturePx is the pick aperture of the construct commands, in pixels.
 const pickAperturePx = 8
@@ -70,7 +83,7 @@ func (c *mirrorCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 
 func (c *mirrorCmd) erasePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	return &cmdsys.Prompt{Message: ctx.T("cmd.mirror.prompt.erase_source"), Accepts: cmdsys.InputKeyword,
-		Keywords: []string{"Yes", "No"}, Default: keywordInput("No")}
+		Keywords: []string{"Yes", "No"}, Default: &cmdsys.Input{Kind: cmdsys.InputText, Text: "N"}, NoOr: true}
 }
 
 func (c *mirrorCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
@@ -136,101 +149,251 @@ func (c *mirrorCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.Displ
 
 // --- OFFSET -------------------------------------------------------------
 
+type offsetStage int
+
+const (
+	offDist offsetStage = iota
+	offDist2
+	offErase
+	offLayer
+	offSelect
+	offSide
+)
+
+// offsetRec is one offset made in this command, so Undo can take it back.
+type offsetRec struct {
+	added  doc.Handle
+	from   doc.Handle // the object it was offset from
+	erased doc.Entity // a clone of the source this offset erased, to put back
+}
+
 type offsetCmd struct {
 	base
-	through bool
-	dist    float64
-	first   *geom.Vec2 // first point of a two-point distance
-	haveDst bool
-	src     doc.Handle
+	stage    offsetStage
+	through  bool
+	dist     float64
+	first    *geom.Vec2 // first point of a two-point distance
+	src      doc.Handle // the object being offset (the newest offset in Multiple mode)
+	picked   doc.Handle // the object the user selected
+	multiple bool
+	done     []offsetRec
 }
 
 func (*offsetCmd) Name() string { return "OFFSET" }
 
 func (c *offsetCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	layer := ctx.T("cmd.offset.msg.layer_source")
+	if ctx.Vars().Int("OFFSETLAYER") == 1 {
+		layer = ctx.T("cmd.offset.msg.layer_current")
+	}
+	ctx.Say("cmd.offset.msg.settings", yesNo(ctx, ctx.Vars().Int("OFFSETERASE") == 1), layer, ctx.Vars().Int("OFFSETGAPTYPE"))
+	return c.distPrompt(ctx)
+}
+
+func (c *offsetCmd) distPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	c.stage, c.first = offDist, nil
 	def := keywordInput("Through")
 	if d := ctx.Vars().Real("OFFSETDIST"); d > 0 {
 		def = distanceInput(d)
 	}
 	return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.distance"), Accepts: cmdsys.InputDistance | cmdsys.InputPoint | cmdsys.InputKeyword,
-		Keywords: []string{"Through"}, Default: def}
+		Keywords: []string{"Through", kwEraseOffset, "Layer"}, Default: def}
 }
 
 func (c *offsetCmd) selectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	c.src = 0
+	c.stage, c.src, c.picked, c.multiple = offSelect, 0, 0, false
 	return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword,
-		Keywords: []string{"Exit"}, Default: keywordInput("Exit")}
+		Keywords: []string{"Exit", "Undo"}, Default: keywordInput("Exit")}
 }
 
 func (c *offsetCmd) sidePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	c.stage = offSide
 	msg := ctx.T("cmd.offset.prompt.side")
 	if c.through {
 		msg = ctx.T("cmd.offset.prompt.through")
 	}
-	return &cmdsys.Prompt{Message: msg, Accepts: cmdsys.InputPoint | cmdsys.InputKeyword,
-		Keywords: []string{"Exit"}, Default: keywordInput("Exit")}
+	p := &cmdsys.Prompt{Message: msg, Accepts: cmdsys.InputPoint | cmdsys.InputKeyword,
+		Keywords: []string{"Exit", "Multiple", "Undo"}, Default: keywordInput("Exit")}
+	if c.multiple {
+		p.Keywords = []string{"Exit", "Undo"}
+		p.Accepts |= cmdsys.InputEnter
+		p.Default = &cmdsys.Input{Kind: cmdsys.InputText, Text: ctx.T("cmd.offset.msg.next_object")}
+	}
+	return p
 }
 
 func (c *offsetCmd) setDistance(ctx *cmdsys.Context, d float64) *cmdsys.Prompt {
 	if d <= 0 || math.IsNaN(d) || math.IsInf(d, 0) {
-		ctx.Say("cmd.offset.msg.positive_distance")
-		return c.Start(ctx)
+		ctx.Say("cmd.common.msg.positive")
+		return c.distPrompt(ctx)
 	}
-	c.dist, c.haveDst = d, true
+	c.dist, c.through = d, false
 	_ = ctx.Vars().Set("OFFSETDIST", d)
 	return c.selectPrompt(ctx)
 }
 
+// undo takes the last offset back and returns false when there is none. An erased source comes
+// back as a new object (the transaction cannot un-erase), so a later offset from it follows.
+func (c *offsetCmd) undo(ctx *cmdsys.Context) bool {
+	n := len(c.done)
+	if n == 0 {
+		return false
+	}
+	r := c.done[n-1]
+	c.done = c.done[:n-1]
+	tx := ctx.Tx()
+	tx.Erase(r.added)
+	back := r.from
+	if r.erased != nil {
+		back = tx.Add(r.erased)
+		for i := range c.done {
+			if c.done[i].from == r.from {
+				c.done[i].from = back
+			}
+		}
+		if c.picked == r.from {
+			c.picked = back
+		}
+	}
+	c.src = back
+	return true
+}
+
 func (c *offsetCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	switch {
-	case !c.haveDst && !c.through:
-		switch {
-		case in.Kind == cmdsys.InputKeyword:
-			c.through = true
-			return c.selectPrompt(ctx)
-		case in.Kind == cmdsys.InputPoint && c.first == nil:
-			c.first = pt(in.Point)
-			return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.first}
-		case in.Kind == cmdsys.InputPoint:
-			d := c.first.Dist(in.Point)
-			c.first = nil
-			return c.setDistance(ctx, d)
-		}
-		return c.setDistance(ctx, in.Value)
-	case c.src == 0:
+	switch c.stage {
+	case offDist:
+		return c.inDist(ctx, in)
+	case offDist2:
 		if in.Kind != cmdsys.InputPoint {
-			return nil
+			return c.distPrompt(ctx)
 		}
-		h, ok := pickConstruct(ctx, in.Point)
-		if !ok {
-			ctx.Say("cmd.offset.msg.nothing_found")
+		return c.setDistance(ctx, c.first.Dist(in.Point))
+	case offErase:
+		_ = ctx.Vars().Set("OFFSETERASE", boolToInt(in.Keyword == "Yes"))
+		return c.distPrompt(ctx)
+	case offLayer:
+		_ = ctx.Vars().Set("OFFSETLAYER", boolToInt(in.Keyword == "Current"))
+		return c.distPrompt(ctx)
+	case offSelect:
+		return c.inSelect(ctx, in)
+	}
+	return c.inSide(ctx, in)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func (c *offsetCmd) inDist(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
+	switch {
+	case in.Kind == cmdsys.InputKeyword:
+		switch in.Keyword {
+		case "Through":
+			c.through = true
+			_ = ctx.Vars().Set("OFFSETDIST", -1.0)
 			return c.selectPrompt(ctx)
+		case kwEraseOffset:
+			c.stage = offErase
+			def := "No"
+			if ctx.Vars().Int("OFFSETERASE") == 1 {
+				def = "Yes"
+			}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.erase"), Accepts: cmdsys.InputKeyword,
+				Keywords: []string{"Yes", "No"}, Default: keywordInput(def), NoOr: true}
+		case "Layer":
+			c.stage = offLayer
+			def := "Source"
+			if ctx.Vars().Int("OFFSETLAYER") == 1 {
+				def = "Current"
+			}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.layer"), Accepts: cmdsys.InputKeyword,
+				Keywords: []string{"Current", "Source"}, Default: keywordInput(def), NoOr: true}
 		}
-		if !offsettable(ctx.Doc.Entity(h)) {
-			ctx.Say("cmd.offset.msg.cannot_offset")
-			return c.selectPrompt(ctx)
-		}
-		c.src = h
-		return c.sidePrompt(ctx)
+	case in.Kind == cmdsys.InputPoint:
+		c.first, c.stage = pt(in.Point), offDist2
+		return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.first}
+	}
+	return c.setDistance(ctx, in.Value)
+}
+
+func (c *offsetCmd) inSelect(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
+	if in.Kind == cmdsys.InputKeyword && in.Keyword == "Undo" {
+		c.undo(ctx)
+		return c.selectPrompt(ctx)
 	}
 	if in.Kind != cmdsys.InputPoint {
 		return nil
 	}
+	h, ok := pickConstruct(ctx, in.Point)
+	if !ok {
+		ctx.Say("cmd.offset.msg.nothing_found")
+		return c.selectPrompt(ctx)
+	}
+	if !offsettable(ctx.Doc.Entity(h)) {
+		ctx.Say("cmd.offset.msg.cannot_offset")
+		return c.selectPrompt(ctx)
+	}
+	c.src, c.picked = h, h
+	return c.sidePrompt(ctx)
+}
+
+func (c *offsetCmd) inSide(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
+	switch {
+	case in.Kind == cmdsys.InputEnter && c.multiple:
+		return c.selectPrompt(ctx)
+	case in.Kind == cmdsys.InputKeyword && in.Keyword == "Multiple":
+		c.multiple = true
+		return c.sidePrompt(ctx)
+	case in.Kind == cmdsys.InputKeyword && in.Keyword == "Undo":
+		if c.undo(ctx) && c.multiple {
+			return c.sidePrompt(ctx)
+		}
+		return c.selectPrompt(ctx)
+	case in.Kind != cmdsys.InputPoint:
+		return nil
+	}
 	src := ctx.Doc.Entity(c.src)
+	if src == nil {
+		return c.selectPrompt(ctx)
+	}
 	ne, msg := offsetEntity(src, in.Point, c.dist, c.through)
 	if ne == nil {
 		ctx.Say(msg)
+		if c.multiple {
+			return c.sidePrompt(ctx)
+		}
 		return c.selectPrompt(ctx)
 	}
-	ctx.Tx().Add(ne)
+	if ctx.Vars().Int("OFFSETLAYER") == 1 {
+		ne.Common().Layer, ne.Common().Color = "", 0
+	}
+	tx := ctx.Tx()
+	rec := offsetRec{from: c.src}
+	if ctx.Vars().Int("OFFSETERASE") == 1 && c.src == c.picked {
+		rec.erased = src.Clone().(doc.Entity)
+		tx.Erase(c.src)
+	}
+	rec.added = tx.Add(ne)
+	c.done = append(c.done, rec)
+	if c.multiple {
+		c.src = rec.added
+		return c.sidePrompt(ctx)
+	}
 	return c.selectPrompt(ctx)
 }
 
 func (c *offsetCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	if c.src == 0 {
+	if c.stage != offSide || c.src == 0 {
 		return
 	}
-	ne, _ := offsetEntity(ctx.Doc.Entity(c.src), cur, c.dist, c.through)
+	src := ctx.Doc.Entity(c.src)
+	if src == nil {
+		return
+	}
+	ne, _ := offsetEntity(src, cur, c.dist, c.through)
 	if ne == nil {
 		return
 	}
@@ -318,206 +481,15 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 		if !ok {
 			return nil, degenerateOffset
 		}
-		out = &doc.LWPolyline{Points: o.Pts, Bulges: o.Bulges, Closed: o.Closed}
+		np := &doc.LWPolyline{Points: o.Pts, Bulges: o.Bulges, Closed: o.Closed}
+		if len(o.Pts) == len(e.Points) {
+			np.Widths = append([][2]float64(nil), e.Widths...)
+		}
+		out = np
 	default:
 		return nil, "cmd.offset.msg.cannot_offset"
 	}
 	c := out.Common()
 	c.Layer, c.Color = e.Common().Layer, e.Common().Color
 	return out, ""
-}
-
-// --- FILLET and CHAMFER -------------------------------------------------
-
-// cornerCmd is FILLET or, with chamfer set, CHAMFER: both cut two lines
-// back to a corner and join them with an arc or a bevel.
-type cornerCmd struct {
-	base
-	chamfer bool
-	ask     string // "radius", "d1", "d2" while a setting is being asked
-	h1      doc.Handle
-	p1      geom.Vec2
-	d1      float64
-}
-
-func (c *cornerCmd) Name() string {
-	if c.chamfer {
-		return "CHAMFER"
-	}
-	return "FILLET"
-}
-
-func (c *cornerCmd) noun() string {
-	if c.chamfer {
-		return "line"
-	}
-	return "object"
-}
-
-func (c *cornerCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	if c.chamfer {
-		ctx.Say("cmd.corner.msg.chamfer_settings", cmdsys.FormatNumber(ctx.Vars().Real("CHAMFERA")), cmdsys.FormatNumber(ctx.Vars().Real("CHAMFERB")))
-	} else {
-		ctx.Say("cmd.corner.msg.fillet_settings", cmdsys.FormatNumber(ctx.Vars().Real("FILLETRAD")))
-	}
-	return c.firstPrompt(ctx)
-}
-
-func (c *cornerCmd) firstPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	c.h1, c.ask = 0, ""
-	kw := "Radius"
-	if c.chamfer {
-		kw = "Distance"
-	}
-	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.select_first_" + c.noun()), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{kw}}
-}
-
-func (c *cornerCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.select_second_" + c.noun()), Accepts: cmdsys.InputPoint}
-}
-
-func (c *cornerCmd) askPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	switch c.ask {
-	case "radius":
-		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.fillet_radius"), Accepts: cmdsys.InputDistance, Default: distanceInput(ctx.Vars().Real("FILLETRAD"))}
-	case "d1":
-		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d1"), Accepts: cmdsys.InputDistance, Default: distanceInput(ctx.Vars().Real("CHAMFERA"))}
-	}
-	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d2"), Accepts: cmdsys.InputDistance, Default: distanceInput(c.d1)}
-}
-
-func (c *cornerCmd) lineAt(ctx *cmdsys.Context, p geom.Vec2) (doc.Handle, *doc.Line) {
-	h, ok := pickConstruct(ctx, p)
-	if !ok {
-		return 0, nil
-	}
-	l, _ := ctx.Doc.Entity(h).(*doc.Line)
-	return h, l
-}
-
-func (c *cornerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	if c.ask != "" {
-		if in.Value < 0 || math.IsNaN(in.Value) {
-			ctx.Say("cmd.corner.msg.non_negative")
-			return c.askPrompt(ctx)
-		}
-		switch c.ask {
-		case "radius":
-			_ = ctx.Vars().Set("FILLETRAD", in.Value)
-			return c.firstPrompt(ctx)
-		case "d1":
-			c.d1 = in.Value
-			_ = ctx.Vars().Set("CHAMFERA", in.Value)
-			c.ask = "d2"
-			return c.askPrompt(ctx)
-		}
-		_ = ctx.Vars().Set("CHAMFERB", in.Value)
-		return c.firstPrompt(ctx)
-	}
-	if in.Kind == cmdsys.InputKeyword {
-		c.ask = "radius"
-		if c.chamfer {
-			c.ask = "d1"
-		}
-		return c.askPrompt(ctx)
-	}
-	if c.h1 == 0 {
-		h, ok := pickConstruct(ctx, in.Point)
-		if !ok {
-			ctx.Say("cmd.corner.msg.nothing_found")
-			return c.firstPrompt(ctx)
-		}
-		if _, isLine := ctx.Doc.Entity(h).(*doc.Line); !isLine {
-			ctx.Say("cmd.corner.msg.supports_two_lines", c.title(ctx))
-			return nil
-		}
-		c.h1, c.p1 = h, in.Point
-		return c.secondPrompt(ctx)
-	}
-	h2, l2 := c.lineAt(ctx, in.Point)
-	switch {
-	case h2 == 0:
-		ctx.Say("cmd.corner.msg.nothing_found")
-		return c.secondPrompt(ctx)
-	case l2 == nil:
-		ctx.Say("cmd.corner.msg.supports_two_lines", c.title(ctx))
-		return nil
-	case h2 == c.h1:
-		ctx.Say("cmd.corner.msg.select_different")
-		return c.secondPrompt(ctx)
-	}
-	l1 := ctx.Doc.Entity(c.h1).(*doc.Line)
-	corner, err := c.compute(ctx, l1, l2, c.p1, in.Point)
-	if err != nil {
-		switch {
-		case errors.Is(err, geom.ErrParallel):
-			ctx.Say("cmd.corner.msg.parallel")
-		case c.chamfer:
-			ctx.Say("cmd.corner.msg.chamfer_too_large")
-		default:
-			ctx.Say("cmd.corner.msg.radius_too_large")
-		}
-		return nil
-	}
-	tx := ctx.Tx()
-	tx.Modify(c.h1, func(e doc.Entity) { cutLine(e.(*doc.Line), corner.Far1, corner.Join1) })
-	tx.Modify(h2, func(e doc.Entity) { cutLine(e.(*doc.Line), corner.Far2, corner.Join2) })
-	var ne doc.Entity
-	switch {
-	case corner.Arc != nil:
-		ne = &doc.Arc{Center: corner.Arc.C, Radius: corner.Arc.R, StartAngle: corner.Arc.Start, EndAngle: corner.Arc.End}
-	case corner.Bevel != nil:
-		ne = &doc.Line{Start: corner.Bevel.A, End: corner.Bevel.B}
-	}
-	if ne != nil {
-		ne.Common().Layer, ne.Common().Color = l1.Layer, l1.Color
-		tx.Add(ne)
-	}
-	return nil
-}
-
-// title is the command's display name in the session's language ("Fillet", "Raccordo").
-func (c *cornerCmd) title(ctx *cmdsys.Context) string {
-	return ctx.Translator().CommandName(c.Name())
-}
-
-func (c *cornerCmd) compute(ctx *cmdsys.Context, l1, l2 *doc.Line, p1, p2 geom.Vec2) (geom.Corner, error) {
-	a, b := geom.Line{A: l1.Start, B: l1.End}, geom.Line{A: l2.Start, B: l2.End}
-	if c.chamfer {
-		return geom.ChamferLines(a, b, p1, p2, ctx.Vars().Real("CHAMFERA"), ctx.Vars().Real("CHAMFERB"))
-	}
-	return geom.FilletLines(a, b, p1, p2, ctx.Vars().Real("FILLETRAD"))
-}
-
-// cutLine moves the end of l that is farther from far to join, keeping far.
-func cutLine(l *doc.Line, far, join geom.Vec2) {
-	if l.Start.Dist(far) <= l.End.Dist(far) {
-		l.End = join
-	} else {
-		l.Start = join
-	}
-}
-
-func (c *cornerCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
-	if c.h1 == 0 || c.ask != "" {
-		return
-	}
-	l1, _ := ctx.Doc.Entity(c.h1).(*doc.Line)
-	h2, l2 := c.lineAt(ctx, cur)
-	if l1 == nil || l2 == nil || h2 == c.h1 {
-		return
-	}
-	corner, err := c.compute(ctx, l1, l2, c.p1, cur)
-	if err != nil {
-		return
-	}
-	tol := previewTol(ctx)
-	dl.Curve(geom.Line{A: corner.Far1, B: corner.Join1}, tol, PreviewColor, 1)
-	dl.Curve(geom.Line{A: corner.Far2, B: corner.Join2}, tol, PreviewColor, 1)
-	switch {
-	case corner.Arc != nil:
-		dl.Curve(*corner.Arc, tol, PreviewColor, 1)
-	case corner.Bevel != nil:
-		dl.Curve(*corner.Bevel, tol, PreviewColor, 1)
-	}
 }

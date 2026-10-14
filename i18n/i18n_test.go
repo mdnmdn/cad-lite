@@ -292,7 +292,7 @@ func TestCommandMetadata(t *testing.T) {
 		"CANCELLA": "ERASE", "SPOSTA": "MOVE", "COPIA": "COPY", "RUOTA": "ROTATE", "SCALA": "SCALE",
 		"SPECCHIO": "MIRROR", "RACCORDO": "FILLET", "CIMATURA": "CHAMFER", "TAGLIA": "TRIM",
 		"ESTENDI": "EXTEND", "SPEZZA": "BREAK", "UNISCI": "JOIN", "ESPLODI": "EXPLODE",
-		"ANNULLA": "UNDO", "RIPETI": "REDO", "L": "LINE", "U": "UNDO"}
+		"ANNULLA": "UNDO", "RIPETI": "REDO", "L": "LINE", "U": "U"}
 	got := map[string]string{}
 	RegisterAliases(func(a, c string) { got[a] = c })
 	for a, c := range want {

@@ -15,7 +15,6 @@ CO,    *COPY
 CP,    *COPY
 RO,    *ROTATE
 SC,    *SCALE
-U,     *UNDO
 Z,     *ZOOM
 LA,    *LAYER
 DI,    *DIST

@@ -64,6 +64,9 @@ func (t *Txn) Add(e Entity) Handle {
 	}
 	if c.Color == 0 {
 		c.Color = ByLayer
+		if t.d.CurrentColor >= 1 && t.d.CurrentColor <= 255 {
+			c.Color = t.d.CurrentColor
+		}
 	}
 	t.touch(c.H)
 	t.d.insert(e)
@@ -175,6 +178,8 @@ func (d *Drawing) restore(h Handle, state Entity, cs ChangeSet) ChangeSet {
 // after (nil = absent).
 type JournalStep struct {
 	Before, After map[Handle]Entity
+	// Name is the command that made the step, when the session recorded it (NameLastStep).
+	Name string
 }
 
 // Journal is the undo/redo history of committed transactions.

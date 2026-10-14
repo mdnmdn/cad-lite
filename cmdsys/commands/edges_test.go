@@ -99,7 +99,7 @@ func TestTrimModeOptionSwitchesToStandard(t *testing.T) {
 	s := newSession(t)
 	s.Run("TRIM")
 	s.Submit("O")
-	if got := s.Prompt(); got != "Enter a trimming mode option or [Quick/Standard] <Quick>:" {
+	if got := s.Prompt(); got != "Enter a trimming mode option [Quick/Standard] <Quick>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("S")
@@ -231,7 +231,7 @@ func TestTrimEdgeExtendUsesImpliedEdge(t *testing.T) {
 		t.Fatalf("last = %q", lastLine(s))
 	}
 	s.Submit("E")
-	if got := s.Prompt(); got != "Enter an implied edge extension mode or [Extend/No extend] <No extend>:" {
+	if got := s.Prompt(); got != "Enter an implied edge extension mode [Extend/No extend] <No extend>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("E")
@@ -259,7 +259,7 @@ func TestTrimProjectOption(t *testing.T) {
 	s := newSession(t)
 	s.Run("TRIM")
 	s.Submit("P")
-	if got := s.Prompt(); got != "Enter a projection option or [None/Ucs/View] <Ucs>:" {
+	if got := s.Prompt(); got != "Enter a projection option [None/Ucs/View] <Ucs>:" {
 		t.Fatalf("prompt = %q", got)
 	}
 	s.Submit("N")

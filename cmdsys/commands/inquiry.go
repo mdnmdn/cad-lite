@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"math"
 
 	"go-draw/cmdsys"
@@ -32,7 +33,8 @@ func (c *distCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	}
 	if c.multi {
 		if in.Kind == cmdsys.InputEnter {
-			ctx.Say("cmd.dist.msg.total", cmdsys.FormatNumber(c.total))
+			storeResult(ctx, "DISTANCE", c.total)
+			ctx.Say("cmd.dist.msg.total", ctx.Fmt(c.total))
 			return nil
 		}
 		if n := len(c.pts); n > 0 {
@@ -46,11 +48,14 @@ func (c *distCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		return &cmdsys.Prompt{Message: ctx.T("cmd.dist.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.first}
 	}
 	d := in.Point.Sub(*c.first)
-	ctx.Say("cmd.dist.msg.result",
-		cmdsys.FormatNumber(d.Len()), cmdsys.FormatNumber(geom.NormAngle(d.Angle())*180/math.Pi),
-		cmdsys.FormatNumber(d.X), cmdsys.FormatNumber(d.Y))
+	storeResult(ctx, "DISTANCE", d.Len())
+	ctx.Say("cmd.dist.msg.result", ctx.Fmt(d.Len()), ctx.FmtAngle(d.Angle()), ctx.FmtAngleRel(0))
+	ctx.Say("cmd.dist.msg.delta", ctx.Fmt(d.X), ctx.Fmt(d.Y), ctx.Fmt(0))
 	return nil
 }
+
+// storeResult publishes an inquiry result in its read-only variable (DISTANCE, AREA, PERIMETER).
+func storeResult(ctx *cmdsys.Context, name string, v float64) { _ = ctx.Vars().Store(name, v) }
 
 func (c *distCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
 	if c.multi && len(c.pts) > 0 {
@@ -71,7 +76,8 @@ func (*idCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 }
 
 func (*idCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	ctx.Say("cmd.id.msg.result", cmdsys.FormatNumber(in.Point.X), cmdsys.FormatNumber(in.Point.Y))
+	ctx.SetLastPoint(in.Point)
+	ctx.Say("cmd.id.msg.result", ctx.Fmt(in.Point.X), ctx.Fmt(in.Point.Y), ctx.Fmt(0))
 	return nil
 }
 
@@ -103,20 +109,53 @@ func (c *listCmd) list(ctx *cmdsys.Context) {
 		if e == nil {
 			continue
 		}
-		ctx.Say("cmd.list.msg.header", e.Class(), e.Common().Layer, h)
+		ctx.Say("cmd.list.msg.header", e.Class(), e.Common().Layer)
+		ctx.Say("cmd.list.msg.space")
+		ctx.Say("cmd.list.msg.handle", h)
 		switch e := e.(type) {
 		case *doc.Line:
-			ctx.Say("cmd.list.msg.line", cmdsys.FormatPoint(e.Start), cmdsys.FormatPoint(e.End), cmdsys.FormatNumber(e.Start.Dist(e.End)))
+			d := e.End.Sub(e.Start)
+			listPoint(ctx, "cmd.list.msg.from_point", e.Start)
+			listPoint(ctx, "cmd.list.msg.to_point", e.End)
+			ctx.Say("cmd.list.msg.line_length", ctx.Fmt(d.Len()), ctx.FmtAngle(d.Angle()))
+			ctx.Say("cmd.list.msg.delta", ctx.Fmt(d.X), ctx.Fmt(d.Y), ctx.Fmt(0))
 		case *doc.Circle:
-			ctx.Say("cmd.list.msg.circle", cmdsys.FormatPoint(e.Center), cmdsys.FormatNumber(e.Radius))
+			listPoint(ctx, "cmd.list.msg.center", e.Center)
+			ctx.Say("cmd.list.msg.radius", ctx.Fmt(e.Radius))
+			ctx.Say("cmd.list.msg.circumference", ctx.Fmt(2*math.Pi*e.Radius))
+			ctx.Say("cmd.list.msg.area", ctx.Fmt(math.Pi*e.Radius*e.Radius))
 		case *doc.Arc:
-			ctx.Say("cmd.list.msg.arc", cmdsys.FormatPoint(e.Center), cmdsys.FormatNumber(e.Radius),
-				cmdsys.FormatNumber(e.StartAngle*180/math.Pi), cmdsys.FormatNumber(e.EndAngle*180/math.Pi))
+			listPoint(ctx, "cmd.list.msg.center", e.Center)
+			ctx.Say("cmd.list.msg.radius", ctx.Fmt(e.Radius))
+			ctx.Say("cmd.list.msg.start_angle", ctx.FmtAngle(e.StartAngle))
+			ctx.Say("cmd.list.msg.end_angle", ctx.FmtAngle(e.EndAngle))
+			ctx.Say("cmd.list.msg.arc_length", ctx.Fmt(e.Geometry()[0].Length()))
 		case *doc.LWPolyline:
-			ctx.Say("cmd.list.msg.polyline", len(e.Points), yesNo(ctx, e.Closed), cmdsys.FormatNumber(e.Geometry()[0].Length()))
+			closed := "cmd.list.msg.open"
+			if e.Closed {
+				closed = "cmd.list.msg.closed"
+			}
+			ctx.Say(closed)
+			ctx.Say("cmd.list.msg.constant_width", ctx.Fmt(0))
+			if area, perim, _, ok := entityArea(e); ok && e.Closed {
+				ctx.Say("cmd.list.msg.area", ctx.Fmt(area))
+				ctx.Say("cmd.list.msg.perimeter", ctx.Fmt(perim))
+			} else if ok {
+				ctx.Say("cmd.list.msg.length", ctx.Fmt(perim))
+			}
+			for _, p := range e.Points {
+				listPoint(ctx, "cmd.list.msg.at_point", p)
+			}
 		}
 	}
 }
+
+// listPoint prints a labelled coordinate triple the way LIST does: "from point, X=  0.0000  Y=  0.0000  Z=  0.0000".
+func listPoint(ctx *cmdsys.Context, key string, p geom.Vec2) {
+	ctx.Say(key, pad(ctx.Fmt(p.X)), pad(ctx.Fmt(p.Y)), pad(ctx.Fmt(0)))
+}
+
+func pad(s string) string { return fmt.Sprintf("%8s", s) }
 
 // Transparent marks DIST as runnable inside another command (cmdsys.Transparent).
 func (*distCmd) Transparent() bool { return true }
@@ -129,4 +168,5 @@ func registerInquiry(r *cmdsys.Registry) {
 	r.Register("DIST", func() cmdsys.Command { return &distCmd{} })
 	r.Register("ID", func() cmdsys.Command { return &idCmd{} })
 	r.Register("LIST", func() cmdsys.Command { return &listCmd{} })
+	r.Alias("LS", "LIST")
 }

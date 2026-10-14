@@ -32,7 +32,15 @@ func previewHover(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList, wa
 	}
 }
 
-func deg(a float64) string { return cmdsys.FormatNumber(a * 180 / math.Pi) }
+// angleText formats an angle between two things for a result line: the AUNITS format, with the
+// degree sign when the unit is decimal degrees ("Angle = 90°").
+func angleText(ctx *cmdsys.Context, rad float64) string {
+	s := ctx.FmtAngleRel(rad)
+	if ctx.Vars().Int("AUNITS") == cmdsys.AUnitsDegrees {
+		s += "°"
+	}
+	return s
+}
 
 func polygonPerimeter(pts []geom.Vec2) float64 {
 	var s float64
@@ -63,61 +71,130 @@ func entityArea(e doc.Entity) (area, perim float64, label string, ok bool) {
 
 // --- AREA ---------------------------------------------------------------
 
+// areaMode is AREA's accumulation state: plain, or adding to / subtracting from a running total.
+type areaMode int
+
+const (
+	areaPlain areaMode = iota
+	areaAdd
+	areaSubtract
+)
+
 type areaCmd struct {
 	pts    []geom.Vec2
 	object bool
+	mode   areaMode
+	total  float64
+	// measure is set when MEASUREGEOM runs AREA: eXit is offered from the start and ends the
+	// measurement instead of the command.
+	measure bool
 }
 
 func (*areaCmd) Name() string { return "AREA" }
 
-func (*areaCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.area.prompt.first_corner"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Object"}}
+func (c *areaCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return c.firstPrompt(ctx) }
+
+func (c *areaCmd) firstPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	kws := []string{"Object", "Add area", "Subtract area"}
+	switch {
+	case c.mode == areaAdd:
+		kws = []string{"Object", "Subtract area", "Exit"}
+	case c.mode == areaSubtract:
+		kws = []string{"Object", "Add area", "Exit"}
+	case c.measure:
+		kws = append(kws, "Exit")
+	}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.area.prompt.first_corner"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: kws}
+}
+
+func (c *areaCmd) objectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 }
 
 func (c *areaCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if c.object {
 		return c.inputObject(ctx, in)
 	}
-	switch {
-	case in.Keyword == "Object" && len(c.pts) == 0:
-		c.object = true
-		return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
-	case in.Kind == cmdsys.InputEnter:
-		c.report(ctx)
-		return nil
-	case in.Kind == cmdsys.InputPoint:
+	if len(c.pts) == 0 && in.Kind == cmdsys.InputKeyword {
+		switch in.Keyword {
+		case "Object":
+			c.object = true
+			return c.objectPrompt(ctx)
+		case "Add area":
+			c.mode = areaAdd
+			return c.firstPrompt(ctx)
+		case "Subtract area":
+			c.mode = areaSubtract
+			return c.firstPrompt(ctx)
+		case "Exit":
+			return nil
+		}
+	}
+	switch in.Kind {
+	case cmdsys.InputEnter:
+		area, perim := c.measurePoints(ctx)
+		return c.finish(ctx, area, perim)
+	case cmdsys.InputPoint:
 		c.pts = append(c.pts, in.Point)
 	}
 	return &cmdsys.Prompt{Message: ctx.T("cmd.area.prompt.next_corner"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Base: pt(c.pts[len(c.pts)-1])}
 }
 
-func (c *areaCmd) report(ctx *cmdsys.Context) {
-	area, perim := 0.0, 0.0
+// measurePoints reports the digitised polygon and returns its area and perimeter.
+func (c *areaCmd) measurePoints(ctx *cmdsys.Context) (area, perim float64) {
 	if len(c.pts) >= 3 {
 		area = math.Abs(geom.PolygonArea(c.pts))
 	}
 	if len(c.pts) >= 2 {
 		perim = polygonPerimeter(c.pts)
 	}
-	ctx.Say("cmd.area.msg.result", cmdsys.FormatNumber(area), cmdsys.FormatNumber(perim))
+	ctx.Say("cmd.area.msg.result", ctx.Fmt(area), ctx.Fmt(perim))
+	return
+}
+
+// finish publishes AREA and PERIMETER for one measurement. Plain AREA ends; in Add and Subtract
+// mode the area joins the running total, which is reported, and the first-corner prompt returns.
+func (c *areaCmd) finish(ctx *cmdsys.Context, area, perim float64) *cmdsys.Prompt {
+	c.pts, c.object = nil, false
+	storeResult(ctx, "PERIMETER", perim)
+	if c.mode == areaPlain {
+		storeResult(ctx, "AREA", area)
+		return nil
+	}
+	if c.mode == areaAdd {
+		c.total += area
+	} else {
+		c.total -= area
+	}
+	storeResult(ctx, "AREA", c.total)
+	ctx.Say("cmd.area.msg.total", ctx.Fmt(c.total))
+	return c.firstPrompt(ctx)
 }
 
 func (c *areaCmd) inputObject(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if in.Kind != cmdsys.InputPoint {
-		return nil
+		c.object = false
+		if c.mode == areaPlain {
+			return nil
+		}
+		return c.firstPrompt(ctx)
 	}
 	e, ok := pickAt(ctx, in.Point)
 	if !ok {
 		ctx.Say("cmd.common.msg.no_object_found")
-		return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+		return c.objectPrompt(ctx)
 	}
 	area, perim, label, ok := entityArea(e)
 	if !ok {
 		ctx.Say("cmd.area.msg.no_area")
-		return nil
+		c.object = false
+		if c.mode == areaPlain {
+			return nil
+		}
+		return c.firstPrompt(ctx)
 	}
-	ctx.Say("cmd.area.msg.result_object", cmdsys.FormatNumber(area), ctx.T(label), cmdsys.FormatNumber(perim))
-	return nil
+	ctx.Say("cmd.area.msg.result_object", ctx.Fmt(area), ctx.T(label), ctx.Fmt(perim))
+	return c.finish(ctx, area, perim)
 }
 
 func (c *areaCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
@@ -168,7 +245,7 @@ func (*radiusCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		ctx.Say("cmd.radius.msg.select_arc_or_circle")
 		return radiusPrompt(ctx)
 	}
-	ctx.Say("cmd.radius.msg.result", cmdsys.FormatNumber(r), cmdsys.FormatNumber(2*r))
+	ctx.Say("cmd.radius.msg.result", ctx.Fmt(r), ctx.Fmt(2*r))
 	return nil
 }
 
@@ -239,7 +316,7 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 		switch e := e.(type) {
 		case *doc.Arc:
-			ctx.Say("cmd.angle.msg.result", cmdsys.FormatNumber(e.Geometry()[0].(geom.Arc).Sweep()*180/math.Pi))
+			ctx.Say("cmd.angle.msg.result", angleText(ctx, e.Geometry()[0].(geom.Arc).Sweep()))
 			return nil
 		case *doc.Circle:
 			c.vertex, c.first, c.stage = e.Center, in.Point, angleSecond
@@ -264,7 +341,7 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			ctx.Say("cmd.angle.msg.select_line")
 			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 		}
-		ctx.Say("cmd.angle.msg.result", deg(lineAngle(c.line1, c.pick1, l2, in.Point)))
+		ctx.Say("cmd.angle.msg.result", angleText(ctx, lineAngle(c.line1, c.pick1, l2, in.Point)))
 		return nil
 	case angleVertex:
 		c.vertex, c.stage = in.Point, angleFirst
@@ -273,7 +350,7 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		c.first, c.stage = in.Point, angleSecond
 		return endpointPrompt(ctx.T("cmd.angle.prompt.second_endpoint"), c.vertex)
 	}
-	ctx.Say("cmd.angle.msg.result", deg(angleBetween(c.vertex, c.first, in.Point)))
+	ctx.Say("cmd.angle.msg.result", angleText(ctx, angleBetween(c.vertex, c.first, in.Point)))
 	return nil
 }
 
@@ -328,12 +405,18 @@ func (*measureGeomCmd) Name() string { return "MEASUREGEOM" }
 
 func (*measureGeomCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	def := cmdsys.Input{Kind: cmdsys.InputKeyword, Keyword: "Distance"}
-	return &cmdsys.Prompt{Message: ctx.T("cmd.measuregeom.prompt.option"), Accepts: cmdsys.InputKeyword, Keywords: []string{"Distance", "Radius", "Angle", "ARea"}, Default: &def}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.measuregeom.prompt.option"), Accepts: cmdsys.InputKeyword, Keywords: []string{"Distance", "Radius", "Angle", "ARea", "Exit"}, Default: &def, NoOr: true}
 }
 
+// Input runs one measurement per option and asks for the next option until eXit.
 func (c *measureGeomCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if c.sub != nil {
-		return c.sub.Input(ctx, in)
+		p := c.sub.Input(ctx, in)
+		if p == nil {
+			c.sub = nil
+			return c.Start(ctx)
+		}
+		return p
 	}
 	switch in.Keyword {
 	case "Distance":
@@ -343,7 +426,9 @@ func (c *measureGeomCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Pro
 	case "Angle":
 		c.sub = &angleCmd{}
 	case "ARea":
-		c.sub = &areaCmd{}
+		c.sub = &areaCmd{measure: true}
+	case "Exit":
+		return nil
 	default:
 		return c.Start(ctx)
 	}

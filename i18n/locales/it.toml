@@ -63,8 +63,46 @@ quadrant = "Quadrante"
 intersection = "Intersezione"
 nearest = "Vicino"
 generic = "Snap"
+node = "Nodo"
+insertion = "Inserimento"
+perpendicular = "Perpendicolare"
+tangent = "Tangente"
+of = "%s di"
+from_base = "Punto base"
+from_offset = "<Scostamento>"
+m2p_first = "Primo punto del punto medio"
+m2p_second = "Secondo punto del punto medio"
+unsupported = "L'osnap %s non è supportato."
+none_found = "Nessun osnap trovato."
 
 [kw]
+zall = "Tutto"
+scale = "Scala"
+make = "CRea"
+set = "Imposta"
+new = "Nuovo"
+color = "Colore"
+ltype = "Tipolinea|TL"
+lweight = "SPessore linea|LWeight"
+plot = "Stampa"
+no_plot = "Non stampa"
+freeze = "CONgela"
+thaw = "SCongela"
+lock = "BLocca"
+unlock = "SBlocca"
+description = "Descrizione"
+settings = "Impostazioni"
+chlayer = "LAyer"
+layers = "LAyer"
+zero_length_geometry = "Lunghezza zero"
+_ = "?"
+snap = "Snap"
+major = "Principale"
+aspect = "Aspetto"
+style = "Stile"
+type = "Tipo"
+isometric = "Isometrico"
+grid = "Griglia"
 project = "Proietta"
 erase = "Cancella"
 boundary_edges = "Bordi limite"
@@ -135,6 +173,15 @@ add = "AGgiungi"
 remove = "RImuovi"
 multiple = "Multiplo"
 auto = "AUto"
+control = "COntrollo"
+begin = "INizio"
+mark = "Segno"
+back = "Torna|Indietro"
+one = "Uno"
+combine = "Combina"
+on = "ON"
+off = "OFF"
+cancel = "Annulla"
 single = "SIngolo"
 displacement = "Spostamento"
 mode = "mOdalità"
@@ -148,6 +195,17 @@ rectangular = "Rettangolare"
 polar = "Polare|po"
 path = "PErcorso"
 base = "Base"
+add_area = "AGgiungi area"
+subtract_area = "SOttrai area"
+polyline = "Polilinea"
+trim = "Taglia"
+no_trim = "Non taglia"
+erase_offset = "Cancella"
+layer = "Layer"
+current = "Corrente"
+source = "Origine"
+method = "mEtodo"
+chamfer_angle = "ANgolo"
 
 [cmd.select.prompt]
 first_corner = "Specificare primo angolo"
@@ -287,7 +345,9 @@ scale_new = "Specificare la nuova lunghezza"
 first_point = "Specificare primo punto"
 
 [cmd.modify.msg]
-rotate_header = "Angolo positivo corrente nel SCU:  ANGDIR=antiorario  ANGBASE=0"
+rotate_header = "Angolo positivo corrente nel SCU:  ANGDIR=%s  ANGBASE=%s"
+angdir_ccw = "antiorario"
+angdir_cw = "orario"
 rotate_copy = "Rotazione di una copia degli oggetti selezionati."
 scale_copy = "Scala di una copia degli oggetti selezionati."
 
@@ -315,19 +375,70 @@ nothing = "Niente da ripristinare."
 
 [cmd.undo.msg]
 everything_undone = "Tutto è stato annullato."
+undone = "%s"
+disabled = "ANNULLA è disattivato (ANNULLA Controllo Nessuno)."
+positive = "Immettere un numero intero maggiore o uguale a 1."
+no_group = "Non c'è nessun gruppo ANNULLA Inizio da terminare."
+
+[cmd.undo.prompt]
+count = "Immettere il numero di operazioni da annullare"
+auto = "Immettere la modalità Auto di ANNULLA"
+control = "Immettere un'opzione di controllo di ANNULLA"
+back_all = "Verrà annullato tutto. OK"
+
+[cmd.mredo.prompt]
+count = "Immettere il numero di azioni da ripristinare"
 
 [cmd.redo.msg]
 nothing_to_redo = "Nessuna operazione da ripetere."
 
 [cmd.zoom.prompt]
+center = "Specificare il punto centrale"
+height = "Inserire l'ingrandimento o l'altezza"
+scale = "Inserire un fattore di scala (nX o nXP)"
 corner = "Specificare angolo della finestra"
 first_corner = "Specificare primo angolo"
 opposite_corner = "Specificare angolo opposto"
 
 [cmd.layer.prompt]
+pick = "Selezionare l'oggetto di cui usare il layer"
+option = "Inserire un'opzione"
+list = "Inserire il nome dei layer da elencare"
+make = "Inserire il nome del nuovo layer (diventa il layer corrente)"
+set = "Inserire il nome del layer da rendere corrente o <selezionare oggetto>"
+new = "Inserire l'elenco dei nomi dei nuovi layer"
+names_on = "Inserire i nomi dei layer da attivare o <selezionare oggetto>"
+names_off = "Inserire i nomi dei layer da disattivare o <selezionare oggetto>"
+names_freeze = "Inserire i nomi dei layer da congelare o <selezionare oggetto>"
+names_thaw = "Inserire i nomi dei layer da scongelare o <selezionare oggetto>"
+names_lock = "Inserire i nomi dei layer da bloccare o <selezionare oggetto>"
+names_unlock = "Inserire i nomi dei layer da sbloccare o <selezionare oggetto>"
+color = "Nuovo colore (1-255 o un nome)"
+ltype = "Inserire il nome del tipo di linea caricato o [?]"
+lweight = "Inserire lo spessore di linea in mm (da 0.00 a 2.11) o DEFAULT"
+plot = "Opzione di stampa"
+desc_name = "Inserire il nome del layer da descrivere"
+description = "Inserire la descrizione del layer %s"
+color_names = "Inserire l'elenco dei layer per il colore %d"
+ltype_names = "Inserire l'elenco dei layer per questo tipo di linea"
+lweight_names = "Inserire l'elenco dei layer per questo spessore di linea"
+plot_names = "Inserire l'elenco dei layer per questa opzione di stampa"
+really_off = "Disattivare davvero il layer %s (il layer CORRENTE)?"
 name = "Nome del layer da rendere corrente, o nome=colore <%s>"
 
 [cmd.layer.msg]
+row = "%-24s %-14s %3d  %s"
+current = "Layer corrente: %s"
+not_found = "Impossibile trovare il layer %q."
+nothing_picked = "Nessun oggetto in quel punto."
+freeze_current = "Il layer %q è il layer CORRENTE e non può essere congelato."
+set_frozen = "Il layer %q è congelato e non può essere reso corrente."
+bad_name = "Nome di layer non valido. Un nome non può essere vuoto né contenere < > / \\ \" : ; ? * | , = `"
+exists = "Il layer %q esiste già."
+bad_lineweight = "Spessore di linea non valido. Usare un valore standard in mm (0.05, 0.09, 0.13 ... 2.11) o DEFAULT."
+ltype_header = "Tipi di linea caricati:"
+ltype_not_loaded = "Il tipo di linea %q non è caricato."
+list_header = "Nome layer               Stato          Colore Tipo di linea"
 bad_color = "Il colore deve essere un indice colore AutoCAD da 1 a 255."
 created = "Layer %q creato."
 
@@ -338,20 +449,36 @@ second_point = "Specificare secondo punto"
 
 [cmd.dist.msg]
 total = "Distanza = %s"
-result = "Distanza = %s,  Angolo = %s°,  Delta X = %s,  Delta Y = %s"
+result = "Distanza = %s,  Angolo nel piano XY = %s,  Angolo dal piano XY = %s"
+delta = "Delta X = %s,  Delta Y = %s,  Delta Z = %s"
 
 [cmd.id.prompt]
 point = "Specificare punto"
 
 [cmd.id.msg]
-result = "X = %s     Y = %s"
+result = "X = %s  Y = %s  Z = %s"
 
 [cmd.list.msg]
-header = "%s  Layer: %q  Handle = %s"
-line = "    da punto %s  a punto %s  Lunghezza = %s"
-circle = "    centro %s  raggio %s"
-arc = "    centro %s  raggio %s  angolo iniziale %s°  angolo finale %s°"
-polyline = "    %d vertici  chiusa: %s  lunghezza %s"
+header = "%s  Layer: %q"
+space = "                Spazio: Spazio modello"
+handle = "                Handle = %s"
+from_point = "da punto, X=%s  Y=%s  Z=%s"
+to_point = "  a punto, X=%s  Y=%s  Z=%s"
+line_length = "Lunghezza = %s,  Angolo nel piano XY = %s"
+delta = "      Delta X = %s,  Delta Y = %s,  Delta Z = %s"
+center = "centro, X=%s  Y=%s  Z=%s"
+radius = "raggio %s"
+circumference = "circonferenza %s"
+area = "area %s"
+perimeter = "perimetro %s"
+length = "lunghezza %s"
+start_angle = "angolo iniziale %s"
+end_angle = "angolo finale %s"
+arc_length = "lunghezza %s"
+open = "Aperta"
+closed = "Chiusa"
+constant_width = "Larghezza costante %s"
+at_point = "nel punto  X=%s  Y=%s  Z=%s"
 
 [cmd.area.prompt]
 first_corner = "Specificare primo angolo"
@@ -361,6 +488,7 @@ next_corner = "Specificare angolo successivo o premere INVIO per il totale"
 result = "Area = %s, Perimetro = %s"
 result_object = "Area = %s, %s = %s"
 no_area = "L'oggetto non ha area."
+total = "Area totale = %s"
 
 [cmd.area.label]
 circumference = "Circonferenza"
@@ -383,7 +511,39 @@ second_line = "Selezionare seconda linea"
 [cmd.angle.msg]
 select_object = "Selezionare un arco, un cerchio o una linea."
 select_line = "Selezionare una linea."
-result = "Angolo = %s°"
+result = "Angolo = %s"
+
+[cmd.units.prompt]
+length_format = "Immettere scelta, da 1 a 5"
+decimals = "Immettere numero di cifre a destra del punto decimale (da 0 a 8)"
+denominator = "Immettere denominatore della frazione minima da visualizzare (1, 2, 4, 8, 16, 32, 64, 128 o 256)"
+angle_format = "Immettere scelta, da 1 a 5"
+angle_places = "Immettere numero di posizioni frazionarie per la visualizzazione degli angoli (da 0 a 8)"
+base = "Immettere direzione per angolo 0"
+clockwise = "Misurare gli angoli in senso orario?"
+
+[cmd.units.msg]
+report_formats = "Formati di rapporto:  (Esempi)"
+length_1 = "1. Scientifico      1.55E+01"
+length_2 = "2. Decimale         15.50"
+length_3 = "3. Ingegneristico   1'-3.50\""
+length_4 = "4. Architettonico   1'-3 1/2\""
+length_5 = "5. Frazionario      15 1/2"
+angle_systems = "Sistemi di misura degli angoli:  (Esempi)"
+angle_1 = "1. Gradi decimali           45.0000"
+angle_2 = "2. Gradi/primi/secondi      45d00'00\""
+angle_3 = "3. Gradi centesimali        50.0000g"
+angle_4 = "4. Radianti                 0.7854r"
+angle_5 = "5. Unità topografiche       N 45d0'0\" E"
+direction_systems = "Direzione dell'angolo 0:"
+direction_east = "    Est      ore 3          0d"
+direction_north = "    Nord     ore 12        90d"
+direction_west = "    Ovest    ore 9        180d"
+direction_south = "    Sud      ore 6        270d"
+range_1_5 = "Richiede un valore intero tra 1 e 5."
+range_0_8 = "Richiede un valore intero tra 0 e 8."
+bad_denominator = "Richiede una potenza di 2 da 1 a 256."
+bad_angle = "Richiede un angolo valido."
 
 [cmd.measuregeom.prompt]
 option = "Immettere un'opzione"
@@ -391,7 +551,7 @@ option = "Immettere un'opzione"
 [cmd.mirror.prompt]
 first_point = "Specificare primo punto della linea di simmetria"
 second_point = "Specificare secondo punto della linea di simmetria"
-erase_source = "Cancellare gli oggetti di origine"
+erase_source = "Cancellare gli oggetti di origine?"
 
 [cmd.mirror.msg]
 points_differ = "I due punti della linea di simmetria devono essere diversi."
@@ -402,9 +562,14 @@ second_point = "Specificare secondo punto"
 select = "Selezionare oggetto per l'offset"
 side = "Specificare punto sul lato dell'offset"
 through = "Specificare punto di passaggio"
+erase = "Cancellare l'oggetto di origine dopo l'offset?"
+layer = "Immettere l'opzione layer per gli oggetti offset"
 
 [cmd.offset.msg]
-positive_distance = "Richiede una distanza positiva e diversa da zero."
+layer_source = "Origine"
+layer_current = "Corrente"
+next_object = "oggetto successivo"
+settings = "Impostazioni correnti: Cancella origine=%s  Layer=%s  OFFSETGAPTYPE=%d"
 nothing_found = "Nessun oggetto in quel punto."
 cannot_offset = "Impossibile eseguire l'offset di questo oggetto."
 degenerate = "L'offset avrebbe raggio nullo o negativo; nessun oggetto creato."
@@ -413,17 +578,32 @@ through_on_object = "Il punto di passaggio giace sull'oggetto; nessun oggetto cr
 [cmd.corner.prompt]
 select_first_object = "Selezionare primo oggetto"
 select_first_line = "Selezionare prima linea"
-select_second_object = "Selezionare secondo oggetto"
-select_second_line = "Selezionare seconda linea"
+select_second_object = "Selezionare secondo oggetto o shift-selezione per applicare lo spigolo"
+select_second_line = "Selezionare seconda linea o shift-selezione per applicare lo spigolo"
+select_polyline = "Selezionare polilinea 2D"
+chamfer_len = "Specificare lunghezza dello smusso sulla prima linea"
+chamfer_ang = "Specificare angolo dello smusso dalla prima linea"
+trim_mode = "Immettere l'opzione modalità Taglia"
+method = "Immettere il metodo di smusso"
 fillet_radius = "Specificare raggio di raccordo"
 chamfer_d1 = "Specificare prima distanza di smusso"
 chamfer_d2 = "Specificare seconda distanza di smusso"
 
 [cmd.corner.msg]
+mode_trim = "TAGLIA"
+mode_notrim = "NON TAGLIA"
 # (verify)
-chamfer_settings = "(modalità TAGLIA) Smusso corrente Dist1 = %s, Dist2 = %s"
+chamfer_settings = "(modalità %s) Smusso corrente Dist1 = %s, Dist2 = %s"
+chamfer_settings_angle = "(modalità %s) Smusso corrente Lunghezza = %s, Angolo = %s"
 # (verify)
-fillet_settings = "Impostazioni correnti: Modalità = TAGLIA, Raggio = %s"
+fillet_settings = "Impostazioni correnti: Modalità = %s, Raggio = %s"
+not_polyline = "Non è una polilinea 2D."
+filleted_one = "%d linea raccordata"
+filleted_other = "%d linee raccordate"
+chamfered_one = "%d linea smussata"
+chamfered_other = "%d linee smussate"
+too_short_one = "%d era troppo corta"
+too_short_other = "%d erano troppo corte"
 non_negative = "Richiede una distanza non negativa."
 nothing_found = "Nessun oggetto in quel punto."
 supports_two_lines = "%s supporta solo due linee."
@@ -519,10 +699,13 @@ open_failed = "Apertura non riuscita: %v"
 opened = "Aperto %s (%d oggetti)."
 more_warnings = "... e altri %d avvisi."
 warning = "Avviso: %s"
+quit_unavailable = "Uscire non è disponibile su questa piattaforma."
+untitled = "Senza titolo"
 
 [cmd.file.prompt]
 open_path = "Immettere il percorso del disegno da aprire"
 save_path = "Immettere il percorso in cui salvare il disegno"
+save_changes = "Salvare le modifiche a %s?"
 
 [cmd.ai.msg]
 unavailable = "L'agente IA non è disponibile su questa piattaforma."
@@ -589,6 +772,7 @@ layers = "LAYER"
 properties = "PROPRIETÀ"
 
 [ui.layers]
+frozen = "congelato"
 # (verify)
 on = "on"
 # (verify)
@@ -605,6 +789,7 @@ layer = "Layer: %s"
 handle = "Handle: %s"
 
 [ui.status]
+modified_tip = "Modifiche non salvate — il disegno differisce dal file salvato"
 coords_tip = "Posizione del cursore — unità del modello"
 grid = "GRIGLIA"
 grid_tip = "Griglia — mostra o nasconde la griglia di disegno (F7)"
@@ -815,6 +1000,18 @@ desc = "Sposta gli oggetti selezionati senza modificarli"
 tip = "Sposta — sposta gli oggetti selezionati senza modificarli (SPOSTA / M)"
 aliases = ["SPOSTA"]
 
+[cmd.stretch]
+name = "Stira"
+desc = "Stira gli oggetti intersecati da una finestra, spostando i vertici e gli estremi al suo interno"
+tip = "Stira — stira gli oggetti intersecati da una finestra, spostando i vertici e gli estremi al suo interno (STIRA / S)"
+aliases = ["STIRA"]
+
+[cmd.multiple.prompt]
+name = "Immettere il nome del comando da ripetere"
+
+[cmd.stretch.msg]
+hint = "Selezionare gli oggetti da stirare con una finestra di selezione intersecante o un poligono intersecante..."
+
 [cmd.copy]
 name = "Copia"
 desc = "Duplica gli oggetti selezionati lasciando gli originali al loro posto"
@@ -835,9 +1032,15 @@ aliases = ["SCALA"]
 
 [cmd.undo]
 name = "Annulla"
-desc = "Annulla l'ultima modifica"
-tip = "Annulla — annulla l'ultima modifica (Ctrl+Z / ANNULLA)"
+desc = "Annulla le modifiche, oppure imposta un segno o un gruppo di annullamento"
+tip = "Annulla — annulla le modifiche, oppure imposta un segno o un gruppo di annullamento (ANNULLA)"
 aliases = ["ANNULLA"]
+
+[cmd.u]
+name = "Annulla"
+desc = "Annulla l'ultima modifica"
+tip = "Annulla — annulla l'ultima modifica (Ctrl+Z / U)"
+aliases = ["U"]
 
 [cmd.redo]
 # (verify)
@@ -880,6 +1083,13 @@ desc = "Misura distanza, raggio, angolo o area"
 tip = "Misura geometria — misura distanza, raggio, angolo o area (MISURAGEOM / MEA)"
 # (verify)
 aliases = ["MISURAGEOM"]
+
+[cmd.units]
+# (verify)
+name = "Unità"
+desc = "Imposta i formati di lunghezza e angolo, la precisione e la direzione dell'angolo 0"
+tip = "Unità — imposta i formati di lunghezza e angolo, la precisione e la direzione dell'angolo 0 (UNITA / UN)"
+aliases = ["UNITA"]
 
 [cmd.id]
 # (verify)
@@ -1001,3 +1211,85 @@ aliases = ["OPZIONI"]
 
 [cmd.options.msg]
 unavailable = "Le opzioni non sono disponibili."
+
+[cmd.ortho.prompt]
+mode = "Immettere modo"
+
+[cmd.grid.prompt]
+spacing = "Specificare passo griglia(X)"
+major = "Specificare frequenza linee principali della griglia"
+horizontal = "Specificare passo orizzontale"
+vertical = "Specificare passo verticale"
+
+[cmd.snap.prompt]
+spacing = "Specificare passo snap"
+horizontal = "Specificare passo orizzontale"
+vertical = "Specificare passo verticale"
+style = "Immettere stile griglia snap"
+type = "Immettere tipo di snap"
+
+[cmd.osnap.prompt]
+modes = "Immettere elenco di modi osnap"
+
+[cmd.osnap.msg]
+current = "Modi osnap correnti: %s"
+invalid = "Modo osnap non valido: %s"
+
+[cmd.aids.msg]
+positive = "Richiede un valore positivo diverso da zero."
+invalid_value = "Valore non valido."
+
+[cmd.layer.state]
+on = "Attivo"
+off = "Disattivo"
+frozen = "Congelato"
+locked = "Bloccato"
+noplot = "NoStampa"
+
+[cmd.pan.prompt]
+base = "Specificare il punto base o lo spostamento"
+second = "Specificare il secondo punto o <usare il primo punto come spostamento>"
+
+[cmd.zoom.msg]
+bad_scale = "Inserire un numero o un fattore di scala come 2, 0.5X o 2XP."
+no_previous = "Nessuna vista precedente salvata."
+
+[cmd.matchprop.prompt]
+source = "Selezionare l'oggetto di origine"
+dest = "Selezionare gli oggetti di destinazione"
+settings = "Inserire l'impostazione da cambiare"
+
+[cmd.matchprop.setting]
+color = "Colore"
+layer = "Layer"
+
+[cmd.matchprop.msg]
+no_object = "Nessun oggetto in quel punto."
+settings = "Impostazioni attive correnti = %s"
+locked_one = "%d oggetto è su un layer bloccato e non è stato modificato."
+locked_other = "%d oggetti sono su layer bloccati e non sono stati modificati."
+
+[cmd.chprop.prompt]
+property = "Inserire la proprietà da cambiare"
+color = "Inserire il nuovo colore (1-255 o un nome)"
+layer = "Inserire il nuovo nome del layer"
+
+[cmd.color.prompt]
+color = "Nuovo colore degli oggetti (1-255, un nome o BYLAYER)"
+
+[cmd.ltscale.prompt]
+factor = "Inserire il nuovo fattore di scala del tipo di linea"
+
+[cmd.ltscale.msg]
+positive = "Richiede un valore positivo diverso da zero."
+
+[cmd.purge.prompt]
+type = "Inserire il tipo di oggetti inutilizzati da eliminare"
+names = "Inserire i nomi da eliminare"
+verify = "Verificare ogni nome da eliminare?"
+each = "Eliminare il layer %q?"
+
+[cmd.purge.msg]
+deleted = "Eliminato il layer %q."
+zero_length_one = "%d oggetto di lunghezza zero eliminato."
+zero_length_other = "%d oggetti di lunghezza zero eliminati."

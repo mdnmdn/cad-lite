@@ -29,7 +29,7 @@ unexported access.
 | Unit | Areas, offsets, fillets and chamfers, trim spans, splitting, joining and extending | `geom/area_test.go`, `geom/offset_test.go`, `geom/fillet_test.go`, `geom/split_test.go` |
 | Unit | Transactions, abort, change listeners, undo and redo | `doc/doc_test.go`; a random-edit test undoes 200 transactions and compares with the original, then redoes them and compares with the result |
 | Command | Every built-in command end to end | `cmdsys/commands/commands_test.go`: scripts fed to a headless `Session`, then the document inspected |
-| Command | MIRROR, OFFSET, FILLET, CHAMFER; TRIM, EXTEND, BREAK, JOIN, EXPLODE; the measurement commands; the AI command | `cmdsys/commands/construct_test.go`, `trim_test.go`, `measure_test.go`, `agent_test.go` |
+| Command | MIRROR, OFFSET, FILLET, CHAMFER; TRIM, EXTEND, BREAK, JOIN, EXPLODE; the measurement commands; the AI command | `cmdsys/commands/construct_test.go`, `construct_more_test.go`, `trim_test.go`, `measure_test.go`, `agent_test.go` |
 | Command | Input parsing, snaps, ortho, window and crossing selection | the same file, calling `ParseInput`, `FindSnap`, `Session.Click` and `Session.SelectBox` |
 | Round trip | DXF write then read; reading a newer-version file; malformed input; truncated files, a missing `EOF` and non-finite numbers | `fileio/dxf/dxf_test.go` |
 | Unit | Atomic save: a failed write keeps the original, a save keeps the mode | `fileio/format_test.go` |

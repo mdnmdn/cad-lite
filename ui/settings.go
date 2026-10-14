@@ -168,7 +168,7 @@ func (ws *Workspace) applyAppearance(w *gpui.Window) {
 // settings.
 func (ws *Workspace) applyDrawingDefaults() {
 	c := ws.prefs().cur
-	ws.Grid = c.Grid
+	ws.session.SetGrid(c.Grid)
 	ws.session.SnapOn = c.OSnap
 	ws.session.Ortho = c.Ortho
 }

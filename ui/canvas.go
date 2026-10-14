@@ -210,7 +210,7 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 
 	dl := &c.dl
 	dl.Reset()
-	if ws.Grid {
+	if ws.session.Grid() {
 		ws.gridItems(dl)
 	}
 	d := ws.session.Drawing()
@@ -266,30 +266,37 @@ func (ws *Workspace) resizeView(b gpui.Bounds) {
 	c.sized = true
 }
 
-// gridItems draws grid lines every power of ten that is at least 16 px
-// apart, with every tenth line stronger.
+// gridItems draws the grid: lines every GRIDUNIT (x and y), widened by powers of ten until they
+// are at least 16 px apart, with every GRIDMAJOR-th line stronger.
 func (ws *Workspace) gridItems(dl *render.DisplayList) {
 	v := ws.view
-	step := math.Pow(10, math.Ceil(math.Log10(16*v.PixelSize())))
+	sp, major := ws.session.GridSpacing(), ws.session.GridMajor()
+	step := func(u float64) float64 {
+		for u < 16*v.PixelSize() {
+			u *= 10
+		}
+		return u
+	}
+	sx, sy := step(sp.X), step(sp.Y)
 	vis := v.Visible()
-	x0, x1 := math.Floor(vis.Min.X/step), math.Ceil(vis.Max.X/step)
-	y0, y1 := math.Floor(vis.Min.Y/step), math.Ceil(vis.Max.Y/step)
+	x0, x1 := math.Floor(vis.Min.X/sx), math.Ceil(vis.Max.X/sx)
+	y0, y1 := math.Floor(vis.Min.Y/sy), math.Ceil(vis.Max.Y/sy)
 	if x1-x0 > 400 || y1-y0 > 400 {
 		return
 	}
 	for i := x0; i <= x1; i++ {
 		col := colGrid
-		if math.Mod(i, 10) == 0 {
+		if math.Mod(i, float64(major)) == 0 {
 			col = colGridMajor
 		}
-		dl.Polyline([]geom.Vec2{{X: i * step, Y: vis.Min.Y}, {X: i * step, Y: vis.Max.Y}}, col, 0, false)
+		dl.Polyline([]geom.Vec2{{X: i * sx, Y: vis.Min.Y}, {X: i * sx, Y: vis.Max.Y}}, col, 0, false)
 	}
 	for j := y0; j <= y1; j++ {
 		col := colGrid
-		if math.Mod(j, 10) == 0 {
+		if math.Mod(j, float64(major)) == 0 {
 			col = colGridMajor
 		}
-		dl.Polyline([]geom.Vec2{{X: vis.Min.X, Y: j * step}, {X: vis.Max.X, Y: j * step}}, col, 0, false)
+		dl.Polyline([]geom.Vec2{{X: vis.Min.X, Y: j * sy}, {X: vis.Max.X, Y: j * sy}}, col, 0, false)
 	}
 }
 
@@ -344,6 +351,12 @@ func snapMarker(dl *render.DisplayList, hit cmdsys.SnapHit, r float64) {
 	case cmdsys.SnapIntersection:
 		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y + r}}, colSnap, 2, false)
 		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y + r}, {X: p.X + r, Y: p.Y - r}}, colSnap, 2, false)
+	case cmdsys.SnapPerpendicular:
+		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y + r}, {X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y - r}}, colSnap, 2, false)
+		dl.Polyline(square(geom.V(p.X-r/2, p.Y-r/2), r/2), colSnap, 2, true)
+	case cmdsys.SnapTangent:
+		dl.Curve(geom.Circle{C: geom.V(p.X, p.Y-r/4), R: r * 0.75}, r/20, colSnap, 2)
+		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y + r/2}, {X: p.X + r, Y: p.Y + r/2}}, colSnap, 2, false)
 	default:
 		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y + r}, {X: p.X + r, Y: p.Y + r}, {X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y - r}}, colSnap, 2, true)
 	}

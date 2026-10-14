@@ -303,10 +303,10 @@ func (ws *Workspace) adoptUpdate(w *gpui.Window, cx *gpui.App, r *updResult) {
 
 // finishInstall runs once the new version is on disk. A drawing without
 // edits restarts at once, so one press of Update does everything; one with
-// edits asks first, because the application cannot tell whether they were
-// saved (see Session undo depth).
+// unsaved changes asks first (Session.Dirty: the drawing changed since it was created, opened or
+// saved).
 func (ws *Workspace) finishInstall(w *gpui.Window, cx *gpui.App) {
-	if ws.session.Drawing().UndoDepth() > 0 {
+	if ws.session.Dirty() {
 		ws.upd().confirm = true
 		return
 	}

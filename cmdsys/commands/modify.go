@@ -140,7 +140,7 @@ func (c *moveCmd) modePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 		def = kwSingleMode
 	}
 	return &cmdsys.Prompt{Message: ctx.T("cmd.modify.prompt.copy_mode"), Accepts: cmdsys.InputKeyword,
-		Keywords: []string{kwSingleMode, "Multiple"}, Default: defaultKeyword(def)}
+		Keywords: []string{kwSingleMode, "Multiple"}, Default: defaultKeyword(def), NoOr: true}
 }
 
 func (c *moveCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
@@ -443,7 +443,11 @@ func (c *transformCmd) apply(ctx *cmdsys.Context, v float64) *cmdsys.Prompt {
 
 func (c *transformCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if !c.scale {
-		ctx.Say("cmd.modify.msg.rotate_header")
+		dir := "cmd.modify.msg.angdir_ccw"
+		if ctx.AngleClockwise() {
+			dir = "cmd.modify.msg.angdir_cw"
+		}
+		ctx.Say("cmd.modify.msg.rotate_header", ctx.T(dir), ctx.FmtAngleRel(ctx.AngleBase()))
 	}
 	if c.begin(ctx) {
 		return c.basePrompt(ctx)

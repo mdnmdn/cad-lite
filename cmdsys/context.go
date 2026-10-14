@@ -36,6 +36,8 @@ type Context struct {
 	prev *selMemory
 	// script hands script text to the session (SCRIPT, RSCRIPT).
 	script func(text string, restart bool)
+	// files is the session's modified counter, quit hook and undo state (dirty.go).
+	files *fileState
 }
 
 // FileHandler reads and writes drawings for the file commands.
