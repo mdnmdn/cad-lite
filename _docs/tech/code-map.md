@@ -21,6 +21,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 
 | Package | Purpose |
 |---|---|
+| `cad-lite/agentinstall` | Package agentinstall installs an AI agent CLI for Cad-lite without touching the system: it downloads mise (github.com/jdx/mise) into Cad-lite's private tools folder, verifies it against the release's SHA256 list, has that mise install OpenCode inside the same folder, and asks OpenCode whether it has credentials. |
 | `cad-lite/appenv` | Package appenv reads Cad-lite's environment variables. |
 | `cad-lite/assets/appicon` | Package appicon embeds Cad-lite's application icon as the PNG set the window icon is made of. |
 | `cad-lite/assets/icons` | Package icons holds Cad-lite's icon set: monochrome 24x24 SVG files, one per registry row in icons.yaml, embedded into the binary. |

@@ -73,12 +73,14 @@ type discoveryState struct {
 	// when it failed.
 	term    string
 	termErr bool
-	open    func(dir string) (string, error)
+	open    TerminalOpener
 
 	poll *gpui.Timer
 
 	// bin is the executable picker of the AI agent section.
 	bin binaryPicker
+	// inst is the "Install OpenCode" flow.
+	inst agentInstall
 
 	mu  sync.Mutex
 	res *AgentDiscovery
@@ -98,7 +100,7 @@ func (ws *Workspace) disc() *discoveryState {
 	if d, ok := discTable.m[key]; ok {
 		return d
 	}
-	d := &discoveryState{probe: defaultDiscoveryProbe, open: OpenTerminal}
+	d := &discoveryState{probe: defaultDiscoveryProbe, open: OpenTerminalCommand}
 	discTable.m[key] = d
 	runtime.AddCleanup(ws, func(k weak.Pointer[Workspace]) {
 		discTable.Lock()
@@ -117,11 +119,12 @@ func (ws *Workspace) SetAgentDiscoveryProbe(f AgentDiscoveryProbe) {
 	ws.disc().probe = f
 }
 
-// SetTerminalOpener replaces how the "Open terminal" button opens a terminal
-// in a folder (tests install a fake). f returns the name of what it opened.
-func (ws *Workspace) SetTerminalOpener(f func(dir string) (string, error)) {
+// SetTerminalOpener replaces how a terminal is opened in a folder, plain for
+// the "Open terminal" button or running OpenCode's sign-in after an
+// installation (tests install a fake). f returns the name of what it opened.
+func (ws *Workspace) SetTerminalOpener(f TerminalOpener) {
 	if f == nil {
-		f = OpenTerminal
+		f = OpenTerminalCommand
 	}
 	ws.disc().open = f
 }
@@ -215,7 +218,7 @@ func (ws *Workspace) pollDiscovery(w *gpui.Window) {
 // openTerminal is the Open terminal button.
 func (ws *Workspace) openTerminal(w *gpui.Window) {
 	d := ws.disc()
-	name, err := d.open(ws.projectDir())
+	name, err := d.open(ws.projectDir(), nil)
 	if err != nil {
 		d.term, d.termErr = err.Error(), true
 	} else {

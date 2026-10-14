@@ -7,7 +7,7 @@ summary: The on-demand docked chat panel that runs AI coding agents (opencode, C
 read_when: you are changing the agent panel, its model picker, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_model.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_install.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -77,6 +77,18 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 - **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. An agent whose executable the user chose in the settings (*Executables*, see [Settings](settings.md)) gets a chip while that file exists, and starts from that file. The chips lock
   while the tab has a session or a stored conversation. With none found the panel says so; `-agent` with `-agent-cmd` offers the
   named harness regardless of `PATH`.
+- **Install OpenCode.** With no agent found, the panel shows an *Install OpenCode* card under the
+  warning (the settings panel's Agent discovery section shows the same card whenever OpenCode is not
+  found). Nothing runs until the user clicks *Install OpenCode…* and then *Install* on the question that
+  follows, which says what is downloaded (mise, about 50 MB, from github.com/jdx/mise, checked against
+  the release's SHA256 list; OpenCode, up to about 1 GB on disk), the folder it all goes into, that
+  nothing is installed system-wide, and that a terminal opens for sign-in; the other button closes it without installing. While it
+  runs, the card lists three steps (download and verify mise, with a bar and megabytes; install OpenCode;
+  check the sign-in) and a *Cancel* button, which stops the running step and keeps nothing
+  half-downloaded. On success the installed OpenCode becomes its executable (`agent.binaries`, as if
+  chosen with Browse, so a restart keeps it), its chip appears, and when `opencode auth list` shows no
+  credential a terminal opens running `opencode auth login`; the card says which terminal opened, and
+  *Sign in…* opens it again. A failure shows the error with *Retry* and *Close*.
 - **Start and Stop.** Start launches the selected agent with the drawing's MCP server attached and
   shows `starting...`, then `ready`. Stop closes the session; the transcript stays. The session also
   ends, with a note, when the agent process exits. Sending a prompt with no session starts one and
@@ -115,7 +127,8 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 - Panel API: `Workspace.AgentPanel` (creates the panel), `Workspace.HasAgentPanel`,
   `Workspace.SetProjectPath`, `AgentPanel.Configure`, `Start`, `Stop`, `Send`, `Cancel`, `Respond`,
   `SetOpener`, `Tabs` (`Tab.Model` is the chip's label), `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`,
-  `Sessions`, `SetModel`, `SetDefaultModel`, `Models`; `Workspace.CloseAgent`;
+  `Sessions`, `SetModel`, `SetDefaultModel`, `Models`; `Workspace.CloseAgent`; `Workspace.SetAgentInstaller`
+  (`ui.AgentInstaller`), `AgentInstalling`;
   action `cad-toggle-agent` bound to F2. Command `AI` reaches the panel through
   `cmdsys.Session.SetAgentHandler` (the `OPTIONS` command is wired the same way through `SetSettingsHandler`); OPEN and SAVE report the file through `cmdsys.Session.OnFilePath`.
 - Files: `<project>/.cad-lite/agent/<id>.jsonl`, `open.json` (the untitled drawing's open tabs) and
@@ -136,7 +149,10 @@ and the menu. `ui/agent_view.go` renders the header, tabs, history menu,
 transcript (`agentmanager/transcript`) and prompt row; the prompt is a `gpui.TextInput` made
 `Multiline(agentPromptLines)` in `newAgentPanel` (`ui/agent.go`). `ui/workspace.go` creates the panel lazily and
 hosts the toggle and `agentCommand`; `cmdsys/commands/agent.go` is the `AI` command. `ui/agent_demo.go`
-seeds the canned transcript. Threading and lifecycle rules are in
+seeds the canned transcript. `ui/agent_install.go` is the Install OpenCode card and its flow
+(`askInstall`, `startInstall` running the `AgentInstaller` on a goroutine, the poll `pollInstall`,
+`cancelInstall`, `openLogin`); tests install fakes with `Workspace.SetAgentInstaller` and
+`SetTerminalOpener`. Threading and lifecycle rules are in
 [Agent integration](../tech/agent-integration.md).
 
 ## Failure
@@ -151,6 +167,10 @@ seeds the canned transcript. Threading and lifecycle rules are in
   previous choice; a model id the CLI rejects at start ends the start with the error, as above.
 - A conversation that cannot be copied on SAVE to another directory shows one warning; the others are copied.
 - In the browser build no agent can start; the panel reports the launch error.
+- An installation that fails (no network, a checksum mismatch, no mise build for the platform, `mise
+  install` failing) shows the error, with the last lines mise printed, and stores nothing; a cancelled one
+  goes back to the offer with a note. A sign-in check that cannot run, or a terminal that cannot be
+  opened, keeps the installed OpenCode and says to run `opencode auth login` by hand.
 
 ## Related docs
 

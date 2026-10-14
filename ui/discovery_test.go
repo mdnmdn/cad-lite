@@ -228,7 +228,7 @@ func TestDiscoveryResultReachesAgentPanelChoices(t *testing.T) {
 func TestOpenTerminalButtonReportsOutcome(t *testing.T) {
 	ws := NewWorkspace(doc.New(), nil)
 	var gotDir string
-	ws.SetTerminalOpener(func(dir string) (string, error) { gotDir = dir; return "xterm", nil })
+	ws.SetTerminalOpener(func(dir string, _ []string) (string, error) { gotDir = dir; return "xterm", nil })
 	h := openSettingsWS(t, ws, 900, 2400, 1)
 	h.openPanel()
 	h.clickID("agents-terminal")
@@ -239,7 +239,7 @@ func TestOpenTerminalButtonReportsOutcome(t *testing.T) {
 	if d := ws.disc(); d.term != "xterm" || d.termErr {
 		t.Errorf("success not recorded: %q %v", d.term, d.termErr)
 	}
-	ws.SetTerminalOpener(func(string) (string, error) { return "", errors.New("no terminal found") })
+	ws.SetTerminalOpener(func(string, []string) (string, error) { return "", errors.New("no terminal found") })
 	h.clickID("agents-terminal")
 	h.hw.Pixels()
 	if d := ws.disc(); d.term != "no terminal found" || !d.termErr {

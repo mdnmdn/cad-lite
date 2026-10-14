@@ -102,6 +102,12 @@ set it to a temporary directory. On the first start after the rename from go-dra
 `cad-lite/settings.toml` does not exist and `go-draw/settings.toml` does, the old file is copied over (and
 left in place).
 
+The agents Cad-lite installs itself (*Install OpenCode*, see [Agent integration](agent-integration.md)) go
+into `cad-lite/tools` under `%LocalAppData%` on Windows, `~/Library/Application Support` on macOS,
+`$XDG_DATA_HOME` or `~/.local/share` on Linux: mise, its data, config, cache and state, and OpenCode.
+`CADLITE_TOOLS_DIR` replaces that folder. Deleting it removes everything installed there; the
+`agent.binaries.opencode` setting then flags the executable as gone.
+
 Every `CADLITE_*` variable is read through `appenv`, which still accepts the old `GODRAW_*` name when the new one is unset. `cmd/cad` loads the file at startup unless `-png` is given (a failure is
 logged and the defaults apply) and saves it, with the window size, when the window closes. The browser build has no file and keeps them in memory.
 

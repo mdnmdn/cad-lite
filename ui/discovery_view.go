@@ -58,6 +58,9 @@ func (ws *Workspace) discoverySection() *gpui.Div {
 			func(w *gpui.Window, _ *gpui.App) { ws.openTerminal(w) }),
 	)
 	sec.Child(buttons)
+	if ws.installWanted(true) {
+		sec.Child(ws.agentInstallBlock("settings"))
+	}
 	if d.term != "" {
 		if d.termErr {
 			sec.Child(gpui.NewText(i18n.T("ui.settings.discovery_terminal_failed", d.term)).TextSize(11).TextColor(uiErr))
