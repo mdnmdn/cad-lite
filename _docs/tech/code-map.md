@@ -21,27 +21,29 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 
 | Package | Purpose |
 |---|---|
-| `go-draw/assets/appicon` | Package appicon embeds go-draw's application icon as the PNG set the window icon is made of. |
-| `go-draw/assets/icons` | Package icons holds go-draw's icon set: monochrome 24x24 SVG files, one per registry row in icons.yaml, embedded into the binary. |
-| `go-draw/cadmcp` | Package cadmcp exposes the go-draw drawing to AI agents as MCP tools. |
-| `go-draw/cmd/cad` | Command cad is the go-draw desktop application: an AutoCAD-style 2D drafting editor built on the gpui library and shown in an ebiten window. |
-| `go-draw/cmdsys` | Package cmdsys is the command framework: AutoCAD-style commands as prompt state machines, typed-input parsing, object snaps, ortho and selection. |
-| `go-draw/cmdsys/commands` | Package commands holds the built-in AutoCAD-style commands. |
-| `go-draw/doc` | Package doc is the document database. |
-| `go-draw/fileio` | Package fileio is the file I/O plugin layer: format readers and writers register here and are chosen by file extension. |
-| `go-draw/fileio/dxf` | Package dxf reads and writes ASCII DXF. |
-| `go-draw/geom` | Package geom is the geometry kernel: double-precision 2D vectors, affine transforms, boxes and curves. |
-| `go-draw/i18n` | Package i18n is go-draw's internationalisation foundation: English and Italian message catalogs, language selection and detection, plurals, localized command-line keywords and the per-command metadata (display name, description, tooltip, typed aliases). |
-| `go-draw/i18n/cmd/i18ncheck` | Command i18ncheck verifies go-draw's message catalogs and finds user-facing string literals that are not catalog keys yet. |
-| `go-draw/internal/gpui` |  |
-| `go-draw/internal/gpui/ebitenplatform` | Package ebitenplatform implements gpui.Platform on top of ebiten. |
-| `go-draw/render` | Package render turns document entities into a backend-neutral display list and owns the view (camera). |
-| `go-draw/render/gpuirender` | Package gpuirender draws a render.DisplayList with the gpui library. |
-| `go-draw/settings` | Package settings holds go-draw's user preferences and their TOML file. |
-| `go-draw/spatial` | Package spatial indexes entity bounding boxes for viewport culling, selection and snap-candidate gathering. |
-| `go-draw/tools/docs` | Command docs maintains the _docs/ library: it lints documents against the rules in _docs/_meta/librarian.md, lists the documents a change touches, reports drift between documents and the code they anchor, and regenerates the INDEX.md catalogue and the code map. |
-| `go-draw/tools/gui` | Command gui runs go-draw's real interactive window under Xvfb with software GL, drives it with xdotool from a scenario file, and captures screenshots. |
-| `go-draw/ui` |  |
+| `cad-lite/appenv` | Package appenv reads Cad-lite's environment variables. |
+| `cad-lite/assets/appicon` | Package appicon embeds Cad-lite's application icon as the PNG set the window icon is made of. |
+| `cad-lite/assets/icons` | Package icons holds Cad-lite's icon set: monochrome 24x24 SVG files, one per registry row in icons.yaml, embedded into the binary. |
+| `cad-lite/cadmcp` | Package cadmcp exposes the Cad-lite drawing to AI agents as MCP tools. |
+| `cad-lite/cmd/cad` | Command cad is the Cad-lite desktop application: an AutoCAD-style 2D drafting editor built on the gpui library and shown in an ebiten window. |
+| `cad-lite/cmdsys` | Package cmdsys is the command framework: AutoCAD-style commands as prompt state machines, typed-input parsing, object snaps, ortho and selection. |
+| `cad-lite/cmdsys/commands` | Package commands holds the built-in AutoCAD-style commands. |
+| `cad-lite/doc` | Package doc is the document database. |
+| `cad-lite/fileio` | Package fileio is the file I/O plugin layer: format readers and writers register here and are chosen by file extension. |
+| `cad-lite/fileio/dxf` | Package dxf reads and writes ASCII DXF. |
+| `cad-lite/geom` | Package geom is the geometry kernel: double-precision 2D vectors, affine transforms, boxes and curves. |
+| `cad-lite/i18n` | Package i18n is Cad-lite's internationalisation foundation: English and Italian message catalogs, language selection and detection, plurals, localized command-line keywords and the per-command metadata (display name, description, tooltip, typed aliases). |
+| `cad-lite/i18n/cmd/i18ncheck` | Command i18ncheck verifies Cad-lite's message catalogs and finds user-facing string literals that are not catalog keys yet. |
+| `cad-lite/internal/gpui` |  |
+| `cad-lite/internal/gpui/ebitenplatform` | Package ebitenplatform implements gpui.Platform on top of ebiten. |
+| `cad-lite/render` | Package render turns document entities into a backend-neutral display list and owns the view (camera). |
+| `cad-lite/render/gpuirender` | Package gpuirender draws a render.DisplayList with the gpui library. |
+| `cad-lite/settings` | Package settings holds Cad-lite's user preferences and their TOML file. |
+| `cad-lite/spatial` | Package spatial indexes entity bounding boxes for viewport culling, selection and snap-candidate gathering. |
+| `cad-lite/tools/docs` | Command docs maintains the _docs/ library: it lints documents against the rules in _docs/_meta/librarian.md, lists the documents a change touches, reports drift between documents and the code they anchor, and regenerates the INDEX.md catalogue and the code map. |
+| `cad-lite/tools/gui` | Command gui runs Cad-lite's real interactive window under Xvfb with software GL, drives it with xdotool from a scenario file, and captures screenshots. |
+| `cad-lite/ui` |  |
+| `cad-lite/updater` | Package updater finds, downloads, verifies and installs Cad-lite releases published on GitHub, and restarts the application into the new version. |
 
 <!-- docs-index:end -->
 

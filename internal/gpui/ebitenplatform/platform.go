@@ -10,7 +10,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // Platform is the ebiten-backed gpui.Platform. It supports a single window.

@@ -65,18 +65,18 @@ func TestVersionCompare(t *testing.T) {
 func TestAssetSelection(t *testing.T) {
 	rel := Release{Version: "1.2.3"}
 	for _, n := range []string{
-		"go-draw-1.2.3-macos-universal.zip", "go-draw-1.2.3-macos-universal.dmg",
-		"go-draw-1.2.3-windows-amd64.zip", "go-draw-1.2.3-windows-amd64-setup.exe", "go-draw-1.2.3-windows-arm64.zip",
-		"go-draw-1.2.3-linux-amd64.tar.gz", "checksums.txt",
+		"cad-lite-1.2.3-macos-universal.zip", "cad-lite-1.2.3-macos-universal.dmg",
+		"cad-lite-1.2.3-windows-amd64.zip", "cad-lite-1.2.3-windows-amd64-setup.exe", "cad-lite-1.2.3-windows-arm64.zip",
+		"cad-lite-1.2.3-linux-amd64.tar.gz", "checksums.txt",
 	} {
 		rel.Assets = append(rel.Assets, Asset{Name: n})
 	}
 	for _, c := range []struct{ goos, arch, want string }{
-		{"darwin", "arm64", "go-draw-1.2.3-macos-universal.zip"},
-		{"darwin", "amd64", "go-draw-1.2.3-macos-universal.zip"},
-		{"windows", "amd64", "go-draw-1.2.3-windows-amd64.zip"},
-		{"windows", "arm64", "go-draw-1.2.3-windows-arm64.zip"},
-		{"linux", "amd64", "go-draw-1.2.3-linux-amd64.tar.gz"},
+		{"darwin", "arm64", "cad-lite-1.2.3-macos-universal.zip"},
+		{"darwin", "amd64", "cad-lite-1.2.3-macos-universal.zip"},
+		{"windows", "amd64", "cad-lite-1.2.3-windows-amd64.zip"},
+		{"windows", "arm64", "cad-lite-1.2.3-windows-arm64.zip"},
+		{"linux", "amd64", "cad-lite-1.2.3-linux-amd64.tar.gz"},
 		{"linux", "arm64", ""},
 		{"freebsd", "amd64", ""},
 	} {
@@ -172,7 +172,7 @@ func skipJS(t *testing.T) {
 
 func TestCheckVersions(t *testing.T) {
 	skipJS(t)
-	assets := map[string][]byte{"go-draw-1.5.0-linux-amd64.tar.gz": []byte("x")}
+	assets := map[string][]byte{"cad-lite-1.5.0-linux-amd64.tar.gz": []byte("x")}
 	f := newFakeGitHub(t, "v1.5.0", assets)
 	for _, c := range []struct {
 		cur       string
@@ -194,7 +194,7 @@ func TestCheckVersions(t *testing.T) {
 
 func TestCheckETag(t *testing.T) {
 	skipJS(t)
-	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{"go-draw-1.5.0-linux-amd64.tar.gz": []byte("x")})
+	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{"cad-lite-1.5.0-linux-amd64.tar.gz": []byte("x")})
 	c := f.client("linux", "amd64")
 	if _, ok, err := c.Check(context.Background(), "1.0.0"); err != nil || !ok {
 		t.Fatal(ok, err)
@@ -216,7 +216,7 @@ func TestCheckETag(t *testing.T) {
 
 func TestCheckSkipsDraftsPrereleasesAndMissingAsset(t *testing.T) {
 	skipJS(t)
-	f := newFakeGitHub(t, "v2.0.0", map[string][]byte{"go-draw-2.0.0-linux-amd64.tar.gz": nil})
+	f := newFakeGitHub(t, "v2.0.0", map[string][]byte{"cad-lite-2.0.0-linux-amd64.tar.gz": nil})
 	f.draft = true
 	rel, ok, err := f.client("linux", "amd64").Check(context.Background(), "1.0.0")
 	if err != nil || ok || !rel.IsZero() {
@@ -301,24 +301,24 @@ func writeTemp(t *testing.T, name string, data []byte) string {
 
 func TestExtractZipAndTarGz(t *testing.T) {
 	dest := t.TempDir()
-	z := writeTemp(t, "a.zip", zipBytes(t, map[string]string{"dir/go-draw.exe": "EXE", "dir/readme.txt": "hi"}, map[string]os.FileMode{"dir/go-draw.exe": 0o755}))
+	z := writeTemp(t, "a.zip", zipBytes(t, map[string]string{"dir/cad-lite.exe": "EXE", "dir/readme.txt": "hi"}, map[string]os.FileMode{"dir/cad-lite.exe": 0o755}))
 	if err := Extract(z, dest); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dest, "dir", "go-draw.exe")); string(b) != "EXE" {
+	if b, _ := os.ReadFile(filepath.Join(dest, "dir", "cad-lite.exe")); string(b) != "EXE" {
 		t.Errorf("zip content %q", b)
 	}
 	if runtime.GOOS != "windows" {
-		if st, _ := os.Stat(filepath.Join(dest, "dir", "go-draw.exe")); st.Mode().Perm() != 0o755 {
+		if st, _ := os.Stat(filepath.Join(dest, "dir", "cad-lite.exe")); st.Mode().Perm() != 0o755 {
 			t.Errorf("zip mode %v", st.Mode())
 		}
 	}
 	dest = t.TempDir()
-	g := writeTemp(t, "a.tar.gz", tgzBytes(t, map[string]string{"go-draw-1-linux-amd64/bin/go-draw": "BIN"}))
+	g := writeTemp(t, "a.tar.gz", tgzBytes(t, map[string]string{"cad-lite-1-linux-amd64/bin/cad-lite": "BIN"}))
 	if err := Extract(g, dest); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(dest, "go-draw-1-linux-amd64", "bin", "go-draw")); string(b) != "BIN" {
+	if b, _ := os.ReadFile(filepath.Join(dest, "cad-lite-1-linux-amd64", "bin", "cad-lite")); string(b) != "BIN" {
 		t.Errorf("tar content %q", b)
 	}
 	if err := Extract(writeTemp(t, "a.rar", nil), dest); err == nil {
@@ -343,7 +343,7 @@ func TestExtractRejectsEscapes(t *testing.T) {
 func TestDownloadVerifies(t *testing.T) {
 	skipJS(t)
 	body := []byte("archive-bytes")
-	name := "go-draw-1.5.0-linux-amd64.tar.gz"
+	name := "cad-lite-1.5.0-linux-amd64.tar.gz"
 	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{name: body})
 	c := f.client("linux", "amd64")
 	rel, _, err := c.Check(context.Background(), "1.0.0")
@@ -404,10 +404,10 @@ func TestParseChecksums(t *testing.T) {
 
 func TestInstallWindows(t *testing.T) {
 	root := t.TempDir()
-	exe := filepath.Join(root, "go-draw.exe")
+	exe := filepath.Join(root, "cad-lite.exe")
 	os.WriteFile(exe, []byte("OLD"), 0o755)
-	z := writeTemp(t, "go-draw-1.5.0-windows-amd64.zip", zipBytes(t, map[string]string{
-		"go-draw-windows-amd64/go-draw.exe": "NEW"}, nil))
+	z := writeTemp(t, "cad-lite-1.5.0-windows-amd64.zip", zipBytes(t, map[string]string{
+		"cad-lite-windows-amd64/cad-lite.exe": "NEW"}, nil))
 	plan, err := Install(z, "windows", exe)
 	if err != nil {
 		t.Fatal(err)
@@ -433,13 +433,13 @@ func TestInstallWindows(t *testing.T) {
 
 func TestInstallLinux(t *testing.T) {
 	root := t.TempDir()
-	exe := filepath.Join(root, "bin", "go-draw")
+	exe := filepath.Join(root, "bin", "cad-lite")
 	os.MkdirAll(filepath.Dir(exe), 0o755)
 	os.WriteFile(exe, []byte("OLD"), 0o755)
 	g := writeTemp(t, "x.tar.gz", tgzBytes(t, map[string]string{
-		"go-draw-1.5.0-linux-amd64/bin/go-draw":  "NEW",
-		"go-draw-1.5.0-linux-amd64/install.sh":   "#!/bin/sh",
-		"go-draw-1.5.0-linux-amd64/share/readme": "r",
+		"cad-lite-1.5.0-linux-amd64/bin/cad-lite": "NEW",
+		"cad-lite-1.5.0-linux-amd64/install.sh":   "#!/bin/sh",
+		"cad-lite-1.5.0-linux-amd64/share/readme": "r",
 	}))
 	if _, err := Install(g, "linux", exe); err != nil {
 		t.Fatal(err)
@@ -460,15 +460,15 @@ func TestInstallLinux(t *testing.T) {
 
 func macZip(t *testing.T, content string) []byte {
 	return zipBytes(t, map[string]string{
-		"go-draw.app/Contents/MacOS/go-draw": content,
-		"go-draw.app/Contents/Info.plist":    "<plist>" + content + "</plist>",
-	}, map[string]os.FileMode{"go-draw.app/Contents/MacOS/go-draw": 0o755})
+		"Cad-lite.app/Contents/MacOS/cad-lite": content,
+		"Cad-lite.app/Contents/Info.plist":     "<plist>" + content + "</plist>",
+	}, map[string]os.FileMode{"Cad-lite.app/Contents/MacOS/cad-lite": 0o755})
 }
 
 func TestInstallMacBundle(t *testing.T) {
 	root := t.TempDir()
-	app := filepath.Join(root, "Apps", "go-draw.app")
-	exe := filepath.Join(app, "Contents", "MacOS", "go-draw")
+	app := filepath.Join(root, "Apps", "Cad-lite.app")
+	exe := filepath.Join(app, "Contents", "MacOS", "cad-lite")
 	os.MkdirAll(filepath.Dir(exe), 0o755)
 	os.WriteFile(exe, []byte("OLD"), 0o755)
 	os.WriteFile(filepath.Join(app, "Contents", "stale"), []byte("s"), 0o644)
@@ -494,11 +494,11 @@ func TestInstallMacBundle(t *testing.T) {
 
 func TestInstallMacKeepsOldWhenBundleIsBad(t *testing.T) {
 	root := t.TempDir()
-	app := filepath.Join(root, "go-draw.app")
-	exe := filepath.Join(app, "Contents", "MacOS", "go-draw")
+	app := filepath.Join(root, "Cad-lite.app")
+	exe := filepath.Join(app, "Contents", "MacOS", "cad-lite")
 	os.MkdirAll(filepath.Dir(exe), 0o755)
 	os.WriteFile(exe, []byte("OLD"), 0o755)
-	z := writeTemp(t, "m.zip", zipBytes(t, map[string]string{"go-draw.app/Contents/Info.plist": "x"}, nil))
+	z := writeTemp(t, "m.zip", zipBytes(t, map[string]string{"Cad-lite.app/Contents/Info.plist": "x"}, nil))
 	if _, err := Install(z, "darwin", exe); err == nil {
 		t.Fatal("bundle without executable accepted")
 	}
@@ -512,7 +512,7 @@ func TestInstallMacKeepsOldWhenBundleIsBad(t *testing.T) {
 
 func TestInstallMacBareBinary(t *testing.T) {
 	root := t.TempDir()
-	exe := filepath.Join(root, "go-draw")
+	exe := filepath.Join(root, "cad-lite")
 	os.WriteFile(exe, []byte("OLD"), 0o755)
 	z := writeTemp(t, "m.zip", macZip(t, "NEW"))
 	plan, err := Install(z, "darwin", exe)
@@ -529,11 +529,11 @@ func TestInstallNotWritable(t *testing.T) {
 		t.Skip("permissions are not enforced here")
 	}
 	root := t.TempDir()
-	exe := filepath.Join(root, "go-draw")
+	exe := filepath.Join(root, "cad-lite")
 	os.WriteFile(exe, []byte("OLD"), 0o755)
 	os.Chmod(root, 0o555)
 	defer os.Chmod(root, 0o755)
-	g := writeTemp(t, "x.tar.gz", tgzBytes(t, map[string]string{"d/bin/go-draw": "NEW"}))
+	g := writeTemp(t, "x.tar.gz", tgzBytes(t, map[string]string{"d/bin/cad-lite": "NEW"}))
 	if _, err := Install(g, "linux", exe); !errors.Is(err, ErrNotWritable) {
 		t.Errorf("err = %v", err)
 	}
@@ -553,8 +553,8 @@ func TestInstallSwapRollsBack(t *testing.T) {
 
 func TestDownloadThenInstall(t *testing.T) {
 	skipJS(t)
-	name := "go-draw-1.5.0-windows-amd64.zip"
-	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{name: zipBytes(t, map[string]string{"go-draw-windows-amd64/go-draw.exe": "NEW"}, nil)})
+	name := "cad-lite-1.5.0-windows-amd64.zip"
+	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{name: zipBytes(t, map[string]string{"cad-lite-windows-amd64/cad-lite.exe": "NEW"}, nil)})
 	c := f.client("windows", "amd64")
 	rel, ok, err := c.Check(context.Background(), "1.4.0")
 	if err != nil || !ok {
@@ -564,7 +564,7 @@ func TestDownloadThenInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exe := filepath.Join(t.TempDir(), "go-draw.exe")
+	exe := filepath.Join(t.TempDir(), "cad-lite.exe")
 	os.WriteFile(exe, []byte("OLD"), 0o755)
 	if _, err := Install(path, "windows", exe); err != nil {
 		t.Fatal(err)
@@ -597,10 +597,10 @@ func sleep() { time.Sleep(20 * time.Millisecond) }
 
 func TestUpdateEndToEnd(t *testing.T) {
 	skipJS(t)
-	name := "go-draw-1.5.0-linux-amd64.tar.gz"
-	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{name: tgzBytes(t, map[string]string{"d/bin/go-draw": "NEW"})})
+	name := "cad-lite-1.5.0-linux-amd64.tar.gz"
+	f := newFakeGitHub(t, "v1.5.0", map[string][]byte{name: tgzBytes(t, map[string]string{"d/bin/cad-lite": "NEW"})})
 	c := f.client("linux", "amd64")
-	c.Exe = filepath.Join(t.TempDir(), "go-draw")
+	c.Exe = filepath.Join(t.TempDir(), "cad-lite")
 	os.WriteFile(c.Exe, []byte("OLD"), 0o755)
 	rel, ok, err := c.Check(context.Background(), "1.0.0")
 	if err != nil || !ok {
@@ -621,5 +621,80 @@ func TestUpdateEndToEnd(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(c.Exe); string(b) != "OLD" {
 		t.Errorf("exe changed after a failed verification: %q", b)
+	}
+}
+
+func TestAssetSelectionAcceptsLegacyPrefix(t *testing.T) {
+	rel := Release{Version: "1.2.3", Assets: []Asset{
+		{Name: "go-draw-1.2.3-linux-amd64.tar.gz"}, {Name: "go-draw-1.2.3-macos-universal.zip"},
+	}}
+	if a, ok := rel.AssetFor("linux", "amd64"); !ok || a.Name != "go-draw-1.2.3-linux-amd64.tar.gz" {
+		t.Errorf("legacy linux asset = %v %v", a, ok)
+	}
+	if a, ok := rel.AssetFor("darwin", "arm64"); !ok || a.Name != "go-draw-1.2.3-macos-universal.zip" {
+		t.Errorf("legacy macOS asset = %v %v", a, ok)
+	}
+	if _, ok := rel.AssetFor("windows", "amd64"); ok {
+		t.Error("found a Windows asset that is not there")
+	}
+	// The new name wins when a release carries both.
+	rel.Assets = append(rel.Assets, Asset{Name: "cad-lite-1.2.3-linux-amd64.tar.gz"})
+	if a, _ := rel.AssetFor("linux", "amd64"); a.Name != "cad-lite-1.2.3-linux-amd64.tar.gz" {
+		t.Errorf("preferred asset = %q", a.Name)
+	}
+}
+
+func TestInstallOverLegacyNamedInstallation(t *testing.T) {
+	// A bundle installed as go-draw.app, with the go-draw binary, updated from a cad-lite archive.
+	root := t.TempDir()
+	app := filepath.Join(root, "go-draw.app")
+	exe := filepath.Join(app, "Contents", "MacOS", "go-draw")
+	os.MkdirAll(filepath.Dir(exe), 0o755)
+	os.WriteFile(exe, []byte("OLD"), 0o755)
+	z := writeTemp(t, "m.zip", macZip(t, "NEW"))
+	plan, err := Install(z, "darwin", exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.App != app {
+		t.Errorf("plan.App = %q, want the installed bundle", plan.App)
+	}
+	if b, _ := os.ReadFile(filepath.Join(app, "Contents", "MacOS", "cad-lite")); string(b) != "NEW" {
+		t.Errorf("new binary = %q", b)
+	}
+
+	// A plain binary named go-draw, updated from an archive that holds cad-lite.
+	bin := filepath.Join(root, "bin", "go-draw")
+	os.MkdirAll(filepath.Dir(bin), 0o755)
+	os.WriteFile(bin, []byte("OLD"), 0o755)
+	g := writeTemp(t, "x.tar.gz", tgzBytes(t, map[string]string{"d/bin/cad-lite": "NEW"}))
+	if _, err := Install(g, "linux", bin); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(bin); string(b) != "NEW" {
+		t.Errorf("binary = %q", b)
+	}
+
+	// An archive published under the old name still installs.
+	os.WriteFile(bin, []byte("OLD"), 0o755)
+	g = writeTemp(t, "y.tar.gz", tgzBytes(t, map[string]string{"d/bin/go-draw": "OLDNAME"}))
+	if _, err := Install(g, "linux", bin); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(bin); string(b) != "OLDNAME" {
+		t.Errorf("binary = %q", b)
+	}
+}
+
+func TestDisabledReadsLegacyEnvName(t *testing.T) {
+	t.Setenv("CADLITE_NO_UPDATE", "")
+	os.Unsetenv("CADLITE_NO_UPDATE")
+	t.Setenv("GODRAW_NO_UPDATE", "1")
+	if !Disabled() {
+		t.Error("GODRAW_NO_UPDATE=1 did not disable updates")
+	}
+	t.Setenv("CADLITE_NO_UPDATE", "0")
+	if Disabled() {
+		t.Error("CADLITE_NO_UPDATE=0 must win over the legacy name")
 	}
 }

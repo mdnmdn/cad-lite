@@ -7,9 +7,9 @@ import (
 	"weak"
 
 	"agentmanager"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
-	"go-draw/settings"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // settingsSaveDelay debounces writes while a slider or button is being

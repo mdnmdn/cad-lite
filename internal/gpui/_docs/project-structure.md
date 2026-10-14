@@ -1,7 +1,7 @@
 # Project structure
 
-The library lives at `internal/gpui/` inside the `go-draw` module (see the
-root `go.mod`); its import path is `go-draw/internal/gpui`. Paths below are
+The library lives at `internal/gpui/` inside the `cad-lite` module (see the
+root `go.mod`); its import path is `cad-lite/internal/gpui`. Paths below are
 relative to `internal/gpui/`. Re-check with `ls . ebitenplatform examples`
 when adding files.
 
@@ -17,7 +17,7 @@ internal/gpui/           core package (package gpui), library root
   ebitenplatform/        ebiten backend
   *.go                   the core package itself
 (repo root)
-  go.mod, go.sum         module go-draw (ebiten, x/image, go-text/typesetting)
+  go.mod, go.sum         module cad-lite (ebiten, x/image, go-text/typesetting)
   .gitignore             ignores *.png, /bin/, .DS_Store, /_tmp/
   _tmp/                  gitignored scratch (never commit)
 ```
@@ -195,5 +195,5 @@ In practice `window.go` and `div.go` reference each other (elements receive a
 - `_tmp/` is gitignored scratch: rendered PNGs, a clone of gpui-ce
   (`_tmp/gpui-ce-src`), a throwaway module `_tmp/docchk2/` with
   doc-snippet packages (`go run ./_tmp/<name>` from the repo root, which may import
-  `go-draw/internal/gpui`). Never commit it.
+  `cad-lite/internal/gpui`). Never commit it.
 - `*.png` is gitignored everywhere (snapshots, `-png` outputs), as is `/bin/`.

@@ -1,22 +1,22 @@
 ---
 id: prod-overview
-title: go-draw product overview
+title: Cad-lite product overview
 kind: product
 status: current
-summary: What go-draw is for, who it serves, what is in and out of scope, and the milestones that deliver it.
-read_when: you are deciding whether a capability belongs in go-draw, or what to build next
+summary: What Cad-lite is for, who it serves, what is in and out of scope, and the milestones that deliver it.
+read_when: you are deciding whether a capability belongs in Cad-lite, or what to build next
 updated: 2026-10-14
 verified: 2026-10-14
 review_cycle: quarterly
 ---
 
-# go-draw
+# Cad-lite
 
 ## Purpose
 
-go-draw is a 2D drafting application in the spirit of AutoCAD. A drafter works from a command line
+Cad-lite is a 2D drafting application in the spirit of AutoCAD. A drafter works from a command line
 with typed coordinates and object snaps, on drawings measured in real units with double precision,
-organised in layers and blocks. Drawings travel between offices as DWG and DXF files, so go-draw
+organised in layers and blocks. Drawings travel between offices as DWG and DXF files, so Cad-lite
 opens, edits and saves them **without losing data**, including objects it does not understand.
 
 It runs as a desktop application on Windows, macOS and Linux. A browser build is a secondary target

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cadmcp"
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/render"
+	"cad-lite/cadmcp"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/render"
 
 	"agentmanager/mcp"
 )

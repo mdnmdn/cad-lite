@@ -3,7 +3,7 @@ package cmdsys
 import (
 	"testing"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 func v(x, y float64) geom.Vec2 { return geom.Vec2{X: x, Y: y} }

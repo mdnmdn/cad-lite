@@ -10,8 +10,8 @@ import (
 	"math"
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 
 	"agentmanager/mcp"
 )
@@ -41,7 +41,7 @@ func Register(srv *mcp.Server, e Env) {
 
 // Instructions returns the text for mcp.Options.Instructions.
 func Instructions() string {
-	return `You control a 2D CAD drawing (go-draw, AutoCAD-like). Model space is Y-up; coordinates are in drawing units (millimetres by default); angles are in degrees, counter-clockwise from +X. Entities are identified by hexadecimal handle strings such as "1A2". Every tool is one undo step. Prefer the structured tools (add_line, add_circle, ...); use run_script for anything else: AutoCAD script text where each single space or newline separates tokens and an empty token (two separators in a row, or a trailing separator) is Enter, for example "LAYER walls=4 LINE 0,0 100,0 100,50 " (the trailing space is the Enter that ends LINE; an Enter pressed while idle repeats the last command, so do not add more). Points are "x,y" or relative "@dx,dy" or polar "@dist<angle". Commands still waiting for input after a script are cancelled. Use get_drawing first to see layers and extents. Use render_png to look at the drawing (an image plus the pixel-to-model mapping) and check your work.`
+	return `You control a 2D CAD drawing (Cad-lite, AutoCAD-like). Model space is Y-up; coordinates are in drawing units (millimetres by default); angles are in degrees, counter-clockwise from +X. Entities are identified by hexadecimal handle strings such as "1A2". Every tool is one undo step. Prefer the structured tools (add_line, add_circle, ...); use run_script for anything else: AutoCAD script text where each single space or newline separates tokens and an empty token (two separators in a row, or a trailing separator) is Enter, for example "LAYER walls=4 LINE 0,0 100,0 100,50 " (the trailing space is the Enter that ends LINE; an Enter pressed while idle repeats the last command, so do not add more). Points are "x,y" or relative "@dx,dy" or polar "@dist<angle". Commands still waiting for input after a script are cancelled. Use get_drawing first to see layers and extents. Use render_png to look at the drawing (an image plus the pixel-to-model mapping) and check your work.`
 }
 
 type toolFunc[A any] func(s *cmdsys.Session, a A) (any, error)

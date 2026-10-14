@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // feed sends each line as one response; an empty line is Enter.

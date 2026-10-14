@@ -7,8 +7,8 @@ import (
 
 	"agentmanager"
 	"agentmanager/transcript"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
 )
 
 // agentPanelWidth is the docked panel width in logical pixels.

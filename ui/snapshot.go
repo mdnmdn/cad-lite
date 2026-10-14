@@ -6,12 +6,12 @@ import (
 	"image/png"
 	"math"
 
-	"go-draw/cadmcp"
-	"go-draw/cmdsys"
-	"go-draw/geom"
-	"go-draw/internal/gpui"
-	"go-draw/render"
-	"go-draw/render/gpuirender"
+	"cad-lite/cadmcp"
+	"cad-lite/cmdsys"
+	"cad-lite/geom"
+	"cad-lite/internal/gpui"
+	"cad-lite/render"
+	"cad-lite/render/gpuirender"
 )
 
 const (

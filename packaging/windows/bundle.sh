@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build go-draw.exe with the icon and version resources embedded; see packaging/README.md.
+# Build cad-lite.exe with the icon and version resources embedded; see packaging/README.md.
 #   ARCHS="amd64 arm64"  GOARCH values
 #   VERSION=1.2.3        defaults to the tag / git describe
-#   OUT=_tmp/dist/windows  output; per arch: $OUT/go-draw-windows-<arch>/go-draw.exe and a .zip
+#   OUT=_tmp/dist/windows  output; per arch: $OUT/cad-lite-windows-<arch>/cad-lite.exe and a .zip
 # Needs go-winres on PATH (go install github.com/tc-hib/go-winres@v0.3.3). Runs on any OS.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -22,7 +22,7 @@ cleanup() { [ "${#syso[@]}" -eq 0 ] || rm -f "${syso[@]}"; }
 trap cleanup EXIT
 
 for arch in $ARCHS; do
-  dir="$OUT/go-draw-windows-$arch"
+  dir="$OUT/cad-lite-windows-$arch"
   rm -rf "$dir"; mkdir -p "$dir"
   if [ "$have_res" = 1 ]; then
     # go-winres names the files rsrc_windows_<arch>.syso next to the package; Go links them
@@ -32,9 +32,9 @@ for arch in $ARCHS; do
     syso+=("$root/cmd/cad/rsrc_windows_$arch.syso")
   fi
   (cd "$root" && GOOS=windows GOARCH="$arch" CGO_ENABLED=0 \
-    go build -trimpath -ldflags "-H=windowsgui -s -w $LDFLAGS_VERSION" -o "$dir/go-draw.exe" ./cmd/cad)
+    go build -trimpath -ldflags "-H=windowsgui -s -w $LDFLAGS_VERSION" -o "$dir/cad-lite.exe" ./cmd/cad)
   rm -f "$root/cmd/cad/rsrc_windows_$arch.syso"
-  (cd "$OUT" && if command -v zip >/dev/null; then zip -qr "go-draw-$VERSION-windows-$arch.zip" "go-draw-windows-$arch"
-   else powershell -NoProfile -Command "Compress-Archive -Force go-draw-windows-$arch go-draw-$VERSION-windows-$arch.zip"; fi)
-  echo "$dir/go-draw.exe (version $VERSION)"
+  (cd "$OUT" && if command -v zip >/dev/null; then zip -qr "cad-lite-$VERSION-windows-$arch.zip" "cad-lite-windows-$arch"
+   else powershell -NoProfile -Command "Compress-Archive -Force cad-lite-windows-$arch cad-lite-$VERSION-windows-$arch.zip"; fi)
+  echo "$dir/cad-lite.exe (version $VERSION)"
 done

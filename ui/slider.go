@@ -3,7 +3,7 @@ package ui
 import (
 	"math"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // Slider geometry in logical pixels.

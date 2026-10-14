@@ -3,10 +3,10 @@ package cmdsys_test
 import (
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/spatial"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/spatial"
 )
 
 // Unknown entities are indexed by their point groups but must never be

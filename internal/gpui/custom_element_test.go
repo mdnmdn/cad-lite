@@ -3,7 +3,7 @@ package gpui_test
 import (
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // frame is a custom container built outside the package: it lays its

@@ -3,7 +3,7 @@ package cmdsys
 import (
 	"math"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // This file is the drafting-aid state a Session keeps besides Snaps, SnapOn and Ortho (which stay

@@ -36,7 +36,7 @@ crude estimate (0.55 em per rune) and **paints nothing**
    import (
    	"fmt"
 
-   	"go-draw/internal/gpui"
+   	"cad-lite/internal/gpui"
    )
 
    func main() {
@@ -160,7 +160,7 @@ package main
 import (
 	"fmt"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 type save struct{}

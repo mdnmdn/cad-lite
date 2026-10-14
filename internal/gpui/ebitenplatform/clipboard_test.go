@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 type fakeHandler struct {

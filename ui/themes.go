@@ -3,8 +3,8 @@ package ui
 import (
 	"weak"
 
-	"go-draw/internal/gpui"
-	"go-draw/render"
+	"cad-lite/internal/gpui"
+	"cad-lite/render"
 )
 
 // Theme is one complete colour scheme: the drawing canvas tokens (render

@@ -4,7 +4,7 @@ Raw planning material (inbox). Written 2026-10-14 against the working tree as it
 other agents' uncommitted edits on disk** (section 1). Nothing here is implemented; no code or other
 document was touched to produce it.
 
-Scope: keyboard, mouse and command-line *paradigm* of AutoCAD 2024/2025 defaults versus go-draw.
+Scope: keyboard, mouse and command-line *paradigm* of AutoCAD 2024/2025 defaults versus Cad-lite.
 Out of scope: new entity types (TEXT, HATCH, blocks, dimensions: backlog G7) except where a missing
 command is only blocked by them, and anything about DWG.
 
@@ -66,7 +66,7 @@ as stated, assuming the gpui pieces in section 5 exist. WP = the package in sect
 
 ### 2.1 Function keys (AutoCAD 2024 Windows defaults)
 
-| Area | AutoCAD behaviour | go-draw today | Gap | Pri | Eff | WP |
+| Area | AutoCAD behaviour | Cad-lite today | Gap | Pri | Eff | WP |
 |---|---|---|---|---|---|---|
 | F1 | Help | Unbound, though the unknown-command message tells the user to press it | Bind F1: HELP command and overlay listing commands, aliases and keys (a real help URL later) | P1 | S | 1 |
 | F2 | Text window (`TEXTSCR`): the full scrollable command history, toggled | F2 toggles the **agent panel** | Conflicts. New text-window overlay on F2; agent panel moves (D-A) | P1 | M | 1, 6 |
@@ -84,7 +84,7 @@ as stated, assuming the gpui pieces in section 5 exist. WP = the package in sect
 
 ### 2.2 Control-key shortcuts and other keys
 
-| Area | AutoCAD behaviour | go-draw today | Gap | Pri | Eff | WP |
+| Area | AutoCAD behaviour | Cad-lite today | Gap | Pri | Eff | WP |
 |---|---|---|---|---|---|---|
 | Ctrl+A | Select all (selectable) objects | `TextInput` has no select-all; nothing bound | Select all; with typed text on the line, select the text instead *(verify)* | P1 | S | 1, 2 |
 | Delete | With a selection and the command line empty: ERASE immediately (`PICKFIRST`) | Deletes a character in the field (consumed by `TextInput`) | Pre-hook: empty line + selection + idle -> ERASE | P1 | S | 1 |
@@ -105,7 +105,7 @@ as stated, assuming the gpui pieces in section 5 exist. WP = the package in sect
 | Ctrl+J, Ctrl+M | Enter | None | Bind | P3 | S | 1 |
 | Ctrl+W, Shift+Space | Selection cycling toggle / cycle overlapping objects | None | See 2.4 | P3 | M | 2 |
 | Ctrl+Tab | Next drawing | Single document | N/A | - | - | - |
-| Ctrl+E | Cycle isometric plane | **Zoom extents** (go-draw's own) | Non-AutoCAD binding, harmless; keep until isometric exists (D-G) | P3 | S | 1 |
+| Ctrl+E | Cycle isometric plane | **Zoom extents** (Cad-lite's own) | Non-AutoCAD binding, harmless; keep until isometric exists (D-G) | P3 | S | 1 |
 | Escape | One press cancels the running command (and typed text); at idle clears the selection and grips; cancels a pending window; a second Esc is needed to leave nested states (a hot grip, a transparent command inside a command) *(verify the single/double rules)* | Cancels the command (`*Cancel*`) or, idle, clears the selection; clears the field | Pending window (WP2), grip cancel (WP4), transparent unwinding (WP5), and the double-Esc rules | P1 | S | 1, 2 |
 | Up / Down | Recall previous command-line inputs (commands at `Command:`, values at prompts) (`INPUTHISTORYMODE` 15, `CMDINPUTHISTORYMAX` 20) | Ignored | Input history ring, per prompt kind; also PgUp/PgDn scroll the history | P1 | M | 1 |
 | Tab / suggestions | `AUTOCOMPLETEMODE` 15 *(verify bits)*: as you type a command a suggestion list (commands, aliases, system variables, mid-string and content matches) appears; Tab / arrows choose; Enter runs what is typed unless an item is highlighted | None (`Registry.Complete` exists, unused). Tab does nothing | Suggestion popup over the command line, Tab cycles, click picks; autocorrect (bit 2) later | P2 | M | 1, 6 |
@@ -121,7 +121,7 @@ as stated, assuming the gpui pieces in section 5 exist. WP = the package in sect
 
 ### 2.3 Mouse and selection
 
-| Area | AutoCAD behaviour | go-draw today | Gap | Pri | Eff | WP |
+| Area | AutoCAD behaviour | Cad-lite today | Gap | Pri | Eff | WP |
 |---|---|---|---|---|---|---|
 | Implicit window | Click empty space, move, click again: window (blue, L->R, fully inside) or crossing (green dashed, R->L, touching). Works idle and at `Select objects:` (`PICKAUTO` 1) | Only press-drag-release draws a box (D8); a click on empty space does nothing | Add click-click (D-B); keep press-drag | P1 | M | 2 |
 | Lasso | Press-drag-release in empty space draws a freehand lasso (clockwise = window, anticlockwise = crossing); Space while dragging cycles Window/Crossing/Fence *(verify direction rule)*. `PICKDRAG` 0 (default) = two-click rectangle | Press-drag draws a rectangle | Lasso behind a setting (D-B) | P2 | M | 2 |
@@ -144,7 +144,7 @@ as stated, assuming the gpui pieces in section 5 exist. WP = the package in sect
 
 ### 2.4 Command line and command set
 
-| Area | AutoCAD behaviour | go-draw today | Gap | Pri | Eff | WP |
+| Area | AutoCAD behaviour | Cad-lite today | Gap | Pri | Eff | WP |
 |---|---|---|---|---|---|---|
 | Prompt format | `Specify next point or [Close/Undo]:` `<default>`; keywords answered by capitals | Met | - | - | - | - |
 | History | Last `CLIPROMPTLINES` (3) lines above the prompt; F2 shows the full scrollback | 4 lines above; 200 kept (`HistoryLimit`) | F2 overlay, larger cap (e.g. 2000), copy | P1 | M | 1 |
@@ -174,12 +174,12 @@ Recommendations are mine; each needs a yes/no from the product owner before its 
 Answers go to `tech/decisions.md` as new D entries, appended by the Wave 0 agent (section 6), so
 that file has one writer.
 
-**D-A. F2 and the agent panel.** AutoCAD's F2 is the text window (full history). go-draw gives F2 to
+**D-A. F2 and the agent panel.** AutoCAD's F2 is the text window (full history). Cad-lite gives F2 to
 the agent panel (`actionAgent`, `agent-panel.md`).
 Recommendation: **F2 becomes the text window; the agent panel moves to `Ctrl+Shift+A`** (also the
 existing `AI` command and toolbar button). Why not F12: it is Dynamic Input (WP6) and users will
 expect the real thing. Why `Ctrl+Shift+A`: AutoCAD's use of it (toggle groups) is rarely touched and
-go-draw has no groups. If groups ever land, revisit. Cost: update `agent-panel.md`, `command-line.md`,
+Cad-lite has no groups. If groups ever land, revisit. Cost: update `agent-panel.md`, `command-line.md`,
 `tools/gui/scenarios/{agent_panel,gestures}.gui`, `ui/{agent_test,agent_store_test,canvas_test}.go`
 (they press F2) in the same commit as the rebind; one agent does all of it (WP1, with WP6 only
 consulted).
@@ -190,7 +190,7 @@ D8 chose press-drag rectangles for trackpad/test friendliness.
 Recommendation: **implement both rectangle gestures now**: click-click (the AutoCAD default) *and*
 keep press-drag-release as a rectangle (exactly AutoCAD's `PICKDRAG`=1 behaviour, so it is a
 documented setting, not an invention). Add lasso as a third mode behind a `PICKDRAG` value (0 =
-AutoCAD default lasso on drag; 1 = rectangle on drag, **go-draw default for now**; 2 = off). Revisit
+AutoCAD default lasso on drag; 1 = rectangle on drag, **Cad-lite default for now**; 2 = off). Revisit
 the default after the lasso is verified in the real window (it has to be: no display here). Click vs.
 click-click must be told apart by the 4 px drag threshold the code already has; a press that does
 not travel starts or finishes a click-click window.
@@ -215,7 +215,7 @@ difference, and expose `ZOOMFACTOR`/`ZOOMWHEEL` later. Do not touch `Workspace.w
 
 **D-G. `Ctrl+E` (zoom extents).** Non-AutoCAD. Keep until an isometric plane exists, then rebind.
 
-**D-H. ZOOM with Enter.** AutoCAD's Enter at `ZOOM` is *real-time* zoom. go-draw's default is
+**D-H. ZOOM with Enter.** AutoCAD's Enter at `ZOOM` is *real-time* zoom. Cad-lite's default is
 Extents. Recommendation: keep Extents as the Enter default (no real-time zoom without a drag mode),
 document it, and make `Z` `E` / `Z` `A` / middle double-click the parity paths.
 
@@ -651,7 +651,7 @@ modifiers) so the UI tests in section 4 run without a display.
    each in the package's own file.
 5. **Verification per package** (AGENTS.md rule 6): `gofmt -l .` empty, `go vet ./...`,
    `go test ./...`, `go run ./tools/docs lint`, `just check-agentmanager`, plus
-   `GODRAW_GUI_TEST=1 go test -count=1 ./tools/gui` on a machine with Xvfb for the package's
+   `CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui` on a machine with Xvfb for the package's
    `.gui` scenario. Rendering changes: `-png` before and after, looked at. The agent shell has no
    display, so every package's report must say which interactive behaviour ran only in headless tests.
 6. **Test file names are per package** (`keys_test.go`, `selection_test.go`, `aids_test.go`,
@@ -667,10 +667,10 @@ modifiers) so the UI tests in section 4 run without a display.
 
 ### 7.1 Alias diff (existing commands first)
 
-go-draw today (`cmdsys/commands/util.go`, `construct.go`, `trim.go`, `agent.go`): `L PL C A REC E M CO CP
+Cad-lite today (`cmdsys/commands/util.go`, `construct.go`, `trim.go`, `agent.go`): `L PL C A REC E M CO CP
 RO SC U Z LA DI LI AA MEA` plus `MI O F CHA TR EX BR J X` and `AGENT`.
 
-| Alias | AutoCAD command | go-draw |
+| Alias | AutoCAD command | Cad-lite |
 |---|---|---|
 | L, PL, C, A, REC, E, M, CO, CP, RO, SC, MI, O, F, CHA, TR, EX, BR, J, X, Z, LA, DI, AA, MEA, LI, U | same | present |
 | LS | LIST | missing (add, S) |
@@ -705,7 +705,7 @@ RO SC U Z LA DI LI AA MEA` plus `MI O F CHA TR EX BR J X` and `AGENT`.
 | ST | STYLE | blocked (G7) |
 | QSAVE, SAVEAS, CLOSE, QUIT, EXIT | no alias | missing (WP5) |
 
-Also: user-editable aliases. AutoCAD reads `acad.pgp`; go-draw keeps the same format
+Also: user-editable aliases. AutoCAD reads `acad.pgp`; Cad-lite keeps the same format
 (`Registry.LoadAliases`), so a settings-directory `aliases.pgp` override (P3, S) fits the
 `settings/` work.
 

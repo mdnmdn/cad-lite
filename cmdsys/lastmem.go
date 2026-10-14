@@ -1,8 +1,8 @@
 package cmdsys
 
 import (
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // lastState is the "last" memory AutoCAD keeps between commands: the last point entered

@@ -1,10 +1,10 @@
 package commands
 
 import (
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // This file holds the helpers every command package shares. It is frozen after the seam split:

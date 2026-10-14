@@ -129,7 +129,7 @@ func (o opener) start(ctx context.Context, cfg agentmanager.Config, extraEnv []s
 	var ir initResult
 	err = s.conn.Call(hctx, "initialize", map[string]any{
 		"protocolVersion": 1,
-		"clientInfo":      map[string]any{"name": "go-draw", "version": "0"},
+		"clientInfo":      map[string]any{"name": "cad-lite", "version": "0"},
 		"clientCapabilities": map[string]any{
 			"fs":       map[string]any{"readTextFile": false, "writeTextFile": false},
 			"terminal": false,

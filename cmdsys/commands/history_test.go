@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 func lineCount(s *cmdsys.Session) int { return len(entities[*doc.Line](s)) }

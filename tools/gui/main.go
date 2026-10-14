@@ -1,4 +1,4 @@
-// Command gui runs go-draw's real interactive window under Xvfb with software
+// Command gui runs Cad-lite's real interactive window under Xvfb with software
 // GL, drives it with xdotool from a scenario file, and captures screenshots.
 //
 //	go run ./tools/gui [-out DIR] [-video] [-bin PATH] scenario.gui...

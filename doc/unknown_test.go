@@ -3,8 +3,8 @@ package doc_test
 import (
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func spline() *doc.Unknown {

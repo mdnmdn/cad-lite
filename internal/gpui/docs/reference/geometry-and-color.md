@@ -191,7 +191,7 @@ Apply with `Shadow(...BoxShadow)` or one of the presets `ShadowNone`,
 ```go
 package snippet
 
-import "go-draw/internal/gpui"
+import "cad-lite/internal/gpui"
 
 var glow = gpui.NewBoxShadow(0, 0, gpui.Blue500.Opacity(0.4)).WithBlur(12).WithSpread(2)
 

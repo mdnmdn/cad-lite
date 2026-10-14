@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
-	"go-draw/render"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
+	"cad-lite/render"
 )
 
 // italian switches the global language for one test and fails it on any catalog gap.

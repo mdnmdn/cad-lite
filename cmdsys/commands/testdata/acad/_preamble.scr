@@ -1,5 +1,5 @@
 ; Preamble: run this in AutoCAD before every corpus script, in a new drawing from acadiso.dwt.
-; It puts the system variables the corpus depends on into a known state. The go-draw harness does
+; It puts the system variables the corpus depends on into a known state. The Cad-lite harness does
 ; not run it; it sets SnapOn=false and Ortho=false on a fresh session instead (README.md).
 ; Lines marked (verify) name variables to be confirmed in a real install.
 ; no dialogs: file and command prompts come to the command line

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func TestStretchLineEndpointAndInside(t *testing.T) {

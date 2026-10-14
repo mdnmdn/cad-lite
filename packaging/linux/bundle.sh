@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Linux tar.gz: bin/go-draw, share/applications/go-draw.desktop, share/icons/.../go-draw.png.
+# Build the Linux tar.gz: bin/cad-lite, share/applications/cad-lite.desktop, share/icons/.../cad-lite.png.
 # Needs cgo plus the X11/GL dev headers (see packaging/README.md); build natively, not cross.
 #   VERSION=1.2.3  OUT=_tmp/dist/linux
 set -euo pipefail
@@ -8,13 +8,13 @@ source "$root/packaging/lib.sh"
 resolve_version
 OUT="${OUT:-$root/_tmp/dist/linux}"
 arch="$(go env GOARCH)"
-name="go-draw-$VERSION-linux-$arch"
+name="cad-lite-$VERSION-linux-$arch"
 stage="$OUT/$name"
 rm -rf "$stage"; mkdir -p "$stage/bin" "$stage/share/applications" "$stage/share/icons/hicolor/256x256/apps"
-(cd "$root" && go build -trimpath -ldflags "-s -w $LDFLAGS_VERSION" -o "$stage/bin/go-draw" ./cmd/cad)
-cp "$root/packaging/linux/go-draw.desktop" "$stage/share/applications/"
+(cd "$root" && go build -trimpath -ldflags "-s -w $LDFLAGS_VERSION" -o "$stage/bin/cad-lite" ./cmd/cad)
+cp "$root/packaging/linux/cad-lite.desktop" "$stage/share/applications/"
 svg="$root/assets/appicon/appicon.svg"
-png="$stage/share/icons/hicolor/256x256/apps/go-draw.png"
+png="$stage/share/icons/hicolor/256x256/apps/cad-lite.png"
 if [ -f "$svg" ] && command -v rsvg-convert >/dev/null; then
   rsvg-convert -w 512 -h 512 "$svg" -o "$png"
 elif [ -f "$root/assets/appicon/window-256.png" ]; then
@@ -28,7 +28,7 @@ cat > "$stage/install.sh" <<'EOS'
 set -e
 p="${PREFIX:-$HOME/.local}"; d="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$p/bin" "$p/share"
-cp "$d/bin/go-draw" "$p/bin/"
+cp "$d/bin/cad-lite" "$p/bin/"
 cp -r "$d/share/." "$p/share/"
 echo "installed to $p"
 EOS

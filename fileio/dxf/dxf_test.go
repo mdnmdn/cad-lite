@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/fileio/dxf"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/fileio/dxf"
+	"cad-lite/geom"
 )
 
 func sample() *doc.Drawing {

@@ -9,8 +9,8 @@ import (
 	"github.com/srwiley/oksvg"
 	"github.com/srwiley/rasterx"
 
-	"go-draw/assets/icons"
-	"go-draw/internal/gpui"
+	"cad-lite/assets/icons"
+	"cad-lite/internal/gpui"
 )
 
 type iconKey struct {

@@ -3,8 +3,8 @@ package commands
 import (
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 // MATCHPROP settings bits (the MATCHPROPSET variable). Entities carry a colour and a layer only,
@@ -18,7 +18,7 @@ const mpAll = mpColor | mpLayer
 
 func init() {
 	cmdsys.RegisterVarGroup(func(_ *cmdsys.Session, v *cmdsys.Vars) {
-		// A go-draw variable standing in for the Property Settings dialog of MATCHPROP: the sum
+		// A Cad-lite variable standing in for the Property Settings dialog of MATCHPROP: the sum
 		// of 1 (Color) and 2 (Layer) that MATCHPROP copies.
 		v.Register(cmdsys.Var{Name: "MATCHPROPSET", Kind: cmdsys.VarInt, Default: mpAll, Min: 0, Max: mpAll})
 	})

@@ -3,9 +3,9 @@ package commands
 import (
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/cmdsys"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // multipleCmd is MULTIPLE: it asks for a command name and runs that command again each time it

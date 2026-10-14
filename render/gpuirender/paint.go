@@ -4,9 +4,9 @@
 package gpuirender
 
 import (
-	"go-draw/geom"
-	"go-draw/internal/gpui"
-	"go-draw/render"
+	"cad-lite/geom"
+	"cad-lite/internal/gpui"
+	"cad-lite/render"
 )
 
 // Rgba converts a render colour to a gpui colour.

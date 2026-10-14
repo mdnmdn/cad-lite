@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"go-draw/doc"
-	"go-draw/i18n"
-	"go-draw/settings"
-	"go-draw/updater"
+	"cad-lite/doc"
+	"cad-lite/i18n"
+	"cad-lite/settings"
+	"cad-lite/updater"
 )
 
 type updRig struct {
@@ -36,12 +36,12 @@ func newUpdRig(t *testing.T, tag string) *updRig {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
-	tw.WriteHeader(&tar.Header{Name: "d/bin/go-draw", Mode: 0o755, Size: 3, Typeflag: tar.TypeReg})
+	tw.WriteHeader(&tar.Header{Name: "d/bin/cad-lite", Mode: 0o755, Size: 3, Typeflag: tar.TypeReg})
 	tw.Write([]byte("NEW"))
 	tw.Close()
 	gz.Close()
 	r := &updRig{archive: buf.Bytes()}
-	name := "go-draw-" + strings.TrimPrefix(tag, "v") + "-linux-amd64.tar.gz"
+	name := "cad-lite-" + strings.TrimPrefix(tag, "v") + "-linux-amd64.tar.gz"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/mdnmdn/go-draw/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
 		r.hits.Add(1)
@@ -62,7 +62,7 @@ func newUpdRig(t *testing.T, tag string) *updRig {
 	mux.HandleFunc("/dl/"+name, func(w http.ResponseWriter, _ *http.Request) { w.Write(r.archive) })
 	r.srv = httptest.NewServer(mux)
 	t.Cleanup(r.srv.Close)
-	r.exe = filepath.Join(t.TempDir(), "go-draw")
+	r.exe = filepath.Join(t.TempDir(), "cad-lite")
 	os.WriteFile(r.exe, []byte("OLD"), 0o755)
 	r.client = updater.NewClient("1.0.0")
 	r.client.BaseURL, r.client.GOOS, r.client.GOARCH, r.client.Exe = r.srv.URL, "linux", "amd64", r.exe
@@ -142,7 +142,7 @@ func TestUpdateAsksBeforeRestartWhenDrawingHasEdits(t *testing.T) {
 
 func TestUpdateChecksumMismatchKeepsInstall(t *testing.T) {
 	h, rig := updHarness(t, "1.0.0", false)
-	rig.sums = strings.Repeat("0", 64) + "  go-draw-2.0.0-linux-amd64.tar.gz\n"
+	rig.sums = strings.Repeat("0", 64) + "  cad-lite-2.0.0-linux-amd64.tar.gz\n"
 	h.ws.checkForUpdate(h.hw.Window(), true)
 	h.settle(func() bool { return h.ws.upd().phase == updAvailable })
 	h.ws.startUpdate(h.hw.Window())

@@ -1,5 +1,5 @@
 # The gear button opens the settings panel; the light theme applies at once; Escape closes it.
-# Run with GODRAW_CONFIG_DIR pointing at a scratch folder so no real config is touched. The last
+# Run with CADLITE_CONFIG_DIR pointing at a scratch folder so no real config is touched. The last
 # steps put the dark theme back so later scenarios sharing that folder start the same.
 app -demo
 shot before

@@ -1,4 +1,4 @@
-// Package updater finds, downloads, verifies and installs go-draw releases
+// Package updater finds, downloads, verifies and installs Cad-lite releases
 // published on GitHub, and restarts the application into the new version.
 //
 // The package is stdlib only and knows nothing about the UI. Client.Check asks
@@ -18,21 +18,25 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"cad-lite/appenv"
 )
 
 // Defaults of a Client.
 const (
 	// DefaultBaseURL is the GitHub REST API root.
 	DefaultBaseURL = "https://api.github.com"
-	// DefaultRepo is the repository releases are read from.
+	// DefaultRepo is the repository releases are read from. It is still the
+	// repository's name from before the rename to Cad-lite: change it when the
+	// GitHub repository is renamed.
 	DefaultRepo = "mdnmdn/go-draw"
-	// EnvDisable names the environment variable that turns updates off when it is "1".
-	EnvDisable = "GODRAW_NO_UPDATE"
+	// EnvDisable names the environment variable (read through appenv, so the
+	// legacy GODRAW_NO_UPDATE works too) that turns updates off when it is "1".
+	EnvDisable = "NO_UPDATE"
 )
 
 // Errors returned by the package, to be tested with errors.Is.
@@ -50,12 +54,12 @@ var (
 )
 
 // Disabled reports whether the environment turns updates off
-// (GODRAW_NO_UPDATE=1).
-func Disabled() bool { return os.Getenv(EnvDisable) == "1" }
+// (CADLITE_NO_UPDATE=1, or the legacy GODRAW_NO_UPDATE=1).
+func Disabled() bool { return appenv.Get(EnvDisable) == "1" }
 
 // Asset is a file attached to a release.
 type Asset struct {
-	// Name is the file name, e.g. go-draw-1.2.3-windows-amd64.zip.
+	// Name is the file name, e.g. cad-lite-1.2.3-windows-amd64.zip.
 	Name string
 	// URL is the public download URL.
 	URL string
@@ -107,13 +111,13 @@ type Client struct {
 	cached Release
 }
 
-// NewClient returns a Client for the go-draw repository on github.com, with
-// the User-Agent "go-draw-updater/<version>".
+// NewClient returns a Client for the Cad-lite repository on github.com, with
+// the User-Agent "cad-lite-updater/<version>".
 func NewClient(version string) *Client {
 	c := &Client{
 		BaseURL:   DefaultBaseURL,
 		Repo:      DefaultRepo,
-		UserAgent: "go-draw-updater/" + version,
+		UserAgent: "cad-lite-updater/" + version,
 		GOOS:      runtime.GOOS,
 		GOARCH:    runtime.GOARCH,
 	}

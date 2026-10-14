@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -8,13 +9,16 @@ import (
 	"agentmanager"
 	"agentmanager/store"
 	"agentmanager/transcript"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
 )
 
 // agentStoreDir is the per-project directory of agent conversations, relative to the project
 // directory (the directory of the open drawing file, else the working directory).
-const agentStoreDir = ".go-draw/agent"
+const agentStoreDir = ".cad-lite/agent"
+
+// legacyAgentStoreDir is where the store lived while the project was called go-draw.
+const legacyAgentStoreDir = ".go-draw/agent"
 
 // agentHistoryShown caps the sessions listed in the history menu.
 const agentHistoryShown = 8
@@ -71,6 +75,7 @@ func (p *AgentPanel) ensureLoaded() {
 		return
 	}
 	h.dir = p.ws.projectDir()
+	migrateAgentStore(h.dir)
 	st, err := store.Open(filepath.Join(h.dir, filepath.FromSlash(agentStoreDir)))
 	if err != nil {
 		p.warnOnce(p.cur, i18n.T("ui.agent.warn.history_unavailable", err))
@@ -389,3 +394,41 @@ func (ws *Workspace) HasAgentPanel() bool { return ws.agent != nil }
 
 // TabTranscript returns the transcript of tab i, for tests.
 func (p *AgentPanel) TabTranscript(i int) *transcript.T { return &p.tabs[i].tr }
+
+// migrateAgentStore copies the legacy store of the project directory dir into the current one
+// when only the legacy one exists. The legacy folder is left in place; failures are ignored and
+// the project then starts with an empty history.
+func migrateAgentStore(dir string) {
+	dst := filepath.Join(dir, filepath.FromSlash(agentStoreDir))
+	src := filepath.Join(dir, filepath.FromSlash(legacyAgentStoreDir))
+	if _, err := os.Stat(dst); err == nil {
+		return
+	}
+	if st, err := os.Stat(src); err != nil || !st.IsDir() {
+		return
+	}
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		to := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(to, 0o755)
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(to, data, 0o644)
+	})
+	if err != nil {
+		os.RemoveAll(dst)
+	}
+}

@@ -3,7 +3,7 @@ package ebitenplatform
 import (
 	"reflect"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // clipResult is a finished clipboard operation, applied on the main loop.

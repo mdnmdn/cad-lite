@@ -41,7 +41,7 @@ Warnings and errors are localized sentences (`dxf.warn.*`, `dxf.err.*` and `file
 | Section | What is read |
 |---|---|
 | HEADER | `$HANDSEED`, `$INSUNITS`, `$CLAYER`; every other variable is kept in `Header.Extra` |
-| TABLES | `LAYER` records: name, colour (negative means off), the frozen (1) and locked (4) flags, the linetype name (6), and the plot flag (290) and lineweight (370) of newer versions; the `GODRAW_LAYER` extended data (below) |
+| TABLES | `LAYER` records: name, colour (negative means off), the frozen (1) and locked (4) flags, the linetype name (6), and the plot flag (290) and lineweight (370) of newer versions; the `CADLITE_LAYER` extended data (below; `GODRAW_LAYER`, the name before the rename, is still read) |
 | ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, and 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline` |
 
 Entity handles (code 5), layers (8) and colours (62) are kept. Every other entity class, and 3D
@@ -58,7 +58,7 @@ is read as 0, with one warning that counts them, so the drawing never holds a no
 
 **Writing** emits R12 (`AC1009`), the most widely readable version, in this order: the header
 (`$ACADVER`, `$CLAYER`, `$HANDLING`, `$HANDSEED`), the `CONTINUOUS` linetype followed by the
-preserved linetypes, the layer table with colours and the off, frozen and locked states and the linetype name (only when the LTYPE table defines it, else `CONTINUOUS`; R12 has no plot flag, lineweight or description, so a layer with any of them carries them as extended data of the application `GODRAW_LAYER`, registered in the APPID table, which the reader restores and does not preserve), the other preserved
+preserved linetypes, the layer table with colours and the off, frozen and locked states and the linetype name (only when the LTYPE table defines it, else `CONTINUOUS`; R12 has no plot flag, lineweight or description, so a layer with any of them carries them as extended data of the application `CADLITE_LAYER`, registered in the APPID table, which the reader restores and does not preserve), the other preserved
 tables, the preserved blocks, and the entities with their handles. An `LWPolyline` is written as
 `POLYLINE`/`VERTEX`/`SEQEND`; the vertex and sequence-end records take handles above the drawing's
 seed, which are not part of the document. Header variables the document does not model are not
@@ -84,7 +84,7 @@ interfaces and built only with a `dwg` build tag, because each needs cgo:
 | LibreDWG | Free software with a C API | GPLv3, which would license the whole application; partial write support |
 
 The choice is open (it decides the application's licence) and is in the backlog. Until it is made,
-DWG files are converted to DXF outside go-draw. A cgo plugin cannot run in a browser, so the browser
+DWG files are converted to DXF outside Cad-lite. A cgo plugin cannot run in a browser, so the browser
 build reads and writes DXF only.
 
 ## Rationale

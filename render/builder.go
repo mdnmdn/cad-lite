@@ -3,7 +3,7 @@ package render
 import (
 	"math"
 
-	"go-draw/doc"
+	"cad-lite/doc"
 )
 
 // Builder turns entities into display items, caching each entity's

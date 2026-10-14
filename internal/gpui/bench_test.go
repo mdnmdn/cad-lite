@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // benchTodo mirrors examples/todo's view with a populated list.

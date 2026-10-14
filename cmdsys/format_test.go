@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/cmdsys"
+	"cad-lite/cmdsys"
 )
 
 func TestFormatLength(t *testing.T) {

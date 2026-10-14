@@ -1,17 +1,18 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+
+	"cad-lite/appenv"
 )
 
 // TestScenarios runs every scenarios/*.gui against the real window under
-// Xvfb. It is gated: set GODRAW_GUI_TEST=1 (just gui-test does). Output goes
-// to GODRAW_GUI_OUT, default _tmp/gui/out under the repository root.
+// Xvfb. It is gated: set CADLITE_GUI_TEST=1 (just gui-test does). Output goes
+// to CADLITE_GUI_OUT, default _tmp/gui/out under the repository root.
 func TestScenarios(t *testing.T) {
-	if os.Getenv("GODRAW_GUI_TEST") != "1" {
-		t.Skip("set GODRAW_GUI_TEST=1 to run the real-window scenarios")
+	if appenv.Get("GUI_TEST") != "1" {
+		t.Skip("set CADLITE_GUI_TEST=1 to run the real-window scenarios")
 	}
 	root, err := repoRoot()
 	if err != nil {
@@ -21,7 +22,7 @@ func TestScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := os.Getenv("GODRAW_GUI_OUT")
+	out := appenv.Get("GUI_OUT")
 	if out == "" {
 		out = filepath.Join(root, "_tmp", "gui", "out")
 	}

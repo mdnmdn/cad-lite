@@ -3,7 +3,7 @@ package commands
 // Aliases are the default command aliases, in acad.pgp format. The text is frozen: a command
 // package registers its own aliases with r.Alias in its registerX function (the table below is
 // only the aliases that predate the split).
-const Aliases = `; go-draw default aliases (acad.pgp format)
+const Aliases = `; Cad-lite default aliases (acad.pgp format)
 L,     *LINE
 PL,    *PLINE
 C,     *CIRCLE

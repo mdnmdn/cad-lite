@@ -1,4 +1,4 @@
-// Command i18ncheck verifies go-draw's message catalogs and finds user-facing string literals
+// Command i18ncheck verifies Cad-lite's message catalogs and finds user-facing string literals
 // that are not catalog keys yet.
 //
 //	go run ./i18n/cmd/i18ncheck                       # catalog parity and placeholders only
@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode"
 
-	"go-draw/i18n"
+	"cad-lite/i18n"
 )
 
 // callArgs maps a function or method name to the argument positions that are user-facing text.
@@ -44,7 +44,7 @@ var callArgs = map[string][]int{
 }
 
 // ignored are literals that are not prose.
-var ignored = map[string]bool{"AI": true, "x": true, "+": true, "go-draw": true, "": true}
+var ignored = map[string]bool{"AI": true, "x": true, "+": true, "Cad-lite": true, "": true}
 
 type finding struct {
 	pos  token.Position

@@ -3,8 +3,8 @@ package cmdsys
 import (
 	"math"
 
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // This file is the pointer side of the session: the effective cursor (snap, then ortho), clicks,

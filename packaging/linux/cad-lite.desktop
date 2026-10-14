@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=go-draw
+Name=Cad-lite
 Comment=2D drafting application
-Exec=go-draw %f
-Icon=go-draw
+Exec=cad-lite %f
+Icon=cad-lite
 Terminal=false
 Categories=Graphics;2DGraphics;Engineering;
 MimeType=image/vnd.dxf;image/x-dxf;
-StartupWMClass=go-draw
+StartupWMClass=cad-lite

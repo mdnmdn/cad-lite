@@ -3,10 +3,10 @@ package cmdsys
 import (
 	"math"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
-	"go-draw/spatial"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
+	"cad-lite/spatial"
 )
 
 // SnapMode is one object snap, as a bit in a mode set. The bit values are AutoCAD's OSMODE
@@ -20,7 +20,7 @@ const (
 	SnapMidpoint
 	// SnapCenter snaps to the centre of circles and arcs.
 	SnapCenter
-	// SnapNode snaps to point objects. No object go-draw draws is a node yet.
+	// SnapNode snaps to point objects. No object Cad-lite draws is a node yet.
 	SnapNode
 	// SnapQuadrant snaps to the 0/90/180/270 degree points of circles and arcs.
 	SnapQuadrant

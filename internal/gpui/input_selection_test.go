@@ -1,7 +1,7 @@
 package gpui_test
 
 import (
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 	"math"
 	"testing"
 	"unicode/utf8"

@@ -6,8 +6,8 @@ agents (opencode, Claude Code, Codex) and exposes one neutral session API. Plan:
 
 ## Rules
 
-1. **Stdlib only.** Module `agentmanager` has no requirements. Never import `go-draw/...`; the
-   nested module makes that a compile error, keep it so. go-draw glue lives outside this tree.
+1. **Stdlib only.** Module `agentmanager` has no requirements. Never import `cad-lite/...`; the
+   nested module makes that a compile error, keep it so. Cad-lite glue lives outside this tree.
 2. **Contract first.** An exported signature change edits `_docs/api-contract.md` (and the plan's
    section 4.3 if still current) before the code. Work packages do not change another package's
    exports; stop and report instead.

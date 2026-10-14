@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go-draw/cadmcp"
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
-	"go-draw/ui"
+	"cad-lite/cadmcp"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
+	"cad-lite/ui"
 )
 
 const snapScript = `LAYER outline=4 REC 0,0 220,130 PLINE 70,95 150,95 150,111 70,111 c ` +

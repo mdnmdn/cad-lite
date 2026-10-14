@@ -24,7 +24,7 @@ jobs:
             go.sum
             agentmanager/go.sum
       # ebiten on Linux needs cgo: its glfw backend uses pkg-config x11 xrandr xinerama xi xrender
-      # xcursor, plus GL and XF86VidMode. No ALSA: go-draw does not use ebiten audio (oto).
+      # xcursor, plus GL and XF86VidMode. No ALSA: Cad-lite does not use ebiten audio (oto).
       - name: Install ebiten build dependencies
         run: |
           sudo apt-get update
@@ -43,8 +43,8 @@ jobs:
       - run: go run ./tools/docs lint
       - name: Build the desktop app with a stamped version
         run: |
-          go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/go-draw" ./cmd/cad
-          test "$("$RUNNER_TEMP/go-draw" -version)" = "go-draw 0.0.0-ci+${GITHUB_SHA::7}"
+          go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
+          test "$("$RUNNER_TEMP/cad-lite" -version)" = "cad-lite 0.0.0-ci+${GITHUB_SHA::7}"
       - name: Build for the browser
         run: GOOS=js GOARCH=wasm go build -o "$RUNNER_TEMP/cad.wasm" ./cmd/cad
 
@@ -62,7 +62,7 @@ jobs:
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config \
             xvfb xdotool x11-utils imagemagick libgl1-mesa-dri
       - name: Real-window scenarios under Xvfb
-        run: GODRAW_GUI_TEST=1 go test -count=1 ./tools/gui
+        run: CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -86,7 +86,7 @@ jobs:
           go-version-file: go.mod
       - name: Build the app
         shell: bash
-        run: go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/go-draw" ./cmd/cad
+        run: go build -ldflags "-X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
       # Only packages that need no window; the UI tests render with the real gpui stack.
       - name: Test pure packages
         run: go test ./geom/... ./doc/... ./spatial/... ./fileio/... ./cmdsys/... ./render

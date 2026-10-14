@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"go-draw/cmdsys"
+	"cad-lite/cmdsys"
 )
 
 // --- SCRIPT, RSCRIPT, DELAY ----------------------------------------------

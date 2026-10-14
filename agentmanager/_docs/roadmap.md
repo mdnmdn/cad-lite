@@ -5,7 +5,7 @@ Status of the agent manager and what is left.
 ## Status
 
 All packages are implemented: root API, `jsonrpc`, `mcp`, `transcript`, `store` (JSONL session persistence and the open-tab set, replayable into a transcript), `harnesses`, `acp` (with the OpenCode
-preset), `claude`, `codex`, and the fake agents. `go vet` and `go test -race ./...` pass. go-draw uses the
+preset), `claude`, `codex`, and the fake agents. `go vet` and `go test -race ./...` pass. Cad-lite uses the
 module through `ui/agent*.go`; its end-to-end test drives all three backends against the fake with a real MCP
 call.
 

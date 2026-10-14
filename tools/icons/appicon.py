@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pillow", "resvg-py", "rich"]
 # ///
-"""go-draw's application icon: the macOS .icns, the Windows .ico and the runtime window icon.
+"""Cad-lite's application icon: the macOS .icns, the Windows .ico and the runtime window icon.
 
     just appicon          # build every output from assets/appicon/*.svg
     just appicon-sheet    # review sheet into assets/appicon/preview/ (gitignored)

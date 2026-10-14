@@ -20,13 +20,13 @@ import (
 	"agentmanager"
 	"agentmanager/mcp"
 	"agentmanager/transcript"
-	"go-draw/cadmcp"
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/internal/gpui"
-	"go-draw/render"
-	"go-draw/ui"
+	"cad-lite/cadmcp"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/internal/gpui"
+	"cad-lite/render"
+	"cad-lite/ui"
 )
 
 var (
@@ -47,7 +47,7 @@ func fakeAgentBinary(t *testing.T) string {
 		t.Skip("go toolchain not available")
 	}
 	fakeOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "godraw-fakeagent-")
+		dir, err := os.MkdirTemp("", "cadlite-fakeagent-")
 		if err != nil {
 			fakeErr = err
 			return
@@ -156,7 +156,7 @@ func TestRenderPNGThroughMCPServer(t *testing.T) {
 	v := render.DefaultView(800, 600)
 	s := cmdsys.NewSession(doc.New(), &v, commands.NewRegistry())
 	s.Script("LINE 0,0 100,0  LINE 0,0 0,50 ")
-	srv := mcp.NewServer(mcp.Options{Name: "go-draw", Version: "1"})
+	srv := mcp.NewServer(mcp.Options{Name: "cad-lite", Version: "1"})
 	cadmcp.Register(srv, cadmcp.Env{
 		Dispatch: &cadmcp.DirectDispatcher{},
 		Session:  func() *cmdsys.Session { return s },

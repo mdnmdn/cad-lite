@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func historyHas(s *cmdsys.Session, want string) bool {

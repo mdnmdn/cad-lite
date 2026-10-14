@@ -108,7 +108,7 @@ MEASUREGEOM) is still reached by typing it.
 The top row starts with a brand that depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`):
 macOS shows the application icon (32px, the 32 and 64 px window icons drawn 1:1 at UI scale 1 and
 2), Windows shows nothing and the buttons start at the row's left padding (the window frame
-carries icon and title), and Linux and the web show the `go-draw` wordmark. `GODRAW_BRAND=mac|win|text`
+carries icon and title), and Linux and the web show the `Cad-lite` wordmark. `CADLITE_BRAND=mac|win|text`
 forces a mode for `-png` renders.
 
 Labels come from the catalog (`ui.toolbar.*`, or the command's display name for the buttons without a

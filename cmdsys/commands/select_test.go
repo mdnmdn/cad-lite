@@ -1,14 +1,14 @@
 package commands_test
 
 import (
-	"go-draw/cmdsys"
+	"cad-lite/cmdsys"
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // selSession returns a session with horizontal lines at y=0 (x 0..10), y=20 (x 20..30) and a

@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"go-draw/doc"
-	"go-draw/internal/gpui"
-	"go-draw/ui"
+	"cad-lite/doc"
+	"cad-lite/internal/gpui"
+	"cad-lite/ui"
 )
 
 // tipRig is a headless window whose clock the test advances.

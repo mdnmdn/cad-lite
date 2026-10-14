@@ -4,9 +4,9 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/geom"
-	"go-draw/internal/gpui"
-	"go-draw/settings"
+	"cad-lite/geom"
+	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 const notch = 20 // one mouse-wheel notch in logical pixels

@@ -4,10 +4,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
-	"go-draw/settings"
-	"go-draw/updater"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
+	"cad-lite/settings"
+	"cad-lite/updater"
 )
 
 // Release notes excerpt limits.

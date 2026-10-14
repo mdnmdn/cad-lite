@@ -4,9 +4,9 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func line(a, b geom.Vec2) *doc.Line { return &doc.Line{Start: a, End: b} }

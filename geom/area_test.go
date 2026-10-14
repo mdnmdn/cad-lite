@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 func closeTo(t *testing.T, name string, got, want float64) {

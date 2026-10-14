@@ -5,7 +5,7 @@ one session API: events out (text, thoughts, tool calls, permission asks, plan, 
 prompt, cancel and permission answers in. It also contains an in-process MCP server so the host
 application can give the agent tools.
 
-Standard library only; imports nothing from go-draw.
+Standard library only; imports nothing from Cad-lite.
 
 ## Packages
 

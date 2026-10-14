@@ -4,7 +4,7 @@ import (
 	"math"
 	"strconv"
 
-	"go-draw/cmdsys"
+	"cad-lite/cmdsys"
 )
 
 // The units variables. LUPREC and AUPREC are registered in cmdsys (sysvars.go); the rest live
@@ -36,7 +36,7 @@ const (
 	unitsClockwise
 )
 
-// unitsCmd is the command-line form of UNITS (AutoCAD's -UNITS; go-draw has no dialog, so UNITS
+// unitsCmd is the command-line form of UNITS (AutoCAD's -UNITS; Cad-lite has no dialog, so UNITS
 // runs the same prompts). Answers are applied when the last prompt is answered.
 type unitsCmd struct {
 	base

@@ -5,8 +5,8 @@
 package cmdsys
 
 import (
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // Command is one AutoCAD-style command. The session calls Start once, then

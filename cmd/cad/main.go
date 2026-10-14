@@ -1,4 +1,4 @@
-// Command cad is the go-draw desktop application: an AutoCAD-style 2D
+// Command cad is the Cad-lite desktop application: an AutoCAD-style 2D
 // drafting editor built on the gpui library and shown in an ebiten window.
 //
 // With -png it runs headlessly instead: it seeds a drawing (the demo plate,
@@ -19,15 +19,16 @@ import (
 	"time"
 
 	"agentmanager"
-	"go-draw/assets/appicon"
-	"go-draw/doc"
-	"go-draw/fileio"
-	"go-draw/fileio/dxf"
-	"go-draw/geom"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
-	"go-draw/internal/gpui/ebitenplatform"
-	"go-draw/ui"
+	"cad-lite/appenv"
+	"cad-lite/assets/appicon"
+	"cad-lite/doc"
+	"cad-lite/fileio"
+	"cad-lite/fileio/dxf"
+	"cad-lite/geom"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
+	"cad-lite/internal/gpui/ebitenplatform"
+	"cad-lite/ui"
 )
 
 // demoScript draws a mounting plate: outline, holes, a slot and centre
@@ -58,7 +59,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *showVersion {
-		fmt.Println("go-draw", version)
+		fmt.Println("cad-lite", version)
 		return
 	}
 
@@ -155,7 +156,7 @@ func main() {
 		}
 		ws.Session().SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
-		opts := gpui.WindowOptions{Width: float32(*width), Height: float32(*height), Title: "go-draw", Resizable: true}
+		opts := gpui.WindowOptions{Width: float32(*width), Height: float32(*height), Title: "Cad-lite", Resizable: true}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
 			fatal(err)
 		}
@@ -187,7 +188,7 @@ func renderPNG(ws *ui.Workspace, path string, w, h int, scale float32, hover str
 	err := p.Run(func(cx *gpui.App) {
 		ws.Session().SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
-		opts := gpui.WindowOptions{Width: float32(w), Height: float32(h), Title: "go-draw"}
+		opts := gpui.WindowOptions{Width: float32(w), Height: float32(h), Title: "Cad-lite"}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {
 			log.Fatal(err)
 		}
@@ -209,10 +210,10 @@ func renderPNG(ws *ui.Workspace, path string, w, h int, scale float32, hover str
 	return hw.SavePNG(path)
 }
 
-// brandFromEnv picks the toolbar brand: GODRAW_BRAND=mac|win|text forces one (for -png renders),
+// brandFromEnv picks the toolbar brand: CADLITE_BRAND=mac|win|text forces one (for -png renders),
 // otherwise it follows the OS.
 func brandFromEnv() ui.Brand {
-	if b, ok := ui.ParseBrand(os.Getenv("GODRAW_BRAND")); ok {
+	if b, ok := ui.ParseBrand(appenv.Get("BRAND")); ok {
 		return b
 	}
 	return ui.BrandForOS(runtime.GOOS)

@@ -9,8 +9,8 @@ package spatial
 import (
 	"slices"
 
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // Index maps entity handles to their bounding boxes.

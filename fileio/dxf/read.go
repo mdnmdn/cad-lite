@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
 )
 
 // Codec is the DXF reader and writer.
@@ -247,7 +247,7 @@ func readTables(d *doc.Drawing, objs []object) {
 			if o.typ == "LTYPE" && strings.EqualFold(o.str(2), "CONTINUOUS") {
 				continue
 			}
-			if o.typ == "APPID" && strings.EqualFold(o.str(2), layerApp) {
+			if o.typ == "APPID" && isLayerApp(o.str(2)) {
 				continue
 			}
 			r := doc.RawRecord{Pairs: rawPairs(o)}
@@ -331,7 +331,7 @@ func readLayer(d *doc.Drawing, o object) {
 		l.Linetype = lt
 	}
 	// R2000 and later write the plot flag (290) and lineweight (370) natively; the R12 writer here
-	// keeps them in extended data of GODRAW_LAYER (see layerApp).
+	// keeps them in extended data of CADLITE_LAYER (see layerApp).
 	if o.has(290) {
 		l.NoPlot = o.int(290) == 0
 	}
@@ -341,7 +341,7 @@ func readLayer(d *doc.Drawing, o object) {
 	readLayerXData(l, o)
 }
 
-// readLayerXData restores the fields the writer put in GODRAW_LAYER extended data: the plot flag,
+// readLayerXData restores the fields the writer put in CADLITE_LAYER extended data: the plot flag,
 // the lineweight and the description, in that order.
 func readLayerXData(l *doc.Layer, o object) {
 	in := false
@@ -349,7 +349,7 @@ func readLayerXData(l *doc.Layer, o object) {
 	for _, p := range o.pairs {
 		switch {
 		case p.code == 1001:
-			in = strings.TrimSpace(p.val) == layerApp
+			in = isLayerApp(p.val)
 		case !in:
 		case p.code == 1070:
 			v, _ := strconv.Atoi(strings.TrimSpace(p.val))
@@ -366,7 +366,17 @@ func readLayerXData(l *doc.Layer, o object) {
 }
 
 // layerApp is the application name of the layer extended data (see the writer).
-const layerApp = "GODRAW_LAYER"
+const layerApp = "CADLITE_LAYER"
+
+// legacyLayerApp is the name the writer used while the project was called go-draw; the reader
+// still understands it, and the writer replaces it with layerApp.
+const legacyLayerApp = "GODRAW_LAYER"
+
+// isLayerApp reports whether name is one of the layer extended-data application names.
+func isLayerApp(name string) bool {
+	name = strings.TrimSpace(name)
+	return strings.EqualFold(name, layerApp) || strings.EqualFold(name, legacyLayerApp)
+}
 
 func common(o object) doc.EntityCommon {
 	c := doc.EntityCommon{Layer: o.str(8), Color: doc.ByLayer}

@@ -10,27 +10,28 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/appenv"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // TestACADCorpus runs the AutoCAD acceptance corpus in testdata/acad: each NAME.scr is fed to
 // Session.Script on a fresh drawing and the result is compared with NAME.expect. The format is
 // documented in testdata/acad/README.md.
 //
-// It is skipped unless GODRAW_ACAD_CORPUS is set:
+// It is skipped unless CADLITE_ACAD_CORPUS is set:
 //
 //	report  log every script's outcome and never fail
-//	1       fail when a script's outcome differs from the "go-draw:" status its .expect declares
+//	1       fail when a script's outcome differs from the "cad-lite:" status its .expect declares
 //	        (so a newly passing script and a regression both need a deliberate edit)
 //	strict  fail every script that does not pass
 func TestACADCorpus(t *testing.T) {
-	mode := os.Getenv("GODRAW_ACAD_CORPUS")
+	mode := appenv.Get("ACAD_CORPUS")
 	if mode == "" {
-		t.Skip("set GODRAW_ACAD_CORPUS=report|1|strict to run the AutoCAD acceptance corpus")
+		t.Skip("set CADLITE_ACAD_CORPUS=report|1|strict to run the AutoCAD acceptance corpus")
 	}
 	files, err := filepath.Glob(filepath.Join("testdata", "acad", "*.scr"))
 	if err != nil || len(files) == 0 {
@@ -70,7 +71,7 @@ func TestACADCorpus(t *testing.T) {
 			case mode == "strict" && got != "pass":
 				t.Fail()
 			case mode != "strict" && got != declared:
-				t.Errorf("%s now %s but its .expect declares go-draw: %s; update the declaration", name, got, declared)
+				t.Errorf("%s now %s but its .expect declares cad-lite: %s; update the declaration", name, got, declared)
 			}
 		})
 	}
@@ -106,7 +107,7 @@ func acadRun(scr, exp string) (fails []string, declared string) {
 		verb, rest, _ := strings.Cut(line, " ")
 		rest = strings.TrimSpace(rest)
 		switch verb {
-		case "go-draw:":
+		case "cad-lite:":
 			declared = rest
 		case "autocad:", "note:", "source:":
 		case "count":

@@ -17,7 +17,7 @@ One line per pass, newest last: date · scope · checks run · counts. Never a s
 
 | date | scope | checks | result |
 |---|---|---|---|
-| 2026-10-14 | Founding pass: `_cad-doc/` adopted as the main `_docs/`. `draft-specs.md` filed verbatim in `inbox/completed/` and distilled into `product/`, `features/`, `tech/`, `backlog.md` and the decision register; `_meta/` adapted from the Ubiq rulebook to go-draw (Go paths, `tools/docs` for the `just docs-*` checks, `internal/gpui` as the separate library) | L1, L2, L4, L5, L7, L8, L9, L10 via `just docs-lint`; L3 via `just docs-drift` | all documents pass; 0 drifted anchors; 1 proposal opened (`P1`) |
+| 2026-10-14 | Founding pass: `_cad-doc/` adopted as the main `_docs/`. `draft-specs.md` filed verbatim in `inbox/completed/` and distilled into `product/`, `features/`, `tech/`, `backlog.md` and the decision register; `_meta/` adapted from the Ubiq rulebook to Cad-lite (Go paths, `tools/docs` for the `just docs-*` checks, `internal/gpui` as the separate library) | L1, L2, L4, L5, L7, L8, L9, L10 via `just docs-lint`; L3 via `just docs-drift` | all documents pass; 0 drifted anchors; 1 proposal opened (`P1`) |
 | 2026-10-14 | Agent-manager integration: `inbox/agent-manager-port.md` implemented and moved to `inbox/completed/` (inbound link in `agentmanager/AGENTS.md` fixed); live verification status filed in `tech/agent-integration.md`, `backlog.md` (G28 extended by the live status, G30-G31) and the `agentmanager/_docs` set | `tools/docs index`, `lint`, `drift` | 0 drifted anchors (`tools/docs drift`); 0 documents opened as proposals |
 
 ## Related docs

@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
 )
 
 type writer struct {
@@ -112,7 +112,7 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 		w.pair(6, lt)
 		if l.NoPlot || l.Lineweight != 0 || l.Description != "" {
 			// R12 has no plot flag, lineweight or description: they ride along as extended data of
-			// the application GODRAW_LAYER, which the reader restores.
+			// the application CADLITE_LAYER, which the reader restores.
 			w.pair(1001, layerApp)
 			w.int(1070, boolInt(l.NoPlot))
 			w.int(1070, l.Lineweight)
@@ -271,7 +271,7 @@ func loadedLinetypes(d *doc.Drawing) map[string]bool {
 	return m
 }
 
-// appidTable writes the APPID table: the preserved records plus GODRAW_LAYER when a layer
+// appidTable writes the APPID table: the preserved records plus CADLITE_LAYER when a layer
 // carries extended data.
 func (w *writer) appidTable(d *doc.Drawing) {
 	rs := d.Preserved.Tables["APPID"]

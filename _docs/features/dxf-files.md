@@ -16,7 +16,7 @@ review_cycle: quarterly
 
 ## Purpose
 
-The drafter opens a DXF drawing, edits it and saves it back to DXF. Anything go-draw cannot read is
+The drafter opens a DXF drawing, edits it and saves it back to DXF. Anything Cad-lite cannot read is
 reported rather than hidden, so the drafter knows what the opened drawing lacks.
 
 ## Behaviour
@@ -28,7 +28,7 @@ reported rather than hidden, so the drafter knows what the opened drawing lacks.
 - **QSAVE** (Ctrl+S) saves silently under the current path and asks for one only when the drawing
   has none. **SAVEAS** (Ctrl+Shift+S) and **SAVE** ask for the path, offering the current one as the default.
 - **NEW** discards the drawing for an empty one, forgets the path and does not touch files. **CLOSE** does
-  the same (go-draw has one drawing).
+  the same (Cad-lite has one drawing).
 - **Unsaved changes.** The session keeps a modified counter: every committed command, undo and redo adds
   one, and creating, opening or saving a drawing resets it (`Session.Dirty`, `Session.Modified`; the read-only
   variable `DBMOD` is 1 while it is not zero). NEW, OPEN, CLOSE, QUIT and EXIT on a dirty drawing ask
@@ -50,7 +50,7 @@ reported rather than hidden, so the drafter knows what the opened drawing lacks.
 - Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC` and
   polylines. What else is read, what is kept and which DXF version is written are owned by
   [File I/O](../tech/file-io.md).
-- **Unknown entities.** An entity of a class go-draw does not model opens without error. It is not
+- **Unknown entities.** An entity of a class Cad-lite does not model opens without error. It is not
   shown and cannot be selected, snapped to or edited, but it stays in the drawing and SAVE writes it
   again when R12 has its class. Entities of classes R12 lacks (SPLINE, MTEXT, HATCH, ELLIPSE and
   custom classes) are left out of the saved file, with a warning that names each one. The

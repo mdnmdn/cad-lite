@@ -1,4 +1,4 @@
-# Every icon go-draw draws.
+# Every icon Cad-lite draws.
 #
 # A key is the file name (`assets/icons/<key>.svg`), the icon's name in the registry and the Go
 # constant in names_gen.go — one spelling, kebab-case `<category>-<thing>`, no synonyms. The value

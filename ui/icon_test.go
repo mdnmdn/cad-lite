@@ -3,9 +3,9 @@ package ui_test
 import (
 	"testing"
 
-	"go-draw/assets/icons"
-	"go-draw/internal/gpui"
-	"go-draw/ui"
+	"cad-lite/assets/icons"
+	"cad-lite/internal/gpui"
+	"cad-lite/ui"
 )
 
 func TestIconMaskCoversInk(t *testing.T) {

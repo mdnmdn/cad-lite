@@ -4,9 +4,9 @@ import (
 	"math"
 	"slices"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // This file is the engine TRIM and EXTEND share: the cutting or boundary edges, the TRIMEXTENDMODE

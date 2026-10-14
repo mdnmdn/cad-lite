@@ -10,9 +10,9 @@ import (
 
 	"agentmanager"
 	"agentmanager/transcript"
-	"go-draw/doc"
-	"go-draw/internal/gpui"
-	"go-draw/ui"
+	"cad-lite/doc"
+	"cad-lite/internal/gpui"
+	"cad-lite/ui"
 )
 
 type memFiles struct{}
@@ -90,7 +90,7 @@ func TestAgentIsLazyUntilOpened(t *testing.T) {
 	if ws.HasAgentPanel() {
 		t.Fatal("panel exists before it was opened")
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".go-draw")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".cad-lite")); err == nil {
 		t.Fatal("store directory created at startup")
 	}
 	p.Windows()[0].Dispatch(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "f2"}})
@@ -109,7 +109,7 @@ func TestOpeningPanelStartsNothingAndWritesNothing(t *testing.T) {
 	if len(r.cfg) != 0 || r.ws.AgentPanel().Running() {
 		t.Fatal("opening the panel started a session")
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".go-draw")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".cad-lite")); err == nil {
 		t.Fatal("history directory created before any prompt")
 	}
 }
@@ -162,7 +162,7 @@ func TestTranscriptPersistsAndResumesAfterRestart(t *testing.T) {
 	r.turn(r.fs, "claude-sid-1", "hi there")
 	r.until("reply", func() bool { return r.hasText(0, "hi there") && !r.ws.AgentPanel().Transcript().Running() })
 	r.ws.CloseAgent()
-	if _, err := os.Stat(filepath.Join(dir, ".go-draw", "agent")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".cad-lite", "agent")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -317,7 +317,7 @@ func TestOpeningDrawingInAnotherProjectSwitchesStore(t *testing.T) {
 	}
 	r.say("in project b", 1)
 	r.nextCfg()
-	if _, err := os.Stat(filepath.Join(b, ".go-draw", "agent")); err != nil {
+	if _, err := os.Stat(filepath.Join(b, ".cad-lite", "agent")); err != nil {
 		t.Fatal(err)
 	}
 

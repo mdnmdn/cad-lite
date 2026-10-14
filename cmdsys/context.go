@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/i18n"
-	"go-draw/render"
-	"go-draw/spatial"
+	"cad-lite/doc"
+	"cad-lite/i18n"
+	"cad-lite/render"
+	"cad-lite/spatial"
 )
 
 // Context is what a command may touch: the document, its transaction, the

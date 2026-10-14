@@ -8,21 +8,21 @@ AutoCAD-compatible when the scripts that exercise it pass.
 The expectations were derived from AutoCAD's documented behaviour, **not yet run in an installed
 AutoCAD**. Every `.expect` says so (`source:`), and the ones that rest on a fact I am unsure of
 carry a `# (verify)` line. Run each script once in a real AutoCAD, compare, and fix the `.expect`
-before treating a failure in go-draw as a go-draw bug.
+before treating a failure in Cad-lite as a Cad-lite bug.
 
 ## Running
 
 ```
-GODRAW_ACAD_CORPUS=report go test ./cmdsys/commands -run TestACADCorpus -v   # log every outcome
-GODRAW_ACAD_CORPUS=1      go test ./cmdsys/commands -run TestACADCorpus      # regression tracker
-GODRAW_ACAD_CORPUS=strict go test ./cmdsys/commands -run TestACADCorpus      # every script must pass
+CADLITE_ACAD_CORPUS=report go test ./cmdsys/commands -run TestACADCorpus -v   # log every outcome
+CADLITE_ACAD_CORPUS=1      go test ./cmdsys/commands -run TestACADCorpus      # regression tracker
+CADLITE_ACAD_CORPUS=strict go test ./cmdsys/commands -run TestACADCorpus      # every script must pass
 ```
 
 Without the variable the test is skipped, so `go test ./...` stays green. The harness is
 `cmdsys/commands/acad_corpus_test.go`. Mode `1` compares each script's outcome with the
-`go-draw:` line of its `.expect` (`pass` or `fail`), so a script that starts passing, and a
+`cad-lite:` line of its `.expect` (`pass` or `fail`), so a script that starts passing, and a
 regression, both fail the test until the declaration is edited on purpose. When a command work
-package makes scripts pass, flip their `go-draw:` lines in the same commit.
+package makes scripts pass, flip their `cad-lite:` lines in the same commit.
 
 In real AutoCAD: start a new drawing from `acadiso.dwt`, run `_preamble.scr`, then the script
 (`SCRIPT`, FILEDIA 0), then inspect the drawing against `.expect`.
@@ -41,7 +41,7 @@ Real AutoCAD script syntax:
   last object created, `ALL` everything; both avoid depending on the pickbox size.
 - Scripts start from an empty drawing, layer `0` current, and assume the preamble: object snap,
   ortho, snap and polar off, dynamic input off, the default values of FILLETRAD, CHAMFERA/B,
-  CIRCLERAD, OFFSETDIST, COPYMODE reset. The go-draw harness sets `SnapOn=false` and
+  CIRCLERAD, OFFSETDIST, COPYMODE reset. The Cad-lite harness sets `SnapOn=false` and
   `Ortho=false` for the same reason.
 - A script leaves no command running. The harness fails a script that ends inside a command.
 
@@ -54,7 +54,7 @@ Line oriented; `#` starts a comment line; blank lines are ignored; fields are se
 spaces; numbers match to 1e-6 (angles in degrees, circularly).
 
 ```
-go-draw: pass|fail           the outcome today; the regression tracker reads it
+cad-lite: pass|fail           the outcome today; the regression tracker reads it
 source: ...                  provenance note (ignored)
 line   x1,y1 x2,y2 [layer=NAME] [color=N|bylayer]
 circle cx,cy r [layer=NAME] [color=N|bylayer]
@@ -85,9 +85,9 @@ Rules:
 
 ## Scripts
 
-Outcome today is `go-draw:` in each `.expect` (12 of 40 pass: scripts that exercise only what exists).
+Outcome today is `cad-lite:` in each `.expect` (12 of 40 pass: scripts that exercise only what exists).
 
-| Script | Covers | go-draw | Main gap | (verify) |
+| Script | Covers | cad-lite | Main gap | (verify) |
 |---|---|---|---|---|
 | `01_line_basic_close_undo` | LINE: continued points, relative input, Undo, Close, Enter | pass |  |  |
 | `02_line_continue` | LINE Enter continues from the last endpoint | fail | Enter at the first-point prompt (continue) |  |

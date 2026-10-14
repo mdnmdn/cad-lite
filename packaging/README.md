@@ -1,13 +1,13 @@
 # Packaging
 
-How go-draw is built into downloadable bundles. CI runs the same scripts as the `just` recipes, so
+How Cad-lite is built into downloadable bundles. CI runs the same scripts as the `just` recipes, so
 a bundle built here matches a released one apart from signing.
 
 | Platform | Script | Output (in `_tmp/dist/`) | `just` |
 |---|---|---|---|
-| macOS | `macos/bundle.sh`, then `macos/package.sh` (CI only) | `macos/go-draw.app`, `go-draw-<v>-macos-universal.{zip,dmg}` | `just bundle-mac` |
-| Windows | `windows/bundle.sh`, `windows/go-draw.iss` | `windows/go-draw-<v>-windows-<arch>.zip`, `...-setup.exe` | `just bundle-win` |
-| Linux | `linux/bundle.sh` | `linux/go-draw-<v>-linux-<arch>.tar.gz` | `just bundle-linux` |
+| macOS | `macos/bundle.sh`, then `macos/package.sh` (CI only) | `macos/Cad-lite.app`, `cad-lite-<v>-macos-universal.{zip,dmg}` | `just bundle-mac` |
+| Windows | `windows/bundle.sh`, `windows/cad-lite.iss` | `windows/cad-lite-<v>-windows-<arch>.zip`, `...-setup.exe` | `just bundle-win` |
+| Linux | `linux/bundle.sh` | `linux/cad-lite-<v>-linux-<arch>.tar.gz` | `just bundle-linux` |
 
 Version: `$VERSION`, else the tag (`v1.2.3` gives `1.2.3`), else `git describe`. A non-semver value
 (an untagged build) stamps `0.0.0` into the numeric fields. `-X main.version` is added when
@@ -32,8 +32,8 @@ DPI, long paths) and version info. `bundle.sh` runs `go-winres make` (install wi
 Go links it automatically for that GOARCH. The `.syso` files are generated and deleted when the
 script exits; do not commit them. The exe is linked with `-H=windowsgui`, so it has no console.
 
-The installer (`go-draw.iss`) is per-user, no admin, with optional desktop icon and `.dxf`
-association. Build by hand: `iscc /DMyAppVersion=1.2.3 /DMyArch=amd64 packaging\windows\go-draw.iss`.
+The installer (`cad-lite.iss`) is per-user, no admin, with optional desktop icon and `.dxf`
+association. Build by hand: `iscc /DMyAppVersion=1.2.3 /DMyArch=amd64 packaging\windows\cad-lite.iss`.
 
 ## macOS signing and notarization
 

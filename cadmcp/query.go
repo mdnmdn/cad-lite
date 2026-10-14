@@ -6,9 +6,9 @@ import (
 	"math"
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func layerInfo(l *doc.Layer) map[string]any {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func TestSnapshotKeyOptions(t *testing.T) {

@@ -3,7 +3,7 @@ id: tech-architecture
 title: Architecture
 kind: tech
 status: current
-summary: The layers of go-draw, the dependency rule between them, where each layer lives, and how an edit flows from input to pixels.
+summary: The layers of Cad-lite, the dependency rule between them, where each layer lives, and how an edit flows from input to pixels.
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
 updated: 2026-10-14
 verified: 2026-10-14
@@ -16,7 +16,7 @@ review_cycle: quarterly
 
 ## Shape
 
-go-draw is one Go module, `go-draw`, holding a layered CAD core, a UI shell and the UI framework it is
+Cad-lite is one Go module, `cad-lite`, holding a layered CAD core, a UI shell and the UI framework it is
 built on. The core is pure Go, headless-testable and independent of any rendering backend; only the
 UI shell and one rendering adapter touch the graphics stack.
 
@@ -43,13 +43,16 @@ plurals, localized command keywords and command aliases. It imports nothing of t
 
 The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenplatform` as its display backend.
 
+`appenv` is a third leaf: it reads the `CADLITE_*` environment variables, falling back to the old
+`GODRAW_*` names. `settings`, `updater`, `cmd/cad` and the tests use it.
+
 `updater` is a second stdlib-only leaf: it finds, downloads, verifies and installs GitHub releases and
 restarts the application. Only `ui` and `cmd/cad` use it; it imports nothing of the project. See
 [Updates](../features/updates.md).
 
 AI agents attach on the side: `cadmcp` exposes the drawing as MCP tools on top of `cmdsys`, and the
 nested module `agentmanager` runs the agent CLIs and the MCP server; `ui` hosts the chat panel that
-joins them. `agentmanager` imports nothing from go-draw. See [Agent integration](agent-integration.md).
+joins them. `agentmanager` imports nothing from Cad-lite. See [Agent integration](agent-integration.md).
 
 `cmd/cad` wires the layers together and chooses the platform: an ebiten window, or a headless
 window that renders one frame to PNG. Every package's purpose is listed in the
@@ -59,7 +62,7 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 
 1. **Dependencies point down.** A package imports only packages in layers below it. `geom` imports
    nothing of the project; `spatial` and `doc` import `geom`; `fileio` imports `doc`; `render`
-   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it. `i18n` imports nothing of the project (it is a leaf, builds for `js/wasm`) and is imported by `cmdsys`, `cmdsys/commands`, `fileio`, `settings`, `ui` and `cmd/cad`. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports go-draw.
+   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it. `i18n` imports nothing of the project (it is a leaf, builds for `js/wasm`) and is imported by `cmdsys`, `cmdsys/commands`, `fileio`, `settings`, `ui` and `cmd/cad`. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports Cad-lite.
 2. **The core never sees the screen.** `geom`, `doc`, `spatial`, `fileio`, `render` and `cmdsys`
    never import `internal/gpui`, ebiten or any graphics package. Only `render/gpuirender`, `ui` and
    `cmd/` import `internal/gpui`, and only `cmd/` imports `internal/gpui/ebitenplatform`.

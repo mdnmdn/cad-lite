@@ -3,7 +3,7 @@ package cadmcp_test
 import (
 	"testing"
 
-	"go-draw/doc"
+	"cad-lite/doc"
 )
 
 func TestListEntitiesFlagsUnknown(t *testing.T) {

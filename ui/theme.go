@@ -1,6 +1,6 @@
 package ui
 
-import "go-draw/internal/gpui"
+import "cad-lite/internal/gpui"
 
 // Theme colours. The variables hold the current theme (themes.go): they start
 // as the dark theme, whose canvas matches AutoCAD's dark model space, and

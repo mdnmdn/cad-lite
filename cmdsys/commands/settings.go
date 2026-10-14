@@ -1,6 +1,6 @@
 package commands
 
-import "go-draw/cmdsys"
+import "cad-lite/cmdsys"
 
 // optionsCmd opens the host's settings panel.
 type optionsCmd struct{ base }

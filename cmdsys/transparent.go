@@ -3,7 +3,7 @@ package cmdsys
 import (
 	"strings"
 
-	"go-draw/doc"
+	"cad-lite/doc"
 )
 
 // Transparent is implemented by commands that may run inside another command, typed with a

@@ -99,10 +99,10 @@ func TestHandshakeAndArgv(t *testing.T) {
 	b, _ := os.ReadFile(e.argv)
 	argv := string(b)
 	for _, want := range []string{
-		"-c\nmcp_servers.cad={url=\"http://127.0.0.1:1/mcp\", bearer_token_env_var=\"GODRAW_MCP_TOKEN\", default_tools_approval_mode=\"approve\", tool_timeout_sec=120}\n",
+		"-c\nmcp_servers.cad={url=\"http://127.0.0.1:1/mcp\", bearer_token_env_var=\"CADLITE_MCP_TOKEN\", default_tools_approval_mode=\"approve\", tool_timeout_sec=120}\n",
 		"-c\nsandbox_mode=\"read-only\"\n", "-c\napproval_policy=\"on-request\"\n",
 		"-c\nmodel=\"gpt-x\"\n", "-c\ndeveloper_instructions=\"be \\\"brief\\\"\"\n",
-		"app-server\n--listen\nstdio://\n", "GODRAW_MCP_TOKEN=sekret\n", "EXTRA=1\n",
+		"app-server\n--listen\nstdio://\n", "CADLITE_MCP_TOKEN=sekret\n", "EXTRA=1\n",
 	} {
 		if !strings.Contains(argv, want) {
 			t.Errorf("argv dump missing %q:\n%s", want, argv)

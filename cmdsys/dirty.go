@@ -1,6 +1,6 @@
 package cmdsys
 
-import "go-draw/doc"
+import "cad-lite/doc"
 
 // This file is the session's file and history state: the modified counter behind DBMOD and
 // Session.Dirty, the host's quit hook, and what UNDO and REDO remember between commands.
@@ -55,7 +55,7 @@ func (f *fileState) attach(d *doc.Drawing) {
 func init() { RegisterVarGroup(dirtyVars) }
 
 // dirtyVars registers DBMOD: 1 while the drawing has unsaved changes, else 0 (AutoCAD's bit 1,
-// the object database). The other bits describe state go-draw does not keep.
+// the object database). The other bits describe state Cad-lite does not keep.
 func dirtyVars(s *Session, v *Vars) {
 	v.Register(Var{Name: "DBMOD", Kind: VarInt, Default: 0, ReadOnly: true,
 		Read: func() any { return boolInt(s.Dirty()) }})

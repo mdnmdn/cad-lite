@@ -1,16 +1,16 @@
 package ui
 
 import (
-	"go-draw/settings"
+	"cad-lite/settings"
 	"math"
 
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/internal/gpui"
-	"go-draw/render"
-	"go-draw/render/gpuirender"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/internal/gpui"
+	"cad-lite/render"
+	"cad-lite/render/gpuirender"
 )
 
 // canvasState is the canvas's interaction state between events.

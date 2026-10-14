@@ -3,7 +3,7 @@ package gpui_test
 import (
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func TestTextInputStyleAppliesBackgroundAndPlaceholder(t *testing.T) {

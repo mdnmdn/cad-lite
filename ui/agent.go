@@ -11,9 +11,9 @@ import (
 	"agentmanager/mcp"
 	"agentmanager/store"
 	"agentmanager/transcript"
-	"go-draw/cadmcp"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
+	"cad-lite/cadmcp"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
 )
 
 // Timer periods of the agent pump. The fast period applies while a session
@@ -268,7 +268,7 @@ func (p *AgentPanel) ensureServer(w *gpui.Window) error {
 		return nil
 	}
 	disp := cadmcp.NewDispatcher(nil)
-	srv := mcp.NewServer(mcp.Options{Name: "go-draw", Version: "1", Instructions: cadmcp.Instructions()})
+	srv := mcp.NewServer(mcp.Options{Name: "cad-lite", Version: "1", Instructions: cadmcp.Instructions()})
 	cadmcp.Register(srv, cadmcp.Env{
 		Dispatch: disp,
 		Session:  p.ws.Session,

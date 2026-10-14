@@ -6,12 +6,12 @@ xdotool and captures screenshots. Needs `Xvfb`, `xdotool`, `import` (ImageMagick
 
 ```
 go run ./tools/gui [-out DIR] [-video] [-bin PATH] scenario.gui...   # just gui-run
-GODRAW_GUI_TEST=1 go test -count=1 ./tools/gui                        # just gui-test
+CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui                        # just gui-test
 ```
 
 The driver builds `cmd/cad` into `_tmp/gui/cad` (or uses `-bin`), starts Xvfb on a free display
 (`-displayfd`, 24-bit colour, screen = window size, no window manager, scale factor 1) with
-`LIBGL_ALWAYS_SOFTWARE=1`, waits for the `go-draw` window, runs the steps, quits the app with SIGTERM
+`LIBGL_ALWAYS_SOFTWARE=1`, waits for the `Cad-lite` window, runs the steps, quits the app with SIGTERM
 and writes `OUT/<scenario>/`: the PNGs, `app.log`, `drawing.dxf` (from `-save-on-exit`) and
 `session.mp4` with `-video`. Exit status is non-zero if any scenario fails.
 

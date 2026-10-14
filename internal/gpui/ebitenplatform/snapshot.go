@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"time"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // Option configures a Platform at construction.

@@ -3,7 +3,7 @@
 ## Package layout
 
 ```
-internal/gpui/           core (package gpui), import path go-draw/internal/gpui
+internal/gpui/           core (package gpui), import path cad-lite/internal/gpui
     geometry.go color.go   Pixels, Point, Size, Bounds, Edges, Corners, Rgba/Hsla
     style.go styled.go     Style, StyleRefinement, StyledMixin (fluent builders)
     layout.go layout_wrap.go flexbox lines and absolute positioning over LayoutNode

@@ -3,10 +3,10 @@ package ui
 import (
 	"strings"
 
-	"go-draw/assets/icons"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
-	"go-draw/settings"
+	"cad-lite/assets/icons"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // Settings panel geometry in logical pixels.

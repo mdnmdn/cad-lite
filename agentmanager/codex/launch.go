@@ -16,7 +16,7 @@ import (
 
 const (
 	defaultBinary = "codex"
-	tokenEnvBase  = "GODRAW_MCP_TOKEN"
+	tokenEnvBase  = "CADLITE_MCP_TOKEN"
 	closeGrace    = 10 * time.Second
 )
 
@@ -130,7 +130,7 @@ func (s *session) handshake(ctx context.Context, cfg agentmanager.Config) error 
 		return nil
 	}
 	if err := call("initialize", map[string]any{
-		"clientInfo":   map[string]any{"name": "go-draw", "version": "0"},
+		"clientInfo":   map[string]any{"name": "cad-lite", "version": "0"},
 		"capabilities": map[string]any{"experimentalApi": true},
 	}, nil); err != nil {
 		return err

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func openHeadless(t *testing.T, w, h float32, root gpui.EntityRoot) (*gpui.HeadlessWindow, *gpui.App) {

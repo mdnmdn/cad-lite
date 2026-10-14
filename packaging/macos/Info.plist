@@ -20,17 +20,17 @@
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>go-draw</string>
+	<string>cad-lite</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>it.synesthesia.go-draw</string>
+	<string>it.synesthesia.cad-lite</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>go-draw</string>
+	<string>Cad-lite</string>
 	<key>CFBundleDisplayName</key>
-	<string>go-draw</string>
+	<string>Cad-lite</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

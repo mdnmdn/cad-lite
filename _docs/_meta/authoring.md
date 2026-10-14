@@ -68,7 +68,7 @@ If you shipped a user-visible capability that no document covers, **write its do
 are the only one who knows it, and a librarian filing it later can only guess. This is the single
 exception, and it is narrow:
 
-> Ask: *would deleting this capability from go-draw delete the document?* If yes, it is a feature
+> Ask: *would deleting this capability from Cad-lite delete the document?* If yes, it is a feature
 > document and you may create it under `features/`. If no — it is a rule, a convention, a model, a
 > procedure — **you may not**: file it under §7 instead.
 
@@ -138,7 +138,7 @@ review_cycle: quarterly        # monthly if this area changes often
 `read_when` is what gets a document opened, so phrase it as the reader's task — "you are adding a
 command", not "command conventions". `summary` says what is inside; `read_when` says when to care.
 
-`status: draft` earns its own note. Much of go-draw is designed ahead of the code (the spike
+`status: draft` earns its own note. Much of Cad-lite is designed ahead of the code (the spike
 implements a slice of the specification), and a draft document describes a contract that the tree
 does not implement end to end. Draft is not a licence to be vague — it is a promise that the design
 is settled and the wiring is not.

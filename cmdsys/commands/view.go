@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // ZoomMargin is the pixel margin ZOOM Extents leaves around the drawing.

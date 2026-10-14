@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/fileio"
+	"cad-lite/doc"
+	"cad-lite/fileio"
 )
 
 type failWriter struct{ partial bool }

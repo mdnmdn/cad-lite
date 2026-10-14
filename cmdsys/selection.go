@@ -3,7 +3,7 @@ package cmdsys
 import (
 	"slices"
 
-	"go-draw/doc"
+	"cad-lite/doc"
 )
 
 // Selection is the session's selection set: not part of the document, not

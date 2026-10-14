@@ -1,7 +1,7 @@
 # RECTANG: two corners, Dimensions
 # Expected state after running 09_rectang_corners_dimensions.scr in AutoCAD 2024/2025 from the preamble state.
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: pass
+cad-lite: pass
 lwpolyline closed 0,0 100,0 100,50 0,50
 lwpolyline closed 200,0 300,0 300,50 200,50
 count 2

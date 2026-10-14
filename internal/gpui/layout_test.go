@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 // fakeMeasure lays text out with 10px per character (spaces included) and a

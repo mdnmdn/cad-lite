@@ -3,9 +3,9 @@ package commands
 import (
 	"math"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // registerTrim adds TRIM, EXTEND, BREAK, BREAKATPOINT, JOIN and EXPLODE and their aliases.

@@ -3,7 +3,7 @@ id: feat-updates
 title: Updates
 kind: feature
 status: current
-summary: How go-draw finds a newer GitHub release, shows it in the settings panel, and on one press downloads, verifies, installs and restarts into it.
+summary: How Cad-lite finds a newer GitHub release, shows it in the settings panel, and on one press downloads, verifies, installs and restarts into it.
 read_when: you are changing the update check, the Update button, the release asset names or checksums, or how the installation is replaced
 updated: 2026-10-14
 verified: 2026-10-14
@@ -16,7 +16,8 @@ review_cycle: monthly
 
 ## Purpose
 
-go-draw keeps itself current from the GitHub releases of `mdnmdn/go-draw`, on a single stream (the
+Cad-lite keeps itself current from the GitHub releases of `mdnmdn/go-draw` (the repository keeps its
+old name; `updater.DefaultRepo` is the one place to change when it is renamed), on a single stream (the
 latest published release; there are no channels). It looks for a new release in the background and
 on demand. When one exists the user presses **Update** once, and the download, the integrity check,
 the installation and the restart follow without further action.
@@ -24,7 +25,7 @@ the installation and the restart follow without further action.
 ## Behaviour
 
 - **Version.** The build stamps its version (`-X main.version=1.2.3`, tag without `v`); the
-  settings panel shows it under *About and updates*, `go-draw -version` prints it, and the macOS
+  settings panel shows it under *About and updates*, `cad-lite -version` prints it, and the macOS
   `Info.plist` and the Windows version resource carry it. An unstamped build is `dev`; CI builds
   are `0.0.0-ci+<shortsha>`. A version with build metadata or that is not semver never updates itself
   (no automatic check, no Update button) but the *Check for updates* button still reports the latest release.
@@ -32,7 +33,7 @@ the installation and the restart follow without further action.
   `update.auto_check` is on. The *Check for updates* button runs one at once, ignoring the cached
   answer. Requests are conditional (`ETag` / `If-None-Match`), so an unchanged release costs a 304.
   Drafts and pre-releases are skipped. Nothing runs in `-png` renders, in tests, in the browser
-  build, or when `GODRAW_NO_UPDATE=1`.
+  build, or when `CADLITE_NO_UPDATE=1`.
 - **Notice.** While a release waits, the toolbar's gear button carries a dot and its tooltip names the
   version; the panel shows the status line, a release-notes excerpt and the Update button.
   Nothing modal interrupts the user.
@@ -44,20 +45,22 @@ the installation and the restart follow without further action.
   dialog that offers *Restart and update* or *Later* (the new version then starts at the next launch).
   Settings are saved and the agent closed before the new process starts, and the new process gets the
   arguments of the old one.
-- **Installing.** Windows: the running `go-draw.exe` is renamed to `go-draw.exe.old`, the new one
+- **Installing.** Windows: the running `cad-lite.exe` is renamed to `cad-lite.exe.old`, the new one
   moved in, and the `.old` file deleted by the next start. macOS: the whole `.app` is extracted beside the
   old one, the old bundle is renamed `.app.old`, the new one renamed into place, and the old one deleted
   only after that worked (restored if it did not); a quarantine attribute on the new copy, if it has
   one, is cleared; the restart is `open -n`. Linux and a bare macOS binary: the binary is replaced the
   same way. The installation is found with `os.Executable` and symlinks resolved.
-- **Assets.** The updater installs from `go-draw-<v>-windows-<amd64|arm64>.zip`,
-  `go-draw-<v>-macos-universal.zip` and `go-draw-<v>-linux-amd64.tar.gz`; the `-setup.exe` and `.dmg`
-  are for people installing by hand and are never chosen by the updater.
+- **Assets.** The updater installs from `cad-lite-<v>-windows-<amd64|arm64>.zip`,
+  `cad-lite-<v>-macos-universal.zip` and `cad-lite-<v>-linux-amd64.tar.gz`; the `-setup.exe` and `.dmg`
+  are for people installing by hand and are never chosen by the updater. Releases published under the
+  old name (`go-draw-<v>-...`, binary `go-draw`) are still accepted, so an installation can update
+  across the rename; the new bundle replaces the installed one under its installed name.
 
 ## Contract
 
 Settings keys `update.auto_check` (boolean, default true) and `update.last_check` (timestamp, set by
-the app); both are in [Settings](settings.md). Environment `GODRAW_NO_UPDATE=1` turns the machinery off.
+the app); both are in [Settings](settings.md). Environment `CADLITE_NO_UPDATE=1` turns the machinery off.
 Package `updater`: `Client` (`NewClient`, `Check`, `CheckForce`, `Download`, `Update`), `Release`, `Asset`,
 `AssetName`, `ParseVersion`, `Updatable`, `Install`, `Extract`, `Relaunch`, `CleanupOld`, `OpenURL`, `Supported`,
 `Disabled`. Workspace: `SetVersion`, `Version`, `EnableUpdates`, `SetUpdateClient`, `UpdatesEnabled`,

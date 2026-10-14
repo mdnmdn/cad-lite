@@ -1,7 +1,7 @@
 # Selection: W, C, WP, CP
 # Expected state after running 27_select_window_crossing_polygon.scr in AutoCAD 2024/2025 from the preamble state.
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: pass
+cad-lite: pass
 line 0,20 40,20
 line 100,50 110,50
 count 2

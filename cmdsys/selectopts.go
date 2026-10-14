@@ -1,8 +1,8 @@
 package cmdsys
 
 import (
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // This file is the pure geometry behind the typed selection options (W C WP CP F ...): which

@@ -3,7 +3,7 @@ package doc
 import (
 	"testing"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 func addLine(t *testing.T, d *Drawing, x float64) Handle {

@@ -1,8 +1,8 @@
 package render
 
 import (
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // Color is a non-premultiplied RGBA colour.

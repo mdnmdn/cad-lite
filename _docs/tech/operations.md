@@ -3,7 +3,7 @@ id: tech-operations
 title: Operations
 kind: tech
 status: current
-summary: How to build, run, test and render go-draw, build the browser binary, and run the documentation tooling.
+summary: How to build, run, test and render Cad-lite, build the browser binary, and run the documentation tooling.
 read_when: you need a build, run, test or docs command, or you are changing one
 updated: 2026-10-14
 verified: 2026-10-14
@@ -31,7 +31,7 @@ output (renders, binaries, experiments) goes in `_tmp/`, which is gitignored and
 | Render headlessly | `go run ./cmd/cad -png _tmp/cad.png` | `just png` |
 | Build for the browser | `GOOS=js GOARCH=wasm go build -o _tmp/cad.wasm ./cmd/cad` | `just wasm` |
 | Run real-window scenarios under Xvfb (`just gui-run tools/gui/scenarios/line.gui`; `-video` records) | `go run ./tools/gui scenario.gui…` | `just gui-run` |
-| Run every real-window scenario; fails on any assertion; output in `_tmp/gui/out` | `GODRAW_GUI_TEST=1 go test -count=1 ./tools/gui` | `just gui-test` |
+| Run every real-window scenario; fails on any assertion; output in `_tmp/gui/out` | `CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui` | `just gui-test` |
 | One screenshot of the real window (`just gui-shot -demo`) | `go run ./tools/gui` on a one-step scenario | `just gui-shot` |
 | Build the application icon (`.icns`, `.ico`, window PNGs) from `assets/appicon/*.svg` | `uv run tools/icons/appicon.py build` | `just appicon` |
 | Review sheet of the application icon at every size beside UI icons | `uv run tools/icons/appicon.py sheet` | `just appicon-sheet` |
@@ -53,7 +53,7 @@ dependencies on first run; sheets are rendered by resvg, not by the application'
 `icons-adopt` downloads the pinned `lucide-static` package from `registry.npmjs.org` into `_tmp/`
 (or reads the `icons/` directory named by `LUCIDE_DIR`), so it needs npm registry access. The
 `preview/` and `variants/` directories under `assets/icons/` are gitignored. The icon workflow is
-in `.claude/skills/go-draw-icons/SKILL.md`.
+in `.claude/skills/cad-lite-icons/SKILL.md`.
 
 Run `go mod tidy` after adding an import.
 
@@ -89,11 +89,15 @@ go run ./cmd/cad -png _tmp/snap.png -demo -script "LINE 25,25" -hover 195.6,25.4
 
 ## Settings file
 
-The application keeps its [settings](../features/settings.md) in `settings.toml`, in `go-draw/` under the
+The application keeps its [settings](../features/settings.md) in `settings.toml`, in `cad-lite/` under the
 OS user config folder: `~/Library/Application Support` on macOS, `%AppData%` on Windows,
-`$XDG_CONFIG_HOME` or `~/.config` on Linux. `GODRAW_CONFIG_DIR` replaces that whole directory (the
-file is then `$GODRAW_CONFIG_DIR/settings.toml`); tests and renders that must not touch the real file
-set it to a temporary directory. `cmd/cad` loads the file at startup unless `-png` is given (a failure is
+`$XDG_CONFIG_HOME` or `~/.config` on Linux. `CADLITE_CONFIG_DIR` replaces that whole directory (the
+file is then `$CADLITE_CONFIG_DIR/settings.toml`); tests and renders that must not touch the real file
+set it to a temporary directory. On the first start after the rename from go-draw, when
+`cad-lite/settings.toml` does not exist and `go-draw/settings.toml` does, the old file is copied over (and
+left in place).
+
+Every `CADLITE_*` variable is read through `appenv`, which still accepts the old `GODRAW_*` name when the new one is unset. `cmd/cad` loads the file at startup unless `-png` is given (a failure is
 logged and the defaults apply) and saves it, with the window size, when the window closes. The browser build has no file and keeps them in memory.
 
 ## Environment notes
@@ -116,8 +120,8 @@ logged and the defaults apply) and saves it, with the window size, when the wind
 ## Releases
 
 `.github/workflows/release.yml` runs on a pushed `v*` tag and on manual dispatch. It builds the
-macOS universal `.app` as `go-draw-<v>-macos-universal.zip` and `.dmg`, the Windows `amd64` and
-`arm64` zips with an Inno Setup `-setup.exe` each, and the Linux `go-draw-<v>-linux-amd64.tar.gz`; a
+macOS universal `.app` as `cad-lite-<v>-macos-universal.zip` and `.dmg`, the Windows `amd64` and
+`arm64` zips with an Inno Setup `-setup.exe` each, and the Linux `cad-lite-<v>-linux-amd64.tar.gz`; a
 `publish` job on a tag attaches them with `SHA256SUMS.txt` to a GitHub Release. The signing secrets
 are optional (see `packaging/README.md`); without them the macOS app is ad-hoc signed. The scripts
 share `packaging/lib.sh`, so a `just bundle-*` recipe builds what the workflow releases.
@@ -133,12 +137,12 @@ Windows and macOS).
 2. `packaging/lib.sh` turns the tag into the version and every bundle script links it with
    `-ldflags "-X main.version=X.Y.Z"` (also into `Info.plist` and the Windows version resource).
    CI stamps `0.0.0-ci+<shortsha>` so its binaries show where they came from.
-3. The release carries, per platform: `go-draw-X.Y.Z-windows-<amd64|arm64>.zip` and
-   `go-draw-X.Y.Z-windows-<arch>-setup.exe`, `go-draw-X.Y.Z-macos-universal.zip` and `.dmg`,
-   `go-draw-X.Y.Z-linux-amd64.tar.gz`, and `SHA256SUMS.txt` (sha256sum format, every file). The
+3. The release carries, per platform: `cad-lite-X.Y.Z-windows-<amd64|arm64>.zip` and
+   `cad-lite-X.Y.Z-windows-<arch>-setup.exe`, `cad-lite-X.Y.Z-macos-universal.zip` and `.dmg`,
+   `cad-lite-X.Y.Z-linux-amd64.tar.gz`, and `SHA256SUMS.txt` (sha256sum format, every file). The
    updater installs from the zips and the tar.gz and verifies them against `SHA256SUMS.txt`; renaming
    an asset means changing `updater.AssetName` too.
-4. `GODRAW_NO_UPDATE=1` turns the in-app update checks off.
+4. `CADLITE_NO_UPDATE=1` turns the in-app update checks off.
 
 ## Related docs
 

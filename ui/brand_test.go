@@ -3,9 +3,9 @@ package ui_test
 import (
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/internal/gpui"
-	"go-draw/ui"
+	"cad-lite/doc"
+	"cad-lite/internal/gpui"
+	"cad-lite/ui"
 )
 
 // brandFrame renders a workspace in the given brand at scale and returns the NRGBA frame.

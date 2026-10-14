@@ -7,7 +7,7 @@ code or other document was touched to produce it. Its acceptance corpus is
 below as *corpus NN*.
 
 **What this is.** The exact command-line behaviour of AutoCAD 2024/2025 (English, `acadiso.dwt`
-defaults) that go-draw must reproduce so that a drafter's typed commands, an AutoCAD `.scr` script
+defaults) that Cad-lite must reproduce so that a drafter's typed commands, an AutoCAD `.scr` script
 and muscle memory all work: command names, prompt sequences, options, defaults, system variables,
 messages. It **complements** [`autocad-parity.md`](autocad-parity.md), which owns keys, mouse,
 grips, drafting-aid pipeline and chrome; this document owns the *language* of the command line and
@@ -29,7 +29,7 @@ ARC, LWPOLYLINE. ELLIPSE, POINT, SPLINE, TEXT, HATCH, blocks and dimensions need
 
 ## 1. Global compatibility rules
 
-Each rule ends with the go-draw gap, as `Gn-m` rows in the table at the end of the section.
+Each rule ends with the Cad-lite gap, as `Gn-m` rows in the table at the end of the section.
 
 ### 1.1 Command-name resolution
 
@@ -54,7 +54,7 @@ Unknown name: `Unknown command "FOO".  Press F1 for more help.` (two spaces; *ve
 command starts. Names are never abbreviated automatically: `LIN` is unknown (the suggestion list
 of the parity plan, WP1, is a UI aid).
 
-**Alias file.** `acad.pgp` lines are `ALIAS, *COMMAND`; go-draw's `Registry.LoadAliases` reads the
+**Alias file.** `acad.pgp` lines are `ALIAS, *COMMAND`; Cad-lite's `Registry.LoadAliases` reads the
 same format (user `aliases.pgp` override is P3 in the parity plan 7.1). Italian aliases arrive
 through `i18n.RegisterAliases` and are *added*, never replacing English ones; **command names stay
 English** and `_NAME` always means the English name.
@@ -67,12 +67,12 @@ interrupted prompt unchanged (same Base, same defaults). While it runs the promp
 (`>>>>` for a second level) *(verify V44)*. A command that is not transparent typed with `'` prints
 an error naming the command and the prompt stays (exact text *verify V2*).
 
-Transparent (view and settings), required in go-draw: **ZOOM, PAN, REDRAW, SETVAR, OSNAP, ORTHO,
+Transparent (view and settings), required in Cad-lite: **ZOOM, PAN, REDRAW, SETVAR, OSNAP, ORTHO,
 GRID, SNAP, DSETTINGS, DIST, ID, LAYER/-LAYER, COLOR, LINETYPE, LWEIGHT, LTSCALE, UNITS, HELP,
 TEXTSCR/GRAPHSCR, CAL** and, with *(verify V2)*, REGEN, MEASUREGEOM, VIEW. A transparent command
 must not open a transaction. ZOOM and PAN have a transparent-only restriction: in a transparent
 ZOOM the options `All`, `Extents` and `Previous` regenerate and are refused if the drawing needs it
-(not an issue in go-draw).
+(not an issue in Cad-lite).
 Never transparent: anything that creates or edits objects, UNDO/U/REDO, selection commands, file
 commands, SCRIPT.
 
@@ -97,7 +97,7 @@ commands, SCRIPT.
   *(verify V8)*.
 - After a transparent command the interrupted prompt is shown again.
 
-go-draw's `Prompt.String` already renders this form; gaps are the default formatting
+Cad-lite's `Prompt.String` already renders this form; gaps are the default formatting
 (`<10>` vs `<10.0000>`) and Yes/No defaults (`<No>` vs `<N>`).
 
 ### 1.4 Keyword input
@@ -140,7 +140,7 @@ same (parity plan 2.2).
 ### 1.6 Defaults remembered between commands
 
 Two kinds: **system variables** (named, saved in the drawing or session, settable with SETVAR or
-by typing the name) and **command memory** (kept for the session, not a variable). go-draw today
+by typing the name) and **command memory** (kept for the session, not a variable). Cad-lite today
 keeps both as package-level variables of `cmdsys/commands/construct.go` (`filletRadius`,
 `chamferD1/D2`, `lastOffset`), **shared by every session in the process**, and some inside the
 Session (`lastPoint`). Target: all of them are session-owned variables in the Wave 0 `Vars`
@@ -195,7 +195,7 @@ Typed at any point prompt; none is ever snapped or constrained by ortho, polar o
 | `x,y` with spaces | Never: a space ends the token (section 1.9) |
 
 Missing or invalid pieces: `1,x` → `Invalid point.` and the prompt is asked again. `@1,1` with no
-previous point is valid in AutoCAD (`LASTPOINT` starts at 0,0,0); go-draw prints an error
+previous point is valid in AutoCAD (`LASTPOINT` starts at 0,0,0); Cad-lite prints an error
 (`ErrNoBase`).
 
 **Typed object snaps.** *Done (WP3) except APP, EXT, PAR, NOD, INS, QUI, GCE, TT (recognised, print `not supported`) and the deferral of PER/TAN at a first point.* At a point prompt, a snap name (or a comma list) arms an override for the
@@ -266,7 +266,7 @@ SELECT first and then run a command should use `P` (corpus 28).
 Objects on locked layers can be selected but not edited; objects on frozen/off layers cannot be
 picked (`ALL` differs, above).
 
-go-draw today answers `Select objects:` only from clicks, box drags and Enter; typed text gets
+Cad-lite today answers `Select objects:` only from clicks, box drags and Enter; typed text gets
 `Invalid value.`. This is the single largest cause of script failure (corpus 15-18, 24-28 fail on
 it): **G8-1, P1**.
 
@@ -278,7 +278,7 @@ A script is a text file; each response is fed to the command line exactly as typ
   response**; **two separators in a row, or a blank line, send an Enter**. A trailing space on a
   line is therefore an extra Enter.
 - `;` starts a comment to the end of the line (the whole line is ignored; text before `;` is
-  still sent). *go-draw's `Session.Script` has no comment rule* (G9-1).
+  still sent). *Cad-lite's `Session.Script` has no comment rule* (G9-1).
 - The first token of a line is typically a command, but nothing distinguishes commands from
   responses: the script is a flat input stream. If a command ends earlier than the script expects,
   the remaining tokens run as commands at `Command:` and usually print `Unknown command`; AutoCAD
@@ -316,11 +316,11 @@ implements the rules above (strip `;` comments, treat one final newline as a ter
 - Variables take effect at once and a few feed back: `ORTHOMODE`, `OSMODE`, `GRIDMODE`... change
   the status bar toggles (the Wave 0 `Vars` registry `OnChange`).
 - Some variables hold a bit set: `OSMODE` below.
-- Only variables go-draw has a use for exist; an unknown valid AutoCAD name (`MIRRTEXT`, `DIMSCALE`)
+- Only variables Cad-lite has a use for exist; an unknown valid AutoCAD name (`MIRRTEXT`, `DIMSCALE`)
   should be accepted as a **stored no-op** (read back what was set) so scripts that set them run
   (P2). The initial set is in 1.11.
 
-### 1.11 System variables go-draw must provide
+### 1.11 System variables Cad-lite must provide
 
 Defaults are `acadiso.dwt`. "Today" is where the state lives now.
 
@@ -350,7 +350,7 @@ Defaults are `acadiso.dwt`. "Today" is where the state lives now.
 A table for the Failure sections; every text is *(verify V9)*. The corpus checks only the ones
 marked ✓ (script 40).
 
-| Situation | AutoCAD | go-draw today |
+| Situation | AutoCAD | Cad-lite today |
 |---|---|---|
 | Unknown command | `Unknown command "FOO".  Press F1 for more help.` | `Unknown command "FOO". Press F1 for help.` |
 | Bad point, no keywords | `Invalid point.` ✓ | `Invalid point.` |
@@ -395,7 +395,7 @@ marked ✓ (script 40).
 One section per command. **AutoCAD** gives the prompt sequence in order; `[…]` are keywords,
 `<…>` defaults; sub-prompts are indented under their keyword. **Today** is the code on disk
 (`cmdsys/commands/*.go`). Gap rows carry the priority, effort and the corpus script that proves the
-fix. Aliases are the `acad.pgp` defaults; go-draw's current ones are `L PL C A REC E M CO CP RO SC U Z
+fix. Aliases are the `acad.pgp` defaults; Cad-lite's current ones are `L PL C A REC E M CO CP RO SC U Z
 LA DI LI AA MEA MI O F CHA TR EX BR J X` and `AGENT` (for AI). Command index with priorities:
 
 | Group | Commands |
@@ -408,7 +408,7 @@ LA DI LI AA MEA MI O F CHA TR EX BR J X` and `AGENT` (for AI). Command index wit
 | 2.6 Drawing aids and settings | OSNAP / -OSNAP, ORTHO, GRID, SNAP, UNITS / -UNITS, SETVAR, SCRIPT |
 | 2.7 Files | NEW, OPEN, SAVE, QSAVE, SAVEAS, QUIT / EXIT / CLOSE |
 | 2.8 Selection | SELECT (and the prompt options of 1.8) |
-| 2.9 go-draw only | AI / AGENT |
+| 2.9 Cad-lite only | AI / AGENT |
 
 ### 2.1 Draw
 
@@ -1048,7 +1048,7 @@ them *(verify V7)*; prints `N found`. `SELECT` is the scripting idiom `SELECT AL
 `MOVE P`. Related: `SELECTSIMILAR`, `QSELECT`, `FILTER` (P3).
 **Today.** `SELECT` runs the full prompt and records the previous selection (done, WP2).
 
-### 2.9 go-draw only
+### 2.9 Cad-lite only
 
 `AI` / `AGENT`: kept as is (no AutoCAD equivalent); it is HumanOnly-adjacent and must never shadow an
 AutoCAD name. `OPTIONS` (`OP`) is the settings dialog (i18n `Commands`, `ui/settings*.go`): out of this
@@ -1058,7 +1058,7 @@ document, alias `OP` is listed in the parity plan.
 
 ## 3. Alias table (`acad.pgp` defaults)
 
-Every AutoCAD default alias for a command in section 2, with go-draw's state today. "Add with" is the
+Every AutoCAD default alias for a command in section 2, with Cad-lite's state today. "Add with" is the
 work package (section 4) that registers it in the same commit as its command
 (`Registry.Alias` in its own `register*` function, so no two packages edit one alias list).
 Dialog-only and entity-blocked commands (HATCH `H`, MTEXT `T`, TEXT `DT`, BLOCK `B`, INSERT `I`,
@@ -1140,7 +1140,7 @@ owner is **CW-G**, after that agent commits; WP3 and WP2 do not edit it (they us
 ### Packages
 
 Every package lists: files it owns exclusively (new files unless marked *existing*), hooks it needs,
-corpus scripts it must flip to `go-draw: pass`, rows it closes, priority and effort. Tests are new
+corpus scripts it must flip to `cad-lite: pass`, rows it closes, priority and effort. Tests are new
 `*_test.go` files per package (`draw_test.go`, `modify_test.go`, ...); nobody edits `commands_test.go`.
 
 **CW-A Draw commands** (LINE, PLINE, CIRCLE, ARC, RECTANG, POLYGON, ELLIPSE, POINT). *Closes* LINE-1..2,
@@ -1210,7 +1210,7 @@ Wave 0   seam + util.go split + hook stubs + Vars move (G6-1)                   
 Wave 2   CW-G  CW-A  CW-B1  CW-B2  CW-B3  CW-C  CW-D  CW-E  WP2  WP3  WP4        parallel, own files
          first days of CW-G: H1 (Vars), H2 (handlers), H3, H5; the others stub against Wave 0
          CW-D and CW-E wait on one small additive change each in `doc` (H6, H7)
-Wave 3   integration: aliases registered, `go-draw:` lines flipped, drawing-and-editing.md, INDEX, backlog
+Wave 3   integration: aliases registered, `cad-lite:` lines flipped, drawing-and-editing.md, INDEX, backlog
 ```
 
 Suggested order when agents are scarce (value per effort): WP2 + CW-G (scripts start working at all: corpus 15-18,
@@ -1219,7 +1219,7 @@ CW-E, CW-B2, CW-C.
 
 Collision rules specific to this document: only CW-G edits `cmdsys/input.go`; only CW-G edits `features/drawing-and-editing.md`;
 `Aliases` text in `commands/aliases.go` is frozen after Wave 0 (packages register their own aliases); the corpus `.expect`
-files are edited by the package whose scripts they are, only to flip `go-draw:` or to correct an expectation after a real AutoCAD
+files are edited by the package whose scripts they are, only to flip `cad-lite:` or to correct an expectation after a real AutoCAD
 check (a correction needs a note).
 
 ---------------------------------------------------------------------------------------------------
@@ -1228,11 +1228,11 @@ check (a correction needs a note).
 
 `cmdsys/commands/testdata/acad/`: `README.md` defines the `.scr` rules and the `.expect` line format; `_preamble.scr` is what real
 AutoCAD runs first. `cmdsys/commands/acad_corpus_test.go` runs every script through `Session.Script` and compares; it is skipped
-unless `GODRAW_ACAD_CORPUS` is `report`, `1` (compare with each file's `go-draw:` declaration) or `strict`.
+unless `CADLITE_ACAD_CORPUS` is `report`, `1` (compare with each file's `cad-lite:` declaration) or `strict`.
 
 40 scripts; **3 pass today** (01 LINE, 20 FILLET, 21 CHAMFER), 37 fail. Per script (details in the corpus README):
 
-| Script | Covers | go-draw | Main gap | (verify) |
+| Script | Covers | cad-lite | Main gap | (verify) |
 |---|---|---|---|---|
 | `01_line_basic_close_undo` | LINE: continued points, relative input, Undo, Close, Enter | pass |  |  |
 | `02_line_continue` | LINE Enter continues from the last endpoint | fail | Enter at the first-point prompt (continue) |  |
@@ -1275,10 +1275,10 @@ unless `GODRAW_ACAD_CORPUS` is `report`, `1` (compare with each file's `go-draw:
 | `39_inquiry_vars` | DIST, AREA, ID results and variables | fail | DIST/AREA/ID variables, precision | yes |
 | `40_error_messages` | Error wording at bad input | fail | error wording | yes |
 
-How the corpus is used: a package's definition of done includes flipping its scripts to `go-draw: pass` in the same commit (mode `1`
+How the corpus is used: a package's definition of done includes flipping its scripts to `cad-lite: pass` in the same commit (mode `1`
 fails until the declaration is edited, so a regression and an unannounced improvement both show up). The expectations are from
 documentation, not from an install: the first real-AutoCAD run of the 40 scripts is a task of its own (section 6, V-checklist), and a
-mismatch is fixed in the `.expect` (with a note) before it is counted as a go-draw defect.
+mismatch is fixed in the `.expect` (with a note) before it is counted as a Cad-lite defect.
 
 ---------------------------------------------------------------------------------------------------
 
@@ -1402,8 +1402,8 @@ Also real: `StripScriptComments` and `Session.Script` drop `;` comments (G9-1 pa
 still sends one more Enter, and `RSCRIPT`, `RESUME`, `DELAY`, tabs are open), G1-1 for `_`, `.` and `_.`
 prefixes at `Command:` (not `MULTIPLE`, not `-NAME` aliases), and G6-1 (per-session construct defaults).
 
-**Corpus.** `GODRAW_ACAD_CORPUS=1` is green. Script `31_prefixes_and_keywords` newly passes (the prefix
-stage), so its `.expect` now declares `go-draw: pass`; the passing set is 01, 20, 21, 31. The harness
+**Corpus.** `CADLITE_ACAD_CORPUS=1` is green. Script `31_prefixes_and_keywords` newly passes (the prefix
+stage), so its `.expect` now declares `cad-lite: pass`; the passing set is 01, 20, 21, 31. The harness
 still strips comments itself, which is now redundant and harmless.
 
 **Docs touched.** `tech/command-system.md` (extension points, prefix and script rules),

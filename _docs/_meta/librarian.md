@@ -38,10 +38,10 @@ Folders encode **kind of knowledge**. Frontmatter encodes **stability**. Never m
 |---|---|---|
 | `INDEX.md` | The map: catalogue, fact-ownership registry, reading paths | Every agent, first |
 | `backlog.md` | Every open question, known gap and deferred item, project-wide | Whoever plans next work |
-| `product/` | Why go-draw exists, in user terms. **No code references.** | Product decisions |
+| `product/` | Why Cad-lite exists, in user terms. **No code references.** | Product decisions |
 | `features/` | One document per user-visible capability: contract on top, implementation below | Building or changing a feature |
 | `tech/` | Cross-cutting models, rules, conventions and procedures | Any implementation task |
-| `references/` | Specifications of file formats and protocols go-draw reads or writes but does not own (DXF, DWG) | Implementing a codec |
+| `references/` | Specifications of file formats and protocols Cad-lite reads or writes but does not own (DXF, DWG) | Implementing a codec |
 | `design/` | Wireframes, prototypes and captured artifacts. **Assets, not documents** | Anyone building a screen |
 | `wip/` | The current task's working notes. Deleted when the task closes | The task in flight |
 | `inbox/` | Raw unprocessed input: transcripts, dumps, pasted drafts | Nobody yet — to be filed |
@@ -55,7 +55,7 @@ prototype is evidence, and editing it to satisfy a linter destroys what makes it
 
 The placement rule, which settles the product-versus-technical question without a third category:
 
-> **If deleting the capability from go-draw would delete the document, it belongs in `features/`.
+> **If deleting the capability from Cad-lite would delete the document, it belongs in `features/`.
 > If the document would survive, it belongs in `tech/`.**
 
 Applied:

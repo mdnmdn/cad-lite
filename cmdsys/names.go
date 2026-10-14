@@ -4,7 +4,7 @@ import "strings"
 
 // commandPrefixes are the characters AutoCAD accepts in front of a command name: ' (transparent),
 // _ (the global, English name: names are English here whatever the UI language, so it changes
-// nothing else) and . (the built-in command, bypassing a redefinition; go-draw has no UNDEFINE).
+// nothing else) and . (the built-in command, bypassing a redefinition; Cad-lite has no UNDEFINE).
 // A leading - is part of the name (-LAYER is its own command).
 const commandPrefixes = "'_."
 

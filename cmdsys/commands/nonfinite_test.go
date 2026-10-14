@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/geom"
 )
 
 func TestNonFiniteInputRejected(t *testing.T) {

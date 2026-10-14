@@ -1,14 +1,14 @@
 ---
-name: go-draw-icons
-description: Reference for go-draw's icon set — the registry in assets/icons/icons.yaml, the SVG spec every icon obeys, how the app rasterises and tints one, and the draw-render-review loop for adding icons without the set drifting. Use when adding, redrawing or renaming an icon, when a command needs a glyph it does not have, or when running just icons-check / icons-sheet / icons-audit.
+name: cad-lite-icons
+description: Reference for Cad-lite's icon set — the registry in assets/icons/icons.yaml, the SVG spec every icon obeys, how the app rasterises and tints one, and the draw-render-review loop for adding icons without the set drifting. Use when adding, redrawing or renaming an icon, when a command needs a glyph it does not have, or when running just icons-check / icons-sheet / icons-audit.
 ---
 
-# go-draw icons
+# Cad-lite icons
 
 The full-colour application icon (not part of this set) is documented in `assets/appicon/README.md`.
 
 An icon is a **monochrome 24×24 SVG** in `assets/icons/`, listed in `assets/icons/icons.yaml`.
-`just icons-check` is what a change has to pass. The Go package is `go-draw/assets/icons`
+`just icons-check` is what a change has to pass. The Go package is `cad-lite/assets/icons`
 (`icons.SVG(name)`, typed `icons.Name` constants in the generated `names_gen.go`); the element that
 draws one is `ui.NewIcon` in `ui/icon.go`; the theme tokens live in `ui/theme.go`.
 
@@ -117,7 +117,7 @@ produced the icons.
 ## Using an icon in Go
 
 ```go
-import "go-draw/assets/icons"
+import "cad-lite/assets/icons"
 
 row.Child(ui.NewIcon(icons.ModifyMove, 18, uiText), gpui.NewText("Move"))
 ```

@@ -3,8 +3,8 @@ package commands
 import (
 	"math"
 
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 // arcSeg is a circular arc as the user draws it: from S to E around C, through Sweep radians,

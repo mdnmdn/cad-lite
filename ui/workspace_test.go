@@ -3,10 +3,10 @@ package ui_test
 import (
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/internal/gpui"
-	"go-draw/ui"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/internal/gpui"
+	"cad-lite/ui"
 )
 
 type harness struct {

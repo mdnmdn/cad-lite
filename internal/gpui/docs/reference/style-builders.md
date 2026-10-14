@@ -225,7 +225,7 @@ and no click handler is required. Press/release/cancellation redraw automaticall
 ```go
 package snippet
 
-import "go-draw/internal/gpui"
+import "cad-lite/internal/gpui"
 
 func focusRing() *gpui.Div {
 	return gpui.NewDiv().ID("f").TabIndex(0).P(8).Border(1, gpui.Gray300).

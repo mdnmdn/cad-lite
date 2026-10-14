@@ -28,7 +28,7 @@ func TestMissingFileYieldsDefaults(t *testing.T) {
 }
 
 func TestRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "go-draw", "settings.toml")
+	path := filepath.Join(t.TempDir(), "cad-lite", "settings.toml")
 	want := Settings{
 		Theme: "light", Language: LangItalian, UIScale: 1.25, Grid: false, OSnap: true, Ortho: true,
 		Wheel: WheelPan, DefaultAgent: "claude", Window: Window{Width: 1000, Height: 700},
@@ -47,7 +47,7 @@ func TestRoundTrip(t *testing.T) {
 
 func TestFileHasHeaderComment(t *testing.T) {
 	text := string(Marshal(Default()))
-	if !strings.HasPrefix(text, "# go-draw settings") || !strings.Contains(text, "[appearance]") || !strings.Contains(text, "ui_scale = 1.0") {
+	if !strings.HasPrefix(text, "# Cad-lite settings") || !strings.Contains(text, "[appearance]") || !strings.Contains(text, "ui_scale = 1.0") {
 		t.Fatalf("unexpected file:\n%s", text)
 	}
 }
@@ -196,7 +196,7 @@ func TestSaveNormalizes(t *testing.T) {
 
 func TestPathEnvOverride(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv(EnvDir, dir)
+	t.Setenv("CADLITE_"+EnvDir, dir)
 	p, err := Path()
 	if err != nil || p != filepath.Join(dir, "settings.toml") {
 		t.Fatalf("Path = %q, %v", p, err)
@@ -204,11 +204,11 @@ func TestPathEnvOverride(t *testing.T) {
 }
 
 func TestPathDefaultsToUserConfigDir(t *testing.T) {
-	t.Setenv(EnvDir, "")
+	t.Setenv("CADLITE_"+EnvDir, "")
 	if runtime.GOOS == "linux" {
 		t.Setenv("XDG_CONFIG_HOME", "/xdg")
 		p, err := Path()
-		if err != nil || p != "/xdg/go-draw/settings.toml" {
+		if err != nil || p != "/xdg/cad-lite/settings.toml" {
 			t.Fatalf("Path = %q, %v", p, err)
 		}
 	}
@@ -242,5 +242,52 @@ func TestUpdateSettings(t *testing.T) {
 	s, _, _ := Parse([]byte("[update]\nchannel = \"beta\"\n"))
 	if !s.AutoUpdate || s.Extra["update.channel"] != "beta" || !strings.Contains(string(Marshal(s)), `channel = "beta"`) {
 		t.Errorf("unknown key in update not kept: %+v", s.Extra)
+	}
+}
+
+func TestPathMigratesLegacySettings(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the default config directory is tested through XDG_CONFIG_HOME")
+	}
+	xdg := t.TempDir()
+	t.Setenv("CADLITE_"+EnvDir, "")
+	t.Setenv("GODRAW_"+EnvDir, "")
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	oldPath := filepath.Join(xdg, LegacyDirName, FileName)
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte("[appearance]\nui_scale = 1.5\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Path()
+	if err != nil || p != filepath.Join(xdg, DirName, FileName) {
+		t.Fatalf("Path = %q, %v", p, err)
+	}
+	if s, err := Load(p); err != nil || s.UIScale != 1.5 {
+		t.Fatalf("migrated settings = %v, %v", s.UIScale, err)
+	}
+	if _, err := os.Stat(oldPath); err != nil {
+		t.Fatal("the legacy file must be left in place")
+	}
+	// A second start must not overwrite what the new file holds now.
+	if err := os.WriteFile(p, []byte("[appearance]\nui_scale = 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Path(); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := Load(p); s.UIScale != 2 {
+		t.Fatalf("UIScale = %v, the new file was overwritten", s.UIScale)
+	}
+}
+
+func TestPathEnvOverrideLegacyName(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CADLITE_"+EnvDir, "")
+	os.Unsetenv("CADLITE_" + EnvDir)
+	t.Setenv("GODRAW_"+EnvDir, dir)
+	if p, err := Path(); err != nil || p != filepath.Join(dir, FileName) {
+		t.Fatalf("Path = %q, %v", p, err)
 	}
 }

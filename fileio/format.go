@@ -11,8 +11,8 @@ import (
 	"slices"
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/i18n"
+	"cad-lite/doc"
+	"cad-lite/i18n"
 )
 
 // Reader reads one file format into a new drawing.

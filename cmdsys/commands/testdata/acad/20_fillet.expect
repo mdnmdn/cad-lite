@@ -1,7 +1,7 @@
 # FILLET: Radius, radius 0 corner
 # Expected state after running 20_fillet.scr in AutoCAD 2024/2025 from the preamble state.
 source: derived from AutoCAD documentation, not yet confirmed in an installed AutoCAD
-go-draw: pass
+cad-lite: pass
 line 10,0 100,0
 line 0,10 0,100
 arc 10,10 10 180 270

@@ -3,7 +3,7 @@ package doc
 import (
 	"slices"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // Layer is a LAYER table record.

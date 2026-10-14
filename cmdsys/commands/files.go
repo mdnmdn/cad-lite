@@ -3,8 +3,8 @@ package commands
 import (
 	"path/filepath"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 // --- NEW, OPEN, SAVE, QSAVE, SAVEAS, CLOSE, QUIT, EXIT ----------------------

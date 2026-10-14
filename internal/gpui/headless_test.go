@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func tree(onClick func()) gpui.EntityRoot {

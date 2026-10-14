@@ -1,8 +1,8 @@
 package gpui_test
 
 import (
+	"cad-lite/internal/gpui"
 	"fmt"
-	"go-draw/internal/gpui"
 	"math"
 	"testing"
 )

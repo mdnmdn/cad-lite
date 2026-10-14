@@ -16,7 +16,7 @@ review_cycle: monthly
 
 ## Purpose
 
-The user picks how go-draw looks and what a new session starts with, and it is remembered. A panel
+The user picks how Cad-lite looks and what a new session starts with, and it is remembered. A panel
 over the window offers a light, dark, classic or high-contrast theme, a UI scale that enlarges or
 reduces the whole interface including text, the drawing aids that start on, the mouse wheel
 behaviour and the default agent. Changes show at once and are saved to a TOML file.
@@ -61,7 +61,7 @@ behaviour and the default agent. Changes show at once and are saved to a TOML fi
 
 ## Contract
 
-The file is `go-draw/settings.toml` in the OS user config folder, or `$GODRAW_CONFIG_DIR/settings.toml`
+The file is `cad-lite/settings.toml` in the OS user config folder (copied once from the old `go-draw/` folder when only that exists), or `$CADLITE_CONFIG_DIR/settings.toml`
 ([Operations](../tech/operations.md)). Tables and keys:
 
 | Key | Values | Default |
@@ -106,7 +106,7 @@ applies on the first frame. The wording of the warnings is in `i18n/locales` (`s
 ## Related docs
 
 - [UI framework and theme](../tech/ui-framework.md) — the themes, tokens and the UI scale
-- [Operations](../tech/operations.md) — where the file lives and `GODRAW_CONFIG_DIR`
+- [Operations](../tech/operations.md) — where the file lives and `CADLITE_CONFIG_DIR`
 - [Drawing canvas](canvas.md) — the wheel, grid and the status-bar toggles
 - [Agent panel](agent-panel.md) — the harness the default agent selects
 - [Updates](updates.md) — the About and updates section

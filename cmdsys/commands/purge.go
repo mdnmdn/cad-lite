@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 // The PURGE keyword ids.

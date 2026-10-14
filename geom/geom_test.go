@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 const eps = 1e-9

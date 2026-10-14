@@ -42,7 +42,7 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 - **History.** `History` lists the project's stored conversations, newest first, with title (the first
   prompt), harness and relative date; choosing one opens it in a tab, or switches to it if it is open.
 - **Per-project storage.** The project is the directory of the drawing file last given to `-open`,
-  OPEN or SAVE, else the working directory. Conversations live in `<project>/.go-draw/agent/`, one
+  OPEN or SAVE, else the working directory. Conversations live in `<project>/.cad-lite/agent/` (copied once from the old `.go-draw/agent/` when only that exists), one
   JSONL file per conversation, created with the first prompt (directory 0700, files 0600). Opening the
   panel restores the tabs that were open when the project was last used, with their transcripts,
   read-only; no agent process starts. Sending to a restored tab starts its session with the stored agent
@@ -93,7 +93,7 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   `SetOpener`, `Tabs`, `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`, `Sessions`; `Workspace.CloseAgent`;
   action `cad-toggle-agent` bound to F2. Command `AI` reaches the panel through
   `cmdsys.Session.SetAgentHandler` (the `OPTIONS` command is wired the same way through `SetSettingsHandler`); OPEN and SAVE report the file through `cmdsys.Session.OnFilePath`.
-- Files: `<project>/.go-draw/agent/<id>.jsonl` and `open.json` (the open tabs), format in the store's
+- Files: `<project>/.cad-lite/agent/<id>.jsonl` and `open.json` (the open tabs), format in the store's
   section of the agentmanager API contract.
 - What the agent may do to the drawing is the tool set in [Agent integration](../tech/agent-integration.md).
 

@@ -165,7 +165,7 @@ func (r *Rasterizer) Size() (int, int)
 
 ## ebitenplatform
 
-Package `go-draw/internal/gpui/ebitenplatform`: `gpui.Platform` on ebiten (no cgo).
+Package `cad-lite/internal/gpui/ebitenplatform`: `gpui.Platform` on ebiten (no cgo).
 Supports a single window; a second `OpenWindow` returns an error.
 
 ```text

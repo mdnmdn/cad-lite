@@ -8,8 +8,8 @@ import (
 	"time"
 	"weak"
 
-	"go-draw/internal/gpui"
-	"go-draw/updater"
+	"cad-lite/internal/gpui"
+	"cad-lite/updater"
 )
 
 // Timing of the update checks.
@@ -123,7 +123,7 @@ func (ws *Workspace) SetUpdateClient(c *updater.Client) {
 // EnableUpdates turns on the update machinery: the automatic checks (when the
 // setting allows them) and the panel's buttons. Hosts that must not touch the
 // network (-png renders, tests) do not call it. It does nothing where
-// updating is unsupported (the browser) or when GODRAW_NO_UPDATE=1.
+// updating is unsupported (the browser) or when CADLITE_NO_UPDATE=1.
 func (ws *Workspace) EnableUpdates() {
 	if !updater.Supported() || updater.Disabled() {
 		return

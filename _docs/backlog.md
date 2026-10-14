@@ -1,6 +1,6 @@
 # Backlog
 
-Every open question, known gap and deferred item in go-draw, one line each. An entry names the
+Every open question, known gap and deferred item in Cad-lite, one line each. An entry names the
 document it affects, so resolving it tells you what to update. Resolving or reprioritising an entry
 is a product decision; add lines freely, and remove one only when the work lands and the affected
 document says so.
@@ -66,7 +66,7 @@ New lines are appended below this heading.
 | G24 | A Go render helper so the icon sheets use oksvg, the application's rasterizer, instead of resvg | [Operations](tech/operations.md) |
 | G25 | measure-radius may need a redraw after review | [UI framework](tech/ui-framework.md) |
 | G26 | The agent panel prompt is a single-line field; a multi-line prompt needs `TextInput` support | [Agent panel](features/agent-panel.md) |
-| G27 | Pick a model, and persist the transcript with the drawing file (sessions persist per project in `.go-draw/agent/`) | [Agent panel](features/agent-panel.md) |
+| G27 | Pick a model, and persist the transcript with the drawing file (sessions persist per project in `.cad-lite/agent/`) | [Agent panel](features/agent-panel.md) |
 | G28 | Live smoke tests of the opencode and Codex backends against the real CLIs; only fakes run in CI (Claude Code is verified live) | [Agent integration](tech/agent-integration.md) |
 | G29 | Alternative to image results: a small CLI, found through an environment variable, that talks to the running instance and writes a PNG for agents whose harness drops MCP images | [Agent integration](tech/agent-integration.md) |
 | G30 | Agent token usage: `TurnEnd` has no usage field, so usage only reaches the debug log and the panel cannot show it | [Agent panel](features/agent-panel.md) |
@@ -77,7 +77,7 @@ New lines are appended below this heading.
 | G35 | The command history keeps the last prompt text after LINE ends (cosmetic, `cmdsys`) | [Command line](features/command-line.md) |
 | G36 | The point prompts of TRIM, EXTEND and BREAK snap the click to nearby points, and the pick radius is a fixed 8 pixels because `Context` cannot see `Session.Aperture` | [Drawing and editing commands](features/drawing-and-editing.md) |
 | G37 | OFFSET, FILLET and CHAMFER cannot pick entities created earlier in the same command (the index updates on commit), and their remembered settings are process-wide rather than per session | [Drawing and editing commands](features/drawing-and-editing.md) |
-| G38 | Confirm the macOS signing identity and the bundle identifier (`it.synesthesia.go-draw`) | [Operations](tech/operations.md) |
+| G38 | Confirm the macOS signing identity and the bundle identifier (`it.synesthesia.cad-lite`) | [Operations](tech/operations.md) |
 | G39 | Windows Authenticode signing is not wired; unsigned executables trigger SmartScreen | [Operations](tech/operations.md) |
 | G41 | UI/UX review findings in `inbox/review-ux.md`, to be triaged | [Drawing canvas](features/canvas.md) |
 | G42 | Settings: persist the agent panel width and the side panel visibility | [Settings](features/settings.md) |

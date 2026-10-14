@@ -8,10 +8,10 @@
     "#1": {
       "0409": {
         "identity": {
-          "name": "it.synesthesia.go-draw",
+          "name": "it.synesthesia.cad-lite",
           "version": "0.0.0.0"
         },
-        "description": "go-draw 2D drafting",
+        "description": "Cad-lite 2D drafting",
         "minimum-os": "win7",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -39,10 +39,10 @@
         "info": {
           "0409": {
             "CompanyName": "Synesthesia",
-            "FileDescription": "go-draw 2D drafting application",
-            "InternalName": "go-draw",
-            "OriginalFilename": "go-draw.exe",
-            "ProductName": "go-draw",
+            "FileDescription": "Cad-lite 2D drafting application",
+            "InternalName": "cad-lite",
+            "OriginalFilename": "cad-lite.exe",
+            "ProductName": "Cad-lite",
             "ProductVersion": "0.0.0",
             "LegalCopyright": ""
           }

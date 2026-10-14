@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func wheel(x, y, dx, dy gpui.Pixels) gpui.ScrollWheelEvent {

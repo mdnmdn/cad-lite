@@ -4,9 +4,9 @@ import (
 	"slices"
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // This file is the typed side of "Select objects:". A text stage (TextOrderSelection) reads the

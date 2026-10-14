@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"go-draw/cmdsys"
-	"go-draw/i18n"
+	"cad-lite/cmdsys"
+	"cad-lite/i18n"
 )
 
 // Register adds every built-in command and the default aliases to r. Each command file owns one

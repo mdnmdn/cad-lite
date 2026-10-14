@@ -3,10 +3,10 @@ package commands
 import (
 	"math"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // --- POLYGON ------------------------------------------------------------

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // Pair is one DXF group: a group code and its value text, kept exactly as

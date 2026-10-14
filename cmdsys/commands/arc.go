@@ -3,9 +3,9 @@ package commands
 import (
 	"math"
 
-	"go-draw/cmdsys"
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/cmdsys"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // --- ARC ----------------------------------------------------------------

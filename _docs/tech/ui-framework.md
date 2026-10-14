@@ -3,7 +3,7 @@ id: tech-ui-framework
 title: UI framework and theme
 kind: tech
 status: current
-summary: The boundary between go-draw and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
+summary: The boundary between Cad-lite and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
 updated: 2026-10-14
 verified: 2026-10-14
@@ -19,7 +19,7 @@ review_cycle: quarterly
 The UI shell (`ui`) is built on `internal/gpui`, a Go port of Zed's GPUI: retained state,
 per-frame element trees, flexbox layout, a keymap with actions and key contexts, and a CPU
 rasterizer with no cgo. The same view renders to an ebiten window (`internal/gpui/ebitenplatform`)
-or headlessly to an image, which is how go-draw renders PNGs and runs UI tests.
+or headlessly to an image, which is how Cad-lite renders PNGs and runs UI tests.
 
 `internal/gpui` is a separate library with its own documentation and rules: its entry point is
 `internal/gpui/_docs/index.md`, its normative API is `internal/gpui/_docs/api-contract.md`, and its
@@ -27,7 +27,7 @@ agent rules are `internal/gpui/AGENTS.md`. This document states only the boundar
 
 ## The boundary
 
-What go-draw uses from the library:
+What Cad-lite uses from the library:
 
 | From gpui | Used for |
 |---|---|
@@ -42,7 +42,7 @@ What go-draw uses from the library:
 | `Window.PaintGlyph` | Every icon: an alpha mask tinted with one theme colour |
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
 
-`Stroke`, `Canvas` and `TextInput.OnEscape` exist in the library for go-draw. A new need follows the
+`Stroke`, `Canvas` and `TextInput.OnEscape` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions
@@ -137,7 +137,7 @@ colour, the analogue of GPUI's `paint_svg`:
 Colour inside a file is discarded, so a theme decision is a token at the call site (`uiText`,
 `uiMuted`, `uiOn`), never part of an SVG. The icon spec (24-unit viewBox, stroke, ink envelope,
 banned tags), the registry rules and the draw, render, review loop are owned by the skill
-`.claude/skills/go-draw-icons/SKILL.md`; the commands are in [Operations](operations.md).
+`.claude/skills/cad-lite-icons/SKILL.md`; the commands are in [Operations](operations.md).
 
 Only `ui` imports `assets/icons`, oksvg and rasterx; the core packages never do
 ([Architecture](architecture.md)).

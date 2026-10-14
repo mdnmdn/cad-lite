@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/geom"
 )
 
 // This file is the drafting-aid commands: ORTHO, GRID, SNAP and OSNAP / -OSNAP (the command-line

@@ -33,7 +33,7 @@ jobs:
           go-version-file: go.mod
       # Pure-Go darwin builds (ebiten uses purego there), so both arches cross-compile on one
       # runner and are merged into a universal binary with lipo.
-      - name: Assemble go-draw.app
+      - name: Assemble Cad-lite.app
         run: ARCHS="arm64 amd64" packaging/macos/bundle.sh
       - name: Sign, notarize when APPLE_* secrets exist, zip and dmg
         env:
@@ -77,10 +77,10 @@ jobs:
       - name: Build installers
         shell: pwsh
         run: |
-          $v = (Get-ChildItem _tmp/dist/windows -Filter 'go-draw-*-windows-amd64.zip').Name -replace '^go-draw-(.*)-windows-amd64\.zip$', '$1'
+          $v = (Get-ChildItem _tmp/dist/windows -Filter 'cad-lite-*-windows-amd64.zip').Name -replace '^cad-lite-(.*)-windows-amd64\.zip$', '$1'
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           foreach ($arch in 'amd64', 'arm64') {
-            & $iscc "/DMyAppVersion=$v" "/DMyArch=$arch" packaging\windows\go-draw.iss
+            & $iscc "/DMyAppVersion=$v" "/DMyArch=$arch" packaging\windows\cad-lite.iss
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       # Authenticode signing is not wired: see packaging/README.md.

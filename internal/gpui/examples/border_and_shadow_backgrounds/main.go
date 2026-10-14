@@ -16,8 +16,8 @@ import (
 	"os"
 	"time"
 
-	"go-draw/internal/gpui"
-	"go-draw/internal/gpui/ebitenplatform"
+	"cad-lite/internal/gpui"
+	"cad-lite/internal/gpui/ebitenplatform"
 )
 
 // ocean and sunset are the first stops of the source's gradients, with the

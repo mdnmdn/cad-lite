@@ -3,7 +3,7 @@ package doc
 import (
 	"math"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // Line is a LINE entity.

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 // This file registers the system variables that mirror state the session already keeps, the
@@ -60,7 +60,7 @@ type storedVar struct {
 }
 
 // storedVars are the AutoCAD variables (acadiso.dwt defaults) a script or a drafter may set that
-// no go-draw package owns yet: the ones with no meaning here (FILEDIA, MIRRTEXT, DIMSCALE) are
+// no Cad-lite package owns yet: the ones with no meaning here (FILEDIA, MIRRTEXT, DIMSCALE) are
 // permanent no-ops, the rest hold the value until their package registers the real variable, which
 // then takes the name (registerStoredVars skips a registered name). Angle variables (POLARANG,
 // SNAPANG, ANGBASE, CHAMFERD) are not listed: their unit is the units package's.

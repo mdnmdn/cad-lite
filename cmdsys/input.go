@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
 )
 
 // InputKind is a bit set of the input types a prompt accepts.

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func uiScaleRoot(onClick func()) gpui.EntityRoot {

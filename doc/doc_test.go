@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func snapshot(d *doc.Drawing) map[doc.Handle]doc.Entity {

@@ -1,6 +1,6 @@
 # i18n migration guide
 
-How to move go-draw's user-facing literals onto the `i18n` package (English and Italian). The
+How to move Cad-lite's user-facing literals onto the `i18n` package (English and Italian). The
 package, the catalogs (`locales/en.toml`, `locales/it.toml`, embedded) and the checker already
 exist; this file is the work order for replacing literals with keys, file by file. Nothing outside
 `i18n/` was edited when this was written.
@@ -159,7 +159,7 @@ empty); the integration needs a `Div.Tooltip(text)` or equivalent first, behind 
 * **Logs and debug output**, `agentmanager` log levels and protocol strings, panic messages,
   `ui/snapshot.go` errors, `settings.Path` errors (`settings: %w`), the demo transcript in
   `ui/agent_demo.go`, test fixtures.
-* **Product and technical names**: `go-draw`, `AI` (the toolbar glyph), `OSNAP`-style acronyms
+* **Product and technical names**: `Cad-lite`, `AI` (the toolbar glyph), `OSNAP`-style acronyms
   inside tooltips, harness names (`opencode`, `claude`, `codex`), `Handle`, `ACI`, key names.
 * **Permission option names** (`Allow once`, `Reject`) come from `agentmanager` and are shown as
   received.

@@ -1,6 +1,6 @@
 package cmdsys
 
-import "go-draw/doc"
+import "cad-lite/doc"
 
 // selMemory is the Previous selection: the set the latest command took, which the P selection
 // option reselects. One per session; entities erased since are pruned.

@@ -4,15 +4,15 @@ import (
 	"image/color"
 	"math"
 
-	"go-draw/assets/appicon"
-	"go-draw/internal/gpui"
+	"cad-lite/assets/appicon"
+	"cad-lite/internal/gpui"
 )
 
 // Brand selects what stands at the left end of the toolbar's top row.
 type Brand int
 
 const (
-	// BrandText shows the "go-draw" wordmark; the zero value, used on Linux and the web.
+	// BrandText shows the "Cad-lite" wordmark; the zero value, used on Linux and the web.
 	BrandText Brand = iota
 	// BrandIcon shows the application icon in place of the wordmark (macOS).
 	BrandIcon
@@ -57,7 +57,7 @@ func (ws *Workspace) brand() gpui.IntoElement {
 	case BrandIcon:
 		return gpui.NewDiv().Pr(10).Child(newBrandIcon(brandIconSize))
 	}
-	return gpui.NewText("go-draw").FontWeight(700).TextColor(uiOn).Pr(10)
+	return gpui.NewText("Cad-lite").FontWeight(700).TextColor(uiOn).Pr(10)
 }
 
 // brandIcon paints the full-colour application icon. gpui has no colour image primitive, so the

@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"go-draw/assets/icons"
-	"go-draw/cmdsys"
-	"go-draw/cmdsys/commands"
-	"go-draw/doc"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
-	"go-draw/render"
+	"cad-lite/assets/icons"
+	"cad-lite/cmdsys"
+	"cad-lite/cmdsys/commands"
+	"cad-lite/doc"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
+	"cad-lite/render"
 )
 
 // Workspace is the root view: one drawing, its session and the window

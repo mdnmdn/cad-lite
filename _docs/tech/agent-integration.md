@@ -3,7 +3,7 @@ id: tech-agent-integration
 title: Agent integration
 kind: tech
 status: current
-summary: How go-draw hosts AI agents: the separate agentmanager module, the in-process MCP server `cad`, the rule that only the UI goroutine touches the drawing, and the permission policy.
+summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-process MCP server `cad`, the rule that only the UI goroutine touches the drawing, and the permission policy.
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
@@ -19,24 +19,24 @@ review_cycle: monthly
 Three pieces connect an AI agent to a drawing:
 
 - **`agentmanager/`**, a nested module with its own `go.mod`, stdlib only, importing nothing from
-  go-draw. It launches opencode (over ACP), Claude Code (stream-json) and Codex (app-server) as child
+  Cad-lite. It launches opencode (over ACP), Claude Code (stream-json) and Codex (app-server) as child
   processes and exposes one backend-neutral `Session` (events in, prompts and permission answers out),
   an MCP server package and a transcript model. Like `internal/gpui`, it is a reusable library with its
   own docs, rules and API contract: start at `agentmanager/_docs/api-contract.md`, which is normative.
-  go-draw reaches it through a `replace` directive in `go.mod`; `go test ./...` from the root does not
+  Cad-lite reaches it through a `replace` directive in `go.mod`; `go test ./...` from the root does not
   enter it, so it has its own check (`just check-agentmanager`, see [Operations](operations.md)).
-- **`cadmcp/`**, go-draw's glue: the drawing tools as MCP tools, and the `Dispatcher` that runs them on
+- **`cadmcp/`**, Cad-lite's glue: the drawing tools as MCP tools, and the `Dispatcher` that runs them on
   the UI goroutine. It imports `cmdsys`, `doc`, `geom` and `agentmanager/mcp`, never the UI.
 - **`ui/agent*.go`**, the panel that starts sessions and pumps events; see the
   [agent panel](../features/agent-panel.md).
 
 `agentmanager/store` (stdlib, in the nested module) persists conversations as JSONL per session plus an
-open-tab set; go-draw keeps them in `<project>/.go-draw/agent/`. Nothing in this chain exists until the
+open-tab set; Cad-lite keeps them in `<project>/.cad-lite/agent/`. Nothing in this chain exists until the
 panel or the `AI` command is first used.
 
 ## The `cad` MCP server
 
-The first session start creates one `mcp.Server` named for go-draw, registers `cadmcp.Register` with an `Env`
+The first session start creates one `mcp.Server` named for Cad-lite, registers `cadmcp.Register` with an `Env`
 (`Dispatch`, `Session`, `Snapshot`, `Changed`), binds it to `127.0.0.1` on a random port and passes its
 URL and bearer token to the agent as `agentmanager.MCPServer{Name: "cad"}`. Every request needs the
 token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of the workspace (the MCP server is stateless per request): it
@@ -105,9 +105,9 @@ transcript (debug log lines excepted); `TurnEnd` and `Exited` fsync. Every backe
 own session id in `SessionStarted` (Claude only after the first prompt); the record keeps the latest.
 Starting a tab whose record has an id for the same harness sets `Config.ResumeID`: Claude `--resume`,
 Codex `thread/resume`, ACP `session/load`. ACP suppresses the history the agent replays on load, which
-is why go-draw shows its own stored transcript. The open tabs and the active one are saved on every
+is why Cad-lite shows its own stored transcript. The open tabs and the active one are saved on every
 change and at quit (`Store.SaveOpen`); restoring them reads records only, so no agent starts until the
-user sends. Project switch and the `.go-draw/` layout are in the [agent panel](../features/agent-panel.md).
+user sends. Project switch and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).
 
 `Env.Changed` runs inside `Do`: it clears the render cache and refreshes the window, so the canvas shows
 the agent's edits between frames.
@@ -122,7 +122,7 @@ the agent's edits between frames.
   `MCPServer` by the same strict rule (`agentmanager/_docs/api-contract.md`).
 - Everything else is a card in the panel with the agent's own options. The panel never answers for the
   user and has no allow-all control.
-- go-draw requests no permissive harness mode (no bypass or full-auto flags). Where a protocol allows it,
+- Cad-lite requests no permissive harness mode (no bypass or full-auto flags). Where a protocol allows it,
   the backends run shell and file tools sandboxed read-only; see the agentmanager API contract.
 
 ## Verification status

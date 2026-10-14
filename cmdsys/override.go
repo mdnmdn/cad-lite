@@ -3,7 +3,7 @@ package cmdsys
 import (
 	"strings"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // This file is the typed object snap overrides of a point prompt (TextOrderSnap): END, MID, CEN,
@@ -338,7 +338,7 @@ func (s *Session) overrideAnswer(pt geom.Vec2, echo string, shift bool) {
 }
 
 // snapBase is the previous point of the command that Perpendicular and Tangent measure from: the
-// prompt's base, nil at a command's first point (AutoCAD defers those two there; go-draw finds
+// prompt's base, nil at a command's first point (AutoCAD defers those two there; Cad-lite finds
 // nothing).
 func (s *Session) snapBase() *geom.Vec2 {
 	if o := &s.aids.ov; o.orig != nil {

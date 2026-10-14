@@ -1,4 +1,4 @@
-// Package cadmcp exposes the go-draw drawing to AI agents as MCP tools.
+// Package cadmcp exposes the Cad-lite drawing to AI agents as MCP tools.
 //
 // gpui is single threaded while MCP handlers run on HTTP goroutines, so every
 // tool body runs through a Runner: the UI's Dispatcher is a mutex-guarded

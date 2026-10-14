@@ -1,4 +1,4 @@
-# go-draw tasks. Each recipe is a plain command, so `just` is optional.
+# Cad-lite tasks. Each recipe is a plain command, so `just` is optional.
 
 # gofmt, vet and test everything, including the nested agentmanager module
 check: check-agentmanager
@@ -72,7 +72,7 @@ gui-run *ARGS:
 
 # every scenario in tools/gui/scenarios; fails on any assertion; output in _tmp/gui/out
 gui-test:
-    GODRAW_GUI_TEST=1 go test -count=1 ./tools/gui
+    CADLITE_GUI_TEST=1 go test -count=1 ./tools/gui
 
 # one screenshot of the real window: `just gui-shot -demo` -> _tmp/gui/out/shot/shot.png
 gui-shot *FLAGS:
@@ -88,7 +88,7 @@ appicon:
 appicon-sheet:
     uv run tools/icons/appicon.py sheet
 
-# macOS bundle (unsigned go-draw.app in _tmp/dist/macos); ARCHS="arm64" off macOS. See packaging/README.md
+# macOS bundle (unsigned Cad-lite.app in _tmp/dist/macos); ARCHS="arm64" off macOS. See packaging/README.md
 bundle-mac:
     packaging/macos/bundle.sh
 

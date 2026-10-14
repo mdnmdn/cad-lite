@@ -1,4 +1,4 @@
-# Code review: go-draw @ c48c7ec (committed state)
+# Code review: Cad-lite @ c48c7ec (committed state)
 
 Reviewed in a throwaway worktree (removed afterwards). Throwaway tests lived only there.
 CONFIRMED = reproduced with a failing input or throwaway test. PLAUSIBLE = read from code, not reproduced.
@@ -71,8 +71,8 @@ Deeper: F12 (R-tree + layer index + selective invalidation + O(1) erase), F13 (o
 ## Tool outputs
 
 - `go vet ./...` (root) clean; `cd agentmanager && go vet ./...` clean.
-- `go test -race ./...` root: all packages ok except `go-draw/ui` and `go-draw/internal/gpui` which were SIGTERM-ed at ~7 s when run in the full parallel batch (load, not a data race: `go test ./ui ./internal/gpui` passes in 4 s/2 s, and `go test -race ./ui` alone passes in 15 s). No race reports. agentmanager: `go test -race ./...` all 11 packages ok.
+- `go test -race ./...` root: all packages ok except `cad-lite/ui` and `cad-lite/internal/gpui` which were SIGTERM-ed at ~7 s when run in the full parallel batch (load, not a data race: `go test ./ui ./internal/gpui` passes in 4 s/2 s, and `go test -race ./ui` alone passes in 15 s). No race reports. agentmanager: `go test -race ./...` all 11 packages ok.
 - staticcheck (root): `cadmcp/tools.go:234 pointOf unused`, `cmdsys/commands/draw.go:87 base unused`, `trim_test.go:111 SA4006`, gpui: `focus.go:124 retain unused`, `geometry.go:225 isFinite unused`, `entity.go:180,207 S1016`, `text.go ClusterIndex SA1019` x6, examples unused fields, `tools/gui/run.go:197,203 ST1005`. staticcheck (agentmanager): only `internal/testutil/fake.go:38 runtime.GOROOT deprecated (SA1019)`.
 - govulncheck: not runnable here (`vuln.go.dev` Forbidden via proxy) in either module; rerun in CI.
-- Layering (`go list -deps`): geom, doc, spatial, fileio, fileio/dxf, render, cmdsys, cmdsys/commands have no go-draw/ui, internal/gpui, cmd or ebiten dependency. `cadmcp` imports only `agentmanager/mcp` plus core packages (no gpui/ui). agentmanager module imports nothing from go-draw. One doc-level note: `cadmcp` (which depends on `agentmanager/mcp`) is not in the AGENTS.md core list; confirm architecture.md says it is allowed.
+- Layering (`go list -deps`): geom, doc, spatial, fileio, fileio/dxf, render, cmdsys, cmdsys/commands have no cad-lite/ui, internal/gpui, cmd or ebiten dependency. `cadmcp` imports only `agentmanager/mcp` plus core packages (no gpui/ui). agentmanager module imports nothing from Cad-lite. One doc-level note: `cadmcp` (which depends on `agentmanager/mcp`) is not in the AGENTS.md core list; confirm architecture.md says it is allowed.
 - Fuzz (throwaway): 40,000 random scripts over all 33 commands with NaN/Inf/1e308 tokens: 0 panics.

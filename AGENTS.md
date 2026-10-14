@@ -4,7 +4,7 @@ Guidance for AI agents working in this repo.
 
 ## What this is
 
-go-draw is an AutoCAD-style 2D drafting application in Go. The UI framework under it is an internal
+Cad-lite is an AutoCAD-style 2D drafting application in Go. The UI framework under it is an internal
 port of Zed's GPUI at `internal/gpui/`, which has its own docs and `AGENTS.md`.
 
 Start at `_docs/INDEX.md`: the map, reading paths by task, and which document owns which fact.

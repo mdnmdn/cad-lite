@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Sign (and optionally notarize) go-draw.app, then write the zip and dmg. Runs on macOS only.
-#   APP=path/to/go-draw.app   OUT=dir for the zip and dmg   VERSION=1.2.3
+# Sign (and optionally notarize) Cad-lite.app, then write the zip and dmg. Runs on macOS only.
+#   APP=path/to/Cad-lite.app   OUT=dir for the zip and dmg   VERSION=1.2.3
 # Mode is picked by which environment variables are set:
 #   MACOS_CERT_P12 (base64) + MACOS_CERT_PASSWORD + MACOS_SIGN_IDENTITY  -> Developer ID signed
 #     + APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD                      -> also notarized, stapled
@@ -9,17 +9,17 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$root/packaging/lib.sh"
 resolve_version
-APP="${APP:-$root/_tmp/dist/macos/go-draw.app}"
+APP="${APP:-$root/_tmp/dist/macos/Cad-lite.app}"
 OUT="${OUT:-$(dirname "$APP")}"
 TMP="${RUNNER_TEMP:-$(mktemp -d)}"
-zip="$OUT/go-draw-$VERSION-macos-universal.zip"
-dmg="$OUT/go-draw-$VERSION-macos-universal.dmg"
+zip="$OUT/cad-lite-$VERSION-macos-universal.zip"
+dmg="$OUT/cad-lite-$VERSION-macos-universal.dmg"
 
 make_dmg() {
   rm -rf "$TMP/dmg" "$dmg"; mkdir "$TMP/dmg"
-  ditto "$APP" "$TMP/dmg/go-draw.app"
+  ditto "$APP" "$TMP/dmg/Cad-lite.app"
   ln -s /Applications "$TMP/dmg/Applications"
-  hdiutil create -volname go-draw -srcfolder "$TMP/dmg" -ov -format UDZO "$dmg"
+  hdiutil create -volname Cad-lite -srcfolder "$TMP/dmg" -ov -format UDZO "$dmg"
 }
 
 notarize() { # notarize FILE
@@ -35,7 +35,7 @@ notarize() { # notarize FILE
 }
 
 if [ -z "${MACOS_CERT_P12:-}" ]; then
-  echo "::warning::no signing certificate; ad-hoc signing go-draw.app (Gatekeeper will ask the user to Open Anyway)"
+  echo "::warning::no signing certificate; ad-hoc signing Cad-lite.app (Gatekeeper will ask the user to Open Anyway)"
   codesign --force --deep --sign - "$APP"
   codesign --verify --deep --strict --verbose=2 "$APP"
   make_dmg
@@ -55,7 +55,7 @@ else
   notarizing=false
   if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then notarizing=true; fi
   ts=--timestamp=none; if $notarizing; then ts=--timestamp; fi
-  for target in "$APP/Contents/MacOS/go-draw" "$APP"; do
+  for target in "$APP/Contents/MacOS/cad-lite" "$APP"; do
     codesign --force $ts --options runtime --keychain "$kc" --sign "$MACOS_SIGN_IDENTITY" "$target"
   done
   codesign --verify --deep --strict --verbose=2 "$APP"
@@ -65,7 +65,7 @@ else
     xcrun stapler staple "$APP"
     xcrun stapler validate "$APP"
   else
-    echo "::warning::APPLE_* secrets not set; go-draw.app is signed but not notarized"
+    echo "::warning::APPLE_* secrets not set; Cad-lite.app is signed but not notarized"
   fi
   make_dmg
   codesign --force $ts --keychain "$kc" --sign "$MACOS_SIGN_IDENTITY" "$dmg"

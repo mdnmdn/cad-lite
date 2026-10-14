@@ -11,7 +11,7 @@ func TestScanFile(t *testing.T) {
 func f(ctx *C) {
 	ctx.Printf("Nothing to redo.")
 	_ = &Prompt{Message: "Specify first point", Keywords: []string{"Close"}}
-	_ = gpui.NewText("go-draw")
+	_ = gpui.NewText("Cad-lite")
 	_ = gpui.NewText(fmt.Sprintf("%d selected", 3))
 	_ = gpui.NewText("Layer: " + name)
 	_ = gpui.NewText("x")

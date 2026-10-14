@@ -1,6 +1,6 @@
 package commands
 
-import "go-draw/cmdsys"
+import "cad-lite/cmdsys"
 
 // registerSelect adds the commands of select.go.
 func registerSelect(r *cmdsys.Registry) {

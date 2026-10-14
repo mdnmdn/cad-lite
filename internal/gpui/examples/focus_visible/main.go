@@ -16,8 +16,8 @@ import (
 	"os"
 	"time"
 
-	"go-draw/internal/gpui"
-	"go-draw/internal/gpui/ebitenplatform"
+	"cad-lite/internal/gpui"
+	"cad-lite/internal/gpui/ebitenplatform"
 )
 
 type tabAction struct{}

@@ -3,8 +3,8 @@ package commands
 import (
 	"math"
 
-	"go-draw/cmdsys"
-	"go-draw/geom"
+	"cad-lite/cmdsys"
+	"cad-lite/geom"
 )
 
 // maxArrayCopies bounds the copies one array command may make.
@@ -35,7 +35,7 @@ const (
 )
 
 // arrayCmd is -ARRAY (the command-line prompts), ARRAY, ARRAYRECT and ARRAYPOLAR. They share one
-// prompt sequence and make explicit, non-associative copies: go-draw has no array object.
+// prompt sequence and make explicit, non-associative copies: Cad-lite has no array object.
 type arrayCmd struct {
 	base
 	selecting

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // VarKind is the type of a system variable.

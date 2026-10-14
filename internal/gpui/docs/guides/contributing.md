@@ -86,7 +86,7 @@ go run ./examples/<name> -png _tmp/<name>.png         # render any example you t
 
 Every Go snippet under `docs/` is checked against the current API. Do the same
 for your edits in a throwaway package under the repo root's `_tmp/`. The library
-is an `internal` package, so the check must live inside the `go-draw` module
+is an `internal` package, so the check must live inside the `cad-lite` module
 rather than in a separate module with a `replace` directive:
 
 ```
@@ -154,8 +154,8 @@ import (
 	"os"
 	"time"
 
-	"go-draw/internal/gpui"
-	"go-draw/internal/gpui/ebitenplatform"
+	"cad-lite/internal/gpui"
+	"cad-lite/internal/gpui/ebitenplatform"
 )
 
 // View is the root view.

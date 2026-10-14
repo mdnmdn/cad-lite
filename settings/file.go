@@ -16,23 +16,24 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"go-draw/i18n"
+	"cad-lite/appenv"
+	"cad-lite/i18n"
 )
 
 // EnvDir names an environment variable that replaces the config directory
 // (the directory holding settings.toml itself), for tests and portable setups.
-const EnvDir = "GODRAW_CONFIG_DIR"
+const EnvDir = "CONFIG_DIR"
 
 // FileName is the settings file's name inside the config directory.
 const FileName = "settings.toml"
 
-// Path returns the settings file: $GODRAW_CONFIG_DIR/settings.toml when that
-// variable is set, else <os.UserConfigDir()>/go-draw/settings.toml
+// Path returns the settings file: $CADLITE_CONFIG_DIR/settings.toml when that
+// variable is set, else <os.UserConfigDir()>/cad-lite/settings.toml
 // (~/Library/Application Support on macOS, %AppData% on Windows,
 // $XDG_CONFIG_HOME or ~/.config on Linux). On js there is no file system and
 // Path returns an error: keep the settings in memory.
 func Path() (string, error) {
-	if d := os.Getenv(EnvDir); d != "" {
+	if d := appenv.Get(EnvDir); d != "" {
 		return filepath.Join(d, FileName), nil
 	}
 	if runtime.GOOS == "js" {
@@ -42,7 +43,35 @@ func Path() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("settings: %w", err)
 	}
-	return filepath.Join(d, "go-draw", FileName), nil
+	path := filepath.Join(d, DirName, FileName)
+	migrateLegacy(path, filepath.Join(d, LegacyDirName, FileName))
+	return path, nil
+}
+
+// DirName is the settings folder's name inside the OS config directory.
+const DirName = "cad-lite"
+
+// LegacyDirName is the folder the settings had while the project was called
+// Cad-lite. Path copies its settings file into DirName on first start.
+const LegacyDirName = "go-draw"
+
+// migrateLegacy copies the old settings file to path when path does not exist
+// yet and old does. The old file is left in place; every failure is ignored
+// (the app then starts with the defaults).
+func migrateLegacy(path, old string) {
+	if _, err := os.Stat(path); err == nil || !errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+	data, err := os.ReadFile(old)
+	if err != nil {
+		return
+	}
+	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
+		return
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		os.Remove(path)
+	}
 }
 
 // Load reads path. A missing file yields Default and no error. A file that
@@ -197,7 +226,7 @@ func Parse(data []byte) (Settings, []string, error) {
 // call Normalize first to persist clamped ones.
 func Marshal(s Settings) []byte {
 	var b bytes.Buffer
-	b.WriteString("# go-draw settings. Rewritten when you change a setting in the app; comments you add are not kept.\n")
+	b.WriteString("# Cad-lite settings. Rewritten when you change a setting in the app; comments you add are not kept.\n")
 	b.WriteString("# Unknown keys are preserved. Invalid values are clamped when loaded.\n\n")
 	top := map[string]any{}
 	sub := map[string]map[string]any{}

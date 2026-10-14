@@ -6,7 +6,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func TestKeyName(t *testing.T) {

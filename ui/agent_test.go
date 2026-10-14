@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"agentmanager"
-	"go-draw/cmdsys"
-	"go-draw/doc"
-	"go-draw/internal/gpui"
-	"go-draw/ui"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
+	"cad-lite/internal/gpui"
+	"cad-lite/ui"
 )
 
 type fakeSession struct {

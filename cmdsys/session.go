@@ -3,11 +3,11 @@ package cmdsys
 import (
 	"strings"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
-	"go-draw/render"
-	"go-draw/spatial"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
+	"cad-lite/render"
+	"cad-lite/spatial"
 )
 
 // Session runs commands against one drawing: it owns the active command and

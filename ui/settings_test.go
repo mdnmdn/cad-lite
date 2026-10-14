@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"go-draw/doc"
-	"go-draw/geom"
-	"go-draw/i18n"
-	"go-draw/internal/gpui"
-	"go-draw/settings"
+	"cad-lite/doc"
+	"cad-lite/geom"
+	"cad-lite/i18n"
+	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // settingsRoot mounts the settings panel over the workspace the way
@@ -234,7 +234,7 @@ func TestUnknownThemeFallsBackToDark(t *testing.T) {
 
 func TestSettingsPersistAndReload(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv(settings.EnvDir, dir)
+	t.Setenv("CADLITE_"+settings.EnvDir, dir)
 	ws := NewWorkspace(doc.New(), nil)
 	if err := ws.LoadSettings(); err != nil {
 		t.Fatal(err)

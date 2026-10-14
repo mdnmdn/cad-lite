@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 // recFiles records saves and serves one drawing to Open.

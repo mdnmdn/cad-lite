@@ -3,7 +3,7 @@ package gpui_test
 import (
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func withMargin(n *gpui.LayoutNode, top, right, bottom, left float32) *gpui.LayoutNode {

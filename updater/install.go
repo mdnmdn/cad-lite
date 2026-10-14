@@ -57,7 +57,7 @@ func (c *Client) Update(ctx context.Context, rel Release, progress Progress) (Pl
 			return Plan{}, err
 		}
 	}
-	tmp, err := os.MkdirTemp("", "go-draw-update-")
+	tmp, err := os.MkdirTemp("", "cad-lite-update-")
 	if err != nil {
 		return Plan{}, fmt.Errorf("updater: %w", err)
 	}
@@ -105,7 +105,7 @@ func Install(archive, goos, exe string) (Plan, error) {
 		}
 	}
 	parent := filepath.Dir(target)
-	stage, err := os.MkdirTemp(parent, ".go-draw-update-")
+	stage, err := os.MkdirTemp(parent, ".cad-lite-update-")
 	if err != nil {
 		return Plan{}, fmt.Errorf("%w: %s: %v", ErrNotWritable, parent, err)
 	}
@@ -115,18 +115,21 @@ func Install(archive, goos, exe string) (Plan, error) {
 	}
 	var fresh string
 	if bundle != "" {
-		if fresh, err = findApp(stage, filepath.Base(exe)); err != nil {
+		if fresh, err = findApp(stage, filepath.Base(exe), BinaryName, LegacyBinaryName); err != nil {
 			return Plan{}, err
 		}
 		clearQuarantine(fresh)
 	} else {
-		name := "go-draw"
+		ext := ""
 		if goos == "windows" {
-			name += ".exe"
+			ext = ".exe"
 		}
+		name := BinaryName + ext
 		p, ok := findFile(stage, name)
 		if !ok {
-			return Plan{}, fmt.Errorf("updater: %s not found in %s", name, filepath.Base(archive))
+			if p, ok = findFile(stage, LegacyBinaryName+ext); !ok {
+				return Plan{}, fmt.Errorf("updater: %s not found in %s", name, filepath.Base(archive))
+			}
 		}
 		if goos != "windows" {
 			if err := os.Chmod(p, 0o755); err != nil {
@@ -141,9 +144,16 @@ func Install(archive, goos, exe string) (Plan, error) {
 	return plan, nil
 }
 
+// BinaryName is the executable's name inside a release archive.
+const BinaryName = "cad-lite"
+
+// LegacyBinaryName is the executable's name in archives published while the
+// project was called go-draw; Install still accepts it.
+const LegacyBinaryName = "go-draw"
+
 // findApp returns the .app directory at the top of dir that holds the main
-// executable bin.
-func findApp(dir, bin string) (string, error) {
+// executable, under the first of bins that exists.
+func findApp(dir string, bins ...string) (string, error) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("updater: %w", err)
@@ -151,12 +161,14 @@ func findApp(dir, bin string) (string, error) {
 	for _, e := range ents {
 		if e.IsDir() && strings.HasSuffix(e.Name(), ".app") {
 			app := filepath.Join(dir, e.Name())
-			if st, err := os.Stat(filepath.Join(app, "Contents", "MacOS", bin)); err == nil && st.Mode().IsRegular() {
-				return app, nil
+			for _, bin := range bins {
+				if st, err := os.Stat(filepath.Join(app, "Contents", "MacOS", bin)); err == nil && st.Mode().IsRegular() {
+					return app, nil
+				}
 			}
 		}
 	}
-	return "", fmt.Errorf("updater: no app bundle with Contents/MacOS/%s in the archive", bin)
+	return "", fmt.Errorf("updater: no app bundle with Contents/MacOS/%s in the archive", bins[0])
 }
 
 // swap puts fresh at target, keeping the previous one as target+".old" until

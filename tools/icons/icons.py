@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["pyyaml", "pillow", "resvg-py", "rich"]
 # ///
-"""go-draw's icon set — the mechanical checks, the Go codegen and the review sheets.
+"""Cad-lite's icon set — the mechanical checks, the Go codegen and the review sheets.
 
 Run it through `just`: `just icons-check`, `icons-gen`, `icons-sheet`, `icons-variants`,
 `icons-audit`, `icons-dupes` (and `uv run tools/icons/icons.py adopt` for Lucide rows).
@@ -58,7 +58,7 @@ BANNED_TAGS = {
 }
 BANNED_ATTRS = {"style", "class", "opacity", "fill-opacity", "stroke-opacity"}
 
-# The two palettes. "dark" is go-draw's shell (ui/theme.go: uiBg, uiText, uiMuted, uiOn); "light" is
+# The two palettes. "dark" is Cad-lite's shell (ui/theme.go: uiBg, uiText, uiMuted, uiOn); "light" is
 # a sheet-only variant. `fg` is what toolbar icons are tinted with, `accent` the active state.
 THEMES = {
     "dark": {"bg": "#181c21", "fg": "#d6dbe1", "muted": "#8c96a2", "accent": "#60a5fa"},

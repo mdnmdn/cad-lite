@@ -3,7 +3,7 @@
 The exported API of package `gpui` (and `ebitenplatform`), grouped by
 area. The lists were generated from `go doc -all ./gpui` and checked against the
 code, then annotated by hand; for a signature or doc comment that is not here,
-`go doc go-draw/internal/gpui <Name>` is authoritative. The normative design contract is
+`go doc cad-lite/internal/gpui <Name>` is authoritative. The normative design contract is
 [`_docs/api-contract.md`](../../_docs/api-contract.md); where it and the code
 disagree these pages follow the code.
 

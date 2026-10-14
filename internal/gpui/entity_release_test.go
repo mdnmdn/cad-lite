@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 type relCounter struct{ N int }

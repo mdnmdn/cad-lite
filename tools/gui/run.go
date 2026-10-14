@@ -228,7 +228,7 @@ func (r *runner) waitWindow(d time.Duration) error {
 			return fmt.Errorf("app exited before its window appeared: %v%s", err, r.logTail())
 		default:
 		}
-		if s, err := r.sh(5*time.Second, "xdotool", "search", "--onlyvisible", "--name", "^go-draw$"); err == nil && s != "" {
+		if s, err := r.sh(5*time.Second, "xdotool", "search", "--onlyvisible", "--name", "^Cad-lite$"); err == nil && s != "" {
 			r.win = strings.Fields(s)[0]
 			return nil
 		}

@@ -1,4 +1,4 @@
-// Package settings holds go-draw's user preferences and their TOML file.
+// Package settings holds Cad-lite's user preferences and their TOML file.
 //
 // The package is pure Go and knows nothing about the UI. A Settings value is
 // plain data: Load reads it (a missing file yields defaults, invalid values are
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"go-draw/i18n"
+	"cad-lite/i18n"
 )
 
 // Limits and defaults of the persisted values.

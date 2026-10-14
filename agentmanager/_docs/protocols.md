@@ -42,8 +42,8 @@ approval request and `mcpToolCall` item shapes, `thread/resume` params.
 - **Launch.** `codex -c k=v ... app-server --listen stdio://` then `Config.Args`; `-c` overrides precede the
   subcommand. Managed overrides: `sandbox_mode="read-only"`, `approval_policy="on-request"` (no permissive mode),
   `model`, `developer_instructions` (from `SystemPrompt`), and per MCP server
-  `mcp_servers.<name>={url=..., bearer_token_env_var="GODRAW_MCP_TOKEN", default_tools_approval_mode="approve", tool_timeout_sec=120}`.
-  The token travels only in the child env (`GODRAW_MCP_TOKEN`, then `GODRAW_MCP_TOKEN_1`, ... for further servers),
+  `mcp_servers.<name>={url=..., bearer_token_env_var="CADLITE_MCP_TOKEN", default_tools_approval_mode="approve", tool_timeout_sec=120}`.
+  The token travels only in the child env (`CADLITE_MCP_TOKEN`, then `CADLITE_MCP_TOKEN_1`, ... for further servers),
   never in argv.
 - **Handshake** (10 s per call, reader running first): `initialize` (`experimentalApi`), `initialized`,
   `thread/start {cwd}` or `thread/resume {threadId,cwd,excludeTurns:true}`; `SessionStarted{thread.id, model}`.

@@ -20,7 +20,7 @@ the cap of five open entries, permanent rejections, and who executes an accepted
 
 Not this table: unresolved *product* questions. Those are one line in
 [`../backlog.md`](../backlog.md). The test is whether resolving it changes a document's place in the
-library (here) or changes what go-draw does (there).
+library (here) or changes what Cad-lite does (there).
 
 The ledger started empty when this library was adapted from the Ubiq rulebook; that project's
 entries do not apply here and were not carried over.
@@ -29,7 +29,7 @@ entries do not apply here and were not carried over.
 
 | id | date | target | kind | rationale | status |
 |---|---|---|---|---|---|
-| P1 | 2026-10-14 | `references/` | gap | The DXF codec is written against the public DXF reference, and the group codes it relies on (entity common codes, LWPOLYLINE vertex codes, R12 POLYLINE/VERTEX/SEQEND) are stated only in `fileio/dxf`. A `references/dxf.md` would hold the subset go-draw depends on, verbatim from Autodesk's reference; the folder does not exist yet and creating it is the librarian's call | open |
+| P1 | 2026-10-14 | `references/` | gap | The DXF codec is written against the public DXF reference, and the group codes it relies on (entity common codes, LWPOLYLINE vertex codes, R12 POLYLINE/VERTEX/SEQEND) are stated only in `fileio/dxf`. A `references/dxf.md` would hold the subset Cad-lite depends on, verbatim from Autodesk's reference; the folder does not exist yet and creating it is the librarian's call | open |
 
 ## Closed
 

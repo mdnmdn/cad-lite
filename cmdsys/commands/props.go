@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 // The ids of the keywords of CHPROP and the MATCHPROP settings; the catalog gives each its display

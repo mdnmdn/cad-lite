@@ -5,8 +5,8 @@ import (
 	"sync"
 	"weak"
 
-	"go-draw/cmdsys"
-	"go-draw/doc"
+	"cad-lite/cmdsys"
+	"cad-lite/doc"
 )
 
 // erasedMemory is what OOPS restores: the entities the latest ERASE removed, per drawing. A drawing

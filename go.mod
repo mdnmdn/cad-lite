@@ -1,4 +1,4 @@
-module go-draw
+module cad-lite
 
 go 1.26.1
 

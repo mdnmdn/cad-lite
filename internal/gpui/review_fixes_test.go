@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func TestBuildTimeObserveAndOnReleaseSurviveConstruction(t *testing.T) {

@@ -5,7 +5,7 @@ package `gpui` (and `ebitenplatform`) must conform to the signatures below.
 If an implementation needs a signature to change, change it **here first**, then
 in the code, so the other agents stay in sync.
 
-Module: `go-draw` (library at `internal/gpui/`). Core package `go-draw/internal/gpui` must depend only on the Go
+Module: `cad-lite` (library at `internal/gpui/`). Core package `cad-lite/internal/gpui` must depend only on the Go
 standard library. `golang.org/x/image` and `github.com/go-text/typesetting` are
 allowed **only** in `font.go` / `text.go`. `github.com/hajimehoshi/ebiten/v2`
 is allowed **only** in `ebitenplatform/`.
@@ -2041,7 +2041,7 @@ package ebitenplatform
 import (
     "image"
 
-    "go-draw/internal/gpui"
+    "cad-lite/internal/gpui"
 )
 
 type Platform struct{ /* ... */ }

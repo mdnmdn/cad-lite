@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 ```
 

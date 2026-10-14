@@ -1,6 +1,6 @@
 # go-gpui
 
-> Library inside go-draw at `internal/gpui/` (import path `go-draw/internal/gpui`).
+> Library inside Cad-lite at `internal/gpui/` (import path `cad-lite/internal/gpui`).
 > Commands below run from this directory.
 
 A proof-of-concept port of [Zed's GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui)
@@ -32,8 +32,8 @@ package main
 import (
 	"log"
 
-	"go-draw/internal/gpui"
-	"go-draw/internal/gpui/ebitenplatform"
+	"cad-lite/internal/gpui"
+	"cad-lite/internal/gpui/ebitenplatform"
 )
 
 func main() {

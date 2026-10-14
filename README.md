@@ -1,6 +1,6 @@
-# go-draw
+# Cad-lite
 
-go-draw is a 2D drafting application in the spirit of AutoCAD, written in Go. A drafter works from
+Cad-lite is a 2D drafting application in the spirit of AutoCAD, written in Go. A drafter works from
 a command line with typed coordinates and object snaps, on drawings in real units with double
 precision, organised in layers, and exchanges them as DXF. The UI runs on an internal Go port of
 Zed's GPUI, which rasterises on the CPU, so the application needs no cgo.
@@ -43,7 +43,7 @@ commands are in [`_docs/tech/operations.md`](_docs/tech/operations.md).
 | `fileio/` | File format plugins; `fileio/dxf` is the DXF codec |
 | `render/` | Backend-neutral view, display list and tessellation; `render/gpuirender` draws it with gpui |
 | `cmdsys/` | Command session, input parsing, snaps and selection; `cmdsys/commands` holds the commands |
-| `agentmanager/` | Nested module: launches opencode, Claude Code and Codex and speaks to them; imports nothing from go-draw, has its own docs |
+| `agentmanager/` | Nested module: launches opencode, Claude Code and Codex and speaks to them; imports nothing from Cad-lite, has its own docs |
 | `cadmcp/` | The drawing as MCP tools for those agents ([`_docs/tech/agent-integration.md`](_docs/tech/agent-integration.md)) |
 | `ui/` | Application shell: toolbar, canvas, panels, command line, status bar |
 | `cmd/cad/` | The executable |

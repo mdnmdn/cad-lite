@@ -6,7 +6,7 @@ package render
 import (
 	"math"
 
-	"go-draw/geom"
+	"cad-lite/geom"
 )
 
 // View is the camera: which part of model space the viewport shows. Model

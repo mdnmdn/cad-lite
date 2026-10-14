@@ -2,12 +2,12 @@
 
 Guidance for AI agents working on the `internal/gpui` library.
 
-This library is the UI framework under the go-draw CAD application (repo root
+This library is the UI framework under the Cad-lite CAD application (repo root
 `AGENTS.md`, docs at the root `_docs/INDEX.md`). It keeps its own docs and
 rules: everything below applies to changes inside `internal/gpui/`. All paths
 here are relative to `internal/gpui/`, and the commands run from this
 directory (`go test ./...` covers the library and its examples). The CAD
-application imports it as `go-draw/internal/gpui`.
+application imports it as `cad-lite/internal/gpui`.
 
 ## What this is
 

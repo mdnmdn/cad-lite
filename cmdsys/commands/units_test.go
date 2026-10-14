@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/doc"
-	"go-draw/geom"
+	"cad-lite/doc"
+	"cad-lite/geom"
 )
 
 func TestUnitsVariablesRegistered(t *testing.T) {

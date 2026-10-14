@@ -126,7 +126,7 @@ native screen-reader support is unavailable, rather than advertise Kit parity.
 
 ## Contract, packages and ownership
 
-Proposed directory `components/` imports only `go-draw/internal/gpui` and stdlib and is
+Proposed directory `components/` imports only `cad-lite/internal/gpui` and stdlib and is
 an optional layer above the core. Do not place controls under ebitenplatform or
 make `gpui` depend on components. Start with one package; split an unstyled base
 from styled presentation only when reuse justifies that extra public seam.

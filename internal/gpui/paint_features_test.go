@@ -4,7 +4,7 @@ import (
 	"image/color"
 	"testing"
 
-	"go-draw/internal/gpui"
+	"cad-lite/internal/gpui"
 )
 
 func renderScene(w, h int, s *gpui.Scene) *gpui.Rasterizer {

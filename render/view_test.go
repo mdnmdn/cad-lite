@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"go-draw/geom"
-	"go-draw/render"
+	"cad-lite/geom"
+	"cad-lite/render"
 )
 
 func TestFitIgnoresNonFiniteBoxes(t *testing.T) {
