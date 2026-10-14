@@ -25,6 +25,7 @@ type SliderState struct {
 	min, max float64
 	step     float64
 	onChange func(float64, *gpui.Window)
+	onCommit func(float64, *gpui.Window)
 }
 
 // Dragging reports whether the thumb is being dragged.
@@ -38,8 +39,17 @@ func (s *SliderState) Move(p gpui.Point, w *gpui.Window) {
 	}
 }
 
-// End finishes a drag.
-func (s *SliderState) End() { s.dragging = false }
+// End finishes a drag and, when one was in progress, reports the final value
+// to OnCommit.
+func (s *SliderState) End(w *gpui.Window) {
+	if !s.dragging {
+		return
+	}
+	s.dragging = false
+	if s.onCommit != nil {
+		s.onCommit(s.value, w)
+	}
+}
 
 // SliderOptions configures NewSlider.
 type SliderOptions struct {
@@ -49,6 +59,8 @@ type SliderOptions struct {
 	// OnChange is called with the snapped value whenever a click, drag or key
 	// press changes it. The owner stores it and the next frame shows it.
 	OnChange func(v float64, w *gpui.Window)
+	// OnCommit is called with the final value when a drag ends.
+	OnCommit func(v float64, w *gpui.Window)
 }
 
 // SnapSlider returns v clamped to [min, max] and rounded to the nearest
@@ -69,7 +81,7 @@ func SnapSlider(v, min, max, step float64) float64 {
 // and End jump to the ends. id must be unique and stable among elements. The
 // returned div has no width: give it one or Flex1.
 func NewSlider(id string, st *SliderState, o SliderOptions) *gpui.Div {
-	st.min, st.max, st.step, st.onChange = o.Min, o.Max, o.Step, o.OnChange
+	st.min, st.max, st.step, st.onChange, st.onCommit = o.Min, o.Max, o.Step, o.OnChange, o.OnCommit
 	st.value = SnapSlider(o.Value, o.Min, o.Max, o.Step)
 	frac := 0.0
 	if o.Max > o.Min {
@@ -103,9 +115,9 @@ func NewSlider(id string, st *SliderState, o SliderOptions) *gpui.Div {
 			st.setFromX(float64(e.Position.X), w)
 		}).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) { st.Move(e.Position, w) }).
-		OnMouseUp(func(e *gpui.MouseUpEvent, _ *gpui.Window, _ *gpui.App) {
+		OnMouseUp(func(e *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
 			if e.Button == gpui.MouseLeft {
-				st.End()
+				st.End(w)
 			}
 		}).
 		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, _ *gpui.App) {

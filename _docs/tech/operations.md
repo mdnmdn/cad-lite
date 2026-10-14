@@ -7,7 +7,7 @@ summary: How to build, run, test and render go-draw, build the browser binary, a
 read_when: you need a build, run, test or docs command, or you are changing one
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, .github/workflows/release.yml, .github/workflows/ci.yml]
+code_anchors: [settings/file.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -79,6 +79,14 @@ A render that shows an active command with its snap marker:
 ```
 go run ./cmd/cad -png _tmp/snap.png -demo -script "LINE 25,25" -hover 195.6,25.4
 ```
+
+## Settings file
+
+The application keeps its [settings](../features/settings.md) in `settings.toml`, in `go-draw/` under the
+OS user config folder: `~/Library/Application Support` on macOS, `%AppData%` on Windows,
+`$XDG_CONFIG_HOME` or `~/.config` on Linux. `GODRAW_CONFIG_DIR` replaces that whole directory (the
+file is then `$GODRAW_CONFIG_DIR/settings.toml`); tests and renders that must not touch the real file
+set it to a temporary directory. The browser build has no file and keeps them in memory.
 
 ## Environment notes
 

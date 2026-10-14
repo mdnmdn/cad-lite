@@ -3,11 +3,11 @@ id: tech-ui-framework
 title: UI framework and theme
 kind: tech
 status: current
-summary: The boundary between go-draw and the internal/gpui library, what the application uses from it, the conventions of the shell, and the theme colours.
+summary: The boundary between go-draw and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/theme.go, ui/workspace.go, ui/icon.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go]
+code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/icon.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -58,8 +58,15 @@ library's rule: its API contract changes first, then its code, then this table.
 
 ## Theme
 
-The shell is dark, with the canvas in AutoCAD's dark model-space colour. Colours are defined once,
-in `ui/theme.go`:
+A theme is a `Theme` value in `ui/themes.go`; the registry holds four, shown in the
+[settings panel](../features/settings.md): `dark` (the default and the original colours, with the
+canvas in AutoCAD's dark model-space colour), `light` (a light shell and a near-white canvas, where
+ACI 7 draws black), `classic` (a near-black canvas in a grey shell, as in AutoCAD's classic
+workspace) and `high-contrast` (black with white borders and saturated accents). `ApplyTheme`
+copies a theme into the package-level variables of `ui/theme.go`, which every view reads while
+rendering, so a redraw shows the new theme without any view being told. `Workspace.applyAppearance`
+also updates the builder's `Background` (which decides how ACI 7 is drawn) and invalidates its
+cache. Views name a token, never a colour; the tokens, one `Theme` field each:
 
 | Token | Use |
 |---|---|
@@ -68,16 +75,37 @@ in `ui/theme.go`:
 | `colCrosshair` | Crosshair and pickbox |
 | `colSnap` | Snap markers |
 | `colSelected`, `colHover` | Selection and hover highlights |
-| `colWindowSel`/`colWindowOut`, `colCrossSel`/`colCrossOut` | Window (blue) and crossing (green) boxes |
+| `colWindowSel`/`colWindowOut`, `colCrossSel`/`colCrossOut` | Window and crossing boxes |
 | `colAxisX`, `colAxisY` | The coordinate-system icon |
 | `uiBg`, `uiPanel`, `uiPanelAlt`, `uiBorder` | Shell backgrounds, hover fill, separators |
-| `uiText`, `uiMuted`, `uiAccent`, `uiOn` | Text, secondary text, the active command, toggles that are on |
+| `uiText`, `uiMuted`, `uiAccent`, `uiOn` | Text, secondary text, the active command (text in `uiText` must read on `uiAccent`), toggles that are on |
 | `uiField`, `uiSelect` | Text field fill and selection highlight; the field border is `uiBorder`, turning `uiAccent` when focused, the placeholder `uiMuted` (all applied by `themeField`) |
 | `uiOK`, `uiWarn`, `uiErr` | Status colours of the agent panel: completed, in progress or warning, failed or error |
+| `uiBackdrop` | The dim layer behind a modal panel |
+
+The per-theme values are the literals in `ui/themes.go`; the canvas of each, for reference:
+
+| Theme | Canvas | Shell (`uiBg` / `uiPanel`) | Accent |
+|---|---|---|---|
+| `dark` | 33, 40, 48 | 24, 28, 33 / 36, 41, 48 | 59, 130, 246 |
+| `light` | 252, 252, 253 | 226, 230, 235 / 244, 246, 248 | 96, 165, 250 |
+| `classic` | 6, 6, 8 | 58, 58, 60 / 76, 76, 80 | 70, 120, 210 |
+| `high-contrast` | 0, 0, 0 | 0, 0, 0 / 10, 10, 10 | 0, 76, 178 |
 
 The command line and the agent prompt are `gpui.TextInput`s themed through `themeField` in
 `ui/theme.go`, which uses the library's `Style`, `PlaceholderColor` and `SelectionColor`; a new
-field gets the same look by passing through it.
+field gets the same look by passing through it, and `ApplyTheme` restyles every such field (the
+registry holds them weakly).
+
+## UI scale
+
+The whole UI, text included, is zoomed by `Window.SetUIScale` (0.75 to 2.0 in the settings; the
+library accepts 0.25 to 4): layout runs at the platform size divided by the factor, the scene is
+rasterized at the device scale times the factor, and the window divides pointer positions by the
+factor, so no view and no platform does anything. It is a zoom of the finished layout, not a font
+size: a narrower logical window reflows. The factor is 1 by default and renders are then identical to
+before. `Window.ScaleFactor` is the effective raster scale, which `ui.Icon` uses to rasterize. The
+contract is in the library's `_docs/api-contract.md`.
 
 ## Icons
 
@@ -121,3 +149,4 @@ the tool and the application differ slightly on edge pixels (decision register).
 - [Rendering](rendering.md) — how the canvas uses `Stroke` and `Quad`
 - [Decision register](decisions.md) — gpui over ImGui, the library's place in the module, and the icon rasterizer
 - [Operations](operations.md) — the `icons-*` commands
+- [Settings](../features/settings.md) — the panel, the file, and what is persisted

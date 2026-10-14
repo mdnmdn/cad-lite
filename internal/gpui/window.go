@@ -26,6 +26,9 @@ type Window struct {
 	root           EntityRoot
 	options        WindowOptions
 	scale          float32
+	// deviceScale is the platform's pixel ratio; scale is deviceScale*uiScale.
+	deviceScale    float32
+	uiScale        float32
 	invalid        bool
 	focus          FocusID
 	mousePosition  Point
@@ -217,6 +220,8 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 		options:        o,
 		app:            app,
 		scale:          1,
+		deviceScale:    1,
+		uiScale:        1,
 		background:     White,
 		invalid:        true,
 		layoutNodes:    make(map[LayoutID]*LayoutNode),
@@ -230,7 +235,7 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 	}
 	if pw != nil {
 		if s := pw.ScaleFactor(); s > 0 {
-			w.scale = s
+			w.deviceScale, w.scale = s, s
 		}
 		if wb, ok := pw.(windowBinder); ok {
 			wb.bindWindow(w)
@@ -246,9 +251,17 @@ func newWindow(pw PlatformWindow, o WindowOptions, app *App) *Window {
 	return w
 }
 
-// Bounds returns the window size in logical pixels, falling back to the
-// requested options and then to 800x600 when the platform reports nothing.
+// Bounds returns the window size in logical pixels (the platform size divided
+// by UIScale), falling back to the requested options and then to 800x600 when
+// the platform reports nothing.
 func (w *Window) Bounds() Bounds {
+	b := w.platformBounds()
+	f := Pixels(w.uiScale)
+	return Bounds{Size: Size{W: b.Size.W / f, H: b.Size.H / f}}
+}
+
+// platformBounds is the window size in the platform's logical pixels.
+func (w *Window) platformBounds() Bounds {
 	var bw, bh Pixels
 	if w.platformWindow != nil {
 		bw, bh = w.platformWindow.Bounds()
@@ -268,8 +281,33 @@ func (w *Window) Bounds() Bounds {
 	return Bounds{Size: Size{W: bw, H: bh}}
 }
 
-// ScaleFactor returns the device pixel ratio of the window.
+// ScaleFactor returns the effective raster scale: the device pixel ratio
+// times UIScale. Elements that rasterize at paint time (icons) use it.
 func (w *Window) ScaleFactor() float32 { return w.scale }
+
+// UIScale returns the window-level UI zoom set by SetUIScale (default 1).
+func (w *Window) UIScale() float32 { return w.uiScale }
+
+// SetUIScale zooms the whole UI by f, clamped to [0.25, 4]: layout runs at the
+// platform size divided by f, the scene rasterizes at the device scale times
+// f, and DispatchEvent divides pointer positions by f. The window is
+// invalidated; a non-finite f is ignored.
+func (w *Window) SetUIScale(f float32) {
+	if f != f || f > 1e6 || f < -1e6 {
+		return
+	}
+	f = min(max(f, 0.25), 4)
+	if f == w.uiScale {
+		return
+	}
+	if w.hasMouse {
+		k := Pixels(w.uiScale / f)
+		w.mousePosition = Point{X: w.mousePosition.X * k, Y: w.mousePosition.Y * k}
+	}
+	w.uiScale = f
+	w.scale = w.deviceScale * f
+	w.Refresh()
+}
 
 // Refresh marks the window dirty and asks the platform for a frame. The
 // dirty flag is cleared by the next Draw.
@@ -796,11 +834,12 @@ func (w *Window) Draw(cx *App) {
 // platform window.
 func (w *Window) present() {
 	if s := w.platformWindow.ScaleFactor(); s > 0 {
-		w.scale = s
+		w.deviceScale = s
 	}
-	b := w.Bounds()
-	pw := int(math.Round(float64(b.Width()) * float64(w.scale)))
-	ph := int(math.Round(float64(b.Height()) * float64(w.scale)))
+	w.scale = w.deviceScale * w.uiScale
+	b := w.platformBounds()
+	pw := int(math.Round(float64(b.Width()) * float64(w.deviceScale)))
+	ph := int(math.Round(float64(b.Height()) * float64(w.deviceScale)))
 	if w.raster == nil || w.raster.w != pw || w.raster.h != ph {
 		w.raster = NewRasterizer(pw, ph)
 	}
@@ -1107,11 +1146,44 @@ func (w *Window) DispatchEvent(input PlatformInput, cx *App) {
 	if cx == nil {
 		cx = w.app
 	}
+	input = w.toUICoords(input)
 	if cx == nil {
 		w.dispatchEvent(input, nil)
 		return
 	}
 	cx.Update(func(cx *App) { w.dispatchEvent(input, cx) })
+}
+
+// toUICoords divides pointer positions by UIScale: the platform reports
+// positions in its own logical pixels, the element tree lives in zoomed ones.
+func (w *Window) toUICoords(input PlatformInput) PlatformInput {
+	if w.uiScale == 1 {
+		return input
+	}
+	k := Pixels(1 / w.uiScale)
+	div := func(p Point) Point { return Point{X: p.X * k, Y: p.Y * k} }
+	switch e := input.(type) {
+	case MouseDownEvent:
+		e.Position = div(e.Position)
+		return e
+	case MouseUpEvent:
+		e.Position = div(e.Position)
+		return e
+	case MouseMoveEvent:
+		e.Position = div(e.Position)
+		return e
+	case ScrollWheelEvent:
+		e.Position = div(e.Position)
+		return e
+	case ClickEvent:
+		if e.Up != nil {
+			up := *e.Up
+			up.Position = div(up.Position)
+			e.Up = &up
+		}
+		return e
+	}
+	return input
 }
 
 // dispatchEvent is DispatchEvent's body.

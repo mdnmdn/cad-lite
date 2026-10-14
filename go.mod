@@ -20,6 +20,9 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 )
 
-require agentmanager v0.0.0
+require (
+	agentmanager v0.0.0
+	github.com/BurntSushi/toml v1.5.0
+)
 
 replace agentmanager => ./agentmanager
