@@ -20,7 +20,7 @@ handlers receive **pointers**.
 | `MouseUpEvent` | `Position Point`, `Button MouseButton`, `Modifiers Modifiers`, `ClickCount int` | `IsLeft()`. |
 | `MouseMoveEvent` | `Position Point`, `Modifiers Modifiers` | Drives hover. |
 | `ClickEvent` | `Up *MouseUpEvent` | A completed press-release on the same element. Not synthesised by the window or the headless platform; the ebiten backend emits it. |
-| `ScrollWheelEvent` | `Position Point`, `DeltaX, DeltaY Pixels`, `Modifiers Modifiers` | Positive `DeltaY` scrolls down (content moves up). |
+| `ScrollWheelEvent` | `Position Point`, `DeltaX, DeltaY Pixels`, `Modifiers Modifiers`, `Precise bool` | Positive `DeltaY` scrolls down (content moves up). `Precise` is true for pixel-precise deltas (a trackpad) and false for notch steps (a mouse wheel); the ebiten backend infers it, other sources leave it false. |
 | `KeyDownEvent` | `Keystroke Keystroke`, `PreferCharacterInput bool` | `PreferCharacterInput` is true for printable characters meant for a focused text field. |
 | `KeyUpEvent` | `Keystroke Keystroke` | |
 | `ModifiersChangedEvent` | `Modifiers Modifiers` | Accepted by dispatch but currently has no listeners. |

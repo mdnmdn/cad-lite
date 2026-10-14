@@ -19,11 +19,19 @@ type Workspace struct {
 	view    *render.View
 	builder *render.Builder
 	input   *gpui.TextInput
-	agent   *AgentPanel
+	// agent is created the first time the panel or the AI command is used.
+	agent *AgentPanel
+	// projectPath is the drawing's file, which decides where agent history lives.
+	projectPath string
+	win         *gpui.Window
 
 	canvas canvasState
 	// Grid toggles the background grid (F7).
 	Grid bool
+	// WheelZoom makes a precise (trackpad) vertical scroll zoom instead of
+	// pan, so the plain wheel always zooms as in AutoCAD. Ctrl+wheel zooms
+	// and Shift+wheel pans either way.
+	WheelZoom bool
 	// fitPending zooms to extents once the canvas size is known.
 	fitPending bool
 }
@@ -36,11 +44,12 @@ const historyLines = 4
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	v := render.DefaultView(800, 600)
 	ws := &Workspace{view: &v, Grid: true, fitPending: d.Len() > 0}
-	ws.agent = newAgentPanel(ws)
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
 	ws.session.OnDrawing(ws.attach)
+	ws.session.OnFilePath(ws.pathChanged)
+	ws.session.SetAgentHandler(ws.agentCommand)
 	ws.input = themeField(gpui.NewTextInput("Type a command"))
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
@@ -117,8 +126,9 @@ func Bindings() []gpui.KeyBinding {
 
 // Render builds the window for the current state.
 func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
+	ws.win = w
 	var agentPanel gpui.IntoElement = gpui.NewDiv()
-	if ws.agent.visible {
+	if ws.agent != nil && ws.agent.visible {
 		agentPanel = ws.agent.render(w, cx)
 	}
 	cmdline := ws.input.Render(w, cx)
@@ -135,7 +145,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
 		OnAction(actionSnap, toggle(func() { s.SnapOn = !s.SnapOn })).
 		OnAction(actionOrtho, toggle(func() { s.Ortho = !s.Ortho })).
-		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.agent.Toggle(w) }).
+		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).
 		OnAction(actionGrid, toggle(func() { ws.Grid = !ws.Grid })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
 		Child(
@@ -275,6 +285,10 @@ func (ws *Workspace) commandArea(cmdline gpui.IntoElement) *gpui.Div {
 func (ws *Workspace) statusBar() *gpui.Div {
 	s := ws.session
 	cur := s.Cursor()
+	coords := "—"
+	if ws.pointerOnCanvas() {
+		coords = fmt.Sprintf("%s, %s", cmdsys.FormatNumber(cur.X), cmdsys.FormatNumber(cur.Y))
+	}
 	flag := func(id, label string, icon icons.Name, on bool, f func()) *gpui.Div {
 		c := uiMuted
 		if on {
@@ -286,7 +300,7 @@ func (ws *Workspace) statusBar() *gpui.Div {
 			Child(NewIcon(icon, 14, c), gpui.NewText(label).FontWeight(700).TextColor(c))
 	}
 	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
-		gpui.NewText(fmt.Sprintf("%s, %s", cmdsys.FormatNumber(cur.X), cmdsys.FormatNumber(cur.Y))).SizeW(170),
+		gpui.NewText(coords).SizeW(170),
 		flag("grid", "GRID", icons.ViewGrid, ws.Grid, func() { ws.Grid = !ws.Grid }),
 		flag("snap", "OSNAP", icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
 		flag("ortho", "ORTHO", icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
@@ -300,3 +314,26 @@ func gpuiColor(c render.Color) gpui.Rgba { return gpui.RgbaOf(c.R, c.G, c.B, c.A
 // FitOnFirstFrame zooms to the drawing's extents once the canvas has its
 // size (after opening a file or running a startup script).
 func (ws *Workspace) FitOnFirstFrame() { ws.fitPending = true }
+
+// agentCommand is the AI command's entry point: an empty prompt toggles the
+// panel, text opens it and sends the text to the active conversation.
+func (ws *Workspace) agentCommand(prompt string) {
+	p := ws.AgentPanel()
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		p.visible = !p.visible
+		if p.visible {
+			p.ensureLoaded()
+		}
+		if ws.win != nil {
+			ws.win.Refresh()
+		}
+		return
+	}
+	p.Show()
+	if ws.win == nil {
+		p.deferred = prompt
+		return
+	}
+	p.sendFromCommand(prompt, ws.win)
+}

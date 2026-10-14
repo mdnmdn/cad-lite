@@ -27,7 +27,8 @@ The canvas in `ui` assembles each frame's display list and hands it to the adapt
 `Scale` (pixels per model unit) and the viewport size in logical pixels. Model space is y-up, the
 viewport y-down. `ToScreen` and `ToModel` convert; `ZoomAt` zooms about a viewport pixel, keeping
 the model point under it fixed; `PanBy` moves by pixels; `Fit` frames a box. Scale is clamped to
-`[MinScale, MaxScale]`.
+`[MinScale, MaxScale]`. `View` does not react to a viewport resize; the canvas does (it rescales so the
+visible box stays visible, see [Drawing canvas](../features/canvas.md)).
 
 **Camera-relative coordinates.** `View.ToScreen` subtracts `Center` in `float64` before scaling, and
 `gpuirender` narrows to `float32` only after that. Large coordinates (survey data in the millions)

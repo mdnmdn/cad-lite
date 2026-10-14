@@ -114,6 +114,15 @@ text and opacity multiplies the subtree. See [styling](styling.md).
 
 `ScrollWheelEvent` deltas are logical pixels, positive `DeltaY` = scroll down
 (the ebiten backend negates ebiten's wheel and uses 20 px per line).
+`Precise` tells a trackpad from a mouse wheel: ebiten exposes no device kind,
+so the backend infers it from the values. A fractional delta, a delta on both
+axes, or a whole delta within 250 ms of a precise one is precise (10 px per
+ebiten unit); any other whole delta is a notch (20 px). Under `GOOS=js`
+ebiten's units are CSS pixels, passed through, and a whole delta of 50 or
+more is a notch. A pinch that a browser delivers as Ctrl+wheel arrives as a
+precise event with `Control` set. The heuristic can misjudge an accelerated
+mouse on macOS (fractional notches), so applications should offer a setting
+that forces one reading.
 `OnScrollWheel` listeners run along the hit path first (bubbling, innermost
 first). If one of them calls `Window.StopPropagation()`, no container
 scrolls - this is how a handler takes over the wheel. Otherwise the delta is

@@ -4,7 +4,7 @@ Status of the agent manager and what is left.
 
 ## Status
 
-All packages are implemented: root API, `jsonrpc`, `mcp`, `transcript`, `harnesses`, `acp` (with the OpenCode
+All packages are implemented: root API, `jsonrpc`, `mcp`, `transcript`, `store` (JSONL session persistence and the open-tab set, replayable into a transcript), `harnesses`, `acp` (with the OpenCode
 preset), `claude`, `codex`, and the fake agents. `go vet` and `go test -race ./...` pass. go-draw uses the
 module through `ui/agent*.go`; its end-to-end test drives all three backends against the fake with a real MCP
 call.
@@ -20,7 +20,7 @@ call.
 ## Next
 
 1. A usage event: `TurnEnd` has no usage field today, so Claude's `result.usage` only reaches `Logger.Debugf`.
-2. A live test of `Config.ResumeID` against the real CLI (claude `--resume`, ACP `session/load`).
+2. A live test of `Config.ResumeID` against the real CLI (claude `--resume`, ACP `session/load`); the store feeds it the id from `SessionStarted`.
 3. A kill-on-close test for claude against the real process (the fake `hang` scenario covers it only in theory of the
    process group).
 4. Live runs of opencode and codex, then remove the unverified marks.

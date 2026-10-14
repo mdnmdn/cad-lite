@@ -11,10 +11,19 @@ import (
 
 const (
 	wheelLinePixels = 20
-	clickSlop       = 4
-	multiClickGap   = 400 * time.Millisecond
-	repeatDelay     = 30
-	repeatInterval  = 3
+	// wheelPrecisePixels is the logical pixels per ebiten wheel unit for
+	// precise (trackpad) events; GLFW already scales macOS precise deltas by 0.1.
+	wheelPrecisePixels = 10
+	// wheelPreciseHold is how long an integral delta after a precise event
+	// still counts as precise (a trackpad swipe emits the odd whole value).
+	wheelPreciseHold = 250 * time.Millisecond
+	// wheelNotchPixels is the smallest integral browser delta (CSS pixels)
+	// taken as a mouse notch; browsers report a notch as 100 or 120.
+	wheelNotchPixels = 50
+	clickSlop        = 4
+	multiClickGap    = 400 * time.Millisecond
+	repeatDelay      = 30
+	repeatInterval   = 3
 )
 
 type keyInfo struct {
@@ -116,10 +125,70 @@ func isShortcut(goos string, m gpui.Modifiers) bool {
 	return goos == "darwin" || m&gpui.Alt == 0
 }
 
-// wheelDelta converts ebiten's wheel offsets (positive y = scroll up) into
-// gpui logical-pixel deltas where positive DeltaY means scroll down.
-func wheelDelta(x, y float64) (dx, dy gpui.Pixels) {
-	return gpui.Pixels(-x * wheelLinePixels), gpui.Pixels(-y * wheelLinePixels)
+// wheelClassifier decides whether a wheel event is precise (trackpad) or a
+// notch (mouse). ebiten exposes no device kind, so it works from the values:
+// a fractional delta or a two-axis delta is precise, and so is an integral
+// delta within wheelPreciseHold of a precise one; any other integral delta is
+// a notch. pixels is true when ebiten's units are CSS pixels (GOOS=js): there
+// every integral delta of wheelNotchPixels or more is a notch.
+type wheelClassifier struct {
+	pixels      bool
+	lastPrecise time.Time
+}
+
+func integral(v float64) bool { return math.Abs(v-math.Round(v)) < 1e-6 }
+
+// classify reports whether the event at now is precise and returns its
+// logical-pixel deltas (positive dy = scroll down).
+func (c *wheelClassifier) classify(x, y float64, now time.Time) (dx, dy gpui.Pixels, precise bool) {
+	switch {
+	case !integral(x) || !integral(y) || (x != 0 && y != 0):
+		precise = true
+	case c.pixels:
+		precise = math.Max(math.Abs(x), math.Abs(y)) < wheelNotchPixels
+	default:
+		precise = !c.lastPrecise.IsZero() && now.Sub(c.lastPrecise) < wheelPreciseHold
+	}
+	if precise {
+		c.lastPrecise = now
+	}
+	scale := float64(wheelLinePixels)
+	switch {
+	case c.pixels:
+		scale = 1
+	case precise:
+		scale = wheelPrecisePixels
+	}
+	return gpui.Pixels(-x * scale), gpui.Pixels(-y * scale), precise
+}
+
+// pointerTracker withholds the pointer position until it is known to be a
+// real one. Before the pointer enters the window the backend reports a
+// meaningless position (the window centre on some platforms), so the first
+// sample only counts once it changes or the user clicks or scrolls.
+type pointerTracker struct {
+	sampled, known bool
+	first, last    gpui.Point
+}
+
+// observe reports whether pos should be dispatched as a MouseMoveEvent.
+// interacted is true when a button was pressed or the wheel turned.
+func (t *pointerTracker) observe(pos gpui.Point, interacted bool) bool {
+	if !t.sampled {
+		t.sampled, t.first = true, pos
+	}
+	if !t.known {
+		if pos == t.first && !interacted {
+			return false
+		}
+		t.known, t.last = true, pos
+		return true
+	}
+	if pos == t.last {
+		return false
+	}
+	t.last = pos
+	return true
 }
 
 // shouldFire reports whether a key held for duration ticks should emit a key

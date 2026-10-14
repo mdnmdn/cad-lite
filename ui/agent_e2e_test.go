@@ -93,6 +93,7 @@ func TestAgentEndToEndAddLine(t *testing.T) {
 			t.Setenv("FAKEAGENT_MCP_ARGS", `{"x1":0,"y1":0,"x2":30,"y2":40}`)
 
 			ws := ui.NewWorkspace(doc.New(), nil)
+			ws.SetProjectPath(filepath.Join(t.TempDir(), "x.dxf"))
 			ws.AgentPanel().Configure(tc.harness, bin)
 			ws.AgentPanel().Show()
 			p := gpui.NewHeadlessPlatform()

@@ -81,7 +81,7 @@ func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	if onLaunch != nil {
 		onLaunch(app)
 	}
-	g := &game{p: p, app: app, clip: newClipWorker()}
+	g := &game{p: p, app: app, clip: newClipWorker(), wheel: wheelClassifier{pixels: runtime.GOOS == "js"}}
 	err := ebiten.RunGame(g)
 	if errors.Is(err, ebiten.Termination) {
 		return nil
@@ -149,8 +149,8 @@ type game struct {
 	p   *Platform
 	app *gpui.App
 
-	lastPos  gpui.Point
-	havePos  bool
+	pointer  pointerTracker
+	wheel    wheelClassifier
 	lastMods gpui.Modifiers
 	clicks   clickTracker
 	keyBuf   []ebiten.Key
@@ -248,9 +248,12 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 
 	cx, cy := ebiten.CursorPositionF()
 	pos := gpui.Point{X: gpui.Pixels(float32(cx) / w.scale), Y: gpui.Pixels(float32(cy) / w.scale)}
-	if !g.havePos || pos != g.lastPos {
-		g.havePos = true
-		g.lastPos = pos
+	wx, wy := ebiten.Wheel()
+	interacted := wx != 0 || wy != 0 ||
+		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) ||
+		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonMiddle) ||
+		inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight)
+	if g.pointer.observe(pos, interacted) {
 		win.DispatchEvent(gpui.MouseMoveEvent{Position: pos, Modifiers: mods}, app)
 	}
 
@@ -279,9 +282,9 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 		}
 	}
 
-	if wx, wy := ebiten.Wheel(); wx != 0 || wy != 0 {
-		dx, dy := wheelDelta(wx, wy)
-		win.DispatchEvent(gpui.ScrollWheelEvent{Position: pos, DeltaX: dx, DeltaY: dy, Modifiers: mods}, app)
+	if wx != 0 || wy != 0 {
+		dx, dy, precise := g.wheel.classify(wx, wy, time.Now())
+		win.DispatchEvent(gpui.ScrollWheelEvent{Position: pos, DeltaX: dx, DeltaY: dy, Modifiers: mods, Precise: precise}, app)
 	}
 
 	g.pollKeys(win, app, w, mods)

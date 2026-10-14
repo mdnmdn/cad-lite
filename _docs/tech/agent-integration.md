@@ -7,7 +7,7 @@ summary: How go-draw hosts AI agents: the separate agentmanager module, the in-p
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod]
+code_anchors: [ui/agent.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -30,13 +30,18 @@ Three pieces connect an AI agent to a drawing:
 - **`ui/agent*.go`**, the panel that starts sessions and pumps events; see the
   [agent panel](../features/agent-panel.md).
 
+`agentmanager/store` (stdlib, in the nested module) persists conversations as JSONL per session plus an
+open-tab set; go-draw keeps them in `<project>/.go-draw/agent/`. Nothing in this chain exists until the
+panel or the `AI` command is first used.
+
 ## The `cad` MCP server
 
-On Start the panel creates an `mcp.Server` named for go-draw, registers `cadmcp.Register` with an `Env`
+The first session start creates one `mcp.Server` named for go-draw, registers `cadmcp.Register` with an `Env`
 (`Dispatch`, `Session`, `Snapshot`, `Changed`), binds it to `127.0.0.1` on a random port and passes its
 URL and bearer token to the agent as `agentmanager.MCPServer{Name: "cad"}`. Every request needs the
-token; requests with a foreign `Host` or `Origin` are refused. The server lives exactly as long as the
-session: Stop, agent exit and quit close it, so the port and token never outlive a chat.
+token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of the workspace (the MCP server is stateless per request): it
+starts with the first session and closes when the last one stops, exits or quits, so the port and token
+never outlive the chats.
 
 The tools (all coordinates in model units, Y up; one tool call is one undo step):
 
@@ -63,14 +68,27 @@ HTTP goroutines, so:
 1. Every tool body runs inside `Dispatcher.Do`, which enqueues it in a mutex-guarded mailbox and waits.
    `Do` fails with `ErrUIBusy` after 15 s or when the dispatcher closes.
 2. The UI goroutine drains the mailbox: `AgentPanel.pump` is a `Window.After` timer that calls
-   `Dispatcher.Drain`, adopts a finished session start, and folds the session's event channel into the
-   transcript with non-blocking reads. No goroutine pumps events.
-3. The timer re-arms every 16 ms while a session is starting, a turn runs or work is queued, every
-   250 ms while an idle session is open (to notice a crashed agent), and not at all with no session.
-4. The session launch (`harnesses.Open`, which spawns a process) runs on its own goroutine and hands
-   the result back through a mutex-guarded slot that the timer reads.
-5. Stop closes the dispatcher first, so waiting tool calls fail fast, then closes the session and the
-   server in the background; quit waits for them.
+   `Dispatcher.Drain`, adopts finished session starts, and folds every tab's event channel into its
+   transcript and stored record with non-blocking reads, background tabs included. No goroutine pumps
+   events. Concurrent sessions therefore interleave only between timer ticks, and tool calls from all
+   of them are serialized by the dispatcher and the server.
+3. The timer re-arms every 16 ms while any session is starting, a turn runs or work is queued, every
+   250 ms while only idle sessions are open (to notice a crashed agent), and not at all with no session.
+4. Each session launch (`harnesses.Open`, which spawns a process) runs on its own goroutine and hands
+   the result back through a per-tab mutex-guarded slot that the timer reads.
+5. Stopping the last live session closes the dispatcher first, so waiting tool calls fail fast, then
+   closes the session and the server in the background; quit waits for them.
+
+## Persistence and resume
+
+Each tab's events and user messages are appended to its `store.Record` as they are folded into the
+transcript (debug log lines excepted); `TurnEnd` and `Exited` fsync. Every backend reports the agent's
+own session id in `SessionStarted` (Claude only after the first prompt); the record keeps the latest.
+Starting a tab whose record has an id for the same harness sets `Config.ResumeID`: Claude `--resume`,
+Codex `thread/resume`, ACP `session/load`. ACP suppresses the history the agent replays on load, which
+is why go-draw shows its own stored transcript. The open tabs and the active one are saved on every
+change and at quit (`Store.SaveOpen`); restoring them reads records only, so no agent starts until the
+user sends. Project switch and the `.go-draw/` layout are in the [agent panel](../features/agent-panel.md).
 
 `Env.Changed` runs inside `Do`: it clears the render cache and refreshes the window, so the canvas shows
 the agent's edits between frames.

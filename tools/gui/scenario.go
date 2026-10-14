@@ -70,7 +70,7 @@ func ParseScenario(r io.Reader) (*Scenario, error) {
 // arity is the allowed argument count range per verb.
 var arity = map[string][2]int{
 	"move": {2, 2}, "click": {2, 3}, "dclick": {2, 3}, "drag": {4, 5},
-	"key": {1, 99}, "type": {1, 1}, "wheel": {1, 3}, "wait": {1, 1},
+	"key": {1, 99}, "type": {1, 1}, "wheel": {1, 3}, "hwheel": {1, 3}, "hold": {1, 1}, "release": {1, 1}, "wait": {1, 1},
 	"shot": {1, 1}, "expect-count": {2, 2}, "expect-diff": {2, 2},
 	"expect-same": {2, 2}, "quit": {0, 0},
 }

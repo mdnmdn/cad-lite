@@ -29,6 +29,8 @@ Coordinates are window-relative logical pixels (scale 1).
 | `key combo...` | xdotool key names with modifiers: `Return`, `Escape`, `F2`, `ctrl+z`; each held 120 ms |
 | `type "text"` | type characters; `\n` presses Return |
 | `wheel DY [X Y]` | DY > 0 scrolls down, < 0 up, one notch each |
+| `hwheel DX [X Y]` | DX > 0 scrolls right, < 0 left, one horizontal notch each |
+| `hold MOD` / `release MOD` | keep `ctrl`, `shift`, `alt` or `super` down across other steps (a Ctrl+wheel) |
 | `wait MS` | sleep |
 | `shot NAME` | save `NAME.png` of the window |
 | `expect-diff A B` / `expect-same A B` | two shots differ / are pixel-identical |

@@ -255,6 +255,7 @@ func (c *fileCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			return nil
 		}
 		printWarnings(ctx, warns)
+		ctx.SetFilePath(in.Text)
 		ctx.Printf("Saved %s (%d entities).", in.Text, ctx.Doc.Len())
 		return nil
 	}
@@ -265,6 +266,7 @@ func (c *fileCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	}
 	printWarnings(ctx, warns)
 	ctx.ReplaceDrawing(d)
+	ctx.SetFilePath(in.Text)
 	ZoomExtents(d, ctx.View)
 	ctx.Printf("Opened %s (%d entities).", in.Text, d.Len())
 	return nil
@@ -331,6 +333,7 @@ func Register(r *cmdsys.Registry) {
 	r.Register("SAVE", func() cmdsys.Command { return &fileCmd{name: "SAVE"} })
 	registerConstruct(r)
 	registerTrim(r)
+	registerAgent(r)
 	r.LoadAliases(Aliases)
 }
 

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"agentmanager"
 	"agentmanager/transcript"
@@ -16,12 +17,20 @@ const agentPanelWidth = 340
 const agentOutputLimit = 280
 
 func (ws *Workspace) agentToggle() *gpui.Div {
-	on := ws.agent.visible
+	on := ws.agent != nil && ws.agent.visible
 	c := uiText
+	dot := gpui.NewDiv().SizeWH(6, 6).Rounded(3).FlexShrink(0)
+	if ws.agent != nil {
+		if live, attn := ws.agent.Live(); attn {
+			dot.Bg(uiWarn)
+		} else if live {
+			dot.Bg(uiOK)
+		}
+	}
 	b := gpui.NewDiv().ID("tool-agent").FlexCol().ItemsCenter().Gap(2).Px_(10).Py_(4).Rounded(4).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.agent.Toggle(w) }).
-		Child(gpui.NewText("AI").FontWeight(700).TextSize(14).TextColor(c), gpui.NewText("Agent").TextSize(10))
+		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).
+		Child(gpui.NewDiv().FlexRow().ItemsCenter().Gap(3).Child(gpui.NewText("AI").FontWeight(700).TextSize(14).TextColor(c), dot), gpui.NewText("Agent").TextSize(10))
 	if on {
 		b.Bg(uiAccent)
 	}
@@ -42,6 +51,11 @@ func (p *AgentPanel) button(id, label string, primary bool, f func(*gpui.Window)
 func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App) *gpui.Div {
 	p.win = w
 	p.probe()
+	if q := p.deferred; q != "" {
+		p.deferred = ""
+		p.sendFromCommand(q, w)
+	}
+	t := p.cur
 	input := p.input.Render(w, cx)
 
 	head := gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Child(
@@ -49,15 +63,49 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App) *gpui.Div {
 		gpui.NewDiv().Flex1(),
 		gpui.NewText(p.statusLine()).TextSize(11).TextColor(uiMuted),
 	)
+	tabs := gpui.NewDiv().FlexRow().FlexWrap().ItemsCenter().Gap(4)
+	for i, ti := range p.Tabs() {
+		i, ti := i, ti
+		dot := gpui.NewDiv().SizeWH(6, 6).Rounded(3).FlexShrink(0)
+		switch {
+		case ti.Attention:
+			dot.Bg(uiWarn)
+		case ti.Working:
+			dot.Bg(uiAccent)
+		case ti.Live:
+			dot.Bg(uiOK)
+		}
+		label := gpui.NewDiv().ID(fmt.Sprintf("agent-tab-%d", i)).FlexRow().ItemsCenter().Gap(4).Child(dot, gpui.NewText(ti.Title).TextSize(12)).
+			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.SwitchTab(i, w) })
+		closeBtn := gpui.NewDiv().ID(fmt.Sprintf("agent-tab-close-%d", i)).Px_(3).
+			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.CloseTab(i, w) }).
+			Child(gpui.NewText("x").TextSize(11).TextColor(uiMuted))
+		chip := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Pl(8).Pr(2).Py_(2).Rounded(10).Bg(uiPanelAlt).Child(label, closeBtn)
+		if ti.Active {
+			chip.Bg(uiAccent)
+		}
+		tabs.Child(chip)
+	}
+	tabs.Child(p.button("agent-new", "+", false, p.NewTab))
+	histLabel := "History"
+	tabs.Child(p.button("agent-history", histLabel, false, func(w *gpui.Window) {
+		p.ensureLoaded()
+		p.hist.menu = !p.hist.menu
+		p.syncSessions()
+		w.Refresh()
+	}))
+
 	picker := gpui.NewDiv().FlexRow().ItemsCenter().Gap(4)
+	locked := t.state != agentIdle || t.rec != nil
+	cur := p.harnessOf(t)
 	for _, h := range p.choices {
 		h := h
 		chip := gpui.NewDiv().ID("agent-pick-" + string(h)).Px_(8).Py_(2).Rounded(10).Bg(uiPanelAlt).
 			Child(gpui.NewText(string(h)).TextSize(12))
-		if h == p.selected {
+		if h == cur {
 			chip.Bg(uiAccent)
 		}
-		if p.state == agentIdle {
+		if !locked {
 			chip.OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.selected = h; w.Refresh() })
 		} else {
 			chip.Opacity(0.6)
@@ -68,14 +116,19 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App) *gpui.Div {
 		picker.Child(gpui.NewText("No agent CLI on PATH (opencode, claude, codex)").TextSize(12).TextColor(uiWarn))
 	}
 	picker.Child(gpui.NewDiv().Flex1())
-	if p.state == agentIdle {
+	if t.state == agentIdle {
 		picker.Child(p.button("agent-start", "Start", true, p.Start))
 	} else {
 		picker.Child(p.button("agent-stop", "Stop", false, p.Stop))
 	}
 
-	list := gpui.NewDiv().ID("agent-list").FlexCol().Flex1().MinH(0).Gap(8).P(8).OverflowYScroll().TrackScroll(p.scroll)
-	blocks := p.tr.Blocks()
+	top := gpui.NewDiv().FlexCol().Gap(6).P(10).Child(head, tabs, picker)
+	if p.hist.menu {
+		top.Child(p.historyMenu())
+	}
+
+	list := gpui.NewDiv().ID("agent-list").FlexCol().Flex1().MinH(0).Gap(8).P(8).OverflowYScroll().TrackScroll(t.scroll)
+	blocks := t.tr.Blocks()
 	if len(blocks) == 0 {
 		list.Child(gpui.NewText("Describe a drawing and the agent will draw it with the same commands you use.").TextColor(uiMuted))
 	}
@@ -84,26 +137,58 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App) *gpui.Div {
 			list.Child(el)
 		}
 	}
-	if v := p.tr.Version(); v != p.shownVersion {
-		p.shownVersion = v
-		p.scroll.ScrollToBottom()
+	if v := t.tr.Version(); v != t.shownVersion {
+		t.shownVersion = v
+		t.scroll.ScrollToBottom()
 	}
 
 	send := p.button("agent-send", "Send", true, func(w *gpui.Window) { p.Send(p.input.Text(), w) })
 	row := gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Child(
 		gpui.NewDiv().Flex1().MinW(0).FlexCol().Child(input), send)
-	if p.tr.Running() {
+	if t.tr.Running() {
 		row.Child(p.button("agent-cancel", "Cancel", false, p.Cancel))
 	}
 
 	return gpui.NewDiv().ID("agent-panel").FlexCol().SizeW(agentPanelWidth).FlexShrink(0).Bg(uiPanel).
 		Child(
-			gpui.NewDiv().FlexCol().Gap(6).P(10).Child(head, picker),
+			top,
 			gpui.NewDiv().SizeH(1).Bg(uiBorder),
 			list,
 			gpui.NewDiv().SizeH(1).Bg(uiBorder),
 			gpui.NewDiv().FlexCol().P(8).Child(row),
 		)
+}
+
+// historyMenu lists the project's stored conversations, newest first.
+func (p *AgentPanel) historyMenu() *gpui.Div {
+	menu := gpui.NewDiv().ID("agent-history-menu").FlexCol().Gap(2).P(4).Rounded(6).Bg(uiPanelAlt).Border(1, uiBorder)
+	if len(p.hist.sessions) == 0 {
+		return menu.Child(gpui.NewText("No earlier conversations in this project").TextSize(12).TextColor(uiMuted))
+	}
+	open := map[string]bool{}
+	for _, t := range p.Tabs() {
+		open[t.SessionID] = true
+	}
+	now := time.Now()
+	for i, m := range p.hist.sessions {
+		if i == agentHistoryShown {
+			break
+		}
+		m := m
+		title := m.Title
+		if title == "" {
+			title = "(empty)"
+		}
+		sub := string(m.Harness) + ", " + relTime(m.Updated, now)
+		if open[m.ID] {
+			sub += ", open"
+		}
+		menu.Child(gpui.NewDiv().ID("agent-sess-"+m.ID).FlexRow().ItemsCenter().Gap(6).Px_(6).Py_(3).Rounded(4).
+			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiBorder) }).
+			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.OpenSession(m.ID, w) }).
+			Child(gpui.NewText(clip(title, 30)).TextSize(12).Flex1().MinW(0), gpui.NewText(sub).TextSize(10).TextColor(uiMuted).FlexShrink(0)))
+	}
+	return menu
 }
 
 func statusColor(s agentmanager.ToolStatus) gpui.Rgba {
@@ -138,13 +223,16 @@ func (p *AgentPanel) block(i int, b transcript.Block) gpui.IntoElement {
 	case transcript.AgentMsg:
 		return gpui.NewText(b.Text)
 	case transcript.Thought:
-		open := p.expanded[i]
+		open := p.cur.expanded[i]
 		mark := "> Thinking"
 		if open {
 			mark = "v Thinking"
 		}
 		d := gpui.NewDiv().ID(fmt.Sprintf("agent-thought-%d", i)).FlexCol().Gap(2).
-			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { p.expanded[i] = !p.expanded[i]; w.Refresh() }).
+			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
+				p.cur.expanded[i] = !p.cur.expanded[i]
+				w.Refresh()
+			}).
 			Child(gpui.NewText(mark).TextSize(11).TextColor(uiMuted))
 		if open {
 			d.Child(gpui.NewText(b.Text).TextSize(12).TextColor(uiMuted))

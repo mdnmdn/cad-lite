@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"agentmanager"
+	"go-draw/cmdsys"
 	"go-draw/doc"
 	"go-draw/internal/gpui"
 	"go-draw/ui"
@@ -63,11 +65,14 @@ type agentRig struct {
 	p   *gpui.HeadlessPlatform
 	fs  *fakeSession
 	cfg chan agentmanager.Config
+
+	mu   sync.Mutex
+	more []*fakeSession
 }
 
 // Positions of the panel controls in the 1280x800 window.
 var (
-	posStart  = gpui.Point{X: 1245, Y: 88}
+	posStart  = gpui.Point{X: 1245, Y: 112}
 	posInput  = gpui.Point{X: 1040, Y: 639}
 	posSend   = gpui.Point{X: 1246, Y: 639}
 	posCancel = gpui.Point{X: 1241, Y: 639}
@@ -75,14 +80,33 @@ var (
 
 func openAgent(t *testing.T) *agentRig {
 	t.Helper()
-	ws := ui.NewWorkspace(doc.New(), nil)
-	r := &agentRig{t: t, ws: ws, fs: newFakeSession(), cfg: make(chan agentmanager.Config, 1)}
+	return newRig(t, t.TempDir(), nil, true)
+}
+
+// newRig opens a workspace whose project directory is dir. The first session the opener starts is
+// r.fs, later ones are appended to r.more; every Config goes to r.cfg. files, when set, serves OPEN.
+func newRig(t *testing.T, dir string, files cmdsys.FileHandler, show bool) *agentRig {
+	t.Helper()
+	ws := ui.NewWorkspace(doc.New(), files)
+	ws.SetProjectPath(filepath.Join(dir, "plate.dxf"))
+	r := &agentRig{t: t, ws: ws, fs: newFakeSession(), cfg: make(chan agentmanager.Config, 16)}
 	ws.AgentPanel().Configure(agentmanager.Claude, "/nonexistent/claude")
+	opened := 0
 	ws.AgentPanel().SetOpener(func(_ context.Context, cfg agentmanager.Config) (agentmanager.Session, error) {
 		r.cfg <- cfg
-		return r.fs, nil
+		opened++
+		if opened == 1 {
+			return r.fs, nil
+		}
+		s := newFakeSession()
+		r.mu.Lock()
+		r.more = append(r.more, s)
+		r.mu.Unlock()
+		return s, nil
 	})
-	ws.AgentPanel().Show()
+	if show {
+		ws.AgentPanel().Show()
+	}
 	r.p = gpui.NewHeadlessPlatform()
 	if err := r.p.Run(func(cx *gpui.App) {
 		cx.Keymap().AddBindings(ui.Bindings()...)
@@ -224,7 +248,7 @@ func TestAgentPermissionButtonAnswers(t *testing.T) {
 			{ID: "r", Name: "Reject", Kind: agentmanager.RejectOnce}}}
 	r.until("permission block", func() bool { return len(r.ws.AgentPanel().Transcript().Blocks()) == 1 })
 	r.hw.Pixels()
-	r.click(gpui.Point{X: 998, Y: 173})
+	r.click(gpui.Point{X: 998, Y: 197})
 	r.fs.mu.Lock()
 	ids, ans := r.fs.answerIDs, r.fs.answers
 	r.fs.mu.Unlock()

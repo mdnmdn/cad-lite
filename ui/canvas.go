@@ -24,14 +24,31 @@ type canvasState struct {
 	panLast  gpui.Point
 	dl       render.DisplayList
 	hoverHit doc.Handle
+	// sized is true once the view has been sized to a painted canvas.
+	sized bool
+	// ref is the scale and canvas size the view was last framed at by the
+	// user (or a command); resizeView derives the scale for any later size
+	// from it, so a resize and its undoing restore the view exactly.
+	// resized is the scale resizeView last set; a different scale means the
+	// user zoomed since and ref is stale.
+	refScale, refW, refH, resized float64
 }
 
 // dragThreshold is how far (px) the pointer must move before a press
 // becomes a box selection.
 const dragThreshold = 4
 
-// zoomPerPixel converts wheel pixels to a zoom factor exponent.
+// zoomPerPixel converts notch wheel pixels to a zoom factor exponent: one
+// 20 px notch is a factor of about 1.087.
 const zoomPerPixel = 1.0 / 240
+
+// pinchPerPixel is the zoom exponent per pixel of precise Ctrl+wheel, which
+// is how browsers and some platforms deliver a trackpad pinch. A single event
+// is clamped to pinchMaxPixels so a burst cannot jump the view.
+const (
+	pinchPerPixel  = 1.0 / 100
+	pinchMaxPixels = 200
+)
 
 func (ws *Workspace) local(p gpui.Point) (float64, float64) {
 	return float64(p.X - ws.canvas.bounds.Origin.X), float64(p.Y - ws.canvas.bounds.Origin.Y)
@@ -58,6 +75,12 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			}
 			switch e.Button {
 			case gpui.MouseMiddle:
+				if e.ClickCount == 2 {
+					c.panning = false
+					commands.ZoomExtents(ws.session.Drawing(), ws.view)
+					ws.pointerMoved(e.Position)
+					break
+				}
 				c.panning, c.panLast = true, e.Position
 			case gpui.MouseRight:
 				ws.submit("", w)
@@ -73,6 +96,10 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 		}).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
 			ws.pointerMoved(e.Position)
+			w.Refresh()
+		}).
+		OnHoverEnd(func(w *gpui.Window, _ *gpui.App) {
+			c.hover = false
 			w.Refresh()
 		}).
 		OnMouseUp(func(e *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
@@ -92,16 +119,41 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			w.Refresh()
 		}).
 		OnScrollWheel(func(e *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) {
-			if e.Modifiers&gpui.Shift != 0 {
-				ws.view.PanBy(float64(-e.DeltaX), float64(-e.DeltaY))
-			} else {
-				x, y := ws.local(e.Position)
-				ws.view.ZoomAt(x, y, math.Exp(-float64(e.DeltaY)*zoomPerPixel))
-			}
+			ws.wheel(e)
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
 		Child(gpui.NewCanvas(ws.paintCanvas))
+}
+
+// wheel maps a scroll event to a view change:
+//
+//   - Ctrl or Cmd: zoom about the pointer, smoothly for precise deltas (a
+//     pinch delivered as Ctrl+wheel) and by notch steps otherwise;
+//   - Shift, or a horizontal notch: pan;
+//   - precise deltas (a trackpad's two-finger scroll): pan by the deltas;
+//   - a vertical notch: zoom about the pointer.
+//
+// With WheelZoom set a precise vertical scroll zooms too, like a mouse wheel.
+func (ws *Workspace) wheel(e *gpui.ScrollWheelEvent) {
+	dx, dy := float64(e.DeltaX), float64(e.DeltaY)
+	x, y := ws.local(e.Position)
+	switch {
+	case e.Modifiers&(gpui.Control|gpui.ModPlatform) != 0:
+		k := zoomPerPixel
+		if e.Precise {
+			k = pinchPerPixel
+		}
+		ws.view.ZoomAt(x, y, math.Exp(-math.Max(-pinchMaxPixels, math.Min(pinchMaxPixels, dy))*k))
+	case e.Modifiers&gpui.Shift != 0:
+		ws.view.PanBy(-dx, -dy)
+	case e.Precise && !ws.WheelZoom:
+		ws.view.PanBy(-dx, -dy)
+	case dx != 0 && dy == 0:
+		ws.view.PanBy(-dx, 0)
+	default:
+		ws.view.ZoomAt(x, y, math.Exp(-dy*zoomPerPixel))
+	}
 }
 
 // pointerMoved updates hover, pan, box and the session cursor.
@@ -132,10 +184,19 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 	c := &ws.canvas
 	c.bounds = b
 	v := ws.view
-	v.Width, v.Height = float64(b.Size.W), float64(b.Size.H)
+	before := *v
+	ws.resizeView(b)
 	if ws.fitPending && v.Width > 0 {
 		commands.ZoomExtents(ws.session.Drawing(), v)
 		ws.fitPending = false
+	}
+	if *v != before {
+		// The model point under the pointer moved, and the status bar was
+		// built before this frame changed the view.
+		if c.hover {
+			ws.pointerMoved(c.mouse)
+		}
+		w.Refresh()
 	}
 	w.PushClip(b)
 	defer w.PopClip()
@@ -170,10 +231,33 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 		}
 	}
 	ws.ucsIcon(dl)
-	if c.hover && b.Contains(c.mouse) {
+	if ws.pointerOnCanvas() {
 		ws.cursorItems(dl)
 	}
 	gpuirender.Painter{Origin: b.Origin, View: *v}.Paint(w, dl)
+}
+
+// resizeView sizes the view to the canvas. When the size of a canvas that
+// has been shown changes (a window resize, the agent panel opening), the
+// scale is adjusted so the model box that was visible stays fully visible
+// around the same centre: the view shrinks or grows with the canvas rather
+// than clipping. The new scale is always derived from the last scale the
+// user chose (canvasState.refScale), so undoing a resize restores the view.
+func (ws *Workspace) resizeView(b gpui.Bounds) {
+	c, v := &ws.canvas, ws.view
+	w, h := float64(b.Size.W), float64(b.Size.H)
+	if w <= 0 || h <= 0 {
+		return
+	}
+	if c.sized && !ws.fitPending && v.Width > 0 && v.Height > 0 && (w != v.Width || h != v.Height) {
+		if v.Scale != c.resized {
+			c.refScale, c.refW, c.refH = v.Scale, v.Width, v.Height
+		}
+		v.Scale = math.Max(render.MinScale, math.Min(render.MaxScale, c.refScale*math.Min(w/c.refW, h/c.refH)))
+		c.resized = v.Scale
+	}
+	v.Width, v.Height = w, h
+	c.sized = true
 }
 
 // gridItems draws grid lines every power of ten that is at least 16 px
@@ -257,6 +341,12 @@ func snapMarker(dl *render.DisplayList, hit cmdsys.SnapHit, r float64) {
 	default:
 		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y + r}, {X: p.X + r, Y: p.Y + r}, {X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y - r}}, colSnap, 2, true)
 	}
+}
+
+// pointerOnCanvas reports whether a real pointer position is known and
+// over the canvas, which is when the crosshair, pickbox and coordinates show.
+func (ws *Workspace) pointerOnCanvas() bool {
+	return ws.canvas.hover && ws.canvas.bounds.Contains(ws.canvas.mouse)
 }
 
 // ScreenPoint returns where the model point p appears in window

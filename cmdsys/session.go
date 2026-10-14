@@ -41,6 +41,8 @@ type Session struct {
 	lastPoint *geom.Vec2
 
 	onDrawing []func(*doc.Drawing)
+	onPath    []func(string)
+	filePath  string
 }
 
 // HistoryLimit caps the number of history lines kept.
@@ -49,7 +51,7 @@ const HistoryLimit = 200
 // NewSession returns a session over d showing view, with commands from reg.
 func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 	s := &Session{registry: reg, Snaps: DefaultSnaps, SnapOn: true, Aperture: 8}
-	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, replace: s.SetDrawing}
+	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, replace: s.SetDrawing, setPath: s.SetFilePath}
 	s.SetDrawing(d)
 	return s
 }
@@ -61,6 +63,26 @@ func (s *Session) SetFiles(f FileHandler) { s.ctx.Files = f }
 // replaced (OPEN, NEW), including the replacement's first change listener
 // wiring.
 func (s *Session) OnDrawing(f func(*doc.Drawing)) { s.onDrawing = append(s.onDrawing, f) }
+
+// FilePath returns the path of the last file OPENed or SAVEd, or "".
+func (s *Session) FilePath() string { return s.filePath }
+
+// SetFilePath records path as the drawing's file (OPEN and SAVE call it) and notifies the
+// OnFilePath listeners. The host calls it for a file opened at startup.
+func (s *Session) SetFilePath(path string) {
+	s.filePath = path
+	for _, f := range s.onPath {
+		f(path)
+	}
+}
+
+// OnFilePath registers f to be called whenever the drawing's file path is set.
+func (s *Session) OnFilePath(f func(string)) { s.onPath = append(s.onPath, f) }
+
+// SetAgentHandler installs the host's AI agent entry point, which the AI command calls with the
+// prompt text, or with "" to toggle the agent panel. Without a handler the command reports that
+// no agent is available.
+func (s *Session) SetAgentHandler(f func(prompt string)) { s.ctx.agent = f }
 
 // SetDrawing replaces the document, cancelling any command and rebuilding
 // the spatial index.

@@ -84,12 +84,15 @@ type MouseMoveEvent struct {
 func (e MouseMoveEvent) isPlatformInput() {}
 
 // ScrollWheelEvent is a scroll at Position by DeltaX/DeltaY logical pixels.
-// Positive DeltaY means scroll down (content moves up).
+// Positive DeltaY means scroll down (content moves up). Precise is true for
+// pixel-precise deltas (a trackpad) and false for discrete line or notch
+// steps (a mouse wheel); a backend that cannot tell leaves it false.
 type ScrollWheelEvent struct {
 	Position  Point
 	DeltaX    Pixels
 	DeltaY    Pixels
 	Modifiers Modifiers
+	Precise   bool
 }
 
 func (e ScrollWheelEvent) isPlatformInput() {}

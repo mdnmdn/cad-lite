@@ -145,8 +145,10 @@ mostly meet it as the `*Window` argument of `Render` and event handlers.
 | `Draw(cx *App)` | Run the full pipeline (render, layout, prepaint, paint, swap, raster, present). Called by the platform. |
 | `DispatchEvent(input PlatformInput, cx *App)` | Route one input event through the rendered frame, inside `App.Update`. |
 | `Close()` | Remove the window from the app, release an `EntityView` root's reference and quit the platform window. Idempotent. |
-| `Bounds() Bounds` | Window size in logical pixels (falls back to the options, then 800x600). |
-| `ScaleFactor() float32` | Device pixel ratio. |
+| `Bounds() Bounds` | Window size in logical pixels: the platform size divided by `UIScale` (falls back to the options, then 800x600). |
+| `ScaleFactor() float32` | Effective raster scale: the platform's device pixel ratio times `UIScale`. |
+| `SetUIScale(f float32)` | Zoom the whole UI by `f` (clamped to 0.25..4, default 1): layout sees the platform size divided by `f`, the scene rasterizes at the device scale times `f` (text stays sharp), and `DispatchEvent` divides pointer positions by `f`. Wheel deltas are not divided. Invalidates the window. |
+| `UIScale() float32` | The current UI zoom. |
 | `SetBackground(c Rgba)` | Colour the frame is cleared to (default opaque white). |
 | `Scene() *Scene` | The last drawn frame's scene, for inspection. |
 | `HitTest(p Point) (GlobalElementID, bool)` | Id of the element owning the topmost hitbox at `p` in the last frame; compare with `Equal`. |

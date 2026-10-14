@@ -21,6 +21,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 
 | Package | Purpose |
 |---|---|
+| `go-draw/assets/appicon` | Package appicon embeds go-draw's application icon as the PNG set the window icon is made of. |
 | `go-draw/assets/icons` | Package icons holds go-draw's icon set: monochrome 24x24 SVG files, one per registry row in icons.yaml, embedded into the binary. |
 | `go-draw/cadmcp` | Package cadmcp exposes the go-draw drawing to AI agents as MCP tools. |
 | `go-draw/cmd/cad` | Command cad is the go-draw desktop application: an AutoCAD-style 2D drafting editor built on the gpui library and shown in an ebiten window. |
@@ -36,7 +37,8 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `go-draw/render/gpuirender` | Package gpuirender draws a render.DisplayList with the gpui library. |
 | `go-draw/spatial` | Package spatial indexes entity bounding boxes for viewport culling, selection and snap-candidate gathering. |
 | `go-draw/tools/docs` | Command docs maintains the _docs/ library: it lints documents against the rules in _docs/_meta/librarian.md, lists the documents a change touches, reports drift between documents and the code they anchor, and regenerates the INDEX.md catalogue and the code map. |
-| `go-draw/ui` | Package ui is the application shell built on the gpui library: toolbar, drawing canvas, layer and properties panel, command line and status bar. |
+| `go-draw/tools/gui` | Command gui runs go-draw's real interactive window under Xvfb with software GL, drives it with xdotool from a scenario file, and captures screenshots. |
+| `go-draw/ui` |  |
 
 <!-- docs-index:end -->
 

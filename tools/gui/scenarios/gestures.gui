@@ -1,0 +1,36 @@
+# Wheel gestures: notch zooms, Shift+wheel and horizontal notches pan,
+# Ctrl+wheel zooms, double middle click zooms to extents. No crosshair
+# before the pointer is known, and the view reframes when F2 narrows the canvas.
+app -demo
+shot start
+wheel -3 535 421
+shot notch-zoom
+expect-diff start notch-zoom
+dclick middle 535 421
+shot extents
+hold shift
+wheel 3 535 421
+release shift
+shot shift-pan
+expect-diff extents shift-pan
+dclick middle 535 421
+shot extents2
+expect-same extents2 extents
+hwheel 3 535 421
+shot hpan
+expect-diff extents2 hpan
+dclick middle 535 421
+hold ctrl
+wheel -4 535 421
+release ctrl
+shot ctrl-zoom
+expect-diff extents2 ctrl-zoom
+dclick middle 535 421
+shot extents3
+key F2
+shot panel-open
+expect-diff extents3 panel-open
+key F2
+shot panel-closed
+expect-same extents3 panel-closed
+expect-same extents3 extents

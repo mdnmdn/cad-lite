@@ -1100,6 +1100,10 @@ type ScrollWheelEvent struct {
     Position Point
     DeltaX, DeltaY Pixels
     Modifiers Modifiers
+    // Precise is true when the deltas are pixel-precise (a trackpad or another
+    // smooth-scroll device) and false when they are discrete line/notch steps
+    // (a mouse wheel). Backends that cannot tell leave it false.
+    Precise bool
 }
 type ClickEvent struct {
     Up *MouseUpEvent
@@ -1523,8 +1527,15 @@ type Window struct {
     // focus, mouse position, invalid flag, root EntityRoot, scale factor,
     // text shaper cache, element state map, scroll offsets.
 }
-func (w *Window) Bounds() Bounds          // in logical px
-func (w *Window) ScaleFactor() float32
+func (w *Window) Bounds() Bounds          // in logical px: platform size / UIScale
+func (w *Window) ScaleFactor() float32    // effective raster scale: platform device scale * UIScale
+// SetUIScale zooms the whole UI: layout sees platform size / f logical px,
+// the scene rasterizes at device scale * f (text included), and DispatchEvent
+// divides pointer positions by f, so platforms need no change. f is clamped to
+// [0.25, 4]; the default 1 changes nothing (renders are pixel-identical). It
+// invalidates the window. ScrollWheelEvent deltas are not divided.
+func (w *Window) SetUIScale(f float32)
+func (w *Window) UIScale() float32
 func (w *Window) Refresh()                // mark dirty, request frame
 func (w *Window) RequestFocus(h *FocusHandle)
 func (w *Window) Focus() *FocusHandle
@@ -1647,7 +1658,8 @@ func (f *Frame) HitTest(p Point) int
 6. `Paint` each element in tree order: emits quads/glyphs/underlines with the
    scene order incremented per primitive.
 7. Swap `nextFrame` into `renderedFrame`.
-8. If there is a `PlatformWindow`: re-read its `ScaleFactor()`, scale the scene
+8. If there is a `PlatformWindow`: re-read its `ScaleFactor()` (the device scale;
+   the effective scale is that times `UIScale()`), scale the scene
    from logical to device px, rasterize (cleared to the background color) and
    call `Present(pix, round(w*scale), round(h*scale))`; then call
    `SetInputHandler(focusedInputHandler())` (nil when none is focused).
@@ -2004,7 +2016,15 @@ Input mapping in `Update`:
   `MouseMoveEvent` when it changed.
 - `ebiten.Wheel()` → `ScrollWheelEvent` (note: ebiten's wheel y is typically
   inverted relative to scroll-down-positive; normalize so positive `DeltaY`
-  means scroll down / content moves up).
+  means scroll down / content moves up). `Precise` is set from the raw
+  values: ebiten exposes no device kind, so the backend classifies each
+  event (a fractional or two-axis delta is precise; an integral one-axis delta
+  is a notch unless it follows a precise event within 250 ms). Precise deltas
+  are 10 px per ebiten unit (GLFW already scales macOS precise deltas by 0.1),
+  notches 20 px per line; under `GOOS=js` ebiten's units are CSS pixels and
+  are passed through unscaled, with integral deltas of 50 or more taken as
+  notches. A pinch that a browser delivers as Ctrl+wheel arrives as a
+  precise event with `Control` set.
 - `ebiten.AppendInputChars` → `KeyDownEvent{PreferCharacterInput:true}` per
   rune, always — except while a shortcut modifier is held: Cmd on darwin,
   Super elsewhere (`ModPlatform`), or Ctrl unless it is AltGr (Ctrl+Alt on

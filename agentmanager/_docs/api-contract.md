@@ -226,3 +226,59 @@ handshakes (ACP, Codex), returns a Session; MCP injection and Close semantics as
 ## ToolCallPatch.MCPServer
 
 `ToolCallPatch` carries `MCPServer string`: the owning MCP server when the backend knows it. Backends set it (Claude from `mcp__server__tool`, Codex from MCP tool-call items, ACP from the tool call's MCP metadata or title). `AllowMCP` matches on it first and falls back to title prefixes.
+
+## Package `store` (session persistence)
+
+A directory-based store of conversations, stdlib plus `agentmanager` and `agentmanager/transcript`. One
+session is one file `<dir>/<id>.jsonl` (dir 0700, files 0600), one JSON line per item. A line is the
+envelope `{"k":kind,"t":RFC3339Nano time,"d":payload}`; kinds are `meta` (first line: id, harness,
+created), `user`, `agent_session`, `permission_resolved` and one per `agentmanager.Event` (`session_started`,
+`text`, `thought`, `tool_start`, `tool_update`, `permission`, `plan`, `turn_end`, `log`, `exited`). Event
+payloads are the event structs' default JSON (no tags on the frozen types); an empty `json.RawMessage`
+reads back as nil. Unknown kinds and unparsable lines are skipped, so a truncated last line costs only that line.
+
+```go
+// Meta describes one stored session; List returns it newest first (Updated, then ID).
+type Meta struct {
+	ID, Harness  string  // Harness is an agentmanager.Harness value
+	AgentSessionID string // backend resume id, "" until the backend reported one
+	Title        string  // first user prompt, whitespace collapsed, at most 80 runes
+	Created, Updated time.Time // Updated is the file's modification time
+}
+var ErrNotFound error
+
+type Store struct{ /* unexported */ }
+func Open(dir string) (*Store, error)     // does not touch the disk; the directory is created by Create
+func (s *Store) Dir() string
+func (s *Store) List() ([]Meta, error)    // unreadable files are skipped; a missing dir is an empty list
+func (s *Store) Create(harness agentmanager.Harness) (*Record, error)
+func (s *Store) Load(id string) (*Record, error)   // ErrNotFound when absent
+func (s *Store) Latest() (*Record, error)          // ErrNotFound when the store is empty
+func (s *Store) Delete(id string) error
+
+// OpenSet is the sessions a host had open (tabs) and the active one. It lives in `<dir>/open.json`
+// (0600, written atomically through a temporary file), separate from the session files.
+type OpenSet struct {
+	IDs    []string // session ids in tab order
+	Active string   // one of IDs, or ""
+}
+func (s *Store) SaveOpen(o OpenSet) error
+func (s *Store) LoadOpen() (OpenSet, error) // ErrNotFound when never saved; ids whose session is gone are dropped
+
+// Record is one open session; methods are goroutine-safe. The file opens on the first write, a write
+// after a truncated line starts a new line first, and TurnEnd, Exited and Close fsync.
+type Record struct{ /* unexported */ }
+func (r *Record) Meta() Meta
+func (r *Record) Append(ev agentmanager.Event) error  // SessionStarted also sets AgentSessionID
+func (r *Record) AddUser(text string) error
+func (r *Record) ResolvePermission(requestID string) error
+func (r *Record) SetAgentSessionID(id string) error
+func (r *Record) Items() []any                        // loaded and appended items: agentmanager.Event, store.User, store.Resolved
+func (r *Record) Replay(t *transcript.T)              // rebuilds a transcript; an unfinished turn ends with a cancelled TurnEnd
+func (r *Record) Close() error
+
+type User struct{ Text string }
+type Resolved struct{ RequestID string }
+func MarshalEvent(ev agentmanager.Event) ([]byte, error)    // envelope line without the newline
+func UnmarshalEvent(line []byte) (agentmanager.Event, error)
+```

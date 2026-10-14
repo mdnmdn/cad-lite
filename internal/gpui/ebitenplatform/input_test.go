@@ -74,13 +74,71 @@ func TestIsShortcut(t *testing.T) {
 	}
 }
 
-func TestWheelDelta(t *testing.T) {
-	dx, dy := wheelDelta(0, -1)
-	if dx != 0 || dy <= 0 {
-		t.Errorf("wheel down should be positive DeltaY, got %v,%v", dx, dy)
+func TestWheelNotchDirectionAndScale(t *testing.T) {
+	var c wheelClassifier
+	t0 := time.Unix(100, 0)
+	dx, dy, precise := c.classify(0, -1, t0)
+	if precise || dx != 0 || dy != wheelLinePixels {
+		t.Errorf("one notch down: got %v,%v precise=%v, want 0,%d false", dx, dy, precise, wheelLinePixels)
 	}
-	if _, dy := wheelDelta(0, 2); dy >= 0 {
-		t.Errorf("wheel up should be negative DeltaY, got %v", dy)
+	if _, dy, _ := c.classify(0, 2, t0.Add(time.Second)); dy != -2*wheelLinePixels {
+		t.Errorf("two notches up: got %v", dy)
+	}
+	if dx, _, precise := c.classify(-1, 0, t0.Add(2*time.Second)); precise || dx != wheelLinePixels {
+		t.Errorf("horizontal notch: dx=%v precise=%v", dx, precise)
+	}
+}
+
+func TestWheelPreciseHeuristic(t *testing.T) {
+	var c wheelClassifier
+	t0 := time.Unix(100, 0)
+	if _, dy, p := c.classify(0, -0.3, t0); !p || dy != 0.3*wheelPrecisePixels {
+		t.Errorf("fractional delta: precise=%v dy=%v", p, dy)
+	}
+	if _, _, p := c.classify(0, -1, t0.Add(16*time.Millisecond)); !p {
+		t.Error("whole delta right after a precise one should stay precise")
+	}
+	if _, _, p := c.classify(0, -1, t0.Add(16*time.Millisecond+wheelPreciseHold+time.Millisecond)); p {
+		t.Error("whole delta after the hold expired is a notch")
+	}
+	var d wheelClassifier
+	if _, _, p := d.classify(1, -1, t0); !p {
+		t.Error("two-axis delta is precise")
+	}
+	if _, _, p := (&wheelClassifier{}).classify(-2, 0, t0); p {
+		t.Error("integral one-axis delta with no history is a notch")
+	}
+}
+
+func TestWheelBrowserPixels(t *testing.T) {
+	c := wheelClassifier{pixels: true}
+	t0 := time.Unix(100, 0)
+	if _, dy, p := c.classify(0, -100, t0); p || dy != 100 {
+		t.Errorf("browser notch: dy=%v precise=%v", dy, p)
+	}
+	if _, dy, p := c.classify(0, -4, t0.Add(time.Second)); !p || dy != 4 {
+		t.Errorf("browser small integral delta is precise pixels: dy=%v precise=%v", dy, p)
+	}
+	if _, dy, p := c.classify(0, -2.5, t0.Add(2*time.Second)); !p || dy != 2.5 {
+		t.Errorf("browser pinch delta: dy=%v precise=%v", dy, p)
+	}
+}
+
+func TestPointerTrackerIgnoresInitialPosition(t *testing.T) {
+	var p pointerTracker
+	centre := gpui.Point{X: 400, Y: 300}
+	if p.observe(centre, false) || p.observe(centre, false) {
+		t.Error("the unchanged initial position must not be dispatched")
+	}
+	if !p.observe(gpui.Point{X: 401, Y: 300}, false) {
+		t.Error("a changed position is a real pointer")
+	}
+	if p.observe(gpui.Point{X: 401, Y: 300}, false) {
+		t.Error("an unchanged position after that is not a move")
+	}
+	var q pointerTracker
+	if !q.observe(centre, true) {
+		t.Error("a click or wheel at the initial position makes it known")
 	}
 }
 

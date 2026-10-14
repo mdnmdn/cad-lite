@@ -15,6 +15,7 @@ Standard library only; imports nothing from go-draw.
 | `jsonrpc` | newline-delimited JSON-RPC 2.0 connection (also raw line mode) |
 | `mcp` | loopback streamable-HTTP MCP server with bearer token |
 | `transcript` | folds events into chat blocks (pure) |
+| `store` | directory store of sessions (JSONL) and the open-tab set; replays into a transcript |
 | `acp` | ACP client backend (opencode preset) |
 | `claude` | Claude Code stream-json backend |
 | `codex` | Codex app-server backend |

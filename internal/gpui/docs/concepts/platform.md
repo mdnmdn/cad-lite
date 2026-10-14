@@ -73,9 +73,9 @@ Input mapping (`ebitenplatform/input.go`):
 
 | Source | Result |
 |---|---|
-| Cursor movement | `MouseMoveEvent` (logical px = cursor / scale) |
+| Cursor movement | `MouseMoveEvent` (logical px = cursor / scale); the first position is withheld until it changes or a button or the wheel is used, because ebiten reports a meaningless position before the pointer has entered the window |
 | Button press / release | `MouseDownEvent` / `MouseUpEvent`, plus `ClickEvent` when release is on the same element id as the press |
-| Wheel | `ScrollWheelEvent`, `20 px` per line, positive `DeltaY` = down |
+| Wheel | `ScrollWheelEvent`, positive `DeltaY` = down; `Precise` false: `20 px` per notch, true: `10 px` per ebiten unit (browser builds: CSS pixels as delivered) |
 | Shift / Ctrl / Alt / Meta | `Shift` / `Control` / `Alt` / `ModPlatform` |
 | Named keys, shortcuts | `KeyDownEvent` / `KeyUpEvent` |
 | Typed text | `KeyDownEvent{PreferCharacterInput: true}`; `Key` is the char (`"space"` for a space, lower-case letter + `Shift` for a capital), `KeyChar` the text, so bare bindings like `"a"`/`"space"` fire |

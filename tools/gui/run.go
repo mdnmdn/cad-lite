@@ -350,24 +350,40 @@ func (r *runner) step(s Step) error {
 				return err
 			}
 		}
-	case "wheel":
+	case "wheel", "hwheel":
 		// wheel dy [x y]: positive scrolls down (zoom out), negative up.
+		// hwheel dx [x y]: positive scrolls right, negative left.
 		if len(a) == 3 {
 			if err := r.move(a[1], a[2]); err != nil {
 				return err
 			}
 			time.Sleep(80 * time.Millisecond)
 		}
-		dy := atoi(a[0])
-		btn := "4"
-		if dy > 0 {
-			btn = "5"
-		} else {
-			dy = -dy
+		n := atoi(a[0])
+		down, up := "5", "4"
+		if s.Op == "hwheel" {
+			down, up = "7", "6"
 		}
-		if err := r.xdo("click", "--repeat", strconv.Itoa(dy), "--delay", "80", btn); err != nil {
+		btn := up
+		if n > 0 {
+			btn = down
+		} else {
+			n = -n
+		}
+		if err := r.xdo("click", "--repeat", strconv.Itoa(n), "--delay", "80", btn); err != nil {
 			return err
 		}
+	case "hold", "release":
+		// hold MOD / release MOD: keep a modifier (ctrl, shift, alt, super) down
+		// across other steps, such as a wheel.
+		cmd := "keydown"
+		if s.Op == "release" {
+			cmd = "keyup"
+		}
+		if err := r.xdo(cmd, a[0]); err != nil {
+			return err
+		}
+		time.Sleep(120 * time.Millisecond)
 	case "wait":
 		ms, err := strconv.Atoi(a[0])
 		if err != nil {

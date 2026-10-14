@@ -3,6 +3,9 @@
 package icons
 
 const (
+	// AppSettings: open the settings panel
+	AppSettings Name = "app-settings"
+
 	// DrawArc: a curved piece of a circle with its two end points
 	DrawArc Name = "draw-arc"
 
@@ -84,6 +87,7 @@ const (
 
 // All lists every icon that has a file, in name order.
 var All = []Name{
+	AppSettings,
 	DrawArc,
 	DrawCircle,
 	DrawLine,

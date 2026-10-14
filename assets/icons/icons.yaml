@@ -130,3 +130,9 @@ categories:
       goal: the layer new geometry goes on
       source: adopted:layers
       keywords: [layer, current, stack]
+
+  app:
+    app-settings:
+      goal: open the settings panel
+      source: adopted:settings
+      keywords: [settings, preferences, options, gear, cog, theme]

@@ -2,8 +2,10 @@ package ui
 
 import (
 	"encoding/json"
+	"time"
 
 	"agentmanager"
+	"agentmanager/store"
 	"agentmanager/transcript"
 )
 
@@ -11,6 +13,7 @@ import (
 // renders and screenshots; no agent runs.
 func SeedAgentDemo(ws *Workspace) {
 	p := ws.AgentPanel()
+	p.hist.loaded, p.hist.off = true, true
 	p.Show()
 	p.Configure(agentmanager.Claude, "")
 	str := func(s string) *string { return &s }
@@ -34,4 +37,16 @@ func SeedAgentDemo(ws *Workspace) {
 				{ID: "r", Name: "Reject", Kind: agentmanager.RejectOnce},
 			}})
 	})
+	second := newAgentTab()
+	second.tr.AddUser("Add a centre line")
+	second.tr.Apply(agentmanager.TextDelta{Text: "Done."})
+	second.tr.Apply(agentmanager.TurnEnd{Reason: agentmanager.StopEndTurn})
+	second.attention = true
+	third := newAgentTab()
+	p.tabs = append(p.tabs, second, third)
+	p.hist.menu = true
+	p.hist.sessions = []store.Meta{
+		{ID: "d1", Harness: "claude", Title: "Draw a 100 by 60 plate with a 10 mm hole in each corner", Updated: time.Now().Add(-2 * time.Minute)},
+		{ID: "d2", Harness: "codex", Title: "Add a centre line", Updated: time.Now().Add(-26 * time.Hour)},
+	}
 }

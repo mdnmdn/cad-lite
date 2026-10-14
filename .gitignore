@@ -6,4 +6,5 @@
 /assets/icons/variants/
 /assets/appicon/preview/
 !/assets/appicon/*.png
+/.go-draw/
 /cmd/cad/rsrc_windows_*.syso

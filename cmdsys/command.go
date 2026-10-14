@@ -46,6 +46,8 @@ type Context struct {
 	txn     *doc.Txn
 	out     func(string)
 	replace func(*doc.Drawing)
+	setPath func(string)
+	agent   func(string)
 }
 
 // FileHandler reads and writes drawings for the file commands.
@@ -72,6 +74,26 @@ func (c *Context) Printf(format string, args ...any) { c.out(fmt.Sprintf(format,
 
 // ReplaceDrawing swaps the open document for d (OPEN and NEW).
 func (c *Context) ReplaceDrawing(d *doc.Drawing) { c.replace(d) }
+
+// SetFilePath records path as the drawing's file after a successful OPEN or SAVE.
+func (c *Context) SetFilePath(path string) {
+	if c.setPath != nil {
+		c.setPath(path)
+	}
+}
+
+// HasAgent reports whether the host installed an AI agent handler.
+func (c *Context) HasAgent() bool { return c.agent != nil }
+
+// Agent hands prompt to the host's AI agent; an empty prompt asks the host to toggle its agent
+// panel. It reports false when the host has no agent.
+func (c *Context) Agent(prompt string) bool {
+	if c.agent == nil {
+		return false
+	}
+	c.agent(prompt)
+	return true
+}
 
 // Registry maps command names and aliases to command factories.
 type Registry struct {
