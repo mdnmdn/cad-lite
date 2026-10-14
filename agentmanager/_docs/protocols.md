@@ -124,3 +124,45 @@ against Claude Code 2.1.299 (see "Live test").
   2.1.299: init after the first line, partial deltas with no duplicated final text, `mcp__cad__ping` through our
   `mcp.Server` with bearer auth and `AllowMCP("cad")` auto-allow, allow and deny round trips (`Bash` needs a non-read-only
   command such as `touch`; `echo` is auto-allowed by Claude itself), interrupt then a fresh prompt on the same process.
+
+## ACP (package `acp`)
+
+Generic Agent Client Protocol v1 client (JSON-RPC 2.0, newline-delimited, stdio). `acp.New(Command)` serves any
+ACP agent; `acp.OpenCode()` is the preset for `opencode acp`. `Config.Binary` overrides the executable and
+`Config.Args` is appended after `acp`. There is no `opencode` CLI in the test environment: everything is verified
+against `internal/fakeagent` (builtins `echo-turn`, `tool-turn`, see its `RunACP` comment); a live run is not done.
+
+- **Handshake** (each step 30 s). `initialize {protocolVersion:1, clientInfo, clientCapabilities:{fs:{readTextFile:false,
+  writeTextFile:false}, terminal:false}}`; a reply with another protocol version aborts. `authenticate` is sent only
+  when `result._meta.defaultAuthMethodId` exists. `session/new {cwd, mcpServers}` (`mcpServers` is always an array).
+  Error `-32000` becomes "authentication required" (OpenCode adds ``authenticate the CLI first (`opencode auth login`)``
+  plus the advertised method ids). `Config.ResumeID` uses `session/load` (needs `loadSession`); the history the agent
+  replays while loading is dropped. `Config.Model` is applied over the wire (`session/set_config_option` on the
+  `model`-category option, else `session/set_model`), never argv; a failure is a warn `Log`. `SessionStarted` follows.
+- **MCP injection.** With `mcpCapabilities.http`, each `Config.MCPServers` entry is sent in `session/new` as
+  `{type:"http", name, url, headers:[{name:"Authorization", value:"Bearer TOKEN"}]}`. Without it, `OpenCode()`
+  restarts the process once with `OPENCODE_CONFIG_CONTENT={"mcp":{name:{type:"remote",url,headers,enabled:true}}}` and
+  sends `mcpServers:[]`; a generic `New` agent gets a warn `Log` and no servers. Bearer tokens are redacted from
+  `Logger` output.
+- **Preset.** `opencode acp`, extra env `OPENCODE_DISABLE_CLAUDE_CODE=1`. No permissive flags or modes: permissions
+  are real round trips.
+- **Prompt slot.** `Prompt` sets a single turn flag, writes `session/prompt` with `CallAsync` and returns; a second
+  prompt while running is an error. `Config.SystemPrompt` prefixes the first prompt of the session. The response ends
+  the turn: `stopReason` maps to `TurnEnd.Reason`; a JSON-RPC error is `TurnEnd{Failed, message}` and the session stays
+  usable. If the process dies mid-turn no `TurnEnd` is sent, `Exited{Err}` follows.
+- **Updates.** `agent_message_chunk` -> `TextDelta`, `agent_thought_chunk` -> `ThoughtDelta` (text content only),
+  `tool_call` -> `ToolCallStart`, `tool_call_update` -> `ToolCallUpdate` (absent field = unchanged; text of `content`
+  items becomes `Output`, diffs as `diff <path>`), `plan` -> `PlanUpdate`. `user_message_chunk`,
+  `available_commands_update` and the other update kinds are ignored. Unknown kinds map to `other`. `MCPServer`/`MCPTool`
+  are derived from the title prefix (`<server>_<tool>`, `mcp__server__tool`, `server.tool`, `server:tool`, `server/tool`)
+  against the configured servers and remembered per tool call id so later patches and permission requests carry it.
+- **Permissions.** `session/request_permission` becomes `PermissionRequest` with `RequestID` `n:<num>` or `s:<str>` (the
+  raw JSON-RPC id is echoed). `Config.AutoApprove` is consulted first; an answer is sent at once and the UI only sees an
+  info `Log`. Otherwise the request is parked until `RespondPermission`; the reply is
+  `{outcome:{outcome:"selected",optionId}}` or `{outcome:{outcome:"cancelled"}}`. A turn end drops outstanding requests
+  without replying. `Cancel` replies `cancelled` to every outstanding request, then sends the `session/cancel`
+  notification; the turn ends with `StopCancelled` when the agent says so.
+- **Other inbound requests** (`terminal/*`, `fs/*`, `elicitation/*`, vendor methods) get `-32601` once.
+- **Exit.** When stdout closes or the process exits, `Exited` is the last event (`Err` empty only after `Close`), the event
+  channel closes and every method returns `agentmanager.ErrClosed`. `Close` answers pending permissions `cancelled`,
+  cancels a running turn, closes stdin, waits up to 10 s, then kills the process group. Idempotent.
