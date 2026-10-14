@@ -84,3 +84,10 @@ New lines are appended below this heading.
 | G43 | Settings: a key-binding editor | [Settings](features/settings.md) |
 | G44 | gpui has no pointer capture, so the UI-scale slider applies only on release instead of live while dragging | [Settings](features/settings.md) |
 | G45 | Tab traversal: no Tab binding to FocusNext, so the panels cannot be walked by keyboard | [UI framework](tech/ui-framework.md) |
+| G46 | Performance: `spatial.Index.Query` scans and sorts on every frame, `Drawing.Layer(name)` is a linear lookup per entity per frame, `InvalidateAll` runs on every mutating MCP call and `Txn.Erase` is O(n) per entity | [Rendering](tech/rendering.md), [Document model](tech/document-model.md) |
+| G47 | Performance: `cadmcp.Snapshot` renders and PNG-encodes up to 2048x2048 on the UI goroutine; cap the pixel count or render off the goroutine | [Agent integration](tech/agent-integration.md) |
+| G48 | `tools/gui` runs `RemoveAll` on `-out/<scenario>`; refuse paths outside `_tmp/` unless `-force` | [Testing](tech/testing.md) |
+| G49 | The `cad` MCP server has no cap on batch length and no `WriteTimeout` (only `IdleTimeout` and the header timeout are set) | [Agent integration](tech/agent-integration.md) |
+| G50 | No "unsaved changes" confirmation for a human NEW, OPEN or quit (the drawing has no dirty flag), and SAVE has no path allow-list; agents cannot run them, humans can | [DXF files](features/dxf-files.md) |
+| G51 | gpui `text.go` uses the deprecated `ClusterIndex` (staticcheck SA1019); fixing it needs a `go-text/typesetting` bump | [UI framework](tech/ui-framework.md) |
+| G52 | Promote the random-script fuzz to a `go test -fuzz` target with `NaN` and `1e308` tokens in the pool, and add a fuzz target for the DXF reader | [Testing](tech/testing.md) |

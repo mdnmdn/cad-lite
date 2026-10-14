@@ -61,11 +61,22 @@ text, integer and Enter. `cmdsys.Input` carries the response.
      otherwise, at a point prompt with a base, a point that distance along the cursor direction
      (direct distance entry);
    - free text, when accepted.
-   A parse error is printed to the history and the prompt stays.
+   A parse error is printed to the history and the prompt stays. Numbers must be finite: `nan`,
+   `inf` and values that overflow (`1e999`) are rejected as an invalid value, and a point whose result overflows
+   to infinity as an invalid point.
 5. **Scripts** follow AutoCAD script rules: `Session.Script` splits on single spaces and newlines and
    submits each token; an empty token (two separators in a row) is Enter.
 6. **A selection prompt answers with the selection set** when the user presses Enter. Modify commands
    take a non-empty pre-selection without prompting (noun-verb editing) and clear the selection.
+
+7. **A panic in a command does not end the session.** `Session.guard` wraps the command's `Start`,
+   `Input`, `Cancel` and `Preview`. On a panic it aborts the open transaction (`doc.Drawing.AbortOpen`),
+   ends the command and its prompt, and prints `Error: NAME failed: ...`; the session accepts the next
+   command.
+8. **Human-only commands.** A command that implements `cmdsys.HumanOnly` (NEW, OPEN, SAVE) is refused
+   with `NAME is not available to agents.` while `Session.SetAgentCaller(true)` is on, by name or alias,
+   and an agent cannot answer the prompt of one a human started. `cadmcp` sets the flag around every
+   tool body; see [Agent integration](agent-integration.md).
 
 ## Input pipeline
 

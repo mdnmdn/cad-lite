@@ -31,6 +31,8 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `go-draw/fileio` | Package fileio is the file I/O plugin layer: format readers and writers register here and are chosen by file extension. |
 | `go-draw/fileio/dxf` | Package dxf reads and writes ASCII DXF. |
 | `go-draw/geom` | Package geom is the geometry kernel: double-precision 2D vectors, affine transforms, boxes and curves. |
+| `go-draw/i18n` | Package i18n is go-draw's internationalisation foundation: English and Italian message catalogs, language selection and detection, plurals, localized command-line keywords and the per-command metadata (display name, description, tooltip, typed aliases). |
+| `go-draw/i18n/cmd/i18ncheck` | Command i18ncheck verifies go-draw's message catalogs and finds user-facing string literals that are not catalog keys yet. |
 | `go-draw/internal/gpui` |  |
 | `go-draw/internal/gpui/ebitenplatform` | Package ebitenplatform implements gpui.Platform on top of ebiten. |
 | `go-draw/render` | Package render turns document entities into a backend-neutral display list and owns the view (camera). |

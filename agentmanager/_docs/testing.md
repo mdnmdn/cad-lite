@@ -56,6 +56,7 @@ Protocol authors use `NewRunner(in, out)`: `ReadFrame`, `WriteFrame` (with `$var
 - `jsonrpc` tests use `io.Pipe` pairs in memory.
 - `internal/proc` tests re-exec the test binary as the child (`TestMain` keyed on `PROC_HELPER`).
 - The race detector makes a child test binary take about a second to exit; that is not a bug.
+- `jsonrpc` tests also cover the inbound line cap (`TestOverlongLineStopsReader`, `TestLineAtCapIsAccepted`) and a failed write stopping the writer (`TestWriteErrorStopsWriterAndFailsPending`); `proc` counts `/proc/self/fd` to prove `Close` releases the pipes (`TestCloseReleasesPipeDescriptors`); `mcp` checks that a cancelled call neither waits for nor runs after a busy handler (`TestCancelledCallDoesNotWaitForOrRunAfterBusyHandler`).
 
 ## Real MCP calls from the fakes
 

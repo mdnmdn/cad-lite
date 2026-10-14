@@ -7,7 +7,7 @@ summary: Opening and saving DXF drawings from the command line and the -open fla
 read_when: you are changing OPEN, SAVE or the -open flag, or how file problems are reported to the user
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/util.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go]
+code_anchors: [cmdsys/commands/util.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -26,6 +26,10 @@ reported rather than hidden, so the drafter knows what the opened drawing lacks.
 - **SAVE** asks `Enter path of drawing to save` and writes the current drawing; the history reads
   `Saved <path> (<n> entities).`
 - **NEW** discards the drawing for an empty one and does not touch files.
+- NEW, OPEN and SAVE are human-only: an AI agent that tries them is refused with
+  `<NAME> is not available to agents.` (see the [command system](../tech/command-system.md)).
+- **SAVE is atomic.** The file is written beside the target and renamed over it, so a failed save
+  (full disk, write error) leaves the previous file intact.
 - The path is typed text, so Space does not submit it. The file format is chosen by the extension,
   case-insensitively; `.dxf` is the only one.
 - `-open PATH` on the command line opens a file at startup and zooms to its extents.
@@ -55,6 +59,7 @@ A failure ends the command and leaves the drawing as it was:
 |---|---|
 | File missing or unreadable | `Open failed: <operating system message>` |
 | Malformed or binary DXF | `Open failed: dxf: line N: ...` |
+| Truncated DXF (a section without `ENDSEC`) | `Open failed: dxf: section "ENTITIES" has no ENDSEC (truncated file?)` |
 | Extension with no reader or writer | `Open failed: no reader for ".dwg" files`, or `Save failed: no writer for ...` |
 | Path not writable | `Save failed: <operating system message>` |
 
@@ -83,7 +88,9 @@ builds the registry, opens `-open` before creating the workspace and calls
 - Saving writes unknown entities of R12 classes and the preserved tables and blocks. Unknown
   entities of other classes are absent from the saved file, each with a warning, so a round trip of
   a file that has them is lossy.
-- The reader rejects binary DXF and files that end inside a group-code pair.
+- The reader rejects binary DXF, files that end inside a group-code pair and sections without `ENDSEC`.
+  A file without the `EOF` marker opens with a warning, and non-finite numbers (`nan`, `inf`) are read as
+  0 with a warning.
 
 ## Related docs
 

@@ -7,7 +7,7 @@ summary: How go-draw hosts AI agents: the separate agentmanager module, the in-p
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod]
+code_anchors: [ui/agent.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -41,7 +41,10 @@ The first session start creates one `mcp.Server` named for go-draw, registers `c
 URL and bearer token to the agent as `agentmanager.MCPServer{Name: "cad"}`. Every request needs the
 token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of the workspace (the MCP server is stateless per request): it
 starts with the first session and closes when the last one stops, exits or quits, so the port and token
-never outlive the chats.
+never outlive the chats. Tool calls are serialized by a capacity-one semaphore that honours the request
+context, so a cancelled request neither waits for nor runs after a busy handler. The HTTP server sets a
+header timeout of 10 s and an `IdleTimeout` of 2 minutes; it sets no write timeout and no batch-length
+cap (see the [backlog](../backlog.md)).
 
 The tools (all coordinates in model units, Y up; one tool call is one undo step):
 
@@ -60,6 +63,14 @@ The tools (all coordinates in model units, Y up; one tool call is one undo step)
 
 `render_png` is drawn by `ui.Snapshot`, headlessly, from the session; it never captures the window.
 
+**Agents cannot run file or destructive commands.** `cadmcp` runs every tool body through `call`, which
+sets `Session.SetAgentCaller(true)` for its duration. A command that implements `cmdsys.HumanOnly` (NEW,
+OPEN and SAVE today) is refused with `<NAME> is not available to agents.`, whatever alias or script
+reached it, and an agent cannot answer a file prompt that a human started. A future QUIT or SAVEAS opts
+in by implementing the interface. `call` also recovers a panic in a tool body, aborts any open
+transaction (`doc.Drawing.AbortOpen`) and returns an error, so a bad tool call leaves the drawing usable;
+the session's own guard is in the [command system](command-system.md).
+
 ## The UI-goroutine rule
 
 gpui and `cmdsys.Session` are single threaded and gpui has no cross-goroutine post. MCP handlers run on
@@ -77,7 +88,10 @@ HTTP goroutines, so:
 4. Each session launch (`harnesses.Open`, which spawns a process) runs on its own goroutine and hands
    the result back through a per-tab mutex-guarded slot that the timer reads.
 5. Stopping the last live session closes the dispatcher first, so waiting tool calls fail fast, then
-   closes the session and the server in the background; quit waits for them.
+   closes the session and the server in the background; quit waits for them. Quit also joins the
+   session starts still in flight (bounded at 10 s), and a start that finishes after its tab has moved
+   on closes its session instead of leaking the agent process. `cmd/cad` calls `Workspace.CloseAgent`
+   before every fatal exit, because `log.Fatal` and `os.Exit` skip deferred calls.
 
 ## Persistence and resume
 
@@ -96,7 +110,11 @@ the agent's edits between frames.
 ## Permission policy
 
 - The session config carries `agentmanager.AllowMCP("cad")`: requests for the `cad` tools are answered
-  without a prompt, preferring allow-once.
+  without a prompt, preferring allow-once. The match is strict: when the backend set
+  `Call.MCPServer` only an exact match passes; otherwise only the exact title `mcp__cad__<tool>` with a
+  bare tool name (`[A-Za-z0-9_-]+`) passes. A call whose kind is anything but other or read is never
+  auto-allowed, so a title that merely starts with `cad` does not qualify. The ACP backend derives
+  `MCPServer` by the same strict rule (`agentmanager/_docs/api-contract.md`).
 - Everything else is a card in the panel with the agent's own options. The panel never answers for the
   user and has no allow-all control.
 - go-draw requests no permissive harness mode (no bypass or full-auto flags). Where a protocol allows it,
@@ -114,7 +132,9 @@ the agent's edits between frames.
 real `Dispatcher`, against `agentmanager`'s fake agent (built with `go build` from the nested module). The
 fake makes a real MCP `add_line` call; the test pumps the UI timer until the drawing has the line and the
 transcript's tool card is completed. A second test calls `render_png` over HTTP and decodes the PNG. They
-skip on `js` or when `go` is missing. Interactive behaviour in a window has not been run in the agent
+skip on `js` or when `go` is missing. `cadmcp/safety_test.go` holds the agent-safety tests: scripts cannot
+reach NEW, OPEN or SAVE, an agent cannot answer a human's file prompt, and a panicking command does not
+brick the drawing. Interactive behaviour in a window has not been run in the agent
 environment (see [Operations](operations.md)).
 
 ACP decisions that affect the panel: the history an agent replays during `session/load` is suppressed, so a

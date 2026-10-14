@@ -7,7 +7,7 @@ summary: The on-demand docked chat panel that runs AI coding agents (opencode, C
 read_when: you are changing the agent panel, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go]
+code_anchors: [ui/agent.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -66,14 +66,18 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   `Thinking` line that expands on click; tool calls as cards with a status dot (pending, in progress,
   completed, failed) and a clipped result; the agent's plan with a mark per step; debug log lines are
   hidden.
-- **Permissions.** The agent's drawing tools (MCP server `cad`) run without asking. Everything else
-  (shell, file edits, other MCP servers) shows a card with one button per option the agent offers;
-  the card stays until answered. There is no switch that allows all.
+- **Permissions.** The agent's drawing tools (MCP server `cad`) run without asking, matched strictly:
+  by the server the backend reports, or by the exact title `mcp__cad__<tool>`, and only for calls of
+  kind other or read. Everything else (shell, file edits, other MCP servers) shows a card with one
+  button per option the agent offers; the card stays until answered. There is no switch that allows all.
+- **Human-only commands.** An agent cannot run NEW, OPEN or SAVE, through a tool, a script or an alias;
+  the history reads `<NAME> is not available to agents.` Only the user opens, saves or discards a drawing.
 - **Focus.** The command line keeps the keyboard by default. Clicking the prompt field moves it to the
   field; **Escape** in the field, clicking the canvas or hiding the panel gives it back to the command
   line. Text typed into the prompt never reaches the command line.
 - **Quit.** Closing the application stops every session, the agent processes and the MCP server, and
-  saves which tabs were open.
+  saves which tabs were open. A session still starting when the application quits is waited for (up to
+  10 s) and closed, and a fatal startup error stops the agent before the process exits.
 
 ## Contract
 

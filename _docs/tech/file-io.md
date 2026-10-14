@@ -7,7 +7,7 @@ summary: The format plugin interface and registry, what the DXF codec reads and 
 read_when: you are adding a file format, changing what the DXF codec reads or writes, or deciding how DWG support lands
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, doc/unknown.go]
+code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go]
 depends_on: [tech-document-model]
 review_cycle: quarterly
 ---
@@ -20,7 +20,12 @@ review_cycle: quarterly
 (extensions, and `Read` returning a new drawing plus warnings) and/or `fileio.Writer` (extensions,
 the format versions it writes, and `Write` returning warnings). A `fileio.Registry` holds the
 formats and picks one by file extension in `Open` and `Save`; `cmd/cad` registers the DXF codec and
-passes the registry to the session as its `cmdsys.FileHandler`. The package is named `fileio` so it
+passes the registry to the session as its `cmdsys.FileHandler`.
+
+`Registry.Save` is atomic: the codec writes a temporary file in the target's directory, which is
+synced, given the existing file's permission bits and renamed over the path, so a failed write leaves
+any existing file untouched. A symbolic link is resolved first and the link is kept; a target that is
+not a regular file is an error. The package is named `fileio` so it
 never shadows the standard library's `io`.
 
 ## The DXF codec
@@ -41,7 +46,11 @@ owns (ATTRIB, VERTEX, SEQEND); the reader returns one warning per class with the
 document does not model (VPORT, LTYPE other than CONTINUOUS, STYLE, VIEW, UCS, APPID, DIMSTYLE) and
 every block except `*Model_Space` and `*Paper_Space` go to `Drawing.Preserved`. An entity whose
 handle duplicates one read earlier is renumbered, with a warning. OBJECTS, CLASSES and the thumbnail are not
-read. A file whose group codes are not integers (binary DXF) or that ends inside a pair is an error.
+read. A file whose group codes are not integers (binary DXF), that ends inside a pair, or that has a
+section without `ENDSEC` (a truncated file, including a `SECTION` nested in another) is an error. A
+file with no `EOF` marker reads with the warning `file has no EOF marker (it may be truncated)`. A
+non-finite number (`nan`, `inf`, `1e999`) in a numeric group (codes 10 to 59, 110 to 149 and 210 to 239)
+is read as 0, with one warning that counts them, so the drawing never holds a non-finite coordinate.
 
 **Writing** emits R12 (`AC1009`), the most widely readable version, in this order: the header
 (`$ACADVER`, `$CLAYER`, `$HANDLING`, `$HANDSEED`), the `CONTINUOUS` linetype followed by the

@@ -76,6 +76,9 @@ on top.
 8. `Drawing.Load` inserts an entity outside any transaction and journal. Only file readers use it,
    on a drawing nobody else holds yet.
 
+`Drawing.AbortOpen` aborts the open transaction if there is one, and does nothing otherwise. A host uses
+it to recover when a panic left a transaction open (`cmdsys.Session.guard`, `cadmcp`).
+
 The command system makes one command one transaction, so one command is one undo step; see the
 [command system](command-system.md).
 
