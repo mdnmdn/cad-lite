@@ -678,6 +678,7 @@ type Div struct {
     onMouseMove  func(*MouseMoveEvent, *Window, *App)
     onClick      func(*ClickEvent, *Window, *App)
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
+    onPinch      func(*PinchEvent, *Window, *App)
     onKeyDown    func(*KeyDownEvent, *Window, *App)
     onKeyUp      func(*KeyUpEvent, *Window, *App)
     onHoverStart func(*Window, *App)
@@ -698,6 +699,7 @@ func (d *Div) OnMouseUp(f func(*MouseUpEvent, *Window, *App)) *Div
 func (d *Div) OnMouseMove(f func(*MouseMoveEvent, *Window, *App)) *Div
 func (d *Div) OnClick(f func(*ClickEvent, *Window, *App)) *Div
 func (d *Div) OnScrollWheel(f func(*ScrollWheelEvent, *Window, *App)) *Div
+func (d *Div) OnPinch(f func(*PinchEvent, *Window, *App)) *Div
 func (d *Div) OnKeyDown(f func(*KeyDownEvent, *Window, *App)) *Div
 func (d *Div) OnKeyUp(f func(*KeyUpEvent, *Window, *App)) *Div
 func (d *Div) OnHoverStart(f func(*Window, *App)) *Div
@@ -834,6 +836,10 @@ func (h *ScrollHandle) ScrollToItem(ix int)    // child ix (Div) / item ix (Unif
 func (h *ScrollHandle) ScrollToTop()
 func (h *ScrollHandle) ScrollToBottom()
 ```
+
+Pinch semantics: `OnPinch` listeners run along the hit path at the event
+position, innermost first, until one calls `Window.StopPropagation()`. A pinch
+never scrolls containers.
 
 Scroll semantics: `OnScrollWheel` listeners run first (bubble, innermost
 first); if one calls `Window.StopPropagation()` no container scrolls. Then
@@ -1180,6 +1186,16 @@ type ScrollWheelEvent struct {
     // smooth-scroll device) and false when they are discrete line/notch steps
     // (a mouse wheel). Backends that cannot tell leave it false.
     Precise bool
+}
+// PinchEvent is one step of a trackpad pinch (magnify) gesture at Position.
+// Delta is the magnification as a fraction: +0.1 is 10% bigger (zoom in);
+// the step's scale factor is 1+Delta. Sent only by backends that can see the
+// gesture (macOS in the ebiten backend); a browser pinch is a Ctrl+wheel
+// ScrollWheelEvent instead. DispatchEvent divides Position by the UI scale.
+type PinchEvent struct {
+    Position Point
+    Delta float32
+    Modifiers Modifiers
 }
 type ClickEvent struct {
     Up *MouseUpEvent
@@ -1711,6 +1727,7 @@ type mouseListener struct {
     onMouseDown, onMouseUp, onMouseMove func(any, *Window, *App)
     onClick      func(*ClickEvent, *Window, *App)
     onScrollWheel func(*ScrollWheelEvent, *Window, *App)
+    onPinch      func(*PinchEvent, *Window, *App)
     keyContext   string
 }
 type keyNode struct {
@@ -2114,7 +2131,22 @@ Input mapping in `Update`:
   notches 20 px per line; under `GOOS=js` ebiten's units are CSS pixels and
   are passed through unscaled, with integral deltas of 50 or more taken as
   notches. A pinch that a browser delivers as Ctrl+wheel arrives as a
-  precise event with `Control` set.
+  precise event with `Control` set. The js backend reads `WheelEvent.ctrlKey`
+  in a passive capture listener (`wheelctrl_js.go`) and ORs `Control` into the
+  wheel event, because a browser pinch has `ctrlKey` but no Control keydown,
+  which is the only source ebiten derives its Control state from; ebiten's own
+  wheel listener already calls `preventDefault`, so the page does not zoom.
+- macOS pinch: GLFW drops `NSEventTypeMagnify`, so `pinch_darwin.go` installs
+  an `NSEvent` local monitor (`addLocalMonitorForEventsMatchingMask:handler:`,
+  `NSEventMaskMagnify`) through `purego/objc`. The first `Update` schedules the install on the main
+  queue (`dispatch_async_f` on `_dispatch_main_q` from libSystem, once), so
+  AppKit is only touched on the main thread. The block
+  runs on the main thread and only pushes to a mutex-guarded `pinchQueue`
+  (position from `locationInWindow` flipped by the content view height, the
+  `magnification` value, modifiers from `modifierFlags`); `Update` drains it
+  into `PinchEvent`s. Any failure to install logs once and leaves pinch
+  unsupported. Smart magnify (double-tap) is not handled. Other OSes have no
+  native source; Windows precision touchpads deliver a pinch as Ctrl+wheel.
 - `ebiten.AppendInputChars` → `KeyDownEvent{PreferCharacterInput:true}` per
   rune, always — except while a shortcut modifier is held: Cmd on darwin,
   Super elsewhere (`ModPlatform`), or Ctrl unless it is AltGr (Ctrl+Alt on

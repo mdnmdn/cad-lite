@@ -19,7 +19,8 @@ Standard library only; imports nothing from Cad-lite.
 | `acp` | ACP client backend (opencode preset) |
 | `claude` | Claude Code stream-json backend |
 | `codex` | Codex app-server backend |
-| `harnesses` | `Open` by harness id, `Available` |
+| `harnesses` | `Open` by harness id, `Available`, `Discover` |
+| `shellenv` | the user's login PATH (login shell, or Windows registry), `Merge`, `Find` |
 | `internal/proc`, `internal/fakeagent`, `internal/testutil` | process spawning, fake CLIs, test helpers |
 
 ## Status

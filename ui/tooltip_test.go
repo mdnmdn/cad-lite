@@ -53,6 +53,15 @@ func (r *tipRig) bubble() bool {
 	return false
 }
 
+// centre returns the centre of the toolbar button with the given id.
+func (r *tipRig) centre(id string) (gpui.Pixels, gpui.Pixels) {
+	b, ok := (&tbRig{t: r.t, hw: r.hw}).bounds(id)
+	if !ok {
+		r.t.Fatalf("%s not found", id)
+	}
+	return gpui.Pixels((b.x0 + b.x1) / 2), gpui.Pixels((b.y0 + b.y1) / 2)
+}
+
 func TestToolbarAndStatusTooltipsAppearAfterDelay(t *testing.T) {
 	r := openTip(t)
 	for _, c := range []struct {
@@ -60,11 +69,17 @@ func TestToolbarAndStatusTooltipsAppearAfterDelay(t *testing.T) {
 		x, y gpui.Pixels
 	}{
 		{"line button", 96, 17},
-		{"mirror button", 249, 57},
-		{"settings button", 1241, 17},
+		{"mirror button", -1, -1},
+		{"settings button", -2, -2},
 		{"grid flag", 228, 786},
 		{"osnap flag", 300, 786},
 	} {
+		switch c.x {
+		case -1:
+			c.x, c.y = r.centre("tool-mirror")
+		case -2:
+			c.x, c.y = r.centre("tool-settings")
+		}
 		r.hover(5, 400, 600*time.Millisecond) // park the pointer on the canvas
 		r.hover(c.x, c.y, 300*time.Millisecond)
 		if r.bubble() {

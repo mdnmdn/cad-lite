@@ -69,7 +69,7 @@ to reach a drawing of your own that will not fit — that is the drawing telling
 
 Categories: `draw-` (entity creation: line, polyline, circle, arc, rectangle), `modify-` (move, copy,
 rotate, scale, erase), `edit-` (undo, redo), `view-` (zoom, pan, grid), `snap-` (osnap, ortho),
-`measure-` (distance, area, angle, radius, id-point), `layer-` (visible, hidden, current), `app-` (settings). A new
+`measure-` (distance, area, angle, radius, id-point), `layer-` (visible, hidden, current), `file-` (open, save), `app-` (settings). A new
 command goes into the category of what it does; a new category needs a line here and in the registry.
 
 ## The registry

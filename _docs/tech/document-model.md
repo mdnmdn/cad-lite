@@ -7,7 +7,7 @@ summary: How a drawing is stored — handles, entities, layers, the header — a
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/unknown.go]
+code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/unknown.go, doc/aci.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -32,11 +32,12 @@ Zero means "no object". The model-space block record is `doc.ModelSpace`, the ow
 `Clone`. `doc.Entity` adds the graphical part: `Common()` (handle, owner, layer, colour), `Bounds`,
 `Geometry` (the curves used for snapping, picking and display) and `Transform`. The entity types are
 `Line`, `Circle`, `Arc` and `LWPolyline`. An `LWPolyline` also carries `Widths`, the start and end width per
-segment; it is nil today, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
+segment; only the DWG reader fills it, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
 
 **Colour.** An entity's `Color` is an AutoCAD Color Index from 1 to 255, or `doc.ByLayer` (256),
 which a transaction assigns when the colour is unset: `Drawing.CurrentColor` (`CECOLOR`) when it is
-set to 1–255, otherwise `ByLayer`.
+set to 1–255, otherwise `ByLayer`. `doc.ACIRGB` gives an index's RGB and `doc.NearestACI` the index nearest an RGB (a
+true colour read from a file has no other place to go: the document has no true colour).
 
 **Layers.** `doc.Layer` has a name, a colour index, the `Off`, `Locked` and `Frozen` flags, `NoPlot`,
 `Linetype` (a name; "" is CONTINUOUS), `Lineweight` (hundredths of a mm; 0 is the default) and

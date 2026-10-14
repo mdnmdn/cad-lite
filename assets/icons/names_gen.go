@@ -33,6 +33,12 @@ const (
 	// EditUndo: take back the last change
 	EditUndo Name = "edit-undo"
 
+	// FileOpen: choose a drawing file to open, an open folder
+	FileOpen Name = "file-open"
+
+	// FileSave: write the drawing to its file, a floppy disk
+	FileSave Name = "file-save"
+
 	// LayerCurrent: the layer new geometry goes on, a stack of sheets
 	LayerCurrent Name = "layer-current"
 
@@ -163,6 +169,8 @@ var All = []Name{
 	DrawRectangle,
 	EditRedo,
 	EditUndo,
+	FileOpen,
+	FileSave,
 	LayerCurrent,
 	LayerFrozen,
 	LayerHidden,

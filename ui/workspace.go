@@ -17,6 +17,10 @@ import (
 // chrome around the canvas.
 type Workspace struct {
 	session *cmdsys.Session
+	// files is the handler OPEN and SAVE use; it also lists the extensions the file dialogs show.
+	files cmdsys.FileHandler
+	// dlg is the native file dialog state.
+	dlg     dialogState
 	view    *render.View
 	builder *render.Builder
 	input   *gpui.TextInput
@@ -37,6 +41,10 @@ type Workspace struct {
 	tipTheme string
 	// fitPending zooms to extents once the canvas size is known.
 	fitPending bool
+	// zoom is the status bar slider's state; zoomSaved is true once the
+	// drag in progress has put the pre-drag view on the ZOOM Previous stack.
+	zoom      SliderState
+	zoomSaved bool
 }
 
 // historyLines is how many history lines show above the command line.
@@ -46,7 +54,7 @@ const historyLines = 4
 // disables OPEN and SAVE (as in a browser build).
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	v := render.DefaultView(800, 600)
-	ws := &Workspace{view: &v, fitPending: d.Len() > 0}
+	ws := &Workspace{view: &v, files: files, fitPending: d.Len() > 0}
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
@@ -110,6 +118,7 @@ func (ws *Workspace) run(name string, w *gpui.Window) {
 var (
 	actionUndo      = gpui.NewAction("cad-undo")
 	actionRedo      = gpui.NewAction("cad-redo")
+	actionOpen      = gpui.NewAction("cad-open")
 	actionSave      = gpui.NewAction("cad-save")
 	actionSaveAs    = gpui.NewAction("cad-save-as")
 	actionSnap      = gpui.NewAction("cad-toggle-snap")
@@ -127,6 +136,8 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("cmd-z", actionUndo, "cad"),
 		gpui.NewKeyBinding("ctrl-y", actionRedo, "cad"),
 		gpui.NewKeyBinding("cmd-shift-z", actionRedo, "cad"),
+		gpui.NewKeyBinding("ctrl-o", actionOpen, "cad"),
+		gpui.NewKeyBinding("cmd-o", actionOpen, "cad"),
 		gpui.NewKeyBinding("ctrl-s", actionSave, "cad"),
 		gpui.NewKeyBinding("cmd-s", actionSave, "cad"),
 		gpui.NewKeyBinding("ctrl-shift-s", actionSaveAs, "cad"),
@@ -163,14 +174,17 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13).
 		OnAction(actionUndo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("U", w) }).
 		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
-		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("QSAVE", w) }).
-		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("SAVEAS", w) }).
+		OnAction(actionOpen, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.openFile(w) }).
+		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFile(w) }).
+		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFileAs(w) }).
 		OnAction(actionSnap, toggle(func() { s.SnapOn = !s.SnapOn })).
 		OnAction(actionOrtho, toggle(func() { s.Ortho = !s.Ortho })).
 		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).
 		OnAction(actionGrid, toggle(func() { s.SetGrid(!s.Grid()) })).
 		OnAction(actionSnapGrid, toggle(func() { s.SetSnapGrid(!s.SnapGrid()) })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
+		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) { ws.zoom.Move(e.Position, w) }).
+		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) { ws.zoom.End(w) }).
 		Child(
 			ws.toolbar(),
 			gpui.NewDiv().FlexRow().Flex1().MinH(0).Child(
@@ -209,53 +223,6 @@ func separator() *gpui.Div { return gpui.NewDiv().SizeWH(1, 28).Bg(uiBorder).Mx(
 
 // tb returns the translated toolbar caption for key.
 func tb(key string) string { return i18n.T("ui.toolbar." + key) }
-
-// toolbar is two rows: drawing, measuring, history and the window buttons on
-// top, the modify commands below. Commands without a short caption of their
-// own show their display name.
-func (ws *Workspace) toolbar() *gpui.Div {
-	top := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2)
-	if b := ws.brand(); b != nil {
-		top.Child(b)
-	}
-	top.Child(
-		ws.button("line", tb("line"), "LINE", icons.DrawLine),
-		ws.button("pline", tb("pline"), "PLINE", icons.DrawPolyline),
-		ws.button("circle", tb("circle"), "CIRCLE", icons.DrawCircle),
-		ws.button("arc", tb("arc"), "ARC", icons.DrawArc),
-		ws.button("rect", tb("rect"), "RECTANG", icons.DrawRectangle),
-		separator(),
-		ws.button("dist", tb("dist"), "DIST", icons.MeasureDistance),
-		ws.button("area", tb("area"), "AREA", icons.MeasureArea),
-		ws.button("id", "", "ID", icons.MeasureIdPoint),
-		separator(),
-		ws.button("undo", tb("undo"), "U", icons.EditUndo),
-		ws.button("redo", tb("redo"), "REDO", icons.EditRedo),
-		ws.button("zoom", tb("zoom"), "ZOOM", icons.ViewZoomWindow),
-		gpui.NewDiv().Flex1(),
-		ws.agentToggle(),
-		ws.settingsButton(),
-	)
-	modify := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Child(
-		ws.button("move", tb("move"), "MOVE", icons.ModifyMove),
-		ws.button("copy", tb("copy"), "COPY", icons.ModifyCopy),
-		ws.button("rotate", tb("rotate"), "ROTATE", icons.ModifyRotate),
-		ws.button("scale", tb("scale"), "SCALE", icons.ModifyScale),
-		ws.button("erase", tb("erase"), "ERASE", icons.ModifyErase),
-		separator(),
-		ws.button("mirror", "", "MIRROR", icons.ModifyMirror),
-		ws.button("offset", "", "OFFSET", icons.ModifyOffset),
-		ws.button("fillet", "", "FILLET", icons.ModifyFillet),
-		ws.button("chamfer", "", "CHAMFER", icons.ModifyChamfer),
-		separator(),
-		ws.button("trim", "", "TRIM", icons.ModifyTrim),
-		ws.button("extend", "", "EXTEND", icons.ModifyExtend),
-		ws.button("break", "", "BREAK", icons.ModifyBreak),
-		ws.button("join", "", "JOIN", icons.ModifyJoin),
-		ws.button("explode", "", "EXPLODE", icons.ModifyExplode),
-	)
-	return gpui.NewDiv().FlexCol().Px_(8).Py_(4).Bg(uiPanel).Child(top, modify)
-}
 
 func (ws *Workspace) sidePanel() *gpui.Div {
 	d := ws.session.Drawing()
@@ -356,14 +323,19 @@ func (ws *Workspace) statusBar() *gpui.Div {
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(); w.Refresh() }).
 			Child(NewIcon(icon, 14, c), gpui.NewText(label).FontWeight(700).TextColor(c))
 	}
-	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
-		gpui.NewDiv().SizeW(170).Tooltip(i18n.T("ui.status.coords_tip")).Child(gpui.NewText(coords)),
+	// The right group wraps below the flags when the window is too narrow
+	// for both, rather than squeezing the summary.
+	right := gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).FlexShrink(0).MlAuto().Child(
+		ws.modifiedMark(),
+		ws.zoomControls(),
+		gpui.NewText(i18n.T("ui.status.summary", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted).FlexShrink(0),
+	)
+	return gpui.NewDiv().FlexRow().FlexWrap().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
+		gpui.NewDiv().SizeW(170).FlexShrink(0).Tooltip(i18n.T("ui.status.coords_tip")).Child(gpui.NewText(coords)),
 		flag("grid", i18n.T("ui.status.grid"), i18n.T("ui.status.grid_tip"), icons.ViewGrid, s.Grid(), func() { s.SetGrid(!s.Grid()) }),
 		flag("snap", i18n.T("ui.status.osnap"), i18n.T("ui.status.osnap_tip"), icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
 		flag("ortho", i18n.T("ui.status.ortho"), i18n.T("ui.status.ortho_tip"), icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
-		gpui.NewDiv().Flex1(),
-		ws.modifiedMark(),
-		gpui.NewText(i18n.T("ui.status.summary", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted),
+		right,
 	)
 }
 

@@ -204,3 +204,79 @@ func TestFileCommandsAreRefusedToAgents(t *testing.T) {
 		}
 	}
 }
+
+// dwgFiles is a file handler that cannot write .dwg, as the application's registry cannot.
+type dwgFiles struct{ recFiles }
+
+func (f *dwgFiles) Save(path string, d *doc.Drawing) ([]string, error) {
+	if strings.HasSuffix(path, ".dwg") {
+		return nil, errors.New("DWG writing is not supported; save as .dxf")
+	}
+	return f.recFiles.Save(path, d)
+}
+
+func (*dwgFiles) WritablePath(path string) string {
+	if strings.HasSuffix(path, ".dwg") {
+		return strings.TrimSuffix(path, ".dwg") + ".dxf"
+	}
+	return path
+}
+
+func dwgSession(t *testing.T) (*cmdsys.Session, *dwgFiles) {
+	s := newSession(t)
+	f := &dwgFiles{recFiles{open: doc.New()}}
+	s.SetFiles(f)
+	return s, f
+}
+
+func TestQsaveOfADrawingOpenedFromDWGAsksForADXFPath(t *testing.T) {
+	s, f := dwgSession(t)
+	xfeed(s, "OPEN", "plan.dwg")
+	dirtyIt(s)
+	xfeed(s, "QSAVE")
+	if got := s.Prompt(); !strings.Contains(got, "path of drawing to save") || !strings.HasSuffix(got, "<plan.dxf>:") {
+		t.Fatalf("QSAVE prompt %q", got)
+	}
+	xfeed(s, "")
+	if s.FilePath() != "plan.dxf" || len(f.saved) != 1 || f.saved[0] != "plan.dxf" || s.Dirty() {
+		t.Fatalf("path %q saved %v dirty %v", s.FilePath(), f.saved, s.Dirty())
+	}
+	// From then on QSAVE is silent again.
+	dirtyIt(s)
+	xfeed(s, "QSAVE")
+	if s.Active() != "" || len(f.saved) != 2 {
+		t.Fatalf("QSAVE after the DXF path: active %q saved %v", s.Active(), f.saved)
+	}
+}
+
+func TestSaveAsOfADWGOffersTheDXFName(t *testing.T) {
+	s, _ := dwgSession(t)
+	s.SetFilePath("plan.dwg")
+	xfeed(s, "SAVEAS")
+	if got := s.Prompt(); !strings.HasSuffix(got, "<plan.dxf>:") {
+		t.Fatalf("SAVEAS prompt %q", got)
+	}
+}
+
+func TestTypingADWGPathReportsThatItCannotBeWritten(t *testing.T) {
+	s, f := dwgSession(t)
+	dirtyIt(s)
+	xfeed(s, "SAVE", "out.dwg")
+	if !strings.Contains(lastLines(s, 1), "Save failed: DWG writing is not supported; save as .dxf") || !s.Dirty() || len(f.saved) != 0 {
+		t.Fatalf("history %q dirty %v saved %v", lastLines(s, 1), s.Dirty(), f.saved)
+	}
+}
+
+func TestSaveChangesBeforeNewOnADWGDrawingAsksForAPath(t *testing.T) {
+	s, f := dwgSession(t)
+	xfeed(s, "OPEN", "plan.dwg")
+	dirtyIt(s)
+	xfeed(s, "NEW", "Y")
+	if got := s.Prompt(); !strings.Contains(got, "path of drawing to save") || !strings.HasSuffix(got, "<plan.dxf>:") {
+		t.Fatalf("prompt %q", got)
+	}
+	xfeed(s, "")
+	if len(f.saved) != 1 || f.saved[0] != "plan.dxf" || s.FilePath() != "" {
+		t.Fatalf("saved %v, path %q (NEW forgets the path)", f.saved, s.FilePath())
+	}
+}

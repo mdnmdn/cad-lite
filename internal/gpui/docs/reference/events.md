@@ -21,6 +21,7 @@ handlers receive **pointers**.
 | `MouseMoveEvent` | `Position Point`, `Modifiers Modifiers` | Drives hover. |
 | `ClickEvent` | `Up *MouseUpEvent` | A completed press-release on the same element. Not synthesised by the window or the headless platform; the ebiten backend emits it. |
 | `ScrollWheelEvent` | `Position Point`, `DeltaX, DeltaY Pixels`, `Modifiers Modifiers`, `Precise bool` | Positive `DeltaY` scrolls down (content moves up). `Precise` is true for pixel-precise deltas (a trackpad) and false for notch steps (a mouse wheel); the ebiten backend infers it, other sources leave it false. |
+| `PinchEvent` | `Position Point`, `Delta float32`, `Modifiers Modifiers` | A trackpad pinch step; `Delta` is the magnification as a fraction (+0.1 = 10% bigger, scale factor `1+Delta`). Sent by the macOS ebiten backend only; a browser or Windows pinch is a Ctrl+`ScrollWheelEvent`. |
 | `KeyDownEvent` | `Keystroke Keystroke`, `PreferCharacterInput bool` | `PreferCharacterInput` is true for printable characters meant for a focused text field. |
 | `KeyUpEvent` | `Keystroke Keystroke` | |
 | `ModifiersChangedEvent` | `Modifiers Modifiers` | Accepted by dispatch but currently has no listeners. |
@@ -45,7 +46,7 @@ type DispatchPhase uint8   // Capture, Bubble
 ### Listener builders (on `*Div`)
 
 See the signature table in [elements.md](elements.md#mouse-and-keyboard-listeners):
-`OnMouseDown`, `OnMouseUp`, `OnMouseMove`, `OnClick`, `OnScrollWheel`,
+`OnMouseDown`, `OnMouseUp`, `OnMouseMove`, `OnClick`, `OnScrollWheel`, `OnPinch`,
 `OnHoverStart`, `OnHoverEnd`, `OnKeyDown`, `OnKeyUp`, `OnAction`, plus
 `Tooltip(text string)` (see [events-and-input.md](../concepts/events-and-input.md#tooltips)). Mouse
 listeners run innermost first along the hit path (bubbling); call
@@ -72,6 +73,7 @@ type MouseListener struct {                   // per-hitbox dispatch table recor
     OnMouseMove func(*MouseMoveEvent, *Window, *App)
     OnClick     func(*ClickEvent, *Window, *App)
     OnScrollWheel func(*ScrollWheelEvent, *Window, *App)
+    OnPinch       func(*PinchEvent, *Window, *App)
     OnHoverStart, OnHoverEnd func(*Window, *App)
     KeyContext string
 }

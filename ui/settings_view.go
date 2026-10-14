@@ -53,8 +53,11 @@ func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 	maxH := float32(w.Bounds().Size.H) - 2*settingsMargin
 	maxW := float32(w.Bounds().Size.W) - 2*settingsMargin
 
-	body := gpui.NewDiv().ID("settings-body").FlexCol().Gap(18).Px_(20).Pb(20).Flex1().MinH(0).OverflowYScroll().
-		Child(ws.appearanceSection(), ws.drawingSection(), ws.agentSection(), ws.updateSection(), ws.settingsFooter())
+	// The title bar and the footer keep their size; only the body scrolls, so
+	// Close and Reset stay reachable however short the window is.
+	body := gpui.NewDiv().ID("settings-body").FlexCol().Gap(18).Px_(20).Pb(16).Flex1().MinH(0).OverflowYScroll().ShowScrollbar().
+		TrackScroll(p.bodyScroll).
+		Child(ws.appearanceSection(), ws.drawingSection(), ws.agentSection(), ws.discoverySection(), ws.updateSection())
 
 	card := gpui.NewDiv().ID("settings-card").TrackFocus(p.focus).FlexCol().
 		SizeW(settingsWidth).MaxW(maxW).MaxH(maxH).
@@ -66,19 +69,34 @@ func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 				w.StopPropagation()
 			}
 		}).
-		Child(ws.settingsHeader(), body)
+		Child(ws.settingsHeader(), body, ws.settingsFooter())
 
 	return gpui.NewDiv().ID("settings-overlay").Absolute().Inset(0).FlexRow().ItemsCenter().JustifyCenter().
 		Bg(uiBackdrop).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.CloseSettings(w) }).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) { p.scale.Move(e.Position, w) }).
 		OnMouseUp(func(e *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) { p.scale.End(w) }).
-		OnScrollWheel(func(_ *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
+		OnScrollWheel(func(e *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) { ws.scrollSettings(e, w) }).
 		Child(card)
 }
 
+// scrollSettings scrolls the panel's body by a wheel event anywhere over the
+// overlay and always consumes it: the window runs every OnScrollWheel handler
+// before the scroll containers, so a handler that only stopped propagation
+// would freeze the body, and one that let it through would zoom the canvas.
+func (ws *Workspace) scrollSettings(e *gpui.ScrollWheelEvent, w *gpui.Window) {
+	h := ws.prefs().bodyScroll
+	off := h.Offset()
+	off.Y = min(max(off.Y+e.DeltaY, 0), h.MaxOffset().H)
+	if off != h.Offset() {
+		h.SetOffset(off)
+		w.Refresh()
+	}
+	w.StopPropagation()
+}
+
 func (ws *Workspace) settingsHeader() *gpui.Div {
-	return gpui.NewDiv().FlexRow().ItemsCenter().Px_(20).Py_(14).
+	return gpui.NewDiv().FlexRow().ItemsCenter().Px_(20).Py_(14).FlexShrink(0).
 		Child(
 			NewIcon(icons.AppSettings, 18, uiOn),
 			gpui.NewDiv().Ml(8).Child(gpui.NewText(i18n.T("ui.settings.title")).FontWeight(700).TextSize(16)),
@@ -278,6 +296,8 @@ func (ws *Workspace) drawingSection() *gpui.Div {
 	)
 }
 
+// agentSection is the "AI AGENT" block: which agent a session starts with.
+// Which agents exist on this machine is the discovery section's business.
 func (ws *Workspace) agentSection() *gpui.Div {
 	c := ws.prefs().cur
 	opts := [][2]string{{"", i18n.T("ui.settings.harness_auto")}, {"opencode", "OpenCode"}, {"claude", "Claude"}, {"codex", "Codex"}}
@@ -289,7 +309,7 @@ func (ws *Workspace) agentSection() *gpui.Div {
 		opts = append(opts, [2]string{c.DefaultAgent, c.DefaultAgent})
 	}
 	harnessTip := i18n.T("ui.settings.default_harness_tip")
-	return gpui.NewDiv().FlexCol().Gap(settingsRowGap).Child(
+	return gpui.NewDiv().ID("settings-sec-agent").FlexCol().Gap(settingsRowGap).Child(
 		sectionTitle(i18n.T("ui.settings.section_agent")),
 		settingRow(i18n.T("ui.settings.default_harness"), harnessTip, segmented("agent-", opts, harnessTip, c.DefaultAgent, func(v string, w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) { s.DefaultAgent = v })
@@ -304,7 +324,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 	if p.path != "" {
 		where = i18n.T("ui.settings.saved_to", p.path)
 	}
-	foot := gpui.NewDiv().FlexCol().Gap(6).Pt(4).
+	foot := gpui.NewDiv().FlexCol().Gap(6).
 		Child(gpui.NewText(where).TextSize(11).TextColor(uiMuted))
 	if p.err != nil {
 		foot.Child(gpui.NewText(p.err.Error()).TextSize(11).TextColor(uiErr))
@@ -312,7 +332,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 	for _, w := range p.warnings {
 		foot.Child(gpui.NewText(w).TextSize(11).TextColor(uiWarn))
 	}
-	return gpui.NewDiv().FlexRow().ItemsStart().Gap(12).Child(
+	row := gpui.NewDiv().FlexRow().ItemsStart().Gap(12).Px_(20).Pt(10).Pb(14).Child(
 		foot.Flex1().MinW(0),
 		ws.smallButton("settings-reset", i18n.T("ui.settings.reset"), i18n.T("ui.settings.reset_tip"), func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) {
@@ -322,4 +342,6 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 			})
 		}).Px_(12),
 	)
+	return gpui.NewDiv().ID("settings-footer").FlexCol().FlexShrink(0).
+		Child(gpui.NewDiv().SizeH(1).Bg(uiBorder), row)
 }

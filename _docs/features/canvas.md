@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, crosshair a
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/canvas.go, ui/workspace.go, ui/icon.go, ui/brand.go]
+code_anchors: [ui/canvas.go, ui/workspace.go, ui/toolbar_layout.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -34,6 +34,7 @@ Gestures follow AutoCAD for a mouse and macOS for a trackpad. The backend tells 
 | Shift + wheel, or a horizontal notch | Pan |
 | Trackpad two-finger scroll (precise) | Pan by the deltas in the direction delivered |
 | Ctrl or Cmd + wheel, which is how a browser delivers a pinch | Zoom about the pointer, smoothly: factor `exp(-dy/100)` for precise deltas, the notch step otherwise; one event is limited to 200 px |
+| Trackpad pinch (macOS native `gpui.PinchEvent`) | Zoom about the pinch position by factor `1+Delta` per step |
 | Middle-button drag | Pan |
 | Double middle click | Zoom to extents |
 
@@ -42,7 +43,7 @@ it as written, `zoom` makes a precise vertical scroll zoom like a notch, and `pa
 pan, notch or precise, with only Ctrl or Cmd zooming. `Workspace.WheelZoom` makes a precise vertical scroll zoom as a mouse wheel does, for users who
 want the plain wheel to always zoom (an accelerated mouse that the heuristic reads as a trackpad
 is the usual reason). Scale is clamped to `render.MinScale` and `render.MaxScale`; panning is
-unbounded. There is no native pinch on desktop: ebiten does not expose one.
+unbounded. ebiten exposes no pinch, so the macOS backend reads it from an `NSEvent` magnify monitor and sends `gpui.PinchEvent`; Windows precision touchpads and browsers deliver it as Ctrl+wheel (the browser backend sets Control from `WheelEvent.ctrlKey`). Linux desktop has no pinch.
 
 - **Resize:** when the canvas size changes (the window is resized, or F2 opens or closes the agent
   panel) the view keeps its centre and changes its scale so the model box that was visible stays
@@ -75,6 +76,10 @@ canvas (the toolbar, a panel, outside the window), there is no crosshair and the
 `—`. The pointer is not hidden:
 the operating system cursor shows beside the crosshair.
 
+The canvas is framed by a 1 px border in the theme's border colour (`uiBorder`), painted over the
+drawing along the inside edge of the canvas area, so it reads as a viewport apart from the toolbar,
+side panel and command line.
+
 ### Pointer
 
 - **Left click** answers the point prompt when one is open; otherwise it picks, and a drag starts a
@@ -96,16 +101,21 @@ class (`LINE × 3`); a single selected entity also shows its layer and handle. T
 
 ### Toolbar
 
-Each button is an icon over a 10px label, in two rows of groups separated by a rule. Top row: Line,
-Polyline, Circle, Arc, Rect; Dist, Area, ID point; Undo, Redo, Zoom; at the right end the `AI` agent
-toggle and the gear `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or
-`OPTIONS`). Second row: Move, Copy, Rotate, Scale, Erase; Mirror, Offset, Fillet, Chamfer; Trim,
-Extend, Break, Join, Explode. A button runs its command as if typed, and the button of the running
-command is highlighted. Every button shows its command's icon from the
-[icon pipeline](../tech/ui-framework.md); a command without a button (LAYER, LIST, NEW, OPEN, SAVE,
+Each button is an icon over a 10px label, in groups separated by a rule: Open, Save; Line, Polyline, Circle, Arc,
+Rect; Dist, Area, ID point; Undo, Redo, Zoom; Move, Copy, Rotate, Scale, Erase; Mirror, Offset,
+Fillet, Chamfer; Trim, Extend, Break, Join, Explode; and at the right end the `AI` agent toggle and
+the gear `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or
+`OPTIONS`). The toolbar reflows with the window width: on a wide window every group shares one
+row, and as the window narrows whole groups wrap onto a second and a third row. A group is never
+split across rows and nothing clips or overlaps; the agent and settings group sits at the right
+end of whichever row it lands on. A button runs its command as if typed, and the button of the running
+command is highlighted. Open and Save, the leftmost group, are the exception: they show the system file
+dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. Their tooltips come from
+`ui.toolbar.open_tip` and `ui.toolbar.save_tip`. Every button shows its command's icon from the
+[icon pipeline](../tech/ui-framework.md); a command without a button (LAYER, LIST, NEW,
 MEASUREGEOM) is still reached by typing it.
 
-The top row starts with a brand that depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`):
+The first row starts with a brand, which leads the file group, that depends on the OS (`Workspace.Brand`, chosen by `ui.BrandForOS`):
 macOS shows the application icon (32px, the 32 and 64 px window icons drawn 1:1 at UI scale 1 and
 2), Windows shows nothing and the buttons start at the row's left padding (the window frame
 carries icon and title), and Linux and the web show the `Cad-lite` wordmark. `CADLITE_BRAND=mac|win|text`
@@ -130,7 +140,11 @@ languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and gr
 |---|---|
 | Coordinates | The cursor in model units: the snapped point while a point is asked for, otherwise the pointer; `—` while the pointer is not over the canvas |
 | GRID, OSNAP, ORTHO | Toggles, each with a 14px icon (captions follow the language, `GRIGLIA`, `SNAP OGG.`, `ORTO` in Italian). Bright (`uiOn`) when on, muted (`uiMuted`) when off; click or press F7, F3, F8 |
+| Zoom | A `−` button, a slider, a `+` button and the scale as a percentage (100% is one screen pixel per model unit), each with a tooltip. The slider is logarithmic from 0.1% to 100000% (scale 1e-3 to 1e3; a scale outside pins the thumb to an end), zooms about the canvas centre and updates the view while it is dragged. The `−` and `+` buttons step the scale by 1.25. The thumb and percentage follow wheel, pinch and command zoom. A drag, a key press or a button click is one step for ZOOM Previous |
 | Right side | `Layer <current>`, the entity count, and `1 px = <size> units` |
+
+When the window is too narrow for the toggles and the right side together, the right side (with the zoom
+controls) wraps onto a second line at the right.
 
 ## Contract
 
@@ -144,8 +158,11 @@ languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and gr
 ## Implementation
 
 `ui.Workspace` in `ui/workspace.go` is the root view: toolbar, then the canvas beside `sidePanel`
-(layers and properties), then `commandArea`, then `statusBar`. `Workspace.button` builds a toolbar
-button around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `statusBar` does
+(layers and properties), then `commandArea`, then `statusBar`. `ui/toolbar_layout.go` builds the toolbar: `Workspace.toolbarGroups` lists the groups and
+`Workspace.toolbar` puts each in a no-shrink row `Div` inside a `FlexWrap` row, so gpui wraps between
+groups only (the right-end group has an auto left margin). `Workspace.button` builds a toolbar
+button around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, `Workspace.fileButton`
+(`ui/filedialog.go`) builds Open and Save with their own tooltips, and `statusBar` does
 the same for the toggles. User-visible text goes through `i18n.T` (`ui.*` keys); `Workspace.Render`
 installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app whenever the theme
 changes. `ui/brand.go` holds the toolbar brand: `Brand`, `BrandForOS`, and a colour bitmap element that paints
@@ -161,6 +178,13 @@ pending zoom to extents, assembles the display list in the order of the table ab
 in `paintCanvas`, applies the resize rule; a frame that changes the view refreshes the pointer
 position and the window. `Workspace.FitOnFirstFrame`
 arms the zoom to extents; `cmd/cad` calls it after `-open`, `-demo`, `-script` and `-png`.
+
+`ui/statusbar_zoom.go` holds the zoom controls: `Workspace.zoomControls` builds them around
+`NewSlider` (`ui/slider.go`) with the `SliderState` in `Workspace.zoom`; `zoomToSlider` and
+`sliderToZoom` map the scale to its decimal logarithm, and `Workspace.setZoom` zooms about the canvas
+centre and keeps the `render.ViewStack` (`View.History`) step. The workspace root forwards mouse move and
+up to the slider state, so a drag continues while the pointer is off the slider, as gpui has no
+pointer capture. `paintFrame` in `ui/canvas.go` draws the canvas border.
 
 Colours are the `col*` and `ui*` variables in `ui/theme.go`.
 

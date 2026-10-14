@@ -216,7 +216,20 @@ Package `transcript` (WP2): `type Block interface{}`; concrete `UserMsg{Text}`, 
 `Blocks() []Block`, `Version() uint64`, `Running() bool`, `ResolvePermission(requestID string)`. Pure, no goroutines.
 
 Package `harnesses` (WP1 stub, finalised after WP3-5): `func Open(ctx context.Context, cfg agentmanager.Config) (agentmanager.Session, error)`
-(switch on `cfg.Harness`); `func Available(h agentmanager.Harness) (path string, ok bool)` (`exec.LookPath`).
+(switch on `cfg.Harness`; when `cfg.Binary` is empty it resolves the harness executable on the effective PATH of `shellenv`, and the child's environment gets that PATH);
+`func Available(h agentmanager.Harness) (path string, ok bool)` (looks the harness executable up on the effective PATH of `shellenv`);
+`type Found struct{ Harness agentmanager.Harness; Path, Version string }`; `func Discover(ctx context.Context, path string) []Found`
+(one entry per harness, OpenCode, Claude, Codex in that order, with `Path` empty when not found and `Version` the first line of `--version` when it answers within 3 s).
+
+Package `shellenv` (stdlib only; the PATH a GUI process lacks): `type Source string` (`SourceLoginShell`, `SourceRegistry`, `SourceApp`);
+`type Probe struct{ Path string; Source Source; Err error }`; `func LoginPATH(ctx context.Context) (string, error)` (Unix: `$SHELL -l -i -c` printing `$PATH` between unique markers,
+5 s timeout, stdin closed; Windows: the Machine and User `Path` from the registry via `reg query`, `%VAR%` expanded);
+`func Run(ctx context.Context) Probe` (LoginPATH plus the source; on failure `Path` is empty, `Source` is `SourceApp` and `Err` says why);
+`func Merge(appPATH, loginPATH string) string` (login entries first, then the app's, de-duplicated, empty entries dropped);
+`func Added(appPATH, loginPATH string) []string` (login entries the app's PATH lacks); `type Binary struct{ Name, Path string }`;
+`func Find(names []string, path string) []Binary` (the names found, with full paths, in order; on Windows `PATHEXT` is tried);
+`func Lookup(name, path string) (string, bool)`, `func Resolve(name string) (string, bool)` (effective PATH, then `exec.LookPath`);
+`func Set(loginPATH string)`, `func Effective() string` (the process PATH merged with what `Set` stored), `func Env() []string` (`["PATH=" + Effective()]`, or nil before `Set`).
 
 Backend constructors (each owner): `acp.OpenCode() agentmanager.Opener`, `acp.New(Command{Path string; Args, Env []string}) agentmanager.Opener`,
 `claude.New() agentmanager.Opener`, `codex.New() agentmanager.Opener`. Each Opener's `Open` spawns,

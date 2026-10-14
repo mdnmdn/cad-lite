@@ -1,6 +1,7 @@
 package ebitenplatform
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -264,5 +265,65 @@ func TestCharKeystrokeMatchesBareBindings(t *testing.T) {
 	}
 	if bk, _ := gpui.ParseKeystroke("a"); bk.Matches(charKeystroke('A', 0)) {
 		t.Error(`binding "a" matches typed "A"`)
+	}
+}
+
+func TestCocoaPointFlipsY(t *testing.T) {
+	// 800x600 content view at the window origin: a point 100 up from the
+	// bottom is 500 down from the top.
+	if p := cocoaPoint(120, 100, 0, 0, 600); p != (gpui.Point{X: 120, Y: 500}) {
+		t.Errorf("origin content view: %v", p)
+	}
+	// Content view inset by a 10x20 frame origin (e.g. a bottom toolbar).
+	if p := cocoaPoint(130, 120, 10, 20, 580); p != (gpui.Point{X: 120, Y: 480}) {
+		t.Errorf("inset content view: %v", p)
+	}
+	// Top-left and bottom-left corners.
+	if p := cocoaPoint(0, 600, 0, 0, 600); p != (gpui.Point{}) {
+		t.Errorf("top-left: %v", p)
+	}
+	if p := cocoaPoint(0, 0, 0, 0, 600); p.Y != 600 {
+		t.Errorf("bottom-left: %v", p)
+	}
+}
+
+func TestCocoaModifiers(t *testing.T) {
+	if m := cocoaModifiers(0); m != 0 {
+		t.Errorf("none: %v", m)
+	}
+	m := cocoaModifiers(cocoaShift | cocoaCommand | 1<<8)
+	if m != gpui.Shift|gpui.ModPlatform {
+		t.Errorf("shift+cmd with unrelated bit: %v", m)
+	}
+	if m := cocoaModifiers(cocoaControl | cocoaOption); m != gpui.Control|gpui.Alt {
+		t.Errorf("ctrl+opt: %v", m)
+	}
+}
+
+func TestPinchDelta(t *testing.T) {
+	if d, ok := pinchDelta(0.12); !ok || d != 0.12 {
+		t.Errorf("0.12 -> %v %v", d, ok)
+	}
+	for _, bad := range []float64{0, math.NaN(), math.Inf(1)} {
+		if _, ok := pinchDelta(bad); ok {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+	if d, _ := pinchDelta(-3); d <= -1 {
+		t.Errorf("clamp: %v", d)
+	}
+}
+
+func TestPinchQueueOrderAndBound(t *testing.T) {
+	q := newPinchQueue()
+	for i := 0; i < pinchQueueMax+10; i++ {
+		q.push(gpui.PinchEvent{Delta: float32(i)})
+	}
+	got := q.drain()
+	if len(got) != pinchQueueMax || got[0].Delta != 10 || got[len(got)-1].Delta != pinchQueueMax+9 {
+		t.Fatalf("len=%d first=%v last=%v", len(got), got[0].Delta, got[len(got)-1].Delta)
+	}
+	if len(q.drain()) != 0 {
+		t.Fatal("drain did not empty the queue")
 	}
 }

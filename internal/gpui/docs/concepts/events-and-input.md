@@ -5,7 +5,7 @@ Source: `events.go`, `window.go` (dispatch), `keymap.go`,
 `ebitenplatform/input.go`.
 
 The platform turns OS input into `PlatformInput` values (`MouseDownEvent`,
-`MouseUpEvent`, `MouseMoveEvent`, `ClickEvent`, `ScrollWheelEvent`,
+`MouseUpEvent`, `MouseMoveEvent`, `ClickEvent`, `ScrollWheelEvent`, `PinchEvent`,
 `KeyDownEvent`, `KeyUpEvent`, `ModifiersChangedEvent`) and calls
 `Window.DispatchEvent(input, app)`, which runs inside `App.Update` itself, so
 effects queued by handlers flush once after dispatch. Dispatch reads the
@@ -155,6 +155,20 @@ offered to the `OverflowScroll` containers on the hit path, innermost first,
 restricted to each one's `ScrollAxes`; the first whose offset changes takes
 it (clamped to `[0, ScrollMax]`) and the window refreshes, so a container at
 its limit lets the wheel chain to the next one out.
+
+### Pinch
+
+`PinchEvent{Position, Delta, Modifiers}` is a trackpad pinch step; `Delta` is
+the magnification as a fraction, so the step scales by `1+Delta` (+0.1 is 10%
+bigger). `OnPinch` listeners run along the hit path at `Position`, innermost
+first, and `Window.StopPropagation()` halts them; a pinch never scrolls a
+container. Only the macOS ebiten backend sends it (an `NSEvent` local monitor,
+since GLFW drops the gesture; if the monitor cannot be installed it logs once
+and pinch is unsupported). Browsers and Windows precision touchpads deliver a
+pinch as Ctrl+wheel instead, so an application that zooms should handle both:
+`OnPinch` and a Ctrl `ScrollWheelEvent`. In the browser the backend sets
+`Control` on that wheel event from `WheelEvent.ctrlKey`, since a pinch has no
+Control keydown. Smart magnify (two-finger double tap) is not delivered.
 
 ### Scrollbar input
 

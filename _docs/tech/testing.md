@@ -7,7 +7,7 @@ summary: What each level of test covers and where it lives, how UI behaviour is 
 read_when: you are adding a feature or fixing a bug and need to know which test to write and where
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go]
+code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go, fileio/dwg/read_test.go, fileio/dwg/fuzz_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -32,7 +32,10 @@ unexported access.
 | Command | MIRROR, OFFSET, FILLET, CHAMFER; TRIM, EXTEND, BREAK, JOIN, EXPLODE; the measurement commands; the AI command | `cmdsys/commands/construct_test.go`, `construct_more_test.go`, `trim_test.go`, `measure_test.go`, `agent_test.go` |
 | Command | Input parsing, snaps, ortho, window and crossing selection | the same file, calling `ParseInput`, `FindSnap`, `Session.Click` and `Session.SelectBox` |
 | Round trip | DXF write then read; reading a newer-version file; malformed input; truncated files, a missing `EOF` and non-finite numbers | `fileio/dxf/dxf_test.go` |
-| Unit | Atomic save: a failed write keeps the original, a save keeps the mode | `fileio/format_test.go` |
+| Unit | Atomic save: a failed write keeps the original, a save keeps the mode; a format with only a reader refuses to save and names the writable extension | `fileio/format_test.go` |
+| Unit | DWG bit codes (BS, BL, BD, DD, MC, SMC, MS, H, TV, TU, string streams) at every bit offset, CRC-16, CRC-32 and the page checksum, both LZ77 variants, the section map, the object map and the class table | `fileio/dwg/bits_test.go`, `crc_test.go`, `lz_test.go`, `container_test.go` |
+| Round trip | DWG fixtures of R14 to R2018: layers, entity counts, exact coordinates, units and extents against ACadSharp's DXF export; DWG to DXF and back; hand-built R2000 and R2004 records for what no fixture holds (2D POLYLINE, mirrored entities, paper space, damaged objects) | `fileio/dwg/read_test.go`, `roundtrip_test.go`, `synth_test.go`, `parity_test.go` |
+| Robustness | Truncated and bit-flipped DWG files, damaged decoded object data, claimed sizes, and `FuzzRead` (the fuzz target for the DWG reader) | `fileio/dwg/robust_test.go`, `errors_test.go`, `fuzz_test.go` |
 | Robustness | A panicking command leaves the session usable; typed `nan` and `inf` are rejected and never reach the view; the view ignores non-finite boxes and zooms | `cmdsys/panic_test.go`, `cmdsys/commands/nonfinite_test.go`, `render/view_test.go` |
 | Agent safety | Scripts cannot reach NEW, OPEN or SAVE; a panicking tool leaves the drawing usable; quitting during a session start closes the late session; the strict `AllowMCP` match | `cadmcp/safety_test.go`, `ui/agent_quit_test.go`, `agentmanager/queue_test.go`, `agentmanager/acp/mcpof_test.go` |
 | Unit | The agent conversation store: JSONL records, the open-tab set, per-project directories | `agentmanager/store/store_test.go`, in the nested module (`just check-agentmanager`) |

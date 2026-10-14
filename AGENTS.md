@@ -48,6 +48,6 @@ commit. Read `_docs/_meta/authoring.md` first; it is short and self-sufficient.*
 
 ## Layout
 
-`geom`, `doc`, `spatial`, `fileio` (+`dxf`), `render` (+`gpuirender`), `cmdsys` (+`commands`), `ui`,
+`geom`, `doc`, `spatial`, `fileio` (+`dxf`), `filedialog`, `render` (+`gpuirender`), `cmdsys` (+`commands`), `ui`,
 `cmd/cad`, `tools/docs` and `internal/gpui`. Each package's purpose is in `_docs/tech/code-map.md`;
 build, test and run commands are in `_docs/tech/operations.md`.

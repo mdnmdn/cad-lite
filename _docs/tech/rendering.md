@@ -7,7 +7,7 @@ summary: How entities become pixels — the view, camera-relative coordinates, t
 read_when: you are changing what or how the canvas draws, adding a display primitive, or chasing jitter or a stale render
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go]
+code_anchors: [render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go, doc/aci.go]
 depends_on: [tech-architecture, tech-document-model]
 review_cycle: quarterly
 ---
@@ -56,8 +56,9 @@ tessellation. `Invalidate` drops the entries of a change set's handles; `Invalid
 everything and runs after any command-line input, because layer colour edits are not journalled.
 
 **Colour.** `ByLayer` resolves through the entity's layer. ACI 7 is black or white, whichever
-contrasts with the background. `render.ACI` maps the other indices: 1–9 and the greys 250–255 are
+contrasts with the background. `render.ACI` maps the other indices through `doc.ACIRGB`: 1–9 and the greys 250–255 are
 AutoCAD's values, 10–249 follow the palette's hue and shade layout closely but not exactly.
+`doc.NearestACI` is the inverse, used where a true colour must become an index (the DWG reader).
 
 ## The frame
 

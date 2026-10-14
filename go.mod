@@ -13,16 +13,16 @@ require (
 require (
 	github.com/ebitengine/gomobile v0.0.0-20260820040257-d11f821a26a6 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
-	github.com/ebitengine/purego v0.11.0 // indirect
 	golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 )
 
 require (
 	agentmanager v0.0.0
 	github.com/BurntSushi/toml v1.5.0
+	github.com/ebitengine/purego v0.11.0
+	golang.org/x/text v0.43.0
 )
 
 replace agentmanager => ./agentmanager

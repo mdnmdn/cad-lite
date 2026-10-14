@@ -383,7 +383,7 @@ func (r *runner) step(s Step) error {
 		if err := r.xdo(cmd, a[0]); err != nil {
 			return err
 		}
-		time.Sleep(120 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 	case "wait":
 		ms, err := strconv.Atoi(a[0])
 		if err != nil {
@@ -416,12 +416,15 @@ func (r *runner) step(s Step) error {
 
 // pressKey holds a key combo (e.g. ctrl+shift+s) down for several frames. A
 // press shorter than one ebiten tick can be missed entirely, because ebiten
-// polls key state once per tick; xdotool key releases immediately.
+// polls key state once per tick; xdotool key releases immediately. The hold
+// is long because a CPU-rasterised frame can take well over 100 ms on a busy
+// runner (the app's startup probes run alongside), and a press and release
+// inside one slow frame is lost.
 func (r *runner) pressKey(k string) error {
 	if err := r.xdo("keydown", "--delay", "30", k); err != nil {
 		return err
 	}
-	time.Sleep(120 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	return r.xdo("keyup", "--delay", "30", k)
 }
 

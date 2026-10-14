@@ -124,7 +124,7 @@ Icons are monochrome SVG files that the shell rasterizes to an alpha mask and ti
 colour, the analogue of GPUI's `paint_svg`:
 
 1. `assets/icons/<name>.svg`, one per row of the registry `assets/icons/icons.yaml` (categories
-   draw, modify, edit, view, snap, measure and layer; `source` is `custom` or `adopted:<lucide-name>`
+   draw, modify, edit, view, snap, measure, layer, file and app; `source` is `custom` or `adopted:<lucide-name>`
    from Lucide under ISC, with the licence in `assets/icons/LICENSE-lucide`).
 2. `icons.SVG(name)` returns the embedded source. The package is data only and imports `embed`;
    its `Name` constants are generated into `names_gen.go` by `just icons-gen`.

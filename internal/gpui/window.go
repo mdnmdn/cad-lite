@@ -157,6 +157,7 @@ type MouseListener struct {
 	OnMouseMove   func(*MouseMoveEvent, *Window, *App)
 	OnClick       func(*ClickEvent, *Window, *App)
 	OnScrollWheel func(*ScrollWheelEvent, *Window, *App)
+	OnPinch       func(*PinchEvent, *Window, *App)
 	OnHoverStart  func(*Window, *App)
 	OnHoverEnd    func(*Window, *App)
 	tooltip       string
@@ -1179,6 +1180,9 @@ func (w *Window) toUICoords(input PlatformInput) PlatformInput {
 	case ScrollWheelEvent:
 		e.Position = div(e.Position)
 		return e
+	case PinchEvent:
+		e.Position = div(e.Position)
+		return e
 	case ClickEvent:
 		if e.Up != nil {
 			up := *e.Up
@@ -1298,6 +1302,9 @@ func (w *Window) dispatchEvent(input PlatformInput, cx *App) {
 	case ScrollWheelEvent:
 		w.dismissTooltip()
 		w.dispatchScroll(e, cx)
+	case PinchEvent:
+		w.dismissTooltip()
+		w.dispatchPinch(e, cx)
 	case KeyDownEvent:
 		w.dismissTooltip()
 		w.setFocusVisible(true)
@@ -1477,6 +1484,18 @@ func (w *Window) dispatchScroll(e ScrollWheelEvent, cx *App) {
 			return
 		}
 	}
+}
+
+// dispatchPinch runs OnPinch over the hit path at the event position,
+// innermost first, until a handler calls StopPropagation.
+func (w *Window) dispatchPinch(e PinchEvent, cx *App) {
+	ev := e
+	w.mousePosition, w.hasMouse = e.Position, true
+	w.dispatchMouse(e.Position, cx, func(l *MouseListener) {
+		if l.OnPinch != nil {
+			l.OnPinch(&ev, w, cx)
+		}
+	})
 }
 
 // focusID moves focus to id if it is still alive.

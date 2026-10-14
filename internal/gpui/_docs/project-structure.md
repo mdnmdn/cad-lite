@@ -123,6 +123,8 @@ Tests (package `gpui_test` unless noted internal), grouped by area:
 | `platform.go` | `New()`, `Run`, ebiten `Game` (`Update`/`Draw`/`Layout`), window, present buffer |
 | `input.go` | ebiten keys/mouse/wheel/chars to gpui events; modifier mapping |
 | `clipboard.go` | clipboard operations applied on the main loop |
+| `pinch.go`, `pinch_darwin.go`, `pinch_other.go` | pinch queue and coordinate/modifier conversion; macOS `NSEvent` magnify monitor via `purego/objc`; stub elsewhere |
+| `wheelctrl_js.go`, `wheelctrl_other.go` | browser: `WheelEvent.ctrlKey` so a pinch arrives with `Control` |
 | `snapshot.go` | `Option`s, `WithSnapshotKey`, frame PNG snapshot |
 | `*_test.go` | `clipboard_test.go`, `input_test.go`, `snapshot_test.go` |
 

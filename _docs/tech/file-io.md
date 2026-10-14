@@ -3,11 +3,11 @@ id: tech-file-io
 title: File I/O
 kind: tech
 status: current
-summary: The format plugin interface and registry, what the DXF codec reads and writes, and the routes to DWG.
-read_when: you are adding a file format, changing what the DXF codec reads or writes, or deciding how DWG support lands
+summary: The format plugin interface and registry, what the DXF codec reads and writes, and what the pure-Go DWG reader reads, skips and refuses.
+read_when: you are adding a file format, changing what the DXF codec reads or writes, changing what the DWG reader imports, or asked to write DWG
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go]
+code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go, fileio/dwg/read.go, fileio/dwg/container.go, fileio/dwg/objects.go, fileio/dwg/entities.go, fileio/dwg/import_entities.go, fileio/dwg/header.go, fileio/dwg/read_test.go, doc/aci.go]
 depends_on: [tech-document-model]
 review_cycle: quarterly
 ---
@@ -19,8 +19,9 @@ review_cycle: quarterly
 `fileio` is the plugin layer between files and the document. A format implements `fileio.Reader`
 (extensions, and `Read` returning a new drawing plus warnings) and/or `fileio.Writer` (extensions,
 the format versions it writes, and `Write` returning warnings). A `fileio.Registry` holds the
-formats and picks one by file extension in `Open` and `Save`; `cmd/cad` registers the DXF codec and
-passes the registry to the session as its `cmdsys.FileHandler`.
+formats and picks one by file extension in `Open` and `Save`; `cmd/cad` registers the DXF codec
+(reader and writer) and the DWG reader, and passes the registry to the session as its
+`cmdsys.FileHandler`.
 
 `Registry.Save` is atomic: the codec writes a temporary file in the target's directory, which is
 synced, given the existing file's permission bits and renamed over the path, so a failed write leaves
@@ -28,9 +29,15 @@ any existing file untouched. A symbolic link is resolved first and the link is k
 not a regular file is an error. The package is named `fileio` so it
 never shadows the standard library's `io`.
 
-Warnings and errors are localized sentences (`dxf.warn.*`, `dxf.err.*` and `fileio.err.*` in the
-`i18n` catalogs), in the language active when the file is read or written; DXF tokens inside them
-(class names, section names, handles) stay as written in the file.
+A format with a reader and no writer is read-only: `Registry.Save` to such a path fails with
+`<FORMAT> writing is not supported; save as <ext of the first writer>` (for DWG, `DWG writing is not
+supported; save as .dxf`) and touches nothing. `Registry.CanRead`, `CanWrite` and `WritablePath`
+(the path with the first writer's extension) let the file commands offer a DXF name after a DWG was
+opened.
+
+Warnings and errors are localized sentences (`dxf.warn.*`, `dxf.err.*`, `dwg.warn.*`, `dwg.err.*`
+and `fileio.err.*` in the `i18n` catalogs), in the language active when the file is read or
+written; DXF tokens inside them (class names, section names, handles) stay as written in the file.
 
 ## The DXF codec
 
@@ -75,22 +82,72 @@ in `fileio/dxf` holds the codec to that.
 
 ## DWG
 
-DWG is proprietary and undocumented by Autodesk. Two routes, both behind the same reader and writer
-interfaces and built only with a `dwg` build tag, because each needs cgo:
+`fileio/dwg.Codec` is a native Go **reader**; there is no DWG writer. It is pure Go, with no cgo
+and no external library, so it builds for `js/wasm`, Windows, macOS and Linux with `CGO_ENABLED=0`.
+It is a port of the DWG reading logic of [ACadSharp](https://github.com/DomCR/ACadSharp) (MIT,
+Copyright (c) 2021 Albert Domenech; the notice is `fileio/dwg/LICENSE-ACadSharp`), written against
+the Open Design Alliance's public specification of the format. No LibreDWG or other GPL or LGPL
+code was read or used ([decision register](decisions.md), D24).
 
-| Option | For | Against |
-|---|---|---|
-| Open Design Alliance Drawings SDK | The most complete read/write coverage of every version | Commercial membership; a C++ API needing a C shim for cgo |
-| LibreDWG | Free software with a C API | GPLv3, which would license the whole application; partial write support |
+**Versions.**
 
-The choice is open (it decides the application's licence) and is in the backlog. Until it is made,
-DWG files are converted to DXF outside Cad-lite. A cgo plugin cannot run in a browser, so the browser
-build reads and writes DXF only.
+| Magic | Release | Container | Status |
+|---|---|---|---|
+| `AC1014` | R14 | Section locators at the start of the file, objects at absolute offsets | read |
+| `AC1015` | R2000 | Same container, bit-coded object records | read |
+| `AC1018` | R2004 | Encrypted file header, page map and section map, LZ77 pages | read |
+| `AC1021` | R2007 | Reed-Solomon encoded header and pages, a second LZ77 variant, UTF-16 strings in a string stream | read |
+| `AC1024`, `AC1027`, `AC1032` | R2010, R2013, R2018 | The R2004 container; object records add a handle-stream size and a bit-coded type | read |
+| `AC1012` | R13 | Read as R14 | accepted, untested: no sample |
+| `AC1009` and older | R12 and before | | refused |
+
+An older version, or a file that is not DWG, fails with `DWG version AC1009 (R11/R12) is not
+supported; open the drawing in a CAD application and save it as DXF` or `not a DWG file`. The
+Reed-Solomon data of R2007 is de-interleaved; its parity bytes are ignored, so errors are not corrected.
+
+**What is imported.** The header's units (`$INSUNITS`, from R2000), handle seed and current layer;
+the layer table (name, colour, off, frozen, locked, plot flag, lineweight and linetype name; R14 has
+no plot flag or lineweight); and the model space entities `LINE`, `CIRCLE`, `ARC`, `LWPOLYLINE`
+(bulges and widths) and 2D `POLYLINE` with its vertices, as an `LWPolyline` (3D polylines and
+meshes are skipped; a vertex that is a spline frame control point is left out). Each entity keeps its
+handle, layer and colour: an ACI index, with by-block and by-layer as `ByLayer`; a true colour or
+colour-book colour keeps the nearest index AutoCAD stored beside it, and a true-colour layer takes
+`doc.NearestACI` of its RGB. Entity linetype, lineweight, thickness and elevation are not kept. An
+entity whose normal is `(0,0,-1)` is mirrored into world coordinates; any other normal is ignored, as
+the DXF reader ignores code 210.
+
+Model space is the entities whose entity mode says so, or whose owner is the `*Model_Space` block
+record. Paper space, block definitions and `INSERT` contents are not read.
+
+**What is skipped.** Every other entity (TEXT, MTEXT, POINT, INSERT, HATCH, SPLINE, ELLIPSE,
+DIMENSION, MULTILEADER and the rest) is skipped, not kept as `doc.Unknown`, and counted in one
+warning, `skipped 29 TEXT, 15 MULTILEADER, 11 DIMENSION, ... (not read from DWG files; the DXF
+reader keeps them)`, by DXF class name, most frequent first. A second warning counts the paper space
+entities. Tables other than layers, blocks, dictionaries, layouts and extended data are not read.
+
+**Robustness.** A bit reader bounds-checks every read and panics with a sentinel that each section,
+object and the top of `Codec.Read` recover, so a damaged object is counted (`N DWG objects could not
+be read`) and the rest imports. An object whose CRC fails is skipped and counted. Sizes a file claims
+are checked before anything is allocated: the file is capped at 1 GiB, a section at 256 MiB and at 64
+times the file, a page at 64 MiB, and decompression stops at the size the page declares. Polyline
+vertex reads share a budget proportional to the object count. `FuzzRead` seeds with the fixtures; the
+mutation tests damage the container and the decoded objects.
+
+**Fixtures** are ACadSharp's `sample_AC10xx.dwg` files (MIT; origin and checksums in
+`fileio/dwg/testdata/README.md`): one drawing in every version, whose expected values are those of
+ACadSharp's ASCII DXF export read by the DXF reader. `TestParityWithDXF` (with `DWG_PARITY_DIR`)
+compares every entity of every version with that export.
 
 ## Rationale
 
-**DXF first.** DXF is documented, text-based and carries the same object model as DWG, so it proves
-the document model — handles, ownership, unknown-object preservation — before the DWG work starts.
+**DXF first.** DXF is documented, text-based and carries the same object model as DWG, so it proved
+the document model — handles, ownership, unknown-object preservation — before the DWG reader was
+written. The reader fills the same `doc.Drawing`, so everything downstream of it (editing, the DXF
+writer, the agent tools) treats a DWG drawing like a DXF one.
+
+**Reader only.** DWG writing needs the object map, classes, the section container and the
+bit-coded records of every object the document holds, and a wrong byte makes AutoCAD refuse the
+file. A drawing opened from DWG is saved as DXF (backlog).
 
 **R12 for writing in the spike.** An R12 file needs no object dictionary, classes or owner chains,
 and every CAD application reads it. The cost is that the writer cannot carry newer data (lightweight
@@ -100,4 +157,4 @@ polylines stay heavy, no lineweights, no true colour); the decision register rec
 
 - [Document model](document-model.md) — what a reader fills and a writer serializes
 - [DXF files](../features/dxf-files.md) — opening and saving from the application
-- [Decision register](decisions.md) — R12 writing and the package name
+- [Decision register](decisions.md) — R12 writing, the package name and the DWG reader

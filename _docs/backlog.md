@@ -11,10 +11,8 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 
 | id | Item | Affects |
 |---|---|---|
-| O1 | DWG library: Open Design Alliance or LibreDWG. Licensing (commercial versus GPLv3) drives the whole project; decide before M4 | [File I/O](tech/file-io.md) |
-| O2 | Application licence; depends on O1 | [File I/O](tech/file-io.md) |
+| O2 | Application licence. DWG no longer constrains it (the reader is pure Go from an MIT-licensed port, D24); the ACadSharp notice must ship with the binaries | [File I/O](tech/file-io.md) |
 | O3 | SHX fonts: substitute TrueType in v1, or implement an SHX parser | [Product overview](product/overview.md) |
-| O4 | WASM and DWG: cgo libraries do not run in a browser, so the browser build is DXF-only | [File I/O](tech/file-io.md) |
 | R1 | Large drawings on a CPU rasteriser: every pointer move re-rasterises the window. Mitigation is base-layer caching (G13) | [Rendering](tech/rendering.md) |
 | R2 | Numerical robustness of TRIM, EXTEND and OFFSET on near-tangent geometry; there is no regression corpus for TRIM and EXTEND, and `geom.Intersect` reports no points for overlapping collinear or concentric pieces | [Geometry kernel](tech/geometry-kernel.md) |
 | R3 | Look and feel: functional, not native-looking; acceptable for v1 | [UI framework](tech/ui-framework.md) |
@@ -26,7 +24,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | M1 | Kernel, model, DXF read | Kernel, document, spatial index, DXF read for LINE, CIRCLE, ARC, polylines, layers, handles | Unknown objects in newer classes, blocks, text, other entities (G1, G7) |
 | M2 | Viewer | Pan, zoom, layers on and off | Linetypes, lineweights, text, hatch (G7) |
 | M3 | Editing core | LINE, PLINE, CIRCLE, ARC, RECTANG, MOVE, COPY, ERASE, ROTATE, SCALE, snaps, selection, undo and redo, DXF save (R12) | Lossless round trip for newer classes (G2) |
-| M4 | DWG | Reader and writer interfaces | The library (O1) |
+| M4 | DWG | DWG reader, pure Go, R14 to R2018: layers, units, LINE, CIRCLE, ARC and polylines | A writer (G60) and the rest of the entities (G61) |
 | M5 | Full v1 command set | The commands in the drawing and editing document | G8, G9 |
 | M6 | Annotation and output | None | Dimensions, MTEXT, layouts, SVG and PDF export (G7, G17) |
 | M7 | Browser build | The binary builds for `js/wasm` and renders headlessly | G12 |
@@ -51,7 +49,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G15 | The operating system cursor is not hidden over the canvas; it needs a platform API. The crosshair can linger when the pointer leaves through the window edge, because the platform sends no leave event | [Drawing canvas](features/canvas.md) |
 | G16 | Layer table edits are not journalled, so they are not undoable and the render cache is cleared on every command-line submission (D11) | [Document model](tech/document-model.md), [Decision register](tech/decisions.md) |
 | G17 | Paper space and layouts, view rotation, UCS | [Product overview](product/overview.md) |
-| G18 | Native open and save dialogs | [DXF files](features/dxf-files.md) |
+| G18 | Typed OPEN and SAVEAS never show the native dialog (FILEDIA is a stored variable with no effect); the dialogs are reached only from the buttons and shortcuts | [DXF files](features/dxf-files.md) |
 | G20 | Command-line autocomplete, history recall and F1 help | [Command line](features/command-line.md) |
 
 ## Further items
@@ -98,7 +96,14 @@ New lines are appended below this heading.
 | G57 | Updates: a real install and relaunch on Windows and macOS is untested (tests simulate the layouts on Linux); macOS in `/Applications` for a non-admin user falls back to the release page | [Updates](features/updates.md) |
 | G58 | Codex: a withdrawn permission request (`serverRequest/resolved`) is dropped silently; the agent panel keeps showing the prompt until it is answered and the answer fails. Emit a withdrawal event and remove the prompt | [Agent panel](features/agent-panel.md), [Agent integration](tech/agent-integration.md) |
 | G59 | The window's close button quits without the "Save changes" question: gpui has no close-request callback the app can veto; add one to `Platform`/`PlatformWindow` and ask when `Session.Dirty()` | [DXF files](features/dxf-files.md), [UI framework](tech/ui-framework.md) |
-| G60 | The settings panel is taller than an 800-pixel window, so its footer (Reset to defaults) is cut off; the panel needs a scrolling body | [Settings](features/settings.md) |
+| G60 | DWG writing: the object map, classes, the section container (R2000 first, then R2004) and the bit-coded records of every object the document holds; until then a drawing opened from DWG saves as DXF | [File I/O](tech/file-io.md), [DXF files](features/dxf-files.md) |
+| G61 | DWG entities that are skipped and counted today: TEXT and MTEXT, INSERT and blocks (BLOCK_HEADER and the block definitions), POINT, ELLIPSE, SPLINE, HATCH, DIMENSION, LEADER and MULTILEADER, 3D entities; they need document support first (G7) | [File I/O](tech/file-io.md), [Document model](tech/document-model.md) |
+| G62 | DWG paper space, layouts and viewports are counted but not read (G17) | [File I/O](tech/file-io.md) |
+| G63 | DWG R13 (`AC1012`) is accepted as R14 but untested for lack of a sample; R12 and older (`AC1009` and before) have a different, unrelated format and are refused | [File I/O](tech/file-io.md) |
+| G64 | DWG linetype definitions, text styles and the other tables are not read, so a layer's linetype is a name only; the R12 DXF writer drops it (D7); true colours map to the nearest ACI index and entity lineweights and linetypes are not kept | [File I/O](tech/file-io.md), [Document model](tech/document-model.md) |
+| G65 | The DWG reader mirrors entities whose extrusion is (0,0,-1) and the DXF reader does not (code 210 is ignored, G7); make the two agree | [File I/O](tech/file-io.md) |
+| G66 | DWG code pages 857, 861, 864, 869 and the UTF-16 one decode as Windows-1252 | [File I/O](tech/file-io.md) |
+| G67 | DWG: read the R2018+ header variables beyond `$INSUNITS` that the document could use ($CECOLOR, $LTSCALE, $PDMODE), and `AcDb:SummaryInfo` | [File I/O](tech/file-io.md) |
 
 ## Next features
 

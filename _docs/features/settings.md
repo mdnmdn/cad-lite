@@ -7,7 +7,7 @@ summary: The settings panel (theme, UI scale, drawing defaults, mouse wheel, def
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, cmd/cad/main.go]
+code_anchors: [settings/settings.go, settings/file.go, ui/settings.go, ui/settings_view.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
@@ -19,7 +19,7 @@ review_cycle: monthly
 The user picks how Cad-lite looks and what a new session starts with, and it is remembered. A panel
 over the window offers a light, dark, classic or high-contrast theme, a UI scale that enlarges or
 reduces the whole interface including text, the drawing aids that start on, the mouse wheel
-behaviour and the default agent. Changes show at once and are saved to a TOML file.
+behaviour and the default agent and where agents are found. Changes show at once and are saved to a TOML file.
 
 ## Behaviour
 
@@ -47,8 +47,21 @@ behaviour and the default agent. Changes show at once and are saved to a TOML fi
   session too (toggling with F7, F3 or F8 afterwards does not change the stored default). The mouse
   wheel is `auto` or `zoom` (the wheel zooms, Shift pans) or `pan` (the wheel pans, Ctrl or Cmd zooms);
   `Workspace.WheelMode` reports it to the canvas.
-- **Agent.** The default harness (`auto`, `opencode`, `claude`, `codex`); `auto` leaves the choice to
-  the first one found on `PATH`.
+- **Panel layout.** The title bar (Settings, Close) and the footer (where the file is, Reset to
+  defaults) stay in place; only the body between them scrolls, with a thin scrollbar. The card is at most the
+  window height minus a 24-pixel margin, so on a short window nothing falls below the screen edge.
+  The wheel or trackpad over the panel or its backdrop scrolls the body and never reaches the canvas. The
+  body returns to the top each time the panel opens.
+- **AI agent.** The default harness (`auto`, `opencode`, `claude`, `codex`); `auto` takes the first one
+  found, in that order.
+- **Agent discovery.** Which of OpenCode, Claude and Codex were found, each with its full path and the
+  version its `--version` reports, or `not found`; a line saying where the PATH came from (login shell,
+  Windows registry, or the app's own when the probe failed, with the reason) and a `Show PATH` expander
+  that lists the folders the login shell added. **Check** runs the probe again (the button shows
+  `Checking…` meanwhile); **Open terminal** opens the user's terminal in the project folder, to install or
+  log in to an agent by hand, and reports when none could be started. The probe runs once in the background
+  at startup, so `auto` works without a click. Nothing is persisted. How the PATH is found and used is in
+  [Agent integration](../tech/agent-integration.md).
 - **About and updates.** The version, the time of the last check, the automatic-check switch, a status
   line, *Check for updates* and, when a release waits, *Update*. Everything about it is in [Updates](updates.md).
 - **Saving.** Every change is written about half a second after the last one, and on close, with the
@@ -78,7 +91,7 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 
 The file starts with a comment header and a comment per table; comments a user adds are not kept.
 API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Parse`, `Marshal`, `Save`,
-`ClampUIScale`); `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
+`ClampUIScale`); `Workspace.EnableAgentDiscovery`, `AgentDiscovery`, `SetAgentDiscoveryProbe`, `SetTerminalOpener`, `ui.OpenTerminal`; `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
 `SaveSettings`, `SetLanguageHandler`, `Language`, `OpenSettings`, `CloseSettings`, `ToggleSettings`, `WheelMode`; theme registry
 `ui.Themes`, `ThemeByName`, `ApplyTheme`; element `ui.NewSlider` with `SliderState`; action
 `cad-settings`.
@@ -91,7 +104,7 @@ same directory, mode 0600, directory 0700, then rename). `ui/settings.go` keeps 
 settings state, `applySettings` (theme, scale, drawing defaults, agent), the debounced save through
 `Window.After` and the hook `withSettings`, which `Workspace.Render` calls to mount the panel and the
 action; `ui/settings_view.go` renders the gear button and the panel; `ui/slider.go` is the reusable
-`Slider`. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
+`Slider`. `ui/discovery.go` holds the discovery state (a worker goroutine hands its result to the UI goroutine through a poll timer, as the update check does), `ui/discovery_view.go` the section and `ui/terminal.go` `OpenTerminal` (macOS `open -a Terminal`, Windows `cmd /c start powershell`, elsewhere `$TERMINAL`, x-terminal-emulator, gnome-terminal, konsole or xterm, the first installed). Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
 applies the stored language with `i18n.Set` and takes the window size from it; a loaded UI scale
 applies on the first frame. The wording of the warnings is in `i18n/locales` (`settings.warn.*`).
 

@@ -3,6 +3,7 @@ package ebitenplatform
 
 import (
 	"errors"
+	"log"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -81,7 +82,7 @@ func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	if onLaunch != nil {
 		onLaunch(app)
 	}
-	g := &game{p: p, app: app, clip: newClipWorker(), wheel: wheelClassifier{pixels: runtime.GOOS == "js"}}
+	g := &game{p: p, app: app, clip: newClipWorker(), wheel: wheelClassifier{pixels: runtime.GOOS == "js"}, pinch: newPinchQueue()}
 	err := ebiten.RunGame(g)
 	if errors.Is(err, ebiten.Termination) {
 		return nil
@@ -151,6 +152,8 @@ type game struct {
 
 	pointer  pointerTracker
 	wheel    wheelClassifier
+	pinch    *pinchQueue
+	pinchSet bool
 	lastMods gpui.Modifiers
 	clicks   clickTracker
 	keyBuf   []ebiten.Key
@@ -246,6 +249,17 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 		win.DispatchEvent(gpui.ModifiersChangedEvent{Modifiers: mods}, app)
 	}
 
+	if !g.pinchSet {
+		g.pinchSet = true
+		installWheelCtrlListener()
+		if err := installPinchMonitor(g.pinch); err != nil && !errors.Is(err, errPinchUnsupported) {
+			log.Printf("gpui: pinch gestures unavailable: %v", err)
+		}
+	}
+	for _, e := range g.pinch.drain() {
+		win.DispatchEvent(e, app)
+	}
+
 	cx, cy := ebiten.CursorPositionF()
 	pos := gpui.Point{X: gpui.Pixels(float32(cx) / w.scale), Y: gpui.Pixels(float32(cy) / w.scale)}
 	wx, wy := ebiten.Wheel()
@@ -284,7 +298,11 @@ func (g *game) pollInput(win *gpui.Window, app *gpui.App, w *window) {
 
 	if wx != 0 || wy != 0 {
 		dx, dy, precise := g.wheel.classify(wx, wy, time.Now())
-		win.DispatchEvent(gpui.ScrollWheelEvent{Position: pos, DeltaX: dx, DeltaY: dy, Modifiers: mods, Precise: precise}, app)
+		wm := mods
+		if takeWheelCtrl() {
+			wm |= gpui.Control
+		}
+		win.DispatchEvent(gpui.ScrollWheelEvent{Position: pos, DeltaX: dx, DeltaY: dy, Modifiers: wm, Precise: precise}, app)
 	}
 
 	g.pollKeys(win, app, w, mods)

@@ -45,6 +45,30 @@ func (r *Registry) AddReader(rd Reader) { r.readers = append(r.readers, rd) }
 // AddWriter registers a writer.
 func (r *Registry) AddWriter(w Writer) { r.writers = append(r.writers, w) }
 
+// ReadExtensions returns every extension a registered reader reads, lower-case with the dot,
+// sorted and without duplicates.
+func (r *Registry) ReadExtensions() []string {
+	var all []string
+	for _, rd := range r.readers {
+		all = append(all, rd.Extensions()...)
+	}
+	return uniqueSorted(all)
+}
+
+// WriteExtensions returns every extension a registered writer writes, in the same form.
+func (r *Registry) WriteExtensions() []string {
+	var all []string
+	for _, w := range r.writers {
+		all = append(all, w.Extensions()...)
+	}
+	return uniqueSorted(all)
+}
+
+func uniqueSorted(in []string) []string {
+	slices.Sort(in)
+	return slices.Compact(in)
+}
+
 func ext(path string) string { return strings.ToLower(filepath.Ext(path)) }
 
 // Open reads the file at path with the reader registered for its extension.
@@ -71,7 +95,44 @@ func (r *Registry) Save(path string, d *doc.Drawing) ([]string, error) {
 			return atomicWrite(path, func(f io.Writer) ([]string, error) { return w.Write(f, d) })
 		}
 	}
+	if r.CanRead(path) {
+		alt := ".dxf"
+		if len(r.writers) > 0 && len(r.writers[0].Extensions()) > 0 {
+			alt = r.writers[0].Extensions()[0]
+		}
+		return nil, errors.New(i18n.T("fileio.err.read_only", strings.ToUpper(strings.TrimPrefix(ext(path), ".")), alt))
+	}
 	return nil, errors.New(i18n.T("fileio.err.no_writer", ext(path)))
+}
+
+// CanRead reports whether a reader is registered for the extension of path.
+func (r *Registry) CanRead(path string) bool {
+	for _, rd := range r.readers {
+		if slices.Contains(rd.Extensions(), ext(path)) {
+			return true
+		}
+	}
+	return false
+}
+
+// CanWrite reports whether a writer is registered for the extension of path.
+func (r *Registry) CanWrite(path string) bool {
+	for _, w := range r.writers {
+		if slices.Contains(w.Extensions(), ext(path)) {
+			return true
+		}
+	}
+	return false
+}
+
+// WritablePath returns path when a writer handles its extension, and otherwise path with the
+// extension of the first registered writer (".dxf" for the application), so a drawing opened from a
+// read-only format such as DWG is offered a path it can be saved to.
+func (r *Registry) WritablePath(path string) string {
+	if r.CanWrite(path) || len(r.writers) == 0 || len(r.writers[0].Extensions()) == 0 {
+		return path
+	}
+	return strings.TrimSuffix(path, filepath.Ext(path)) + r.writers[0].Extensions()[0]
 }
 
 func atomicWrite(path string, write func(io.Writer) ([]string, error)) (warns []string, err error) {
