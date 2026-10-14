@@ -48,8 +48,9 @@ library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions
 
-- `ui.Workspace` is the window's root view and the only `EntityRoot`. It owns the session, the view
-  and the render builder, and builds the element tree from them each frame.
+- `ui.Workspace` is the window's root view and the only `EntityRoot`. It owns the open drawings as
+  document tabs, each with its session, view and render builder, and builds the element tree from the
+  active one each frame.
 - All state the UI shows lives in the session or the workspace; elements are rebuilt every frame and
   hold none.
 - The root element sets the key context `cad`; workspace shortcuts are bound in that context
@@ -67,8 +68,8 @@ ACI 7 draws black), `classic` (a near-black canvas in a grey shell, as in AutoCA
 workspace) and `high-contrast` (black with white borders and saturated accents). `ApplyTheme`
 copies a theme into the package-level variables of `ui/theme.go`, which every view reads while
 rendering, so a redraw shows the new theme without any view being told. `Workspace.applyAppearance`
-also updates the builder's `Background` (which decides how ACI 7 is drawn) and invalidates its
-cache. Views name a token, never a colour; the tokens, one `Theme` field each:
+also updates every tab's builder's `Background` (which decides how ACI 7 is drawn) and invalidates
+their caches. Views name a token, never a colour; the tokens, one `Theme` field each:
 
 | Token | Use |
 |---|---|

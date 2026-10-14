@@ -363,6 +363,35 @@ func TestAgentToolCallFromAnotherGoroutineIsDrained(t *testing.T) {
 	}
 }
 
+// Each document tab has its own MCP server: an agent session edits the drawing of the tab it was
+// started from, whichever tab is active when its tool call arrives.
+func TestAgentToolsEditTheTabTheSessionStartedIn(t *testing.T) {
+	r := newRig(t, t.TempDir(), memFiles{}, true)
+	r.start()
+	plate := <-r.cfg
+	r.open("/elsewhere/bracket.dxf")
+	if len(r.ws.Documents()) != 2 || r.ws.AgentPanel().Running() {
+		t.Fatalf("bracket should open in a tab showing no live conversation: %+v", r.ws.Documents())
+	}
+	r.callTool(plate.MCPServers[0], "add_line", `{"x1":0,"y1":0,"x2":50,"y2":0}`)
+	if a, b := r.ws.DocumentSession(0).Drawing().Len(), r.ws.Session().Drawing().Len(); a != 1 || b != 0 {
+		t.Fatalf("plate has %d entities, bracket %d: the edit went to the wrong tab", a, b)
+	}
+	r.say("draw on the bracket", 1)
+	bracket := r.nextCfg()
+	if bracket.MCPServers[0].URL == plate.MCPServers[0].URL {
+		t.Fatal("both drawings share one MCP server")
+	}
+	r.ws.SwitchDocument(0)
+	r.callTool(bracket.MCPServers[0], "add_circle", `{"cx":0,"cy":0,"r":5}`)
+	if a, b := r.ws.DocumentSession(0).Drawing().Len(), r.ws.DocumentSession(1).Drawing().Len(); a != 1 || b != 1 {
+		t.Fatalf("plate has %d entities, bracket %d", a, b)
+	}
+	if live, _ := r.ws.AgentPanel().Live(); !live || !r.ws.AgentPanel().Running() {
+		t.Fatal("plate's session should still be live and shown")
+	}
+}
+
 // An entity edit through MCP keeps the other entities' cached display items; a layer table edit,
 // which no change set reports, drops them.
 func TestAgentEntityEditKeepsRenderCache(t *testing.T) {

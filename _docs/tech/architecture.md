@@ -84,7 +84,8 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 
 ## Data flow of an edit
 
-1. Input (keyboard, mouse) reaches `ui.Workspace`, which forwards it to `cmdsys.Session`: typed text
+1. Input (keyboard, mouse) reaches `ui.Workspace`, which forwards it to the `cmdsys.Session` of the
+   active document tab: typed text
    to `Session.Submit`, clicks to `Session.Click`, pointer moves to `Session.Hover`, box drags to
    `Session.SelectBox`.
 2. The session parses the input for the active prompt and calls the active command's `Input`.

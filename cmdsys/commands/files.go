@@ -11,7 +11,8 @@ import (
 
 // fileCmd is every file command. The ones that discard the drawing (NEW, OPEN, CLOSE, QUIT, EXIT)
 // ask "Save changes to NAME? [Yes/No/Cancel]" first when the drawing is dirty; the ones that save
-// ask for a path when the drawing has none.
+// ask for a path when the drawing has none. With a document host (one tab per drawing) OPEN and NEW
+// open another tab instead and discard nothing, and CLOSE closes the tab.
 type fileCmd struct {
 	base
 	name  string
@@ -55,7 +56,13 @@ func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 		}
 		return c.savePathPrompt(ctx, fileSavePath)
 	case "NEW", "CLOSE":
+		if h := ctx.Documents(); h != nil && c.name == "NEW" && h.New() {
+			return nil
+		}
 		c.then = func(ctx *cmdsys.Context) {
+			if h := ctx.Documents(); h != nil && c.name == "CLOSE" && h.Close() {
+				return
+			}
 			ctx.ReplaceDrawing(doc.New())
 			ctx.SetFilePath("")
 		}
@@ -102,15 +109,28 @@ func (c *fileCmd) discard(ctx *cmdsys.Context) *cmdsys.Prompt {
 func (c *fileCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	switch c.stage {
 	case fileOpenPath:
+		host := ctx.Documents()
+		if host != nil && host.ShowOpen(in.Text) {
+			return nil
+		}
 		d, warns, err := ctx.Files.Open(in.Text)
 		if err != nil {
 			ctx.Say("cmd.file.msg.open_failed", err)
 			return nil
 		}
-		c.opened, c.warns = d, warns
 		path := in.Text
+		if host != nil {
+			if s := host.OpenNew(path, d); s != nil {
+				// The drawing went to a tab of its own; the current one stays as it is.
+				printWarnings(s.Say, warns)
+				ZoomExtents(d, s.View())
+				s.Say("cmd.file.msg.opened", path, d.Len())
+				return nil
+			}
+		}
+		c.opened, c.warns = d, warns
 		c.then = func(ctx *cmdsys.Context) {
-			printWarnings(ctx, c.warns)
+			printWarnings(ctx.Say, c.warns)
 			ctx.ReplaceDrawing(c.opened)
 			ctx.SetFilePath(path)
 			ZoomExtents(c.opened, ctx.View)
@@ -159,21 +179,22 @@ func saveTo(ctx *cmdsys.Context, path string) bool {
 		ctx.Say("cmd.file.msg.save_failed", err)
 		return false
 	}
-	printWarnings(ctx, warns)
+	printWarnings(ctx.Say, warns)
 	ctx.SetFilePath(path)
 	ctx.MarkSaved()
 	ctx.Say("cmd.file.msg.saved", path, ctx.Doc.Len())
 	return true
 }
 
-func printWarnings(ctx *cmdsys.Context, warns []string) {
+// printWarnings writes a reader's or writer's warnings through say, at most five.
+func printWarnings(say func(key string, args ...any), warns []string) {
 	const shown = 5
 	for i, w := range warns {
 		if i == shown {
-			ctx.Say("cmd.file.msg.more_warnings", len(warns)-shown)
+			say("cmd.file.msg.more_warnings", len(warns)-shown)
 			break
 		}
-		ctx.Say("cmd.file.msg.warning", w)
+		say("cmd.file.msg.warning", w)
 	}
 }
 

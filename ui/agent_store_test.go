@@ -307,22 +307,27 @@ func TestOpeningDrawingInAnotherProjectSwitchesStore(t *testing.T) {
 	r.turn(r.fs, "SA", "answer a")
 	r.until("answer", func() bool { return r.hasText(0, "answer a") && !p.Transcript().Running() })
 
-	s := r.ws.Session()
-	s.Run("OPEN")
-	s.Submit(filepath.Join(b, "b.dxf"))
-	r.until("closed", r.fs.isClosed)
+	r.open(filepath.Join(b, "b.dxf"))
 	tabs := p.Tabs()
 	if len(tabs) != 1 || tabs[0].Title != "New" || tabs[0].Live || len(p.Transcript().Blocks()) != 0 {
-		t.Fatalf("after switching project: %+v", tabs)
+		t.Fatalf("after opening a drawing of project b: %+v", tabs)
 	}
 	r.say("in project b", 1)
-	r.nextCfg()
+	if cfg := r.nextCfg(); cfg.Cwd != b {
+		t.Fatalf("project b's agent runs in %q", cfg.Cwd)
+	}
 	if _, err := os.Stat(filepath.Join(b, ".cad-lite", "agent")); err != nil {
 		t.Fatal(err)
 	}
 
-	s.Run("OPEN")
-	s.Submit(filepath.Join(a, "plate.dxf"))
+	// Back to plate.dxf's tab: project a's conversation, still live.
+	r.open(filepath.Join(a, "plate.dxf"))
+	if !r.hasText(0, "answer a") || !p.Tabs()[0].Live {
+		t.Fatalf("project a not shown: %+v", p.Tabs())
+	}
+	r.ws.CloseDocument(0, r.hw.Window())
+	r.until("closed", r.fs.isClosed)
+	r.open(filepath.Join(a, "plate.dxf"))
 	if !r.hasText(0, "answer a") || p.Tabs()[0].Live {
 		t.Fatalf("project a not restored: %+v", p.Tabs())
 	}

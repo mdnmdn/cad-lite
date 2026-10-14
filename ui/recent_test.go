@@ -121,7 +121,7 @@ func TestOpenMenuOpensRecentFile(t *testing.T) {
 	}
 }
 
-func TestOpenMenuKeepsTheUnsavedChangesQuestion(t *testing.T) {
+func TestOpenMenuOpensBesideADirtyDrawing(t *testing.T) {
 	a := savedDrawing(t)
 	h, _ := recentRig(t, nil, a)
 	h.ws.Session().Script("LINE 0,0 5,5  ")
@@ -129,13 +129,20 @@ func TestOpenMenuKeepsTheUnsavedChangesQuestion(t *testing.T) {
 	h.clickID("tool-open-menu")
 	h.frame()
 	h.clickID("recent-file-0")
-	p := h.ws.Session().CurrentPrompt()
-	if h.ws.Session().Active() != "OPEN" || p == nil || !slices.Contains(p.Keywords, "Yes") {
-		t.Fatalf("a dirty drawing should ask Save changes, active %q prompt %+v", h.ws.Session().Active(), p)
+	if h.ws.Session().FilePath() != a || len(h.ws.Documents()) != 2 {
+		t.Fatalf("the file should open in a tab of its own: %+v", h.ws.Documents())
 	}
-	h.ws.submit("No", h.hw.Window())
-	if h.ws.Session().FilePath() != a {
-		t.Fatalf("answering No did not open the file: %q", h.ws.Session().FilePath())
+	if s := h.ws.DocumentSession(0); !s.Dirty() || s.Active() != "" {
+		t.Fatalf("the dirty drawing was touched: dirty %v, active %q", s.Dirty(), s.Active())
+	}
+	// Opening it again shows its tab instead of a third one.
+	h.ws.SwitchDocument(0)
+	h.frame()
+	h.clickID("tool-open-menu")
+	h.frame()
+	h.clickID("recent-file-0")
+	if docs := h.ws.Documents(); len(docs) != 2 || !docs[1].Active {
+		t.Fatalf("reopening an open file should switch to its tab: %+v", docs)
 	}
 }
 
@@ -207,7 +214,7 @@ func TestOpenMenuClosesOnPressOutsideAndEscape(t *testing.T) {
 	h.clickID("tool-open-menu")
 	h.frame()
 	n := h.ws.Session().RunCount()
-	h.click(gpui.Point{X: 500, Y: 400}) // over the canvas
+	h.click(gpui.Point{X: 40, Y: 400}) // over the canvas, clear of the start panel
 	h.frame()
 	if h.ws.OpenMenuShown() {
 		t.Fatal("press outside did not close the menu")

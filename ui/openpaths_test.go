@@ -72,30 +72,45 @@ func TestDroppedUnsupportedFileIsReported(t *testing.T) {
 	}
 }
 
-func TestDroppedFilesOpenTheFirstDrawingAndReportTheRest(t *testing.T) {
+func TestDroppedFilesOpenOneTabEach(t *testing.T) {
 	h := dialogRig(t, nil)
-	first, second := drawingAt(t, "a.dxf"), drawingAt(t, "b.dxf")
-	h.drop("/x/readme.txt", first, second)
-	s := h.ws.Session()
-	if s.FilePath() != first {
-		t.Fatalf("file path %q, want the first drawing %q", s.FilePath(), first)
+	a, b, c := drawingAt(t, "a.dxf"), drawingAt(t, "b.dxf"), drawingAt(t, "c.dxf")
+	h.drop("/x/readme.txt", a, b, c)
+	docs := h.ws.Documents()
+	if len(docs) != 3 {
+		t.Fatalf("want three tabs (the untitled one replaced by the first), got %+v", docs)
 	}
-	if !historyHas(h.ws, "Cannot open readme.txt") || !historyHas(h.ws, "b.dxf not opened") {
-		t.Fatalf("history does not report the other files: %q", s.History())
+	for i, want := range []string{a, b, c} {
+		if docs[i].Path != want || h.ws.DocumentSession(i).Drawing().Len() != 1 {
+			t.Fatalf("tab %d is %q, want %q with its line", i, docs[i].Path, want)
+		}
+	}
+	if !docs[2].Active {
+		t.Fatalf("the last drawing opened should be active: %+v", docs)
+	}
+	if !slices.ContainsFunc(h.ws.DocumentSession(0).History(), func(l string) bool { return strings.Contains(l, "Cannot open readme.txt") }) {
+		t.Fatalf("the unsupported file is not reported: %q", h.ws.DocumentSession(0).History())
+	}
+	if !historyHas(h.ws, "Opened", "c.dxf") {
+		t.Fatalf("the tab's history does not say what was opened: %q", h.ws.Session().History())
+	}
+	// Dropping an open file again shows its tab.
+	h.drop(a)
+	if docs := h.ws.Documents(); len(docs) != 3 || !docs[0].Active {
+		t.Fatalf("an open file should switch to its tab: %+v", docs)
 	}
 }
 
-func TestDroppedFileAsksAboutUnsavedChanges(t *testing.T) {
+func TestDroppedFileOpensBesideADirtyDrawing(t *testing.T) {
 	h := dialogRig(t, nil)
 	h.ws.Session().Script("LINE 0,0 5,5  ")
-	h.drop(drawingAt(t, "c.dxf"))
-	s := h.ws.Session()
-	p := s.CurrentPrompt()
-	if s.Active() != "OPEN" || p == nil || !slices.Contains(p.Keywords, "Yes") {
-		t.Fatalf("a dirty drawing should ask Save changes, active %q prompt %+v", s.Active(), p)
+	path := drawingAt(t, "c.dxf")
+	h.drop(path)
+	if s := h.ws.Session(); s.FilePath() != path || s.Active() != "" {
+		t.Fatalf("the file should open in its own tab, path %q active %q", s.FilePath(), s.Active())
 	}
-	if s.FilePath() != "" {
-		t.Fatal("the file opened before the question was answered")
+	if s := h.ws.DocumentSession(0); !s.Dirty() || s.Drawing().Len() != 1 || s.FilePath() != "" {
+		t.Fatal("the dirty drawing was replaced")
 	}
 }
 

@@ -7,7 +7,7 @@ summary: The on-demand docked chat panel that runs AI coding agents (opencode, C
 read_when: you are changing the agent panel, its model picker, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_install.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/doctabs.go, ui/agent.go, ui/agent_model.go, ui/agent_install.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -36,9 +36,9 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   others keep running and are drained and stored in the background. A tab's dot is green while its
   session is live, blue while a turn runs and amber when a background tab asked for permission or
   finished a turn; switching to it clears the amber. The harness chips apply to a tab without a stored
-  conversation; afterwards the tab is fixed to the harness it started with. All sessions share one `cad`
-  MCP server, started with the first session and closed with the last; tool calls still run one at a
-  time on the UI goroutine.
+  conversation; afterwards the tab is fixed to the harness it started with. The sessions of one drawing
+  share one `cad` MCP server, started with its first session and closed with its last; tool calls still
+  run one at a time on the UI goroutine.
 - **History.** `History` lists the project's stored conversations, newest first, with title (the first
   prompt), harness and relative date, and the drawing's file name for a conversation of another drawing;
   choosing one opens it in a tab, or switches to it if it is open.
@@ -64,9 +64,12 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   continues its own context (Claude `--resume`, Codex `thread/resume`, ACP `session/load`, whose replayed
   history is suppressed because the stored transcript is shown). A session the agent has lost ends with an
   error note; open a new tab to continue.
-- **Drawing switches.** OPEN of another drawing, or NEW from a saved one, closes every live session, keeps
-  their records and shows the tabs of the new drawing (none for a drawing never used with the agent).
-  Reopening the same file changes nothing. SAVE or SAVEAS under a new name takes the tabs along: in the same
+- **Document tabs.** The panel shows the conversations of the active [document tab](document-tabs.md):
+  switching tabs shows the other drawing's conversations (restored from the store the first time, none
+  for a drawing never used with the agent) while the sessions of the tab left keep running there. A
+  session is bound to the document tab it was started in: its `cad` tools act on that drawing whichever
+  tab is active (decision D32). Closing a document tab ends its sessions and keeps their records. OPEN
+  into the untouched untitled tab closes that tab's live sessions and shows the opened drawing's tabs. SAVE or SAVEAS under a new name takes the tabs along: in the same
   directory the sessions keep running and reopening the old name shows no tabs; in another directory the open
   conversations are copied into that project's store, their sessions close and the tabs reappear there
   (the originals stay in the old project's History). The first save of an untitled drawing works the same
@@ -115,7 +118,7 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 - **Focus.** The command line keeps the keyboard by default. Clicking the prompt field moves it to the
   field; **Escape** in the field, clicking the canvas or hiding the panel gives it back to the command
   line. Text typed into the prompt never reaches the command line.
-- **Quit.** Closing the application stops every session, the agent processes and the MCP server, and
+- **Quit.** Closing the application stops every session of every document tab, the agent processes and the MCP server, and
   saves which tabs were open. A session still starting when the application quits is waited for (up to
   10 s) and closed, and a fatal startup error stops the agent before the process exits.
 
@@ -138,12 +141,14 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 
 ## Implementation
 
-`ui/agent.go` holds `AgentPanel` and `agentTab` (transcript, record, session state per conversation):
-`startTab` (shared MCP server, `agentmanager.Config` with `ResumeID`, launch on a goroutine), the timer
-`pump` over every tab and `stopTab`. `ui/agent_store.go` holds the persistence glue: project directory,
+`ui/agent.go` holds `AgentPanel`, `agentSet` (one document tab's conversations, history state and MCP
+server; the panel embeds the active tab's and `follow` swaps it) and `agentTab` (transcript, record,
+session state per conversation): `ensureServer` (the set's MCP server, whose session is the document
+tab's), `startTab` (`agentmanager.Config` with `ResumeID`, launch on a goroutine), the timer `pump` over
+every tab of every set and `stopTab`. `ui/agent_store.go` holds the persistence glue: project directory,
 `ensureLoaded` (open set restore), tabs, history and `apply`, which folds each event into the
 transcript and `agentmanager/store`, and `drawingChanged`, which `Workspace.pathChanged` calls with whether
-the drawing was saved (the same `doc.Drawing`) or replaced. `ui/agent_model.go` holds the model state per
+the drawing was saved (the same `doc.Drawing`) or replaced, for the active document tab only. `ui/agent_model.go` holds the model state per
 tab (`tabModel`), `SetModel`/`applyModel` (a `ModelSetter` switch on a goroutine, or a restart), the chip
 and the menu. `ui/agent_view.go` renders the header, tabs, history menu,
 transcript (`agentmanager/transcript`) and prompt row; the prompt is a `gpui.TextInput` made

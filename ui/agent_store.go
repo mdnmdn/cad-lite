@@ -41,14 +41,14 @@ type agentHistory struct {
 	failed bool
 }
 
-// projectDir returns the directory agent history is stored under: the directory of the last file
-// opened, saved or passed to SetProjectPath, else the working directory.
-func (ws *Workspace) projectDir() string {
-	if ws.projectPath != "" {
-		if abs, err := filepath.Abs(ws.projectPath); err == nil {
+// projectDir returns the directory the tab's agent history is stored under: the directory of the
+// last file opened, saved or passed to SetProjectPath, else the working directory.
+func (t *docTab) projectDir() string {
+	if t.projectPath != "" {
+		if abs, err := filepath.Abs(t.projectPath); err == nil {
 			return filepath.Dir(abs)
 		}
-		return filepath.Dir(ws.projectPath)
+		return filepath.Dir(t.projectPath)
 	}
 	wd, _ := os.Getwd()
 	return wd
@@ -56,26 +56,27 @@ func (ws *Workspace) projectDir() string {
 
 // drawingKey names the drawing's open tabs in the project store: the drawing file's name, or ""
 // for an untitled drawing.
-func (ws *Workspace) drawingKey() string {
-	if ws.projectPath == "" {
+func (t *docTab) drawingKey() string {
+	if t.projectPath == "" {
 		return ""
 	}
-	return filepath.Base(ws.projectPath)
+	return filepath.Base(t.projectPath)
 }
 
 // SetProjectPath tells the workspace which file the drawing was loaded from, for a file opened
 // before the workspace was built. OPEN and SAVE do this themselves.
 func (ws *Workspace) SetProjectPath(path string) { ws.session.SetFilePath(path) }
 
-// pathChanged follows the session's file path. The drawing is the same one when it was saved
-// (SAVE, SAVEAS) and another one when it was opened or replaced (OPEN, NEW): a saved drawing takes
-// its agent tabs along, another drawing brings its own.
-func (ws *Workspace) pathChanged(path string) {
-	d := ws.session.Drawing()
-	saved := ws.pathDoc == d
-	ws.pathDoc = d
-	ws.projectPath = path
-	if ws.agent != nil {
+// pathChanged follows the file path of tab t's session. The drawing is the same one when it was
+// saved (SAVE, SAVEAS) and another one when it was opened or replaced (OPEN, NEW): a saved drawing
+// takes its agent tabs along, another drawing brings its own. Paths change only through the
+// commands of the active tab, whose conversations the panel shows.
+func (ws *Workspace) pathChanged(t *docTab, path string) {
+	d := t.session.Drawing()
+	saved := t.pathDoc == d
+	t.pathDoc = d
+	t.projectPath = path
+	if ws.agent != nil && t == ws.docTab {
 		ws.agent.drawingChanged(saved)
 	}
 }
@@ -92,7 +93,7 @@ func (p *AgentPanel) ensureLoaded() {
 	if h.off {
 		return
 	}
-	h.dir, h.drawing = p.ws.projectDir(), p.ws.drawingKey()
+	h.dir, h.drawing = p.doc.projectDir(), p.doc.drawingKey()
 	migrateAgentStore(h.dir)
 	st, err := agentStore(h.dir)
 	if err != nil {
@@ -180,7 +181,7 @@ func (p *AgentPanel) syncSessions() {
 }
 
 // persistOpen stores which sessions are open for the drawing and which tab is active.
-func (p *AgentPanel) persistOpen() {
+func (p *agentSet) persistOpen() {
 	h := &p.hist
 	if !h.loaded || h.off || h.st == nil {
 		return
@@ -189,7 +190,7 @@ func (p *AgentPanel) persistOpen() {
 }
 
 // openSet lists the stored sessions of the open tabs and the active one.
-func (p *AgentPanel) openSet() store.OpenSet {
+func (p *agentSet) openSet() store.OpenSet {
 	set := store.OpenSet{}
 	for _, t := range p.tabs {
 		if t.rec != nil {
@@ -349,7 +350,7 @@ func (p *AgentPanel) Sessions() []store.Meta {
 // that drawing had open.
 func (p *AgentPanel) drawingChanged(saved bool) {
 	h := &p.hist
-	dir, key := p.ws.projectDir(), p.ws.drawingKey()
+	dir, key := p.doc.projectDir(), p.doc.drawingKey()
 	if !h.loaded || h.off || (dir == h.dir && key == h.drawing) {
 		return
 	}
@@ -469,14 +470,14 @@ func (p *AgentPanel) userMessage(t *agentTab, text string) {
 	}
 }
 
-func (p *AgentPanel) check(err error) {
+func (p *agentSet) check(err error) {
 	if err != nil {
 		p.warnOnce(p.cur, i18n.T("ui.agent.warn.write_failed", err))
 	}
 }
 
 // warnOnce shows a warning in the transcript of t, once per project. It is not stored.
-func (p *AgentPanel) warnOnce(t *agentTab, msg string) {
+func (p *agentSet) warnOnce(t *agentTab, msg string) {
 	if p.hist.failed {
 		return
 	}

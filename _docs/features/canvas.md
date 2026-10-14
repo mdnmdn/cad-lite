@@ -17,7 +17,8 @@ review_cycle: monthly
 ## Purpose
 
 The canvas is where the drawing is seen and where clicks become points, picks and boxes. Around it,
-a title bar and a ribbon hold the commands, a side panel lists the layers and describes the
+a title bar and a ribbon hold the commands, a strip of [document tabs](document-tabs.md) over it switches
+drawings, a side panel lists the layers and describes the
 selection, and a status bar shows the cursor position, the drafting toggles and the view scale. The view behaves like AutoCAD's model space: dark
 background, a crosshair that follows the pointer, and snap markers that show what a click will hit.
 
@@ -223,7 +224,8 @@ line at the right.
 
 ## Contract
 
-- View: `render.View` (`ZoomAt`, `PanBy`, `Fit`, `PixelSize`), owned by the workspace.
+- View: `render.View` (`ZoomAt`, `PanBy`, `Fit`, `PixelSize`), one per document tab; the canvas, the
+  panels and the status bar show the active tab's view, session and drawing.
 - Session state read: `Session.Cursor`, `Session.Snap`, `Session.CurrentPrompt`, `Session.Selection`,
   `Session.Aperture`, `Session.SnapOn`, `Session.Ortho`, `Session.Polar`, `Session.Grid`,
   `Session.SnapGrid`, `Session.LineweightDisplay`, `Session.Units`; written through `Session.Click`,
@@ -234,7 +236,7 @@ line at the right.
 ## Implementation
 
 `ui.Workspace` in `ui/workspace.go` is the root view: `titleBar` (`ui/titlebar.go`), `ribbon`, then a row of the
-canvas column (`canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.go`) and the agent panel, then
+canvas column (the document tab strip `tabStrip` of `ui/doctabs.go`, then `canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.go`) and the agent panel, then
 `statusBar` (`ui/statusbar.go`), with 1 px dividers or splitters between (`Workspace.chrome`).
 `ui/layout.go` holds `layoutState` (sizes, folded flags, the drag in progress), the pure sizing functions
 `columnWidths`, `sideRange`, `agentRange`, `layersHeight`, `layersLimits` and `resizeSpan`, the `splitter`

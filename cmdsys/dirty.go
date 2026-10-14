@@ -36,6 +36,7 @@ type HistoryState struct {
 type fileState struct {
 	mods    int
 	quit    func()
+	host    DocumentHost
 	path    func() string
 	history HistoryState
 }
@@ -76,6 +77,31 @@ func (s *Session) MarkSaved() { s.files.mods = 0 }
 // SetQuitHandler installs the host's way of ending the application, which QUIT and EXIT call once
 // any unsaved changes are dealt with. Without one they report that quitting is not available.
 func (s *Session) SetQuitHandler(f func()) { s.files.quit = f }
+
+// DocumentHost is the host's side of the file commands when it keeps several drawings open, one
+// tab each, with a session per tab. The host installs one per session (Session.SetDocumentHost),
+// bound to that session's tab. Without one, OPEN replaces the session's drawing and NEW and CLOSE
+// empty it.
+type DocumentHost interface {
+	// ShowOpen switches to the tab that has the file path open and reports whether one has. OPEN
+	// asks before it reads the file.
+	ShowOpen(path string) bool
+	// OpenNew puts d, just read from path, in a tab of its own, records path as its file, makes
+	// it the active tab and returns its session. It returns nil when OPEN should replace this
+	// session's drawing instead (the host's choice for an untouched untitled one).
+	OpenNew(path string, d *doc.Drawing) *Session
+	// New opens an empty drawing in a new active tab and reports whether it did.
+	New() bool
+	// Close closes this session's tab once its unsaved changes are dealt with and reports whether
+	// it did; false (the last tab) has CLOSE empty the drawing.
+	Close() bool
+}
+
+// SetDocumentHost installs the host that gives each drawing a tab of its own (see DocumentHost).
+func (s *Session) SetDocumentHost(h DocumentHost) { s.files.host = h }
+
+// Documents returns the session's document host, or nil when the host keeps one drawing.
+func (c *Context) Documents() DocumentHost { return c.files.host }
 
 // Modified returns the session's modified counter (see Session.Modified).
 func (c *Context) Modified() int { return c.files.mods }

@@ -778,6 +778,11 @@ utilities = "Utilities"
 untitled = "Untitled"
 doc_tip = "Drawing: %s"
 
+[ui.tabs]
+untitled_tip = "Untitled drawing — not saved to a file yet"
+switch_tip = "Click to show it, middle-click or x to close it; Ctrl+Tab and Ctrl+Shift+Tab switch drawings"
+close_tip = "Close this drawing (CLOSE) — asks to save unsaved changes first"
+
 [ui.canvas]
 viewport_label = "[-][Top][2D Wireframe]"
 viewport_tip = "Viewport — the top view in the 2D wireframe style, the only one Cad-lite has"
@@ -793,7 +798,6 @@ filter_all_supported = "All supported files"
 filter_all = "All files"
 filter_ext = "%s drawing"
 unsupported = "Cannot open %s: Cad-lite opens %s files."
-not_opened = "%s not opened: one drawing is open at a time."
 
 [ui.recent]
 menu_tip = "Recent — the drawings and folders you used lately; pick a file to open it or a folder to browse it"
@@ -1116,7 +1120,7 @@ open_release_tip = "Open release page — shows the release on GitHub, to downlo
 badge_tip = "Update available — version %s; open the settings to install it"
 restart_title = "Restart to finish the update?"
 restart_body = "Version %s is installed. Restart now to use it, or keep working and get it the next time you open Cad-lite."
-restart_body_dirty = "Version %s is installed. This drawing has unsaved changes: restarting now loses them. Save first, or choose Later."
+restart_body_dirty = "Version %s is installed. An open drawing has unsaved changes: restarting now loses them. Save first, or choose Later."
 restart_now = "Restart and update"
 restart_now_tip = "Restart now — closes Cad-lite and opens the new version"
 restart_later = "Later"

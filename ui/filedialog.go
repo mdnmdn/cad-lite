@@ -179,9 +179,10 @@ func (ws *Workspace) pollDialog(w *gpui.Window) {
 	w.Refresh()
 }
 
-// openFilePath opens the drawing at path as a typed OPEN does: the unsaved-changes question, the
-// undo reset, the project switch and the recent list all happen in it. Every "open this file" in
-// the UI (the Open dialog, the recent menu, the start panel) comes through here.
+// openFilePath opens the drawing at path as a typed OPEN does: in a tab of its own (or the tab that
+// has it, or in place of the untouched untitled drawing), with the project switch and the recent
+// list. Every "open this file" in the UI (the Open dialog, the recent menu, the start panel) comes
+// through here.
 func (ws *Workspace) openFilePath(path string, w *gpui.Window) {
 	ws.run("OPEN", w)
 	if p := ws.session.CurrentPrompt(); ws.session.Active() == "OPEN" && p != nil && p.Accepts&cmdsys.InputText != 0 {

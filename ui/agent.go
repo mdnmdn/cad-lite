@@ -13,6 +13,7 @@ import (
 	"agentmanager/store"
 	"agentmanager/transcript"
 	"cad-lite/cadmcp"
+	"cad-lite/cmdsys"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 )
@@ -82,12 +83,48 @@ func newAgentTab() *agentTab {
 	return &agentTab{expanded: map[int]bool{}, scroll: gpui.NewScrollHandle(), shownVersion: ^uint64(0)}
 }
 
+// agentSet is the agent state of one document tab: its conversation tabs, its place in the
+// project store and the cad MCP server its sessions share. The server's tools act on that
+// document tab's session, so an agent session stays bound to the drawing it was started from
+// whichever tab is active (decision D32).
+type agentSet struct {
+	// doc is the document tab the set belongs to.
+	doc  *docTab
+	tabs []*agentTab
+	cur  *agentTab
+	hist agentHistory
+	// srv and disp are the cad MCP server shared by the set's live sessions; nil while none is.
+	srv  *mcp.Server
+	disp *cadmcp.Dispatcher
+	ep   mcp.Endpoint
+}
+
+func newAgentSet(doc *docTab) *agentSet {
+	s := &agentSet{doc: doc, cur: newAgentTab()}
+	s.tabs = []*agentTab{s.cur}
+	return s
+}
+
+// live reports whether a tab of the set has a session starting or open.
+func (s *agentSet) live() bool {
+	for _, t := range s.tabs {
+		if t.state != agentIdle {
+			return true
+		}
+	}
+	return false
+}
+
 // AgentPanel is the docked chat panel that drives AI agents over the
-// drawing: one tab per conversation, each with its own agent session. All of
+// drawing: one tab per conversation, each with its own agent session. It shows
+// the conversations of the active document tab (the embedded agentSet); the
+// sessions of the other document tabs keep running. All of
 // its methods and every callback run on the UI goroutine; the only
 // cross-goroutine traffic is the cadmcp.Dispatcher mailbox, the sessions'
 // event channels (read without blocking) and the start results.
 type AgentPanel struct {
+	// agentSet is the active document tab's agent state.
+	*agentSet
 	ws      *Workspace
 	win     *gpui.Window
 	visible bool
@@ -106,16 +143,9 @@ type AgentPanel struct {
 	// modelInput is the model menu's free-text field; modelMenu shows the menu.
 	modelInput *gpui.TextInput
 	modelMenu  bool
-	tabs       []*agentTab
-	cur        *agentTab
-	hist       agentHistory
 	// deferred is a prompt from the AI command that waits for the first frame.
 	deferred string
 
-	// srv and disp are the one cad MCP server shared by every live session.
-	srv   *mcp.Server
-	disp  *cadmcp.Dispatcher
-	ep    mcp.Endpoint
 	timer *gpui.Timer
 	tgen  int
 	// openers counts start goroutines in flight, so quitting can wait for them and close
@@ -135,8 +165,7 @@ func newAgentPanel(ws *Workspace) *AgentPanel {
 		open:  harnesses.Open,
 		input: themeBareField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder")), fontUI, false).Multiline(agentPromptLines),
 	}
-	p.cur = newAgentTab()
-	p.tabs = []*agentTab{p.cur}
+	p.agentSet = ws.docTab.agentSet()
 	p.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { p.Send(text, w) })
 	p.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { p.returnFocus(w) })
 	return p
@@ -171,13 +200,77 @@ func (ws *Workspace) CloseAgent() {
 	if p == nil {
 		return
 	}
-	p.stopAll(true)
-	p.persistOpen()
-	for _, t := range p.tabs {
+	for _, s := range p.sets() {
+		for _, t := range s.tabs {
+			p.stopTab(t, true)
+		}
+	}
+	p.joinOpeners()
+	for _, s := range p.sets() {
+		s.closeRecords()
+	}
+}
+
+// closeRecords saves which of the set's conversations are open and closes their records.
+func (s *agentSet) closeRecords() {
+	s.persistOpen()
+	for _, t := range s.tabs {
 		if t.rec != nil {
 			t.rec.Close()
 		}
 	}
+}
+
+// agentSet returns the document tab's agent state, creating it on first use.
+func (t *docTab) agentSet() *agentSet {
+	if t.agents == nil {
+		t.agents = newAgentSet(t)
+	}
+	return t.agents
+}
+
+// sets returns the agent state of every document tab that has one, in tab order.
+func (p *AgentPanel) sets() []*agentSet {
+	var out []*agentSet
+	for _, t := range p.ws.tabs {
+		if t.agents != nil {
+			out = append(out, t.agents)
+		}
+	}
+	return out
+}
+
+// setOf returns the agent state tab t belongs to, or nil for a tab no longer in one.
+func (p *AgentPanel) setOf(t *agentTab) *agentSet {
+	for _, s := range p.sets() {
+		if slices.Contains(s.tabs, t) {
+			return s
+		}
+	}
+	return nil
+}
+
+// follow shows the conversations of document tab t: the panel follows the active tab. Sessions
+// started from the previous tab keep running there.
+func (p *AgentPanel) follow(t *docTab) {
+	p.agentSet = t.agentSet()
+	p.modelMenu = false
+	if p.visible {
+		p.ensureLoaded()
+	}
+}
+
+// closeDocument stops every session of document tab t and stores its open conversations, before
+// the tab closes.
+func (p *AgentPanel) closeDocument(t *docTab) {
+	s := t.agents
+	if s == nil {
+		return
+	}
+	for _, at := range s.tabs {
+		p.stopTab(at, false)
+	}
+	s.closeRecords()
 }
 
 // Visible reports whether the panel is shown.
@@ -233,12 +326,14 @@ func (p *AgentPanel) Transcript() *transcript.T { return &p.cur.tr }
 // Running reports whether the active tab's session is starting or open.
 func (p *AgentPanel) Running() bool { return p.cur.state != agentIdle }
 
-// Live reports whether any tab has a session starting or open, and whether
-// a background tab wants attention.
+// Live reports whether any tab, of any document tab, has a session starting
+// or open, and whether a background tab wants attention.
 func (p *AgentPanel) Live() (live, attention bool) {
-	for _, t := range p.tabs {
-		live = live || t.state != agentIdle
-		attention = attention || t.attention
+	for _, s := range p.sets() {
+		for _, t := range s.tabs {
+			live = live || t.state != agentIdle
+			attention = attention || t.attention
+		}
 	}
 	return
 }
@@ -290,35 +385,37 @@ func (p *AgentPanel) harnessOf(t *agentTab) agentmanager.Harness {
 	return p.selected
 }
 
-// agentChanged is the MCP refresh hook, run on the UI goroutine after a mutating tool. Entity edits
-// already reached the render cache through the drawing's change sets, so only a layer table edit
-// (which no change set reports) drops the whole cache.
-func (p *AgentPanel) agentChanged() {
-	p.ws.builder.SyncLayers()
+// agentChanged is the MCP refresh hook of document tab d, run on the UI goroutine after a mutating
+// tool. Entity edits already reached the render cache through the drawing's change sets, so only a
+// layer table edit (which no change set reports) drops the whole cache.
+func (p *AgentPanel) agentChanged(d *docTab) {
+	d.builder.SyncLayers()
 	if p.win != nil {
 		p.win.Refresh()
 	}
 }
 
-// ensureServer starts the shared MCP server on first use.
-func (p *AgentPanel) ensureServer(w *gpui.Window) error {
-	if p.srv != nil {
+// ensureServer starts set s's MCP server on first use. Its tools act on the session of the
+// document tab s belongs to, whichever tab is active when a call arrives.
+func (p *AgentPanel) ensureServer(s *agentSet) error {
+	if s.srv != nil {
 		return nil
 	}
+	d := s.doc
 	disp := cadmcp.NewDispatcher(nil)
 	srv := mcp.NewServer(mcp.Options{Name: "cad-lite", Version: "1", Instructions: cadmcp.Instructions()})
 	cadmcp.Register(srv, cadmcp.Env{
 		Dispatch: disp,
-		Session:  p.ws.Session,
+		Session:  func() *cmdsys.Session { return d.session },
 		Snapshot: SnapshotImage,
-		Changed:  p.agentChanged,
+		Changed:  func() { p.agentChanged(d) },
 	})
 	ep, err := srv.Start()
 	if err != nil {
 		disp.Close()
 		return err
 	}
-	p.srv, p.disp, p.ep = srv, disp, ep
+	s.srv, s.disp, s.ep = srv, disp, ep
 	return nil
 }
 
@@ -341,7 +438,11 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 		return
 	}
 	p.win = w
-	if err := p.ensureServer(w); err != nil {
+	set := p.setOf(t)
+	if set == nil {
+		return
+	}
+	if err := p.ensureServer(set); err != nil {
 		p.apply(t, agentmanager.Log{Level: "error", Message: i18n.T("ui.agent.err.mcp", err)})
 		w.Refresh()
 		return
@@ -353,11 +454,11 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 	t.mu.Unlock()
 	cfg := agentmanager.Config{
 		Harness:      h,
-		Cwd:          p.ws.projectDir(),
+		Cwd:          set.doc.projectDir(),
 		ResumeID:     p.resumeID(t, h),
 		Model:        p.modelFor(t, h),
 		SystemPrompt: cadmcp.Instructions(),
-		MCPServers:   []agentmanager.MCPServer{{Name: agentMCPName, URL: p.ep.URL, Token: p.ep.Token}},
+		MCPServers:   []agentmanager.MCPServer{{Name: agentMCPName, URL: set.ep.URL, Token: set.ep.Token}},
 		AutoApprove:  agentmanager.AllowMCP(agentMCPName),
 	}
 	if p.binary != "" && p.binFor == h {
@@ -393,6 +494,7 @@ func (p *AgentPanel) Stop(w *gpui.Window) {
 	w.Refresh()
 }
 
+// stopAll stops the sessions of the active document tab's conversations.
 func (p *AgentPanel) stopAll(wait bool) {
 	for _, t := range p.tabs {
 		p.stopTab(t, wait)
@@ -435,16 +537,17 @@ func (p *AgentPanel) stopTab(t *agentTab, wait bool) {
 	t.state = agentIdle
 	t.queued = ""
 	t.mdl.setting, t.mdl.restart, t.mdl.pending = false, false, false
-	var disp *cadmcp.Dispatcher
 	var srv *mcp.Server
+	if s := p.setOf(t); s != nil && !s.live() {
+		srv = s.srv
+		if s.disp != nil {
+			s.disp.Close()
+		}
+		s.disp, s.srv = nil, nil
+	}
 	if !p.anyLive() {
 		p.timer.Cancel()
 		p.timer = nil
-		disp, srv = p.disp, p.srv
-		p.disp, p.srv = nil, nil
-		if disp != nil {
-			disp.Close()
-		}
 	}
 	closeAll := func() {
 		if sess != nil {
@@ -461,13 +564,9 @@ func (p *AgentPanel) stopTab(t *agentTab, wait bool) {
 	}
 }
 
+// anyLive reports whether any document tab has a live agent session.
 func (p *AgentPanel) anyLive() bool {
-	for _, t := range p.tabs {
-		if t.state != agentIdle {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(p.sets(), (*agentSet).live)
 }
 
 // Send submits a prompt on the active tab. Without a session it starts one
@@ -557,15 +656,33 @@ func (p *AgentPanel) arm(w *gpui.Window, d time.Duration) {
 }
 
 // pump is the timer body, on the UI goroutine: it runs queued tool calls,
-// adopts finished starts, folds pending agent events of every tab into its
-// transcript and record, and re-arms itself while a session exists.
+// adopts finished starts, folds pending agent events of every tab of every
+// document tab into its transcript and record, and re-arms itself while a
+// session exists.
 func (p *AgentPanel) pump(w *gpui.Window) {
 	p.win = w
-	if p.disp != nil {
-		p.disp.Drain()
+	live, busy, pending := false, false, false
+	for _, s := range p.sets() {
+		if s.disp != nil {
+			s.disp.Drain()
+		}
+		live, busy = p.pumpTabs(s.tabs, live, busy)
+		pending = pending || (s.disp != nil && s.disp.Pending() > 0)
 	}
-	live, busy := false, false
-	for _, t := range append([]*agentTab(nil), p.tabs...) {
+	if !live {
+		return
+	}
+	next := agentIdlePoll
+	if busy || pending {
+		next = agentBusyPoll
+	}
+	p.arm(w, next)
+}
+
+// pumpTabs adopts the finished starts and model switches of tabs and folds their events; it adds
+// to live and busy whether one has a session and whether one needs the fast period.
+func (p *AgentPanel) pumpTabs(tabs []*agentTab, live, busy bool) (bool, bool) {
+	for _, t := range append([]*agentTab(nil), tabs...) {
 		t.mu.Lock()
 		res := t.startRes
 		t.startRes = nil
@@ -580,14 +697,7 @@ func (p *AgentPanel) pump(w *gpui.Window) {
 			busy = busy || t.state == agentStarting || t.tr.Running() || t.mdl.setting
 		}
 	}
-	if !live {
-		return
-	}
-	next := agentIdlePoll
-	if busy || (p.disp != nil && p.disp.Pending() > 0) {
-		next = agentBusyPoll
-	}
-	p.arm(w, next)
+	return live, busy
 }
 
 func (p *AgentPanel) started(t *agentTab, res *agentStart) {

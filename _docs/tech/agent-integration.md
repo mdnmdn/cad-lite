@@ -90,11 +90,13 @@ once on Linux; a real sign-in and the macOS and Windows terminals were not.
 
 ## The `cad` MCP server
 
-The first session start creates one `mcp.Server` named for Cad-lite, registers `cadmcp.Register` with an `Env`
-(`Dispatch`, `Session`, `Snapshot`, `Changed`), binds it to `127.0.0.1` on a random port and passes its
+The first session start of a document tab creates that tab's `mcp.Server` named for Cad-lite, registers
+`cadmcp.Register` with an `Env` (`Dispatch`, `Session`, which returns that document tab's session whichever tab
+is active, `Snapshot`, `Changed`), binds it to `127.0.0.1` on a random port and passes its
 URL and bearer token to the agent as `agentmanager.MCPServer{Name: "cad"}`. Every request needs the
-token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of the workspace (the MCP server is stateless per request): it
-starts with the first session and closes when the last one stops, exits or quits, so the port and token
+token; requests with a foreign `Host` or `Origin` are refused. One server serves every live session of its document tab (the MCP server is stateless per request), so a
+session edits the drawing it was started from (decision D32): it
+starts with the tab's first session and closes when its last one stops, exits or quits, so the port and token
 never outlive the chats. Tool calls are serialized by a capacity-one semaphore that honours the request
 context, so a cancelled request neither waits for nor runs after a busy handler. The HTTP server sets a
 header timeout of 10 s and an `IdleTimeout` of 2 minutes; it sets no write timeout and no batch-length

@@ -180,7 +180,7 @@ func main() {
 			signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 			go func() { <-sig; cx.Quit() }()
 		}
-		ws.Session().SetQuitHandler(cx.Quit)
+		ws.SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		// Files opened from Finder or dropped on the Dock icon (macOS).
 		cx.OnOpenPaths(func(paths []string, _ *gpui.App) { ws.OpenPaths(paths) })
@@ -214,7 +214,7 @@ func renderPNG(ws *ui.Workspace, path string, w, h int, scale float32, hover str
 	p.SetScaleFactor(scale)
 	var hw *gpui.HeadlessWindow
 	err := p.Run(func(cx *gpui.App) {
-		ws.Session().SetQuitHandler(cx.Quit)
+		ws.SetQuitHandler(cx.Quit)
 		cx.Keymap().AddBindings(ui.Bindings()...)
 		opts := gpui.WindowOptions{Width: float32(w), Height: float32(h), Title: "Cad-lite"}
 		if err := cx.OpenWindow(opts, func(*gpui.Window, *gpui.App) gpui.EntityRoot { return ws }); err != nil {

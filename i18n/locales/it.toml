@@ -779,6 +779,11 @@ utilities = "Utilità"
 untitled = "Senza titolo"
 doc_tip = "Disegno: %s"
 
+[ui.tabs]
+untitled_tip = "Disegno senza titolo — non ancora salvato in un file"
+switch_tip = "Clic per mostrarlo, clic centrale o x per chiuderlo; Ctrl+Tab e Ctrl+Maiusc+Tab passano da un disegno all'altro"
+close_tip = "Chiudi questo disegno (CLOSE) — chiede prima di salvare le modifiche"
+
 [ui.canvas]
 viewport_label = "[-][Alto][Wireframe 2D]"
 viewport_tip = "Vista — la vista dall'alto nello stile wireframe 2D, l'unica di Cad-lite"
@@ -794,7 +799,6 @@ filter_all_supported = "Tutti i file supportati"
 filter_all = "Tutti i file"
 filter_ext = "Disegno %s"
 unsupported = "Impossibile aprire %s: Cad-lite apre file %s."
-not_opened = "%s non aperto: si apre un disegno alla volta."
 
 [ui.recent]
 menu_tip = "Recenti — i disegni e le cartelle usati di recente; scegli un file per aprirlo o una cartella per sfogliarla"
@@ -1121,7 +1125,7 @@ open_release_tip = "Apri la pagina della versione — mostra la versione su GitH
 badge_tip = "Aggiornamento disponibile — versione %s; apri le opzioni per installarla"
 restart_title = "Riavviare per completare l'aggiornamento?"
 restart_body = "La versione %s è installata. Riavvia ora per usarla, oppure continua a lavorare e la troverai alla prossima apertura di Cad-lite."
-restart_body_dirty = "La versione %s è installata. Questo disegno ha modifiche non salvate: riavviando ora vanno perse. Salva prima, oppure scegli Più tardi."
+restart_body_dirty = "La versione %s è installata. Un disegno aperto ha modifiche non salvate: riavviando ora vanno perse. Salva prima, oppure scegli Più tardi."
 restart_now = "Riavvia ora"
 restart_now_tip = "Riavvia ora — chiude Cad-lite e apre la nuova versione"
 restart_later = "Più tardi"

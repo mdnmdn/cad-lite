@@ -43,8 +43,8 @@ behaviour and the default agent and where agents are found. Changes show at once
   names are extra aliases (see [Command line](command-line.md)), and an AI agent driving the
   drawing always gets English. Warnings produced while the file is read are in the system language,
   because the stored choice is not known yet.
-- **Drawing.** Grid, object snap and ortho switches set what starts on and apply to the current
-  session too (toggling with F7, F3 or F8 afterwards does not change the stored default). The mouse
+- **Drawing.** Grid, object snap and ortho switches set what starts on and apply to every open
+  document tab and each new one too (toggling with F7, F3 or F8 afterwards does not change the stored default). The mouse
   wheel is `auto` or `zoom` (the wheel zooms, Shift pans) or `pan` (the wheel pans, Ctrl or Cmd zooms);
   `Workspace.WheelMode` reports it to the canvas.
 - **Panel layout.** The title bar (Settings, Close) and the footer (where the file is, Reset to

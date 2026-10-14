@@ -41,9 +41,9 @@ and the installation follow without further action; a dialog then asks before th
   `SHA256SUMS.txt` of the same release (a missing list, a missing entry or a mismatch refuses to install),
   and replaces the installation. The status line shows the percentage, then "installing".
 - **Restart.** Once the installation is done a dialog always asks: *Restart and update* quits and
-  starts the new version, *Later* keeps working and the new version starts at the next launch. When the
-  drawing has unsaved changes (`Session.Dirty`: changed since it was created, opened or saved) the dialog
-  warns that restarting loses them.
+  starts the new version, *Later* keeps working and the new version starts at the next launch. When an
+  open drawing (any document tab) has unsaved changes (`Session.Dirty`: changed since it was created, opened
+  or saved) the dialog warns that restarting loses them.
   Settings are saved and the agent closed before the new process starts, and the new process gets the
   arguments of the old one.
 - **Installing.** Windows: the running `cad-lite.exe` is renamed to `cad-lite.exe.old`, the new one

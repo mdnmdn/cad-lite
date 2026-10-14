@@ -46,7 +46,11 @@ text, integer and Enter. `cmdsys.Input` carries the response.
 change listener (a committed transaction, an undo, a redo): `Session.Modified`, `Dirty`, `MarkSaved`, and the
 read-only variable `DBMOD`. The counter is reset when the drawing is replaced (`SetDrawing`) and by a save.
 The host reads `Dirty` for its title, status and restart decisions and installs `SetQuitHandler` for QUIT and
-EXIT. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
+EXIT. A host that keeps several drawings, one session each, installs a `DocumentHost` per session
+(`SetDocumentHost`, read by commands through `Context.Documents`): OPEN asks it to show a tab that has the
+file (`ShowOpen`) before reading and to open the drawing it read in a new one (`OpenNew`, which returns
+that tab's session, or nil to replace this drawing), NEW asks `New`, and CLOSE asks `Close` once the
+unsaved changes are dealt with. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
 REDO reverses a whole `UNDO n`. When a command ends the session names the undo step after it
 (`Drawing.NameLastStep`), so `U` can print the command it undid.
 

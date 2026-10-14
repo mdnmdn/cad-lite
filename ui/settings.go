@@ -8,6 +8,7 @@ import (
 	"weak"
 
 	"agentmanager"
+	"cad-lite/cmdsys"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/settings"
@@ -157,9 +158,9 @@ func (ws *Workspace) applyAppearance(w *gpui.Window) {
 		t, _ = ThemeByName(DefaultThemeName)
 	}
 	ApplyTheme(t)
-	if ws.builder != nil {
-		ws.builder.Background = colCanvas
-		ws.builder.InvalidateAll()
+	for _, t := range ws.tabs {
+		t.builder.Background = colCanvas
+		t.builder.InvalidateAll()
 	}
 	if w == nil {
 		w = ws.win
@@ -173,13 +174,21 @@ func (ws *Workspace) applyAppearance(w *gpui.Window) {
 	}
 }
 
-// applyDrawingDefaults sets the grid, object snap and ortho flags from the
-// settings.
+// applyDrawingDefaults sets the grid, object snap and ortho flags of every tab from the
+// settings; a tab opened later starts with them too.
 func (ws *Workspace) applyDrawingDefaults() {
+	ws.aidsSet = true
+	for _, t := range ws.tabs {
+		ws.applyDrawingDefaultsTo(t.session)
+	}
+}
+
+// applyDrawingDefaultsTo sets the grid, object snap and ortho flags of s from the settings.
+func (ws *Workspace) applyDrawingDefaultsTo(s *cmdsys.Session) {
 	c := ws.prefs().cur
-	ws.session.SetGrid(c.Grid)
-	ws.session.SnapOn = c.OSnap
-	ws.session.Ortho = c.Ortho
+	s.SetGrid(c.Grid)
+	s.SnapOn = c.OSnap
+	s.Ortho = c.Ortho
 }
 
 // SetLanguageHandler installs the hook that applies the interface language:

@@ -4,34 +4,31 @@ import (
 	"strings"
 
 	"cad-lite/cmdsys"
-	"cad-lite/cmdsys/commands"
 	"cad-lite/doc"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/render"
 )
 
-// Workspace is the root view: one drawing, its session and the window
-// chrome around the canvas.
+// Workspace is the root view: the open drawings, one document tab each, and the window chrome
+// around the canvas. The per-drawing state (session, view, display cache, canvas state, file) is
+// the embedded active docTab; the rest (ribbon, panels, settings, agent panel, recent files, file
+// dialog, command line field) is the shell every tab shares.
 type Workspace struct {
-	session *cmdsys.Session
+	// docTab is the active tab; its fields (session, view, builder, canvas, ...) read as the
+	// workspace's own.
+	*docTab
+	// tabs are the open drawings in strip order; docTab is one of them.
+	tabs []*docTab
 	// files is the handler OPEN and SAVE use; it also lists the extensions the file dialogs show.
 	files cmdsys.FileHandler
 	// dlg is the native file dialog state.
-	dlg     dialogState
-	view    *render.View
-	builder *render.Builder
-	input   *gpui.TextInput
+	dlg   dialogState
+	input *gpui.TextInput
 	// agent is created the first time the panel or the AI command is used.
 	agent *AgentPanel
-	// projectPath is the drawing's file, which decides where agent history lives.
-	projectPath string
-	// pathDoc is the drawing projectPath was last set for: the same drawing at the next path
-	// change means it was saved, another one that it was opened or replaced.
-	pathDoc *doc.Drawing
-	win     *gpui.Window
+	win   *gpui.Window
 
-	canvas canvasState
 	// WheelZoom makes a precise (trackpad) vertical scroll zoom instead of
 	// pan, so the plain wheel always zooms as in AutoCAD. Ctrl+wheel zooms
 	// and Shift+wheel pans either way.
@@ -40,8 +37,6 @@ type Workspace struct {
 	Brand Brand
 	// tipTheme is the theme whose tooltip style the App currently has.
 	tipTheme string
-	// fitPending zooms to extents once the canvas size is known.
-	fitPending bool
 	// zoom is the status bar slider's state; zoomSaved is true once the
 	// drag in progress has put the pre-drag view on the ZOOM Previous stack.
 	zoom      SliderState
@@ -56,27 +51,19 @@ type Workspace struct {
 	lay layoutState
 	// recent is the Open menu and start panel state; the lists are in the settings.
 	recent recentState
+	// quit is the host's way of ending the application (SetQuitHandler); quitting asks about each
+	// dirty tab first (doctabs.go).
+	quit quitState
+	// aidsSet is true once the settings' drawing aids were applied; a new tab takes them too.
+	aidsSet bool
 }
 
-// NewWorkspace returns a workspace editing d. files may be nil, which
+// NewWorkspace returns a workspace editing d in its one tab. files may be nil, which
 // disables OPEN and SAVE (as in a browser build).
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
-	v := render.DefaultView(800, 600)
-	ws := &Workspace{view: &v, files: files, fitPending: d.Len() > 0}
+	ws := &Workspace{files: files}
 	ws.lay.col = gpui.NewScrollHandle()
-	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
-	ws.session.SetFiles(files)
-	ws.attach(d)
-	ws.pathDoc = d
-	ws.session.OnDrawing(ws.attach)
-	ws.session.OnFilePath(ws.pathChanged)
-	ws.session.OnFilePath(ws.noteRecentFile)
-	ws.session.SetAgentHandler(ws.agentCommand)
-	ws.session.SetSettingsHandler(func() {
-		if ws.win != nil {
-			ws.ToggleSettings(ws.win)
-		}
-	})
+	ws.docTab = ws.newDocTab(d)
 	ws.input = themeBareField(gpui.NewTextInput(i18n.T("ui.cmdline.placeholder")), fontUI+1, true)
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
@@ -92,12 +79,6 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	return ws
 }
 
-// attach builds the display cache for a (new) drawing.
-func (ws *Workspace) attach(d *doc.Drawing) {
-	ws.builder = render.NewBuilder(d, colCanvas)
-	d.OnChange(ws.builder.Invalidate)
-}
-
 // Session returns the command session, for scripting and tests.
 func (ws *Workspace) Session() *cmdsys.Session { return ws.session }
 
@@ -111,10 +92,12 @@ func (ws *Workspace) acceptsText() bool {
 
 func (ws *Workspace) submit(text string, w *gpui.Window) {
 	ws.input.SetText("")
-	n := ws.session.RunCount()
-	ws.session.Submit(text)
-	ws.noteIfRan(n)
-	ws.builder.SyncLayers()
+	// The answer may close this tab or open another (CLOSE, OPEN), so the tab is held here.
+	t := ws.docTab
+	n := t.session.RunCount()
+	t.session.Submit(text)
+	ws.noteIfRan(t, n)
+	t.builder.SyncLayers()
 	w.Refresh()
 }
 
@@ -129,17 +112,18 @@ func (ws *Workspace) escape(w *gpui.Window) {
 
 func (ws *Workspace) run(name string, w *gpui.Window) {
 	ws.input.SetText("")
-	n := ws.session.RunCount()
-	ws.session.Run(name)
-	ws.noteIfRan(n)
+	t := ws.docTab
+	n := t.session.RunCount()
+	t.session.Run(name)
+	ws.noteIfRan(t, n)
 	w.Refresh()
 }
 
-// noteIfRan records the last started command as recent when the session started one since the
-// run count was n.
-func (ws *Workspace) noteIfRan(n int) {
-	if ws.session.RunCount() > n {
-		ws.noteCommand(ws.session.LastCommand())
+// noteIfRan records the last started command as recent when tab t's session started one since
+// the run count was n.
+func (ws *Workspace) noteIfRan(t *docTab, n int) {
+	if t.session.RunCount() > n {
+		ws.noteCommand(t.session.LastCommand())
 	}
 }
 
@@ -157,6 +141,8 @@ var (
 	actionPolar     = gpui.NewAction("cad-toggle-polar")
 	actionZoomExtnt = gpui.NewAction("cad-zoom-extents")
 	actionAgent     = gpui.NewAction("cad-toggle-agent")
+	actionNextTab   = gpui.NewAction("cad-next-tab")
+	actionPrevTab   = gpui.NewAction("cad-prev-tab")
 )
 
 // Bindings returns the workspace key bindings, to add to the app keymap.
@@ -179,6 +165,8 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("f10", actionPolar, "cad"),
 		gpui.NewKeyBinding("ctrl-e", actionZoomExtnt, "cad"),
 		gpui.NewKeyBinding("f2", actionAgent, "cad"),
+		gpui.NewKeyBinding("ctrl-tab", actionNextTab, "cad"),
+		gpui.NewKeyBinding("ctrl-shift-tab", actionPrevTab, "cad"),
 	}, settingsBindings()...)
 }
 
@@ -213,6 +201,8 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionOrtho, toggle(func() { s.SetOrtho(!s.Ortho) })).
 		OnAction(actionPolar, toggle(func() { s.SetPolar(!s.Polar()) })).
 		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.AgentPanel().Toggle(w) }).
+		OnAction(actionNextTab, toggle(func() { ws.cycleTab(1) })).
+		OnAction(actionPrevTab, toggle(func() { ws.cycleTab(-1) })).
 		OnAction(actionGrid, toggle(func() { s.SetGrid(!s.Grid()) })).
 		OnAction(actionSnapGrid, toggle(func() { s.SetSnapGrid(!s.SnapGrid()) })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
@@ -230,7 +220,8 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 }
 
 // chrome returns the window's rows above the status bar: the title bar, the ribbon unless it is
-// collapsed, and the body, each followed by a divider.
+// collapsed, and the body, each followed by a divider. The body's left column is the document
+// tab strip, the canvas and the command area.
 func (ws *Workspace) chrome(win, sideW, agentW float32, cmdline gpui.IntoElement, w *gpui.Window, cx *gpui.App) []gpui.IntoElement {
 	rows := []gpui.IntoElement{ws.titleBar(), hDivider()}
 	if !ws.lay.ribbonOff {
@@ -238,6 +229,7 @@ func (ws *Workspace) chrome(win, sideW, agentW float32, cmdline gpui.IntoElement
 	}
 	body := gpui.NewDiv().FlexRow().Flex1().MinH(0).Child(
 		gpui.NewDiv().FlexCol().Flex1().MinW(0).Child(
+			ws.tabStrip(),
 			ws.canvasElement(),
 			hDivider(),
 			ws.commandArea(cmdline, w),

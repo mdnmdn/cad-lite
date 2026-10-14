@@ -32,28 +32,31 @@ func (r *agentRig) chat(i int, text, sid, reply string) {
 	r.until(reply, func() bool { return r.hasText(0, reply) && !r.ws.AgentPanel().Transcript().Running() })
 }
 
-func TestEachDrawingRestoresItsOwnTabs(t *testing.T) {
+func TestEachDrawingTabShowsItsOwnConversations(t *testing.T) {
 	dir := t.TempDir()
 	r := newRig(t, dir, memFiles{}, true)
 	p := r.ws.AgentPanel()
 	r.chat(0, "about the plate", "SP", "plate answer")
 
+	// bracket.dxf opens in a tab of its own; plate's session keeps running in its tab.
 	r.open(filepath.Join(dir, "bracket.dxf"))
-	r.until("closed", r.fs.isClosed)
+	if len(r.ws.Documents()) != 2 {
+		t.Fatalf("bracket did not open in a tab: %+v", r.ws.Documents())
+	}
 	if tabs := p.Tabs(); len(tabs) != 1 || tabs[0].SessionID != "" || len(p.Transcript().Blocks()) != 0 {
 		t.Fatalf("bracket starts with %+v", tabs)
 	}
+	if live, _ := p.Live(); !live || r.fs.isClosed() {
+		t.Fatal("opening another drawing stopped plate's session")
+	}
 	r.chat(1, "about the bracket", "SB", "bracket answer")
 
+	// OPEN of the open plate.dxf shows its tab, with its conversation still live.
 	r.open(filepath.Join(dir, "plate.dxf"))
-	if !r.hasText(0, "plate answer") || r.hasText(0, "bracket answer") || len(p.Tabs()) != 1 {
+	if !r.ws.Documents()[0].Active || !r.hasText(0, "plate answer") || r.hasText(0, "bracket answer") || len(p.Tabs()) != 1 || !p.Tabs()[0].Live {
 		t.Fatalf("plate tabs %+v", p.Tabs())
 	}
-	r.say("plate again", 2)
-	if cfg := r.nextCfg(); cfg.ResumeID != "SP" {
-		t.Fatalf("plate ResumeID %q", cfg.ResumeID)
-	}
-	r.open(filepath.Join(dir, "bracket.dxf"))
+	r.ws.SwitchDocument(1)
 	if !r.hasText(0, "bracket answer") || r.hasText(0, "plate answer") {
 		t.Fatalf("bracket tabs %+v", p.Tabs())
 	}
@@ -65,6 +68,12 @@ func TestEachDrawingRestoresItsOwnTabs(t *testing.T) {
 	}
 	if len(ms) != 2 || !drawings["plate.dxf"] || !drawings["bracket.dxf"] {
 		t.Fatalf("history %+v", ms)
+	}
+	// Closing the bracket tab ends its session only.
+	r.ws.CloseDocument(1, r.hw.Window())
+	r.until("bracket closed", r.sess(1).isClosed)
+	if r.fs.isClosed() || !r.hasText(0, "plate answer") {
+		t.Fatal("closing bracket's tab touched plate's conversation")
 	}
 }
 
@@ -132,7 +141,7 @@ func TestUntitledDrawingTabsFollowFirstSave(t *testing.T) {
 	t.Chdir(dir)
 	r := newRig(t, dir, memFiles{}, true)
 	p := r.ws.AgentPanel()
-	r.ws.Session().Run("NEW")
+	r.ws.Session().Run("NEW") // an untitled tab beside plate.dxf
 	r.chat(0, "sketch", "SU", "sketched")
 
 	r.saveAs(filepath.Join(dir, "sketch.dxf"))
@@ -150,9 +159,12 @@ func TestUntitledDrawingTabsFollowFirstSave(t *testing.T) {
 		t.Fatalf("sketch.dxf set %+v %v", set, err)
 	}
 	r.ws.Session().Run("NEW")
-	r.until("closed", r.fs.isClosed)
 	if len(p.Tabs()) != 1 || r.hasText(0, "sketched") {
-		t.Fatalf("NEW kept the drawing's tabs: %+v", p.Tabs())
+		t.Fatalf("the new drawing shows sketch.dxf's tabs: %+v", p.Tabs())
+	}
+	r.ws.SwitchDocument(1)
+	if r.fs.isClosed() || !r.hasText(0, "sketched") {
+		t.Fatal("sketch.dxf's tab lost its conversation")
 	}
 }
 

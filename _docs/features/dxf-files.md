@@ -7,7 +7,7 @@ summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, t
 read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+code_anchors: [ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -21,8 +21,9 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
 
 ## Behaviour
 
-- **OPEN** asks `Enter path of drawing to open (.dxf or .dwg)`. On success the open drawing is replaced, the view
-  zooms to its extents and the history reads `Opened <path> (<n> entities).`
+- **OPEN** asks `Enter path of drawing to open (.dxf or .dwg)`. On success the drawing opens in a
+  [document tab](document-tabs.md) of its own (in place of the untouched untitled drawing, or the tab that
+  has the file open), the view zooms to its extents and that tab's history reads `Opened <path> (<n> entities).`
 - **SAVE** asks `Enter path of drawing to save` and writes the current drawing as DXF; the history
   reads `Saved <path> (<n> entities).`
 - **QSAVE** (Ctrl+S) saves silently under the current path and asks for one only when the drawing
@@ -32,8 +33,8 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   dialog and the `Save changes` question offer the same name with `.dxf` as the default.
 - **Open and Save buttons.** The title bar has icon-only Open (Ctrl+O) and Save (Ctrl+S) buttons after the document chip; Save as
   is a right click on Save and Ctrl+Shift+S. Open shows the system open dialog and, when a file is
-  chosen, runs OPEN with that path, so the `Save changes` question, the undo reset, the project path and
-  the agent history switch happen as for a typed OPEN. Save with a file runs QSAVE; Save without one, and
+  chosen, runs OPEN with that path, so the tab choice, the project path and the agent history switch
+  happen as for a typed OPEN. Save with a file runs QSAVE; Save without one, and
   Save as, show the system save dialog (the current name, or `drawing`, pre-filled) and run SAVEAS with
   the chosen path. Cancelling the dialog does nothing. One dialog is open at a time; the window stays
   usable behind it.
@@ -44,7 +45,7 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   nothing. The lists are saved in the settings file at once (`recent` table, see [Settings](settings.md)).
 - **Open menu.** The chevron beside Open lists `Recent files` (format, name, folder; the tooltip has the full path)
   and `Recent folders`, then `Clear recent`, which empties both. A file opens through the same path as the Open
-  dialog's answer, so the `Save changes` question applies. A folder shows the Open dialog starting in it (without
+  dialog's answer, in a tab of its own. A folder shows the Open dialog starting in it (without
   a dialog, OPEN prompts on the command line). A file or folder that was not found when the menu opened is greyed
   but kept: clicking a missing file runs OPEN anyway, which fails with the usual history line, and then drops it
   from the list; a missing folder is dropped and the dialog starts where it otherwise would. The same file rows
@@ -59,15 +60,16 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   that fails) the buttons run OPEN, QSAVE or SAVEAS on the command line, so the user types the path as
   before. Typed OPEN, SAVE and SAVEAS always stay on the command line; the `FILEDIA` variable is stored
   but does not change that.
-- **NEW** discards the drawing for an empty one, forgets the path and does not touch files. **CLOSE** does
-  the same (Cad-lite has one drawing).
+- **NEW** opens an empty untitled drawing in a new tab and does not touch files. **CLOSE** closes the
+  tab, or empties the last one to an untitled drawing (see [Document tabs](document-tabs.md)).
 - **Unsaved changes.** The session keeps a modified counter: every committed command, undo and redo adds
   one, and creating, opening or saving a drawing resets it (`Session.Dirty`, `Session.Modified`; the read-only
-  variable `DBMOD` is 1 while it is not zero). NEW, OPEN, CLOSE, QUIT and EXIT on a dirty drawing ask
+  variable `DBMOD` is 1 while it is not zero). The counter is per tab. CLOSE, QUIT and EXIT on a dirty drawing
+  (QUIT and EXIT on every dirty tab in turn), and NEW and OPEN where no document host opens another tab, ask
   `Save changes to NAME? [Yes/No/Cancel] <Yes>` (`NAME` is the file name, or `Untitled`): Yes saves
   (asking for a path when there is none) and goes on, No goes on, Cancel stops. OPEN reads the file first, so
   a bad path fails before the question. A failed save keeps the drawing. The title bar's document chip shows a dot before the name while the
-  drawing is dirty. Layer table edits do not count, because they are not journalled. The window's own close
+  drawing is dirty, as each document tab does. Layer table edits do not count, because they are not journalled. The window's own close
   button does not ask yet: the gpui platform has no close hook.
 - **QUIT** and **EXIT** end the application through the host (`Session.SetQuitHandler`); without a host they
   print `Quitting is not available on this platform.`
@@ -81,16 +83,18 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
 - **Files from the operating system.** A file dropped on the window, a file opened from Finder or
   dropped on the Dock icon (macOS), and files named after the flags (`cad-lite plan.dxf`, which is how
   Windows "Open with" and the Linux desktop entry pass them) all take one path: the first file whose
-  extension a reader reads runs OPEN with that path, so the `Save changes` question, the undo reset and
-  the project switch happen as for a typed OPEN, and a launch file is fitted once the canvas has its
-  size. Every other path is reported in the history and nothing else happens:
+  extension a reader reads runs OPEN with that path, so the tab choice and the project switch happen as for
+  a typed OPEN, and a launch file is fitted once the canvas has its
+  size. Every such path opens, one tab each and in order (see [Document tabs](document-tabs.md)). Every
+  other path is reported in the history and nothing else happens:
   `Cannot open notes.txt: Cad-lite opens DWG, DXF files.` for a file no reader reads (a dropped folder
-  included), and `b.dxf not opened: one drawing is open at a time.` for each further drawing. A drop
+  included). A drop
   lands anywhere on the window, the settings panel included. File arguments and `-open` do not mix;
   given both, the application stops with a usage error. The macOS bundle declares DXF (editor) and DWG
   (viewer) as document types at the `Alternate` rank, so Cad-lite is offered in "Open With" without
   becoming the default; the Linux desktop entry lists the DXF and DWG MIME types and passes `%F`.
-- Opening replaces the drawing, its undo history and the selection; the previous drawing is saved only if the user answers Yes to `Save changes`.
+- Opening into the untouched untitled tab replaces that drawing, its undo history and the selection;
+  any other open leaves the current tab as it is.
 - Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC` and
   polylines. What else is read, what is kept and which DXF version is written are owned by
   [File I/O](../tech/file-io.md).
@@ -156,8 +160,8 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
 
 ## Contract
 
-- Entry point: `Workspace.OpenPaths(paths)` is the one function for files the OS hands over; with
-  document tabs (backlog N1) it is where each supported path is redirected to a tab of its own.
+- Entry point: `Workspace.OpenPaths(paths)` is the one function for files the OS hands over; it runs
+  OPEN once per supported path, and OPEN puts each in a tab of its own.
 
 - Commands: OPEN, SAVE, NEW, registered in `cmdsys/commands`; prompt kind `InputText`.
 - Interface: `cmdsys.FileHandler` (`Open`, `Save`), implemented by `fileio.Registry`; the session
@@ -166,7 +170,8 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
   receives it through `Session.SetFiles`. `fileio.Registry.ReadExtensions` and `WriteExtensions` feed the
   dialog filters. `ui.FileDialog` (`Open`, `Save`) is what the workspace shows dialogs with, installed by
   `Workspace.SetFileDialog`; `cmd/cad` installs `filedialog.System{}` for the window, not for `-png`.
-- Document: a successful open calls `Context.ReplaceDrawing`, which cancels the running command and clears the selection.
+- Document: a successful open into the same tab calls `Context.ReplaceDrawing`, which cancels the running
+  command and clears the selection; otherwise `cmdsys.DocumentHost.OpenNew` gives the drawing a tab (`Context.Documents`).
 
 ## Implementation
 
@@ -183,8 +188,8 @@ builds the registry, opens `-open` before creating the workspace and calls
 event) to it.
 
 `ui/openpaths.go` holds `Workspace.OpenPaths`: it checks each path with the handler's `CanRead`,
-reports the others through `Session.Say`, then runs OPEN and submits the first path, as `pollDialog`
-does. The root view's `OnFileDrop` listener (`onFileDrop`) feeds it the paths of a
+reports the others through `Session.Say`, and for each supported one runs OPEN and submits the path in
+the active tab (`openPath`); the document host (`ui/doctabs.go`) then makes the new tab active. The root view's `OnFileDrop` listener (`onFileDrop`) feeds it the paths of a
 `gpui.FileDropEvent`. How the platform produces the drop and the open-documents event, and their
 limits, is in the gpui contract (`internal/gpui/_docs/api-contract.md`, the ebiten platform section).
 
@@ -192,7 +197,7 @@ limits, is in the gpui contract (`internal/gpui/_docs/api-contract.md`, the ebit
 `startDialog`, which runs the `ui.FileDialog` on a goroutine and polls its answer with a `gpui.Window.After`
 timer, so no gpui state is touched off the UI goroutine (the pattern of the agent discovery probe).
 `pollDialog` then opens the chosen file through `Workspace.openFilePath`, the one function every "open this
-path" in the UI goes through (it runs OPEN and submits the path), or runs SAVEAS and submits the path, or falls back to the command on any error
+path" in the UI goes through (it runs OPEN and submits the path, and OPEN picks the tab), or runs SAVEAS and submits the path, or falls back to the command on any error
 other than `filedialog.ErrCancelled`. `openFilters` and `saveFilters` build the type lists from the
 registry. `ui/recent.go` holds the recent lists' UI: `Workspace.noteRecentFile` is a `Session.OnFilePath`
 listener, the single place a successful open or save is reported (`Context.SetFilePath`), and
@@ -210,8 +215,8 @@ macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs o
 - Saving writes unknown entities of R12 classes and the preserved tables and blocks. Unknown
   entities of other classes are absent from the saved file, each with a warning, so a round trip of
   a file that has them is lossy.
-- A dropped or OS-opened file that fails to read reports `Open failed: ...` like a typed path; an
-  unsupported one is reported before OPEN starts, so no command runs.
+- A dropped or OS-opened file that fails to read reports `Open failed: ...` like a typed path and opens
+  no tab; an unsupported one is reported before OPEN starts, so no command runs.
 - A DWG that cannot be read to the end opens with what could be: a damaged or CRC-failing object is
   counted in a warning and left out; an unreadable file header or section map is an error.
 - The reader rejects binary DXF, files that end inside a group-code pair and sections without `ENDSEC`.
@@ -230,3 +235,4 @@ macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs o
 - Write DWG, and read more DWG entities (TEXT, INSERT and blocks first).
 - Browser file access through the browser's own APIs.
 - Pin a recent drawing so it stays at the top of the list.
+- Open a file from the OS that is open in a tab but changed on disk as a reload, not a tab switch.

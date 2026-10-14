@@ -165,19 +165,20 @@ func TestToolbarWithoutDialogRunsTheCommands(t *testing.T) {
 	}
 }
 
-func TestOpenKeepsTheUnsavedChangesQuestion(t *testing.T) {
+func TestOpenBesideADirtyDrawingKeepsIt(t *testing.T) {
 	fd := &fakeDialog{path: savedDrawing(t)}
 	h := dialogRig(t, fd)
 	h.ws.Session().Script("LINE 0,0 5,5  ")
 	h.frame() // the unsaved-changes dot moves the buttons; find them where they are now
 	h.clickID("tool-open")
 	h.answered(fd)
-	p := h.ws.Session().CurrentPrompt()
-	if h.ws.Session().Active() != "OPEN" || p == nil || !slices.Contains(p.Keywords, "Yes") {
-		t.Fatalf("a dirty drawing should ask Save changes, active %q prompt %+v", h.ws.Session().Active(), p)
+	docs := h.ws.Documents()
+	if len(docs) != 2 || !docs[1].Active || docs[1].Path != fd.path {
+		t.Fatalf("the file should open in a second tab: %+v", docs)
 	}
-	if h.ws.Session().FilePath() != "" {
-		t.Fatal("the file opened before the question was answered")
+	first := h.ws.DocumentSession(0)
+	if !first.Dirty() || first.Drawing().Len() != 1 || first.Active() != "" {
+		t.Fatalf("the dirty drawing changed: dirty %v, %d entities, active %q", first.Dirty(), first.Drawing().Len(), first.Active())
 	}
 }
 
