@@ -42,7 +42,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G5 | No large-drawing benchmark and no DXF corpus test | [Testing](tech/testing.md) |
 | G6 | Interactive window behaviour has never run in the agent environment (no display or GPU); only headless tests and renders cover it | [Operations](tech/operations.md) |
 | G7 | Unsupported content: linetypes, lineweights, TEXT, MTEXT, HATCH, INSERT and blocks, dimensions, ELLIPSE, SPLINE; the extrusion direction (code 210) is ignored | [Document model](tech/document-model.md), [File I/O](tech/file-io.md) |
-| G8 | Missing commands: TRIM, EXTEND, OFFSET, FILLET, CHAMFER, MIRROR, STRETCH, BREAK, JOIN, EXPLODE, ARRAY, MATCHPROP, AREA | [Drawing and editing commands](features/drawing-and-editing.md) |
+| G8 | Missing commands: TRIM, EXTEND, OFFSET, FILLET, CHAMFER, MIRROR, STRETCH, BREAK, JOIN, EXPLODE, ARRAY, MATCHPROP | [Drawing and editing commands](features/drawing-and-editing.md) |
 | G9 | Grips and a properties palette; the properties panel is read-only | [Drawing canvas](features/canvas.md) |
 | G10 | Polar tracking, object snap tracking, and the Perpendicular, Tangent and Extension snaps | [Command system](tech/command-system.md) |
 | G11 | PLINE arc segments | [Drawing and editing commands](features/drawing-and-editing.md) |

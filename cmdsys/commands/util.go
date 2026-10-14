@@ -122,15 +122,33 @@ func (*layerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 type distCmd struct {
 	base
 	first *geom.Vec2
+	multi bool
+	pts   []geom.Vec2
+	total float64
 }
 
 func (*distCmd) Name() string { return "DIST" }
 
 func (*distCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify first point", Accepts: cmdsys.InputPoint}
+	return &cmdsys.Prompt{Message: "Specify first point", Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Multiple points"}}
 }
 
 func (c *distCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
+	if in.Keyword == "Multiple points" {
+		c.multi = true
+		return &cmdsys.Prompt{Message: "Specify first point", Accepts: cmdsys.InputPoint}
+	}
+	if c.multi {
+		if in.Kind == cmdsys.InputEnter {
+			ctx.Printf("Distance = %s", cmdsys.FormatNumber(c.total))
+			return nil
+		}
+		if n := len(c.pts); n > 0 {
+			c.total += c.pts[n-1].Dist(in.Point)
+		}
+		c.pts = append(c.pts, in.Point)
+		return &cmdsys.Prompt{Message: "Specify next point", Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Base: pt(in.Point)}
+	}
 	if c.first == nil {
 		c.first = pt(in.Point)
 		return &cmdsys.Prompt{Message: "Specify second point", Accepts: cmdsys.InputPoint, Base: c.first}
@@ -143,6 +161,10 @@ func (c *distCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 }
 
 func (c *distCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
+	if c.multi && len(c.pts) > 0 {
+		dl.Polyline(append(append([]geom.Vec2(nil), c.pts...), cur), PreviewColor, 0, false)
+		return
+	}
 	if c.first != nil {
 		dl.Polyline([]geom.Vec2{*c.first, cur}, PreviewColor, 0, false)
 	}
@@ -277,6 +299,8 @@ Z,     *ZOOM
 LA,    *LAYER
 DI,    *DIST
 LI,    *LIST
+AA,    *AREA
+MEA,   *MEASUREGEOM
 `
 
 // Register adds every built-in command and the default aliases to r.
@@ -296,6 +320,8 @@ func Register(r *cmdsys.Registry) {
 	r.Register("ZOOM", func() cmdsys.Command { return &zoomCmd{} })
 	r.Register("LAYER", func() cmdsys.Command { return &layerCmd{} })
 	r.Register("DIST", func() cmdsys.Command { return &distCmd{} })
+	r.Register("AREA", func() cmdsys.Command { return &areaCmd{} })
+	r.Register("MEASUREGEOM", func() cmdsys.Command { return &measureGeomCmd{} })
 	r.Register("ID", func() cmdsys.Command { return &idCmd{} })
 	r.Register("LIST", func() cmdsys.Command { return &listCmd{} })
 	r.Register("NEW", func() cmdsys.Command {

@@ -7,7 +7,7 @@ summary: The numeric policy, the curve types and operations of geom, and the spa
 read_when: you are adding a curve type or a geometric operation, comparing floats, or querying entities by location
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/tol.go, spatial/index.go]
+code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/tol.go, spatial/index.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -54,6 +54,7 @@ Operations:
 | Bulge to arc | `geom.BulgeArc` | polyline segments, tessellation |
 | Box/segment overlap | `geom.SegmentIntersectsBox` | crossing selection |
 | Arc through three points | `doc.ArcFrom3Points` | the ARC command |
+| Signed area of a polygon or a bulged polyline (closed by its chord) | `geom.PolygonArea`, `geom.PolylineArea`, `geom.ArcSegmentArea` | AREA, MEASUREGEOM |
 
 `Curve.Transform` assumes a similarity transform (translate, rotate, uniform scale, mirror): a circle
 stays a circle with its radius scaled by `Mat3.ScaleFactor`. A mirroring transform keeps arcs

@@ -7,7 +7,7 @@ summary: Every built-in command with its prompts and aliases, how selection, obj
 read_when: you are adding or changing a command, an alias, or what a click does while a command runs
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/util.go, cmdsys/snap.go]
+code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/util.go, cmdsys/commands/measure.go, cmdsys/snap.go]
 depends_on: [tech-command-system, tech-document-model]
 review_cycle: monthly
 ---
@@ -41,7 +41,9 @@ This table is the owner of the command list and the default aliases.
 | REDO | — | Redoes the last undone command |
 | ZOOM | Z | A window by two corners, or `[Extents/Window]`; Enter is Extents |
 | LAYER | LA | A layer name makes it current, creating it with colour 7 when new; `name=color` sets its colour (1–255) |
-| DIST | DI | Two points; prints distance, angle and the X and Y deltas |
+| DIST | DI | Two points; prints distance, angle and the X and Y deltas. `[Multiple points]` (`M`) adds up consecutive segments and prints `Distance = total` on Enter |
+| AREA | AA | Corner points until Enter, or `[Object]` to pick one; prints `Area = X, Perimeter = Y` (`Circumference` for a circle). Open polylines and arcs close by their chord; polyline bulges count; a line has no area |
+| MEASUREGEOM | MEA | `[Distance/Radius/Angle/ARea]`, Enter is Distance. Radius picks an arc or circle (`Radius = r, Diameter = d`); Angle measures two lines, an arc's included angle, a circle centre and two points, or a vertex and two points (`Angle = n°`); ARea is AREA. One measurement per run |
 | ID | — | One point; prints its coordinates |
 | LIST | LI | Prints each selected entity's type, layer, handle and geometry |
 | NEW | — | Replaces the drawing with an empty one |
@@ -85,7 +87,7 @@ with their handles. Selections, view changes and layer table edits are not undoa
 
 The draw commands are in `cmdsys/commands/draw.go` (`lineCmd`, `plineCmd`, `circleCmd`, `arcCmd`,
 `rectCmd`), the modify commands in `modify.go` (`eraseCmd`, `moveCmd` for MOVE and COPY,
-`transformCmd` for ROTATE and SCALE, all sharing `selecting`), and the rest in `util.go`, which also
+`transformCmd` for ROTATE and SCALE, all sharing `selecting`), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, and the rest in `util.go`, which also
 holds `Register`, `Aliases` and `ZoomExtents`. Snaps, picking and box selection are
 `cmdsys.FindSnap`, `cmdsys.Pick` and `cmdsys.SelectBox`; the UI forwards clicks and drags to
 `Session.Click` and `Session.SelectBox` from `ui/canvas.go`.
