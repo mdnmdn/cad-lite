@@ -10,6 +10,7 @@ import (
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 )
 
 type writer struct {
@@ -159,12 +160,12 @@ func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 			w.pair(8, e.Layer)
 		case *doc.Unknown:
 			if !r12Entities[e.Type] {
-				warns = append(warns, fmt.Sprintf("%s %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)", e.Type, h))
+				warns = append(warns, i18n.T("dxf.warn.not_written_r12", e.Type, h))
 				continue
 			}
 			w.pairs(e.Source())
 		default:
-			warns = append(warns, fmt.Sprintf("%s %s not written (not supported by the R12 writer)", e.Class(), h))
+			warns = append(warns, i18n.T("dxf.warn.not_written_unsupported", e.Class(), h))
 		}
 	}
 	w.pair(0, "ENDSEC")
@@ -229,7 +230,7 @@ func (w *writer) block(warns []string, b doc.RawRecord) []string {
 		if r12Blocks[typ] || r12Entities[typ] {
 			w.pairs(ps[:n])
 		} else {
-			warns = append(warns, fmt.Sprintf("%s in block %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)", typ, b.Name()))
+			warns = append(warns, i18n.T("dxf.warn.block_not_written", typ, b.Name()))
 		}
 		ps = ps[n:]
 	}

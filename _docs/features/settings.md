@@ -33,9 +33,15 @@ behaviour and the default agent. Changes show at once and are saved to a TOML fi
   and keys apply immediately; a drag shows the value while it moves and applies it on release,
   because rescaling the UI under the pointer would move the slider away from it. The themes and the
   scale mechanism are in [UI framework](../tech/ui-framework.md).
-- **Language.** `Auto`, `English` or `Italiano`. The workspace stores the choice and calls the hook
-  installed with `Workspace.SetLanguageHandler` (on registration, on load and on every change);
-  translating the interface is the host's job.
+- **Language.** `Auto`, `English` or `Italiano`. `Auto` follows the system language (`LC_ALL`,
+  `LC_MESSAGES`, `LANG`, in that order; English when none names a supported language). The workspace
+  stores the choice and calls the hook installed with `Workspace.SetLanguageHandler` (on
+  registration, on load and on every change); `cmd/cad` installs a hook that calls
+  `i18n.Set(i18n.FromSetting(lang))`, so prompts, history lines, keywords and the settings warnings
+  switch language at once. Command names stay valid in English whatever the language, Italian
+  names are extra aliases (see [Command line](command-line.md)), and an AI agent driving the
+  drawing always gets English. Warnings produced while the file is read are in the system language,
+  because the stored choice is not known yet.
 - **Drawing.** Grid, object snap and ortho switches set what starts on and apply to the current
   session too (toggling with F7, F3 or F8 afterwards does not change the stored default). The mouse
   wheel is `auto` or `zoom` (the wheel zooms, Shift pans) or `pan` (the wheel pans, Ctrl or Cmd zooms);
@@ -80,8 +86,9 @@ same directory, mode 0600, directory 0700, then rename). `ui/settings.go` keeps 
 settings state, `applySettings` (theme, scale, drawing defaults, agent), the debounced save through
 `Window.After` and the hook `withSettings`, which `Workspace.Render` calls to mount the panel and the
 action; `ui/settings_view.go` renders the gear button and the panel; `ui/slider.go` is the reusable
-`Slider`. `cmd/cad/main.go` calls `Workspace.LoadSettings` before the window opens and takes the
-window size from it; a loaded UI scale applies on the first frame.
+`Slider`. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
+applies the stored language with `i18n.Set` and takes the window size from it; a loaded UI scale
+applies on the first frame. The wording of the warnings is in `i18n/locales` (`settings.warn.*`).
 
 ## Failure
 

@@ -286,6 +286,8 @@ handle_renumbered = "%s handle %s is already used; renumbered to %s"
 not_written_r12 = "%s %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)"
 not_written_unsupported = "%s %s not written (not supported by the R12 writer)"
 block_not_written = "%s in block %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)"
+non_finite = "%d non-finite numbers (nan/inf) were read as 0"
+no_eof = "file has no EOF marker (it may be truncated)"
 
 [dxf.err]
 no_value = "dxf: line %d: group code %q has no value"
@@ -295,6 +297,7 @@ no_endsec = "dxf: section %q has no ENDSEC (truncated file?)"
 [fileio.err]
 no_reader = "no reader for %q files"
 no_writer = "no writer for %q files"
+not_regular = "%s is not a regular file"
 
 [settings.warn]
 wrong_type = "%s must be %s, got %v; using the default"
@@ -385,6 +388,10 @@ permission = "Permission requested"
 answered = "answered"
 plan = "Plan"
 tab_new = "New"
+thought_tip = "Thinking — shows or hides the agent's reasoning"
+tab_tip = "Conversation — switches to this tab"
+session_tip = "Reopen — opens this earlier conversation in a tab"
+permission_tip = "Answer — replies to the agent's permission request with this option"
 
 [ui.agent.status]
 starting = "starting %s..."

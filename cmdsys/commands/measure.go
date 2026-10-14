@@ -43,20 +43,20 @@ func polygonPerimeter(pts []geom.Vec2) float64 {
 }
 
 // entityArea measures e: the area it encloses and its perimeter, with the
-// perimeter's label. Open polylines and arcs are closed by their chord.
+// perimeter's label key (cmd.area.label.*). Open polylines and arcs are closed by their chord.
 func entityArea(e doc.Entity) (area, perim float64, label string, ok bool) {
 	switch e := e.(type) {
 	case *doc.Circle:
-		return math.Pi * e.Radius * e.Radius, 2 * math.Pi * e.Radius, "Circumference", true
+		return math.Pi * e.Radius * e.Radius, 2 * math.Pi * e.Radius, "cmd.area.label.circumference", true
 	case *doc.Arc:
 		a := e.Geometry()[0].(geom.Arc)
-		return math.Abs(geom.ArcSegmentArea(a.R, a.Sweep())), a.Length(), "Perimeter", true
+		return math.Abs(geom.ArcSegmentArea(a.R, a.Sweep())), a.Length(), "cmd.area.label.perimeter", true
 	case *doc.LWPolyline:
 		p := e.Geometry()[0].(geom.Polyline)
 		if len(p.Pts) < 2 {
 			return 0, 0, "", false
 		}
-		return math.Abs(geom.PolylineArea(p)), p.Length(), "Perimeter", true
+		return math.Abs(geom.PolylineArea(p)), p.Length(), "cmd.area.label.perimeter", true
 	}
 	return 0, 0, "", false
 }
@@ -70,8 +70,8 @@ type areaCmd struct {
 
 func (*areaCmd) Name() string { return "AREA" }
 
-func (*areaCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify first corner point", Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Object"}}
+func (*areaCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.area.prompt.first_corner"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Object"}}
 }
 
 func (c *areaCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -81,14 +81,14 @@ func (c *areaCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	switch {
 	case in.Keyword == "Object" && len(c.pts) == 0:
 		c.object = true
-		return &cmdsys.Prompt{Message: "Select object", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 	case in.Kind == cmdsys.InputEnter:
 		c.report(ctx)
 		return nil
 	case in.Kind == cmdsys.InputPoint:
 		c.pts = append(c.pts, in.Point)
 	}
-	return &cmdsys.Prompt{Message: "Specify next corner point or press ENTER for total", Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Base: pt(c.pts[len(c.pts)-1])}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.area.prompt.next_corner"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Base: pt(c.pts[len(c.pts)-1])}
 }
 
 func (c *areaCmd) report(ctx *cmdsys.Context) {
@@ -99,7 +99,7 @@ func (c *areaCmd) report(ctx *cmdsys.Context) {
 	if len(c.pts) >= 2 {
 		perim = polygonPerimeter(c.pts)
 	}
-	ctx.Printf("Area = %s, Perimeter = %s", cmdsys.FormatNumber(area), cmdsys.FormatNumber(perim))
+	ctx.Say("cmd.area.msg.result", cmdsys.FormatNumber(area), cmdsys.FormatNumber(perim))
 }
 
 func (c *areaCmd) inputObject(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -108,15 +108,15 @@ func (c *areaCmd) inputObject(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prom
 	}
 	e, ok := pickAt(ctx, in.Point)
 	if !ok {
-		ctx.Printf("No object found.")
-		return &cmdsys.Prompt{Message: "Select object", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+		ctx.Say("cmd.common.msg.no_object_found")
+		return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 	}
 	area, perim, label, ok := entityArea(e)
 	if !ok {
-		ctx.Printf("Object has no area.")
+		ctx.Say("cmd.area.msg.no_area")
 		return nil
 	}
-	ctx.Printf("Area = %s, %s = %s", cmdsys.FormatNumber(area), label, cmdsys.FormatNumber(perim))
+	ctx.Say("cmd.area.msg.result_object", cmdsys.FormatNumber(area), ctx.T(label), cmdsys.FormatNumber(perim))
 	return nil
 }
 
@@ -138,11 +138,11 @@ type radiusCmd struct{}
 
 func (*radiusCmd) Name() string { return "RADIUS" }
 
-func radiusPrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Select arc or circle", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+func radiusPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.radius.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 }
 
-func (*radiusCmd) Start(*cmdsys.Context) *cmdsys.Prompt { return radiusPrompt() }
+func (*radiusCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return radiusPrompt(ctx) }
 
 func radiusOf(e doc.Entity) (float64, bool) {
 	switch e := e.(type) {
@@ -160,15 +160,15 @@ func (*radiusCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	}
 	e, ok := pickAt(ctx, in.Point)
 	if !ok {
-		ctx.Printf("No object found.")
-		return radiusPrompt()
+		ctx.Say("cmd.common.msg.no_object_found")
+		return radiusPrompt(ctx)
 	}
 	r, ok := radiusOf(e)
 	if !ok {
-		ctx.Printf("Select an arc or a circle.")
-		return radiusPrompt()
+		ctx.Say("cmd.radius.msg.select_arc_or_circle")
+		return radiusPrompt(ctx)
 	}
-	ctx.Printf("Radius = %s, Diameter = %s", cmdsys.FormatNumber(r), cmdsys.FormatNumber(2*r))
+	ctx.Say("cmd.radius.msg.result", cmdsys.FormatNumber(r), cmdsys.FormatNumber(2*r))
 	return nil
 }
 
@@ -200,8 +200,8 @@ type angleCmd struct {
 
 func (*angleCmd) Name() string { return "ANGLE" }
 
-func (*angleCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Select arc, circle, line or <specify vertex>", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+func (*angleCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 }
 
 func endpointPrompt(msg string, vertex geom.Vec2) *cmdsys.Prompt {
@@ -230,26 +230,26 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	case angleObject:
 		if in.Kind == cmdsys.InputEnter {
 			c.stage = angleVertex
-			return &cmdsys.Prompt{Message: "Specify angle vertex", Accepts: cmdsys.InputPoint}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.vertex"), Accepts: cmdsys.InputPoint}
 		}
 		e, ok := pickAt(ctx, in.Point)
 		if !ok {
 			c.vertex, c.stage = in.Point, angleFirst
-			return endpointPrompt("Specify first angle endpoint", c.vertex)
+			return endpointPrompt(ctx.T("cmd.angle.prompt.first_endpoint"), c.vertex)
 		}
 		switch e := e.(type) {
 		case *doc.Arc:
-			ctx.Printf("Angle = %s°", cmdsys.FormatNumber(e.Geometry()[0].(geom.Arc).Sweep()*180/math.Pi))
+			ctx.Say("cmd.angle.msg.result", cmdsys.FormatNumber(e.Geometry()[0].(geom.Arc).Sweep()*180/math.Pi))
 			return nil
 		case *doc.Circle:
 			c.vertex, c.first, c.stage = e.Center, in.Point, angleSecond
-			return endpointPrompt("Specify second angle endpoint", c.vertex)
+			return endpointPrompt(ctx.T("cmd.angle.prompt.second_endpoint"), c.vertex)
 		case *doc.Line:
 			c.line1, _ = lineOf(e)
 			c.pick1, c.stage = in.Point, angleLine2
-			return &cmdsys.Prompt{Message: "Select second line", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 		}
-		ctx.Printf("Select an arc, a circle or a line.")
+		ctx.Say("cmd.angle.msg.select_object")
 		return c.Start(ctx)
 	case angleLine2:
 		if in.Kind != cmdsys.InputPoint {
@@ -261,19 +261,19 @@ func (c *angleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			l2, isLine = lineOf(e)
 		}
 		if !isLine {
-			ctx.Printf("Select a line.")
-			return &cmdsys.Prompt{Message: "Select second line", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+			ctx.Say("cmd.angle.msg.select_line")
+			return &cmdsys.Prompt{Message: ctx.T("cmd.angle.prompt.second_line"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 		}
-		ctx.Printf("Angle = %s°", deg(lineAngle(c.line1, c.pick1, l2, in.Point)))
+		ctx.Say("cmd.angle.msg.result", deg(lineAngle(c.line1, c.pick1, l2, in.Point)))
 		return nil
 	case angleVertex:
 		c.vertex, c.stage = in.Point, angleFirst
-		return endpointPrompt("Specify first angle endpoint", c.vertex)
+		return endpointPrompt(ctx.T("cmd.angle.prompt.first_endpoint"), c.vertex)
 	case angleFirst:
 		c.first, c.stage = in.Point, angleSecond
-		return endpointPrompt("Specify second angle endpoint", c.vertex)
+		return endpointPrompt(ctx.T("cmd.angle.prompt.second_endpoint"), c.vertex)
 	}
-	ctx.Printf("Angle = %s°", deg(angleBetween(c.vertex, c.first, in.Point)))
+	ctx.Say("cmd.angle.msg.result", deg(angleBetween(c.vertex, c.first, in.Point)))
 	return nil
 }
 
@@ -326,9 +326,9 @@ type measureGeomCmd struct {
 
 func (*measureGeomCmd) Name() string { return "MEASUREGEOM" }
 
-func (*measureGeomCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
+func (*measureGeomCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	def := cmdsys.Input{Kind: cmdsys.InputKeyword, Keyword: "Distance"}
-	return &cmdsys.Prompt{Message: "Enter an option", Accepts: cmdsys.InputKeyword, Keywords: []string{"Distance", "Radius", "Angle", "ARea"}, Default: &def}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.measuregeom.prompt.option"), Accepts: cmdsys.InputKeyword, Keywords: []string{"Distance", "Radius", "Angle", "ARea"}, Default: &def}
 }
 
 func (c *measureGeomCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {

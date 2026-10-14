@@ -12,6 +12,7 @@ import (
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 	"go-draw/render"
 	"go-draw/spatial"
 )
@@ -53,6 +54,7 @@ type Context struct {
 
 	txn     *doc.Txn
 	out     func(string)
+	tr      func() i18n.Translator
 	replace func(*doc.Drawing)
 	setPath func(string)
 	agent   func(string)
@@ -79,8 +81,38 @@ func (c *Context) Tx() *doc.Txn {
 	return c.txn
 }
 
-// Printf writes a line to the command history.
+// Printf writes a line to the command history. The format is a finished sentence; user-facing
+// text goes through Say or T so it can be translated.
 func (c *Context) Printf(format string, args ...any) { c.out(fmt.Sprintf(format, args...)) }
+
+// Translator returns the translator commands must use for user-facing text: the session's
+// language, or English while an AI agent drives the session.
+func (c *Context) Translator() i18n.Translator {
+	if c.tr == nil {
+		return i18n.For(i18n.Current())
+	}
+	return c.tr()
+}
+
+// T translates key in the session's language (fmt.Sprintf style arguments).
+func (c *Context) T(key string, args ...any) string { return c.Translator().T(key, args...) }
+
+// Plural translates the counted message key (key_one / key_other) with n as first argument.
+func (c *Context) Plural(key string, n int, args ...any) string {
+	return c.Translator().Plural(key, n, args...)
+}
+
+// Say writes the translated message key to the command history.
+func (c *Context) Say(key string, args ...any) { c.out(c.T(key, args...)) }
+
+// SayPlural writes the translated counted message key to the command history.
+func (c *Context) SayPlural(key string, n int, args ...any) { c.out(c.Plural(key, n, args...)) }
+
+// Cmd returns the display name of command name for the session's language, upper-cased as it is
+// typed ("LINEA"); the canonical name stays English.
+func (c *Context) Cmd(name string) string {
+	return strings.ToUpper(c.Translator().CommandName(name))
+}
 
 // ReplaceDrawing swaps the open document for d (OPEN and NEW).
 func (c *Context) ReplaceDrawing(d *doc.Drawing) { c.replace(d) }

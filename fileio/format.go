@@ -4,7 +4,7 @@
 package fileio
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"go-draw/doc"
+	"go-draw/i18n"
 )
 
 // Reader reads one file format into a new drawing.
@@ -58,7 +59,7 @@ func (r *Registry) Open(path string) (*doc.Drawing, []string, error) {
 			return rd.Read(f)
 		}
 	}
-	return nil, nil, fmt.Errorf("no reader for %q files", ext(path))
+	return nil, nil, errors.New(i18n.T("fileio.err.no_reader", ext(path)))
 }
 
 // Save writes d to path with the writer registered for its extension. The file is written to a
@@ -70,7 +71,7 @@ func (r *Registry) Save(path string, d *doc.Drawing) ([]string, error) {
 			return atomicWrite(path, func(f io.Writer) ([]string, error) { return w.Write(f, d) })
 		}
 	}
-	return nil, fmt.Errorf("no writer for %q files", ext(path))
+	return nil, errors.New(i18n.T("fileio.err.no_writer", ext(path)))
 }
 
 func atomicWrite(path string, write func(io.Writer) ([]string, error)) (warns []string, err error) {
@@ -79,7 +80,7 @@ func atomicWrite(path string, write func(io.Writer) ([]string, error)) (warns []
 		path = real
 		if st, serr := os.Stat(path); serr == nil {
 			if !st.Mode().IsRegular() {
-				return nil, fmt.Errorf("%s is not a regular file", path)
+				return nil, errors.New(i18n.T("fileio.err.not_regular", path))
 			}
 			mode = st.Mode().Perm()
 		}

@@ -162,8 +162,8 @@ type trimCmd struct {
 
 func (*trimCmd) Name() string { return "TRIM" }
 
-func (c *trimCmd) prompt() *cmdsys.Prompt {
-	p := &cmdsys.Prompt{Message: "Select object to trim", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+func (c *trimCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	p := &cmdsys.Prompt{Message: ctx.T("cmd.trim.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 	if c.edges == nil {
 		p.Accepts |= cmdsys.InputKeyword
 		p.Keywords = []string{"cuTting edges"}
@@ -171,7 +171,7 @@ func (c *trimCmd) prompt() *cmdsys.Prompt {
 	return p
 }
 
-func (c *trimCmd) Start(*cmdsys.Context) *cmdsys.Prompt { return c.prompt() }
+func (c *trimCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return c.prompt(ctx) }
 
 func (c *trimCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	switch {
@@ -179,30 +179,30 @@ func (c *trimCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		c.choosing = false
 		if len(in.Selection) > 0 {
 			c.edges = append([]doc.Handle(nil), in.Selection...)
-			ctx.Printf("%d found", len(c.edges))
+			ctx.SayPlural("cmd.common.msg.found", len(c.edges))
 		}
 		ctx.Selection.Clear()
-		return c.prompt()
+		return c.prompt(ctx)
 	case in.Kind == cmdsys.InputEnter:
 		return nil
 	case in.Kind == cmdsys.InputKeyword:
 		c.choosing = true
-		return &cmdsys.Prompt{Message: "Select cutting edges <select all>", Accepts: cmdsys.InputSelection}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.trim.prompt.select_edges"), Accepts: cmdsys.InputSelection}
 	case in.Kind == cmdsys.InputPoint:
 		c.trimAt(ctx, in.Point)
 	}
-	return c.prompt()
+	return c.prompt(ctx)
 }
 
 func (c *trimCmd) trimAt(ctx *cmdsys.Context, p geom.Vec2) {
 	h, e, ok := pickEntity(ctx, p)
 	if !ok {
-		ctx.Printf("No object found at that point.")
+		ctx.Say("cmd.common.msg.no_object_at_point")
 		return
 	}
 	curve, ok := editCurve(e)
 	if !ok {
-		ctx.Printf("Cannot trim this object.")
+		ctx.Say("cmd.trim.msg.cannot_trim")
 		return
 	}
 	tol := workTol(ctx)
@@ -221,7 +221,7 @@ func (c *trimCmd) trimAt(ctx *cmdsys.Context, p geom.Vec2) {
 	}
 	spans, ok := geom.TrimSpan(curve, ts, curve.ClosestParam(p))
 	if !ok {
-		ctx.Printf("Object does not intersect an edge.")
+		ctx.Say("cmd.trim.msg.no_intersection")
 		return
 	}
 	var out []geom.Curve
@@ -239,11 +239,11 @@ type extendCmd struct{ base }
 
 func (*extendCmd) Name() string { return "EXTEND" }
 
-func (*extendCmd) prompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Select object to extend", Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
+func (*extendCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.extend.prompt.select_object"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter}
 }
 
-func (c *extendCmd) Start(*cmdsys.Context) *cmdsys.Prompt { return c.prompt() }
+func (c *extendCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt { return c.prompt(ctx) }
 
 func (c *extendCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if in.Kind == cmdsys.InputEnter {
@@ -252,13 +252,13 @@ func (c *extendCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if in.Kind == cmdsys.InputPoint {
 		c.extendAt(ctx, in.Point)
 	}
-	return c.prompt()
+	return c.prompt(ctx)
 }
 
 func (c *extendCmd) extendAt(ctx *cmdsys.Context, p geom.Vec2) {
 	h, e, ok := pickEntity(ctx, p)
 	if !ok {
-		ctx.Printf("No object found at that point.")
+		ctx.Say("cmd.common.msg.no_object_at_point")
 		return
 	}
 	boundaries := boundaryCurves(ctx, nil, h, nil)
@@ -271,16 +271,16 @@ func (c *extendCmd) extendAt(ctx *cmdsys.Context, p geom.Vec2) {
 		nc, ok = extendCurve(e.Geometry()[0], p, boundaries, tol)
 	case *doc.LWPolyline:
 		if e.Closed {
-			ctx.Printf("Cannot extend a closed polyline.")
+			ctx.Say("cmd.extend.msg.closed_polyline")
 			return
 		}
 		nc, ok = extendPolyline(e.Geometry()[0].(geom.Polyline), p, boundaries, tol)
 	default:
-		ctx.Printf("Cannot extend this object.")
+		ctx.Say("cmd.extend.msg.cannot_extend")
 		return
 	}
 	if !ok {
-		ctx.Printf("No boundary edge in the extension of that end.")
+		ctx.Say("cmd.extend.msg.no_boundary")
 		return
 	}
 	replaceWith(ctx, h, []geom.Curve{nc})
@@ -337,12 +337,12 @@ type breakCmd struct {
 
 func (*breakCmd) Name() string { return "BREAK" }
 
-func (*breakCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Select object", Accepts: cmdsys.InputPoint}
+func (*breakCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_object"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *breakCmd) secondPrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify second break point", Accepts: cmdsys.InputPoint, Base: c.first}
+func (c *breakCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.break.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.first}
 }
 
 func (c *breakCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -350,22 +350,22 @@ func (c *breakCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	case c.h == 0:
 		h, e, ok := pickEntity(ctx, in.Point)
 		if !ok {
-			ctx.Printf("No object found at that point.")
+			ctx.Say("cmd.common.msg.no_object_at_point")
 			return c.Start(ctx)
 		}
 		if _, ok := editCurve(e); !ok {
-			ctx.Printf("Cannot break this object.")
+			ctx.Say("cmd.break.msg.cannot_break")
 			return c.Start(ctx)
 		}
 		c.h, c.first = h, pt(in.Point)
-		return &cmdsys.Prompt{Message: "Specify second break point", Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"First point"}, Base: c.first}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.break.prompt.second_point"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"First point"}, Base: c.first}
 	case in.Kind == cmdsys.InputKeyword:
 		c.choosing = true
-		return &cmdsys.Prompt{Message: "Specify first break point", Accepts: cmdsys.InputPoint}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.break.prompt.first_point"), Accepts: cmdsys.InputPoint}
 	case c.choosing:
 		c.choosing = false
 		c.first = pt(in.Point)
-		return c.secondPrompt()
+		return c.secondPrompt(ctx)
 	}
 	c.breakAt(ctx, *c.first, in.Point)
 	return nil
@@ -384,7 +384,7 @@ func (c *breakCmd) breakAt(ctx *cmdsys.Context, p1, p2 geom.Vec2) {
 	if curve.PointAt(pa).Near(curve.PointAt(pb), workTol(ctx)) {
 		pb = pa
 		if _, circle := curve.(geom.Circle); circle {
-			ctx.Printf("Cannot break a circle at a single point.")
+			ctx.Say("cmd.break.msg.circle_one_point")
 			return
 		}
 	}
@@ -413,7 +413,7 @@ func (c *joinCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 		ctx.Selection.Clear()
 		return c.run(ctx)
 	}
-	return &cmdsys.Prompt{Message: "Select source object or multiple objects to join at once", Accepts: cmdsys.InputSelection}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.join.prompt.select_source"), Accepts: cmdsys.InputSelection}
 }
 
 func (c *joinCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -424,12 +424,12 @@ func (c *joinCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 		return nil
 	}
-	ctx.Printf("%d found", len(in.Selection))
+	ctx.SayPlural("cmd.common.msg.found", len(in.Selection))
 	if !c.source {
 		c.hs = append([]doc.Handle(nil), in.Selection...)
 		if len(c.hs) == 1 {
 			c.source = true
-			return &cmdsys.Prompt{Message: "Select objects to join to source", Accepts: cmdsys.InputSelection}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.join.prompt.select_others"), Accepts: cmdsys.InputSelection}
 		}
 		return c.run(ctx)
 	}
@@ -473,7 +473,7 @@ func (c *joinCmd) run(ctx *cmdsys.Context) *cmdsys.Prompt {
 		}
 		if n == nil {
 			if i == 0 {
-				ctx.Printf("Cannot join the source object.")
+				ctx.Say("cmd.join.msg.cannot_join_source")
 				return nil
 			}
 			skipped++
@@ -493,10 +493,10 @@ func (c *joinCmd) run(ctx *cmdsys.Context) *cmdsys.Prompt {
 		members = append(members, nodes[i].members...)
 	}
 	if skipped > 0 {
-		ctx.Printf("%d %s cannot be joined.", skipped, plural(skipped))
+		ctx.SayPlural("cmd.join.msg.skipped", skipped)
 	}
 	if len(members) < 2 {
-		ctx.Printf("0 objects joined.")
+		ctx.Say("cmd.join.msg.none_joined")
 		return nil
 	}
 	var result geom.Curve
@@ -511,7 +511,7 @@ func (c *joinCmd) run(ctx *cmdsys.Context) *cmdsys.Prompt {
 	}
 	replaceWith(ctx, c.hs[0], []geom.Curve{result})
 	n := len(members) - 1
-	ctx.Printf("%d %s joined.", n, plural(n))
+	ctx.SayPlural("cmd.join.msg.joined", n)
 	return nil
 }
 
@@ -572,7 +572,7 @@ func (c *explodeCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 		c.run(ctx)
 		return nil
 	}
-	return &cmdsys.Prompt{Message: "Select objects to explode", Accepts: cmdsys.InputSelection}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.explode.prompt.select"), Accepts: cmdsys.InputSelection}
 }
 
 func (c *explodeCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -608,9 +608,9 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 		exploded++
 	}
 	if refused > 0 {
-		ctx.Printf("%d %s cannot be exploded.", refused, plural(refused))
+		ctx.SayPlural("cmd.explode.msg.refused", refused)
 	}
-	ctx.Printf("%d %s exploded.", exploded, plural(exploded))
+	ctx.SayPlural("cmd.explode.msg.exploded", exploded)
 }
 
 func isArc(c geom.Curve) bool { _, ok := c.(geom.Arc); return ok }
@@ -618,11 +618,4 @@ func isArc(c geom.Curve) bool { _, ok := c.(geom.Arc); return ok }
 func ends(c geom.Curve) (geom.Vec2, geom.Vec2) {
 	t0, t1 := c.ParamRange()
 	return c.PointAt(t0), c.PointAt(t1)
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return "object"
-	}
-	return "objects"
 }

@@ -16,8 +16,8 @@ type selecting struct {
 	hs []doc.Handle
 }
 
-func selectPrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Select objects", Accepts: cmdsys.InputSelection}
+func selectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_objects"), Accepts: cmdsys.InputSelection}
 }
 
 // begin takes the pre-selection; it returns false when the command must
@@ -38,7 +38,7 @@ func (s *selecting) take(ctx *cmdsys.Context, in cmdsys.Input) bool {
 	if len(s.hs) == 0 {
 		return false
 	}
-	ctx.Printf("%d found", len(s.hs))
+	ctx.SayPlural("cmd.common.msg.found", len(s.hs))
 	return true
 }
 
@@ -76,7 +76,7 @@ func (c *eraseCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.begin(ctx) {
 		return c.erase(ctx)
 	}
-	return selectPrompt()
+	return selectPrompt(ctx)
 }
 
 func (c *eraseCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -102,12 +102,12 @@ func (c *moveCmd) Name() string {
 	return "MOVE"
 }
 
-func (c *moveCmd) basePrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify base point", Accepts: cmdsys.InputPoint}
+func (c *moveCmd) basePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.modify.prompt.base_point"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *moveCmd) secondPrompt() *cmdsys.Prompt {
-	p := &cmdsys.Prompt{Message: "Specify second point", Accepts: cmdsys.InputPoint, Base: c.from}
+func (c *moveCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	p := &cmdsys.Prompt{Message: ctx.T("cmd.modify.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.from}
 	if c.copy {
 		p.Accepts |= cmdsys.InputEnter
 	}
@@ -116,9 +116,9 @@ func (c *moveCmd) secondPrompt() *cmdsys.Prompt {
 
 func (c *moveCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.begin(ctx) {
-		return c.basePrompt()
+		return c.basePrompt(ctx)
 	}
-	return selectPrompt()
+	return selectPrompt(ctx)
 }
 
 func (c *moveCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -127,10 +127,10 @@ func (c *moveCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		if !c.take(ctx, in) {
 			return nil
 		}
-		return c.basePrompt()
+		return c.basePrompt(ctx)
 	case c.from == nil:
 		c.from = pt(in.Point)
-		return c.secondPrompt()
+		return c.secondPrompt(ctx)
 	case in.Kind == cmdsys.InputEnter:
 		return nil
 	}
@@ -150,7 +150,7 @@ func (c *moveCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		tx.Modify(h, func(e doc.Entity) { e.Transform(m) })
 	}
 	if c.copy {
-		return c.secondPrompt()
+		return c.secondPrompt(ctx)
 	}
 	return nil
 }
@@ -179,15 +179,15 @@ func (c *transformCmd) Name() string {
 	return "ROTATE"
 }
 
-func (c *transformCmd) basePrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify base point", Accepts: cmdsys.InputPoint}
+func (c *transformCmd) basePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.modify.prompt.base_point"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *transformCmd) valuePrompt() *cmdsys.Prompt {
+func (c *transformCmd) valuePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.scale {
-		return &cmdsys.Prompt{Message: "Specify scale factor", Accepts: cmdsys.InputDistance, Base: c.center}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.modify.prompt.scale_factor"), Accepts: cmdsys.InputDistance, Base: c.center}
 	}
-	return &cmdsys.Prompt{Message: "Specify rotation angle", Accepts: cmdsys.InputAngle, Base: c.center}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.modify.prompt.rotation_angle"), Accepts: cmdsys.InputAngle, Base: c.center}
 }
 
 func (c *transformCmd) matrix(v float64) geom.Mat3 {
@@ -199,9 +199,9 @@ func (c *transformCmd) matrix(v float64) geom.Mat3 {
 
 func (c *transformCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.begin(ctx) {
-		return c.basePrompt()
+		return c.basePrompt(ctx)
 	}
-	return selectPrompt()
+	return selectPrompt(ctx)
 }
 
 func (c *transformCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -210,14 +210,14 @@ func (c *transformCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Promp
 		if !c.take(ctx, in) {
 			return nil
 		}
-		return c.basePrompt()
+		return c.basePrompt(ctx)
 	case c.center == nil:
 		c.center = pt(in.Point)
-		return c.valuePrompt()
+		return c.valuePrompt(ctx)
 	}
 	if c.scale && in.Value <= 0 {
-		ctx.Printf("Value must be positive and nonzero.")
-		return c.valuePrompt()
+		ctx.Say("cmd.common.msg.positive")
+		return c.valuePrompt(ctx)
 	}
 	m := c.matrix(in.Value)
 	for _, h := range c.hs {

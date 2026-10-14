@@ -7,7 +7,7 @@ summary: The command line under the canvas — typing commands and answers, the 
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/workspace.go, cmdsys/session.go, cmdsys/input.go]
+code_anchors: [ui/workspace.go, cmdsys/session.go, cmdsys/input.go, i18n/keyword.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
 ---
@@ -34,8 +34,21 @@ history.
 - **Right-click** on the canvas is Enter.
 - **Escape** cancels the running command and prints `*Cancel*`; with no command running it clears
   the selection. What a command committed before Escape stays in the drawing.
+- **Language.** Prompts, history lines, errors and keywords follow the interface language
+  ([Settings](settings.md)); in Italian the idle prompt is `Comando:`, a running command echoes as
+  `Comando: LINEA` and `LINE` asks `Specificare punto successivo o [Chiudi/Annulla]:`.
+- **Italian names.** The Italian names of the commands (`LINEA`, `POLILINEA`, `CERCHIO`, `ARCO`,
+  `RETTANGOLO`, `CANCELLA`, `SPOSTA`, `COPIA`, `RUOTA`, `SCALA`, `ANNULLA`, `ZOOM`, `DISTANZA`,
+  `TAGLIA`, `ESTENDI`, `SPEZZA`, `UNISCI`, `ESPLODI` and the rest of the catalog) are aliases that
+  run the English command. They are registered in every language, so they work in an English
+  session too. The canonical names stay English: `LINE`, `L` and a script written in English run
+  unchanged in an Italian session.
+- **Keywords.** An option is typed by its full name or its shortcut in the current language
+  (`Chiudi` or `C`), and always by its English name or shortcut as well (`Close`). A leading `_`
+  (`_C`, `_Close`) means English only, as in AutoCAD, which a script can use to stay language
+  independent.
 - Command names and aliases are case-insensitive. An unknown name prints
-  `Unknown command "NAME". Press F1 for help.` and starts nothing.
+  `Unknown command "NAME". Press F1 for help.` (`Comando "NAME" sconosciuto. Premere F1 per la guida.` in Italian) and starts nothing.
 - Typed answers take the forms the [command system](../tech/command-system.md) lists: `x,y`,
   `@dx,dy`, `d<angle`, `@d<angle`, a bare number for direct distance entry, keywords by name or
   shortcut. An invalid answer prints the error and the prompt stays.

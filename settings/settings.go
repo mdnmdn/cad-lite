@@ -9,9 +9,10 @@
 package settings
 
 import (
-	"fmt"
 	"math"
 	"strings"
+
+	"go-draw/i18n"
 )
 
 // Limits and defaults of the persisted values.
@@ -116,15 +117,15 @@ func ClampUIScale(s float64) float64 {
 func (s *Settings) Normalize() []string {
 	var w []string
 	if strings.TrimSpace(s.Theme) == "" {
-		w = append(w, fmt.Sprintf("theme is empty; using %q", DefaultTheme))
+		w = append(w, i18n.T("settings.warn.theme_empty", DefaultTheme))
 		s.Theme = DefaultTheme
 	}
 	if c := ClampUIScale(s.UIScale); c != s.UIScale {
-		w = append(w, fmt.Sprintf("ui_scale %v is out of range or off-step; using %v", s.UIScale, c))
+		w = append(w, i18n.T("settings.warn.ui_scale", s.UIScale, c))
 		s.UIScale = c
 	}
 	if !contains(Languages, s.Language) {
-		w = append(w, fmt.Sprintf("language %q is not one of %v; using %q", s.Language, Languages, LangAuto))
+		w = append(w, i18n.T("settings.warn.language", s.Language, Languages, LangAuto))
 		s.Language = LangAuto
 	}
 	ok := false
@@ -132,7 +133,7 @@ func (s *Settings) Normalize() []string {
 		ok = ok || m == s.Wheel
 	}
 	if !ok {
-		w = append(w, fmt.Sprintf("wheel %q is not one of %v; using %q", s.Wheel, WheelModes, WheelAuto))
+		w = append(w, i18n.T("settings.warn.wheel", s.Wheel, WheelModes, WheelAuto))
 		s.Wheel = WheelAuto
 	}
 	for _, d := range []struct {
@@ -143,7 +144,7 @@ func (s *Settings) Normalize() []string {
 			continue
 		}
 		if c := min(max(*d.v, MinWindowSize), MaxWindowSize); c != *d.v {
-			w = append(w, fmt.Sprintf("%s %d is out of range; using %d", d.name, *d.v, c))
+			w = append(w, i18n.T("settings.warn.out_of_range", d.name, *d.v, c))
 			*d.v = c
 		}
 	}

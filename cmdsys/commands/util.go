@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -9,8 +8,17 @@ import (
 	"go-draw/cmdsys"
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 	"go-draw/render"
 )
+
+// yesNo renders a boolean as the session's Yes or No.
+func yesNo(ctx *cmdsys.Context, b bool) string {
+	if b {
+		return ctx.T("common.yes")
+	}
+	return ctx.T("common.no")
+}
 
 // immediate is a command that runs entirely in Start.
 type immediate struct {
@@ -34,13 +42,13 @@ func (c *immediate) Input(*cmdsys.Context, cmdsys.Input) *cmdsys.Prompt { return
 
 func undo(ctx *cmdsys.Context) {
 	if !ctx.Doc.Undo() {
-		ctx.Printf("Everything has been undone.")
+		ctx.Say("cmd.undo.msg.everything_undone")
 	}
 }
 
 func redo(ctx *cmdsys.Context) {
 	if !ctx.Doc.Redo() {
-		ctx.Printf("Nothing to redo.")
+		ctx.Say("cmd.redo.msg.nothing_to_redo")
 	}
 }
 
@@ -59,9 +67,9 @@ type zoomCmd struct {
 
 func (*zoomCmd) Name() string { return "ZOOM" }
 
-func (c *zoomCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
+func (c *zoomCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	ext := cmdsys.Input{Kind: cmdsys.InputKeyword, Keyword: "Extents"}
-	return &cmdsys.Prompt{Message: "Specify corner of window", Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Extents", "Window"}, Default: &ext}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.zoom.prompt.corner"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Extents", "Window"}, Default: &ext}
 }
 
 func (c *zoomCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -70,10 +78,10 @@ func (c *zoomCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		ZoomExtents(ctx.Doc, ctx.View)
 		return nil
 	case in.Keyword == "Window":
-		return &cmdsys.Prompt{Message: "Specify first corner", Accepts: cmdsys.InputPoint}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.zoom.prompt.first_corner"), Accepts: cmdsys.InputPoint}
 	case c.corner == nil:
 		c.corner = pt(in.Point)
-		return &cmdsys.Prompt{Message: "Specify opposite corner", Accepts: cmdsys.InputPoint, Base: c.corner}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.zoom.prompt.opposite_corner"), Accepts: cmdsys.InputPoint, Base: c.corner}
 	}
 	ctx.View.Fit(geom.BoxOf(*c.corner, in.Point), 0)
 	return nil
@@ -92,7 +100,7 @@ type layerCmd struct{ base }
 func (*layerCmd) Name() string { return "LAYER" }
 
 func (*layerCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: fmt.Sprintf("Layer name to make current, or name=color <%s>", ctx.Doc.CurrentLayer), Accepts: cmdsys.InputText | cmdsys.InputEnter}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.layer.prompt.name", ctx.Doc.CurrentLayer), Accepts: cmdsys.InputText | cmdsys.InputEnter}
 }
 
 func (*layerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -105,7 +113,7 @@ func (*layerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if hasColor {
 		n, err := strconv.Atoi(strings.TrimSpace(col))
 		if err != nil || n < 1 || n > 255 {
-			ctx.Printf("Color must be an AutoCAD Color Index from 1 to 255.")
+			ctx.Say("cmd.layer.msg.bad_color")
 			return nil
 		}
 		color = n
@@ -113,7 +121,7 @@ func (*layerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	l := ctx.Doc.Layer(name)
 	if l == nil {
 		l = ctx.Doc.AddLayer(name, color)
-		ctx.Printf("Layer %q created.", name)
+		ctx.Say("cmd.layer.msg.created", name)
 	} else if hasColor {
 		l.Color = color
 	}
@@ -133,32 +141,32 @@ type distCmd struct {
 
 func (*distCmd) Name() string { return "DIST" }
 
-func (*distCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify first point", Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Multiple points"}}
+func (*distCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.dist.prompt.first_point"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{"Multiple points"}}
 }
 
 func (c *distCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if in.Keyword == "Multiple points" {
 		c.multi = true
-		return &cmdsys.Prompt{Message: "Specify first point", Accepts: cmdsys.InputPoint}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.dist.prompt.first_point"), Accepts: cmdsys.InputPoint}
 	}
 	if c.multi {
 		if in.Kind == cmdsys.InputEnter {
-			ctx.Printf("Distance = %s", cmdsys.FormatNumber(c.total))
+			ctx.Say("cmd.dist.msg.total", cmdsys.FormatNumber(c.total))
 			return nil
 		}
 		if n := len(c.pts); n > 0 {
 			c.total += c.pts[n-1].Dist(in.Point)
 		}
 		c.pts = append(c.pts, in.Point)
-		return &cmdsys.Prompt{Message: "Specify next point", Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Base: pt(in.Point)}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.dist.prompt.next_point"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter, Base: pt(in.Point)}
 	}
 	if c.first == nil {
 		c.first = pt(in.Point)
-		return &cmdsys.Prompt{Message: "Specify second point", Accepts: cmdsys.InputPoint, Base: c.first}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.dist.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.first}
 	}
 	d := in.Point.Sub(*c.first)
-	ctx.Printf("Distance = %s,  Angle = %s°,  Delta X = %s,  Delta Y = %s",
+	ctx.Say("cmd.dist.msg.result",
 		cmdsys.FormatNumber(d.Len()), cmdsys.FormatNumber(geom.NormAngle(d.Angle())*180/math.Pi),
 		cmdsys.FormatNumber(d.X), cmdsys.FormatNumber(d.Y))
 	return nil
@@ -178,12 +186,12 @@ type idCmd struct{ base }
 
 func (*idCmd) Name() string { return "ID" }
 
-func (*idCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify point", Accepts: cmdsys.InputPoint}
+func (*idCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.id.prompt.point"), Accepts: cmdsys.InputPoint}
 }
 
 func (*idCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
-	ctx.Printf("X = %s     Y = %s", cmdsys.FormatNumber(in.Point.X), cmdsys.FormatNumber(in.Point.Y))
+	ctx.Say("cmd.id.msg.result", cmdsys.FormatNumber(in.Point.X), cmdsys.FormatNumber(in.Point.Y))
 	return nil
 }
 
@@ -199,7 +207,7 @@ func (c *listCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 		c.list(ctx)
 		return nil
 	}
-	return selectPrompt()
+	return selectPrompt(ctx)
 }
 
 func (c *listCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -215,17 +223,17 @@ func (c *listCmd) list(ctx *cmdsys.Context) {
 		if e == nil {
 			continue
 		}
-		ctx.Printf("%s  Layer: %q  Handle = %s", e.Class(), e.Common().Layer, h)
+		ctx.Say("cmd.list.msg.header", e.Class(), e.Common().Layer, h)
 		switch e := e.(type) {
 		case *doc.Line:
-			ctx.Printf("    from point %s  to point %s  Length = %s", cmdsys.FormatPoint(e.Start), cmdsys.FormatPoint(e.End), cmdsys.FormatNumber(e.Start.Dist(e.End)))
+			ctx.Say("cmd.list.msg.line", cmdsys.FormatPoint(e.Start), cmdsys.FormatPoint(e.End), cmdsys.FormatNumber(e.Start.Dist(e.End)))
 		case *doc.Circle:
-			ctx.Printf("    center point %s  radius %s", cmdsys.FormatPoint(e.Center), cmdsys.FormatNumber(e.Radius))
+			ctx.Say("cmd.list.msg.circle", cmdsys.FormatPoint(e.Center), cmdsys.FormatNumber(e.Radius))
 		case *doc.Arc:
-			ctx.Printf("    center point %s  radius %s  start angle %s°  end angle %s°", cmdsys.FormatPoint(e.Center), cmdsys.FormatNumber(e.Radius),
+			ctx.Say("cmd.list.msg.arc", cmdsys.FormatPoint(e.Center), cmdsys.FormatNumber(e.Radius),
 				cmdsys.FormatNumber(e.StartAngle*180/math.Pi), cmdsys.FormatNumber(e.EndAngle*180/math.Pi))
 		case *doc.LWPolyline:
-			ctx.Printf("    %d vertices  closed: %v  length %s", len(e.Points), e.Closed, cmdsys.FormatNumber(e.Geometry()[0].Length()))
+			ctx.Say("cmd.list.msg.polyline", len(e.Points), yesNo(ctx, e.Closed), cmdsys.FormatNumber(e.Geometry()[0].Length()))
 		}
 	}
 }
@@ -244,38 +252,38 @@ func (c *fileCmd) HumanOnly() bool { return true }
 
 func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if ctx.Files == nil {
-		ctx.Printf("File commands are not available on this platform.")
+		ctx.Say("cmd.file.msg.unavailable")
 		return nil
 	}
-	verb := "open"
+	key := "cmd.file.prompt.open_path"
 	if c.name == "SAVE" {
-		verb = "save"
+		key = "cmd.file.prompt.save_path"
 	}
-	return &cmdsys.Prompt{Message: "Enter path of drawing to " + verb, Accepts: cmdsys.InputText}
+	return &cmdsys.Prompt{Message: ctx.T(key), Accepts: cmdsys.InputText}
 }
 
 func (c *fileCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if c.name == "SAVE" {
 		warns, err := ctx.Files.Save(in.Text, ctx.Doc)
 		if err != nil {
-			ctx.Printf("Save failed: %v", err)
+			ctx.Say("cmd.file.msg.save_failed", err)
 			return nil
 		}
 		printWarnings(ctx, warns)
 		ctx.SetFilePath(in.Text)
-		ctx.Printf("Saved %s (%d entities).", in.Text, ctx.Doc.Len())
+		ctx.Say("cmd.file.msg.saved", in.Text, ctx.Doc.Len())
 		return nil
 	}
 	d, warns, err := ctx.Files.Open(in.Text)
 	if err != nil {
-		ctx.Printf("Open failed: %v", err)
+		ctx.Say("cmd.file.msg.open_failed", err)
 		return nil
 	}
 	printWarnings(ctx, warns)
 	ctx.ReplaceDrawing(d)
 	ctx.SetFilePath(in.Text)
 	ZoomExtents(d, ctx.View)
-	ctx.Printf("Opened %s (%d entities).", in.Text, d.Len())
+	ctx.Say("cmd.file.msg.opened", in.Text, d.Len())
 	return nil
 }
 
@@ -283,10 +291,10 @@ func printWarnings(ctx *cmdsys.Context, warns []string) {
 	const shown = 5
 	for i, w := range warns {
 		if i == shown {
-			ctx.Printf("... and %d more warnings.", len(warns)-shown)
+			ctx.Say("cmd.file.msg.more_warnings", len(warns)-shown)
 			break
 		}
-		ctx.Printf("Warning: %s", w)
+		ctx.Say("cmd.file.msg.warning", w)
 	}
 }
 
@@ -343,6 +351,8 @@ func Register(r *cmdsys.Registry) {
 	registerAgent(r)
 	registerSettings(r)
 	r.LoadAliases(Aliases)
+	// English short aliases and the Italian names of every language, whatever the UI language.
+	i18n.RegisterAliases(r.Alias)
 }
 
 // NewRegistry returns a registry with every built-in command registered.

@@ -7,7 +7,7 @@ summary: The layers of go-draw, the dependency rule between them, where each lay
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go]
+code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go, i18n/i18n.go]
 depends_on: [prod-overview]
 review_cycle: quarterly
 ---
@@ -37,6 +37,10 @@ UI shell and one rendering adapter touch the graphics stack.
 └──────────────────────────────┴──────────────────────────────┘
 ```
 
+`i18n` is a leaf beside the core: the English and Italian message catalogs, language detection,
+plurals, localized command keywords and command aliases. It imports nothing of the project, and
+`cmdsys`, `fileio`, `settings`, `cadmcp` and `ui` may import it.
+
 The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenplatform` as its display backend.
 
 AI agents attach on the side: `cadmcp` exposes the drawing as MCP tools on top of `cmdsys`, and the
@@ -51,7 +55,7 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 
 1. **Dependencies point down.** A package imports only packages in layers below it. `geom` imports
    nothing of the project; `spatial` and `doc` import `geom`; `fileio` imports `doc`; `render`
-   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports go-draw.
+   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it. `i18n` imports nothing of the project (it is a leaf, builds for `js/wasm`) and is imported by `cmdsys`, `cmdsys/commands`, `fileio`, `settings`, `ui` and `cmd/cad`. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports go-draw.
 2. **The core never sees the screen.** `geom`, `doc`, `spatial`, `fileio`, `render` and `cmdsys`
    never import `internal/gpui`, ebiten or any graphics package. Only `render/gpuirender`, `ui` and
    `cmd/` import `internal/gpui`, and only `cmd/` imports `internal/gpui/ebitenplatform`.

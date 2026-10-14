@@ -31,12 +31,12 @@ type lineCmd struct {
 
 func (*lineCmd) Name() string { return "LINE" }
 
-func (c *lineCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify first point", Accepts: cmdsys.InputPoint}
+func (c *lineCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.line.prompt.first_point"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *lineCmd) prompt() *cmdsys.Prompt {
-	p := &cmdsys.Prompt{Message: "Specify next point", Accepts: cmdsys.InputPoint | cmdsys.InputEnter | cmdsys.InputKeyword, Base: pt(c.pts[len(c.pts)-1])}
+func (c *lineCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	p := &cmdsys.Prompt{Message: ctx.T("cmd.line.prompt.next_point"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter | cmdsys.InputKeyword, Base: pt(c.pts[len(c.pts)-1])}
 	if len(c.pts) >= 3 {
 		p.Keywords = []string{"Close", "Undo"}
 	} else {
@@ -59,7 +59,7 @@ func (c *lineCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		ctx.Tx().Erase(c.added[len(c.added)-1])
 		c.added = c.added[:len(c.added)-1]
 		c.pts = c.pts[:len(c.pts)-1]
-		return c.prompt()
+		return c.prompt(ctx)
 	case in.Keyword == "Close":
 		ctx.Tx().Add(&doc.Line{Start: c.pts[len(c.pts)-1], End: c.pts[0]})
 		return nil
@@ -68,9 +68,9 @@ func (c *lineCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			c.added = append(c.added, ctx.Tx().Add(&doc.Line{Start: c.pts[n-1], End: in.Point}))
 		}
 		c.pts = append(c.pts, in.Point)
-		return c.prompt()
+		return c.prompt(ctx)
 	}
-	return c.prompt()
+	return c.prompt(ctx)
 }
 
 func (c *lineCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
@@ -89,12 +89,12 @@ type plineCmd struct {
 
 func (*plineCmd) Name() string { return "PLINE" }
 
-func (c *plineCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify start point", Accepts: cmdsys.InputPoint}
+func (c *plineCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.pline.prompt.start_point"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *plineCmd) prompt() *cmdsys.Prompt {
-	p := &cmdsys.Prompt{Message: "Specify next point", Accepts: cmdsys.InputPoint | cmdsys.InputEnter | cmdsys.InputKeyword, Base: pt(c.pts[len(c.pts)-1]), Keywords: []string{"Undo"}}
+func (c *plineCmd) prompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	p := &cmdsys.Prompt{Message: ctx.T("cmd.pline.prompt.next_point"), Accepts: cmdsys.InputPoint | cmdsys.InputEnter | cmdsys.InputKeyword, Base: pt(c.pts[len(c.pts)-1]), Keywords: []string{"Undo"}}
 	if len(c.pts) >= 3 {
 		p.Keywords = []string{"Close", "Undo"}
 	}
@@ -122,7 +122,7 @@ func (c *plineCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	case in.Kind == cmdsys.InputPoint:
 		c.pts = append(c.pts, in.Point)
 	}
-	return c.prompt()
+	return c.prompt(ctx)
 }
 
 func (c *plineCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
@@ -144,38 +144,38 @@ type circleCmd struct {
 
 func (*circleCmd) Name() string { return "CIRCLE" }
 
-func (c *circleCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify center point for circle", Accepts: cmdsys.InputPoint}
+func (c *circleCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.circle.prompt.center"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *circleCmd) radiusPrompt() *cmdsys.Prompt {
+func (c *circleCmd) radiusPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.diameter {
-		return &cmdsys.Prompt{Message: "Specify diameter of circle", Accepts: cmdsys.InputDistance, Base: c.center}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.circle.prompt.diameter"), Accepts: cmdsys.InputDistance, Base: c.center}
 	}
-	return &cmdsys.Prompt{Message: "Specify radius of circle", Accepts: cmdsys.InputDistance | cmdsys.InputKeyword, Keywords: []string{"Diameter"}, Base: c.center}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.circle.prompt.radius"), Accepts: cmdsys.InputDistance | cmdsys.InputKeyword, Keywords: []string{"Diameter"}, Base: c.center}
 }
 
 func (c *circleCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	switch {
 	case c.center == nil:
 		c.center = pt(in.Point)
-		return c.radiusPrompt()
+		return c.radiusPrompt(ctx)
 	case in.Keyword == "Diameter":
 		c.diameter = true
-		return c.radiusPrompt()
+		return c.radiusPrompt(ctx)
 	case in.Kind == cmdsys.InputDistance:
 		r := in.Value
 		if c.diameter {
 			r /= 2
 		}
 		if r <= 0 {
-			ctx.Printf("Value must be positive and nonzero.")
-			return c.radiusPrompt()
+			ctx.Say("cmd.common.msg.positive")
+			return c.radiusPrompt(ctx)
 		}
 		ctx.Tx().Add(&doc.Circle{Center: *c.center, Radius: r})
 		return nil
 	}
-	return c.radiusPrompt()
+	return c.radiusPrompt(ctx)
 }
 
 func (c *circleCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
@@ -199,21 +199,21 @@ type arcCmd struct {
 
 func (*arcCmd) Name() string { return "ARC" }
 
-func (c *arcCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify start point of arc", Accepts: cmdsys.InputPoint}
+func (c *arcCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.arc.prompt.start_point"), Accepts: cmdsys.InputPoint}
 }
 
 func (c *arcCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	c.pts = append(c.pts, in.Point)
 	switch len(c.pts) {
 	case 1:
-		return &cmdsys.Prompt{Message: "Specify second point of arc", Accepts: cmdsys.InputPoint, Base: pt(c.pts[0])}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.arc.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: pt(c.pts[0])}
 	case 2:
-		return &cmdsys.Prompt{Message: "Specify end point of arc", Accepts: cmdsys.InputPoint, Base: pt(c.pts[1])}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.arc.prompt.end_point"), Accepts: cmdsys.InputPoint, Base: pt(c.pts[1])}
 	}
 	a, ok := doc.ArcFrom3Points(c.pts[0], c.pts[1], c.pts[2])
 	if !ok {
-		ctx.Printf("The points are collinear; no arc was drawn.")
+		ctx.Say("cmd.arc.msg.collinear")
 		return nil
 	}
 	ctx.Tx().Add(&doc.Arc{Center: a.C, Radius: a.R, StartAngle: a.Start, EndAngle: a.End})
@@ -240,8 +240,8 @@ type rectCmd struct {
 
 func (*rectCmd) Name() string { return "RECTANG" }
 
-func (c *rectCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify first corner point", Accepts: cmdsys.InputPoint}
+func (c *rectCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.rectang.prompt.first_corner"), Accepts: cmdsys.InputPoint}
 }
 
 func rectPts(a, b geom.Vec2) []geom.Vec2 {
@@ -251,7 +251,7 @@ func rectPts(a, b geom.Vec2) []geom.Vec2 {
 func (c *rectCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if c.first == nil {
 		c.first = pt(in.Point)
-		return &cmdsys.Prompt{Message: "Specify other corner point", Accepts: cmdsys.InputPoint, Base: c.first}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.rectang.prompt.other_corner"), Accepts: cmdsys.InputPoint, Base: c.first}
 	}
 	ctx.Tx().Add(&doc.LWPolyline{Points: rectPts(*c.first, in.Point), Closed: true})
 	return nil

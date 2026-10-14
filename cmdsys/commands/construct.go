@@ -3,7 +3,6 @@ package commands
 import (
 	"errors"
 	"math"
-	"strings"
 
 	"go-draw/cmdsys"
 	"go-draw/doc"
@@ -59,24 +58,24 @@ type mirrorCmd struct {
 
 func (*mirrorCmd) Name() string { return "MIRROR" }
 
-func (c *mirrorCmd) firstPrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify first point of mirror line", Accepts: cmdsys.InputPoint}
+func (c *mirrorCmd) firstPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.mirror.prompt.first_point"), Accepts: cmdsys.InputPoint}
 }
 
-func (c *mirrorCmd) secondPrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Specify second point of mirror line", Accepts: cmdsys.InputPoint, Base: c.p1}
+func (c *mirrorCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.mirror.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.p1}
 }
 
-func (c *mirrorCmd) erasePrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Erase source objects", Accepts: cmdsys.InputKeyword,
+func (c *mirrorCmd) erasePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.mirror.prompt.erase_source"), Accepts: cmdsys.InputKeyword,
 		Keywords: []string{"Yes", "No"}, Default: keywordInput("No")}
 }
 
 func (c *mirrorCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.begin(ctx) {
-		return c.firstPrompt()
+		return c.firstPrompt(ctx)
 	}
-	return selectPrompt()
+	return selectPrompt(ctx)
 }
 
 func (c *mirrorCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -85,17 +84,17 @@ func (c *mirrorCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		if !c.take(ctx, in) {
 			return nil
 		}
-		return c.firstPrompt()
+		return c.firstPrompt(ctx)
 	case c.p1 == nil:
 		c.p1 = pt(in.Point)
-		return c.secondPrompt()
+		return c.secondPrompt(ctx)
 	case c.p2 == nil:
 		if in.Point.Near(*c.p1, 1e-12) {
-			ctx.Printf("The two points of the mirror line must differ.")
-			return c.secondPrompt()
+			ctx.Say("cmd.mirror.msg.points_differ")
+			return c.secondPrompt(ctx)
 		}
 		c.p2 = pt(in.Point)
-		return c.erasePrompt()
+		return c.erasePrompt(ctx)
 	}
 	m := mirrorMatrix(*c.p1, *c.p2)
 	tx := ctx.Tx()
@@ -146,25 +145,25 @@ type offsetCmd struct {
 
 func (*offsetCmd) Name() string { return "OFFSET" }
 
-func (c *offsetCmd) Start(*cmdsys.Context) *cmdsys.Prompt {
+func (c *offsetCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	def := keywordInput("Through")
 	if lastOffset > 0 {
 		def = distanceInput(lastOffset)
 	}
-	return &cmdsys.Prompt{Message: "Specify offset distance", Accepts: cmdsys.InputDistance | cmdsys.InputPoint | cmdsys.InputKeyword,
+	return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.distance"), Accepts: cmdsys.InputDistance | cmdsys.InputPoint | cmdsys.InputKeyword,
 		Keywords: []string{"Through"}, Default: def}
 }
 
-func (c *offsetCmd) selectPrompt() *cmdsys.Prompt {
+func (c *offsetCmd) selectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	c.src = 0
-	return &cmdsys.Prompt{Message: "Select object to offset", Accepts: cmdsys.InputPoint | cmdsys.InputKeyword,
+	return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.select"), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword,
 		Keywords: []string{"Exit"}, Default: keywordInput("Exit")}
 }
 
-func (c *offsetCmd) sidePrompt() *cmdsys.Prompt {
-	msg := "Specify point on side to offset"
+func (c *offsetCmd) sidePrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	msg := ctx.T("cmd.offset.prompt.side")
 	if c.through {
-		msg = "Specify through point"
+		msg = ctx.T("cmd.offset.prompt.through")
 	}
 	return &cmdsys.Prompt{Message: msg, Accepts: cmdsys.InputPoint | cmdsys.InputKeyword,
 		Keywords: []string{"Exit"}, Default: keywordInput("Exit")}
@@ -172,12 +171,12 @@ func (c *offsetCmd) sidePrompt() *cmdsys.Prompt {
 
 func (c *offsetCmd) setDistance(ctx *cmdsys.Context, d float64) *cmdsys.Prompt {
 	if d <= 0 || math.IsNaN(d) || math.IsInf(d, 0) {
-		ctx.Printf("Requires a positive, nonzero distance.")
+		ctx.Say("cmd.offset.msg.positive_distance")
 		return c.Start(ctx)
 	}
 	c.dist, c.haveDst = d, true
 	lastOffset = d
-	return c.selectPrompt()
+	return c.selectPrompt(ctx)
 }
 
 func (c *offsetCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
@@ -186,10 +185,10 @@ func (c *offsetCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		switch {
 		case in.Kind == cmdsys.InputKeyword:
 			c.through = true
-			return c.selectPrompt()
+			return c.selectPrompt(ctx)
 		case in.Kind == cmdsys.InputPoint && c.first == nil:
 			c.first = pt(in.Point)
-			return &cmdsys.Prompt{Message: "Specify second point", Accepts: cmdsys.InputPoint, Base: c.first}
+			return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.second_point"), Accepts: cmdsys.InputPoint, Base: c.first}
 		case in.Kind == cmdsys.InputPoint:
 			d := c.first.Dist(in.Point)
 			c.first = nil
@@ -202,15 +201,15 @@ func (c *offsetCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 		h, ok := pickConstruct(ctx, in.Point)
 		if !ok {
-			ctx.Printf("Nothing found at that point.")
-			return c.selectPrompt()
+			ctx.Say("cmd.offset.msg.nothing_found")
+			return c.selectPrompt(ctx)
 		}
 		if !offsettable(ctx.Doc.Entity(h)) {
-			ctx.Printf("Cannot offset this object.")
-			return c.selectPrompt()
+			ctx.Say("cmd.offset.msg.cannot_offset")
+			return c.selectPrompt(ctx)
 		}
 		c.src = h
-		return c.sidePrompt()
+		return c.sidePrompt(ctx)
 	}
 	if in.Kind != cmdsys.InputPoint {
 		return nil
@@ -218,11 +217,11 @@ func (c *offsetCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	src := ctx.Doc.Entity(c.src)
 	ne, msg := offsetEntity(src, in.Point, c.dist, c.through)
 	if ne == nil {
-		ctx.Printf("%s", msg)
-		return c.selectPrompt()
+		ctx.Say(msg)
+		return c.selectPrompt(ctx)
 	}
 	ctx.Tx().Add(ne)
-	return c.selectPrompt()
+	return c.selectPrompt(ctx)
 }
 
 func (c *offsetCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.DisplayList) {
@@ -247,10 +246,10 @@ func offsettable(e doc.Entity) bool {
 	return false
 }
 
-const degenerateOffset = "The offset would have a zero or negative radius; nothing was created."
+const degenerateOffset = "cmd.offset.msg.degenerate"
 
 // offsetEntity returns the offset of e towards the point side, dist away or,
-// with through, passing through side. It returns nil and a message when the
+// with through, passing through side. It returns nil and a message key when the
 // result is degenerate or e cannot be offset. The new entity inherits the
 // layer and colour of e.
 func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc.Entity, string) {
@@ -263,7 +262,7 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 			dist = math.Abs(cross) / math.Max(l.Length(), 1e-300)
 		}
 		if dist <= 0 {
-			return nil, "The through point lies on the object; nothing was created."
+			return nil, "cmd.offset.msg.through_on_object"
 		}
 		if cross < 0 {
 			dist = -dist
@@ -278,7 +277,7 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 			dist = -dist
 		}
 		if dist == 0 {
-			return nil, "The through point lies on the object; nothing was created."
+			return nil, "cmd.offset.msg.through_on_object"
 		}
 		o, ok := geom.OffsetCircle(geom.Circle{C: e.Center, R: e.Radius}, dist)
 		if !ok {
@@ -293,7 +292,7 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 			dist = -dist
 		}
 		if dist == 0 {
-			return nil, "The through point lies on the object; nothing was created."
+			return nil, "cmd.offset.msg.through_on_object"
 		}
 		o, ok := geom.OffsetArc(geom.Arc{C: e.Center, R: e.Radius, Start: e.StartAngle, End: e.EndAngle}, dist)
 		if !ok {
@@ -308,7 +307,7 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 			dist = q.Dist(side)
 		}
 		if dist <= 0 {
-			return nil, "The through point lies on the object; nothing was created."
+			return nil, "cmd.offset.msg.through_on_object"
 		}
 		if p.Tangent(t).Cross(side.Sub(q)) < 0 {
 			dist = -dist
@@ -319,7 +318,7 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 		}
 		out = &doc.LWPolyline{Points: o.Pts, Bulges: o.Bulges, Closed: o.Closed}
 	default:
-		return nil, "Cannot offset this object."
+		return nil, "cmd.offset.msg.cannot_offset"
 	}
 	c := out.Common()
 	c.Layer, c.Color = e.Common().Layer, e.Common().Color
@@ -355,34 +354,34 @@ func (c *cornerCmd) noun() string {
 
 func (c *cornerCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.chamfer {
-		ctx.Printf("(TRIM mode) Current chamfer Dist1 = %s, Dist2 = %s", cmdsys.FormatNumber(chamferD1), cmdsys.FormatNumber(chamferD2))
+		ctx.Say("cmd.corner.msg.chamfer_settings", cmdsys.FormatNumber(chamferD1), cmdsys.FormatNumber(chamferD2))
 	} else {
-		ctx.Printf("Current settings: Mode = TRIM, Radius = %s", cmdsys.FormatNumber(filletRadius))
+		ctx.Say("cmd.corner.msg.fillet_settings", cmdsys.FormatNumber(filletRadius))
 	}
-	return c.firstPrompt()
+	return c.firstPrompt(ctx)
 }
 
-func (c *cornerCmd) firstPrompt() *cmdsys.Prompt {
+func (c *cornerCmd) firstPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	c.h1, c.ask = 0, ""
 	kw := "Radius"
 	if c.chamfer {
 		kw = "Distance"
 	}
-	return &cmdsys.Prompt{Message: "Select first " + c.noun(), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{kw}}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.select_first_" + c.noun()), Accepts: cmdsys.InputPoint | cmdsys.InputKeyword, Keywords: []string{kw}}
 }
 
-func (c *cornerCmd) secondPrompt() *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: "Select second " + c.noun(), Accepts: cmdsys.InputPoint}
+func (c *cornerCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.select_second_" + c.noun()), Accepts: cmdsys.InputPoint}
 }
 
-func (c *cornerCmd) askPrompt() *cmdsys.Prompt {
+func (c *cornerCmd) askPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	switch c.ask {
 	case "radius":
-		return &cmdsys.Prompt{Message: "Specify fillet radius", Accepts: cmdsys.InputDistance, Default: distanceInput(filletRadius)}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.fillet_radius"), Accepts: cmdsys.InputDistance, Default: distanceInput(filletRadius)}
 	case "d1":
-		return &cmdsys.Prompt{Message: "Specify first chamfer distance", Accepts: cmdsys.InputDistance, Default: distanceInput(chamferD1)}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d1"), Accepts: cmdsys.InputDistance, Default: distanceInput(chamferD1)}
 	}
-	return &cmdsys.Prompt{Message: "Specify second chamfer distance", Accepts: cmdsys.InputDistance, Default: distanceInput(c.d1)}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d2"), Accepts: cmdsys.InputDistance, Default: distanceInput(c.d1)}
 }
 
 func (c *cornerCmd) lineAt(ctx *cmdsys.Context, p geom.Vec2) (doc.Handle, *doc.Line) {
@@ -397,63 +396,63 @@ func (c *cornerCmd) lineAt(ctx *cmdsys.Context, p geom.Vec2) (doc.Handle, *doc.L
 func (c *cornerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if c.ask != "" {
 		if in.Value < 0 || math.IsNaN(in.Value) {
-			ctx.Printf("Requires a non-negative distance.")
-			return c.askPrompt()
+			ctx.Say("cmd.corner.msg.non_negative")
+			return c.askPrompt(ctx)
 		}
 		switch c.ask {
 		case "radius":
 			filletRadius = in.Value
-			return c.firstPrompt()
+			return c.firstPrompt(ctx)
 		case "d1":
 			c.d1, chamferD1 = in.Value, in.Value
 			c.ask = "d2"
-			return c.askPrompt()
+			return c.askPrompt(ctx)
 		}
 		chamferD2 = in.Value
-		return c.firstPrompt()
+		return c.firstPrompt(ctx)
 	}
 	if in.Kind == cmdsys.InputKeyword {
 		c.ask = "radius"
 		if c.chamfer {
 			c.ask = "d1"
 		}
-		return c.askPrompt()
+		return c.askPrompt(ctx)
 	}
 	if c.h1 == 0 {
 		h, ok := pickConstruct(ctx, in.Point)
 		if !ok {
-			ctx.Printf("Nothing found at that point.")
-			return c.firstPrompt()
+			ctx.Say("cmd.corner.msg.nothing_found")
+			return c.firstPrompt(ctx)
 		}
 		if _, isLine := ctx.Doc.Entity(h).(*doc.Line); !isLine {
-			ctx.Printf("%s supports two lines.", c.title())
+			ctx.Say("cmd.corner.msg.supports_two_lines", c.title(ctx))
 			return nil
 		}
 		c.h1, c.p1 = h, in.Point
-		return c.secondPrompt()
+		return c.secondPrompt(ctx)
 	}
 	h2, l2 := c.lineAt(ctx, in.Point)
 	switch {
 	case h2 == 0:
-		ctx.Printf("Nothing found at that point.")
-		return c.secondPrompt()
+		ctx.Say("cmd.corner.msg.nothing_found")
+		return c.secondPrompt(ctx)
 	case l2 == nil:
-		ctx.Printf("%s supports two lines.", c.title())
+		ctx.Say("cmd.corner.msg.supports_two_lines", c.title(ctx))
 		return nil
 	case h2 == c.h1:
-		ctx.Printf("Select a different line.")
-		return c.secondPrompt()
+		ctx.Say("cmd.corner.msg.select_different")
+		return c.secondPrompt(ctx)
 	}
 	l1 := ctx.Doc.Entity(c.h1).(*doc.Line)
 	corner, err := c.compute(l1, l2, c.p1, in.Point)
 	if err != nil {
 		switch {
 		case errors.Is(err, geom.ErrParallel):
-			ctx.Printf("Lines are parallel.")
+			ctx.Say("cmd.corner.msg.parallel")
 		case c.chamfer:
-			ctx.Printf("Chamfer distances are too large for the lines.")
+			ctx.Say("cmd.corner.msg.chamfer_too_large")
 		default:
-			ctx.Printf("Radius is too large for the lines.")
+			ctx.Say("cmd.corner.msg.radius_too_large")
 		}
 		return nil
 	}
@@ -474,9 +473,9 @@ func (c *cornerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	return nil
 }
 
-func (c *cornerCmd) title() string {
-	n := c.Name()
-	return n[:1] + strings.ToLower(n[1:])
+// title is the command's display name in the session's language ("Fillet", "Raccordo").
+func (c *cornerCmd) title(ctx *cmdsys.Context) string {
+	return ctx.Translator().CommandName(c.Name())
 }
 
 func (c *cornerCmd) compute(l1, l2 *doc.Line, p1, p2 geom.Vec2) (geom.Corner, error) {

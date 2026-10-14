@@ -5,6 +5,7 @@ import (
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 	"go-draw/spatial"
 )
 
@@ -29,23 +30,26 @@ const (
 // DefaultSnaps is the mode set a new session starts with.
 const DefaultSnaps = SnapEndpoint | SnapMidpoint | SnapCenter | SnapQuadrant | SnapIntersection
 
-// String returns the AutoCAD tooltip name of a single mode.
-func (m SnapMode) String() string {
+// String returns the AutoCAD tooltip name of a single mode in the current language.
+func (m SnapMode) String() string { return m.In(i18n.For(i18n.Current())) }
+
+// In returns the name of a single mode in the language of t.
+func (m SnapMode) In(t i18n.Translator) string {
 	switch m {
 	case SnapEndpoint:
-		return "Endpoint"
+		return t.T("snap.endpoint")
 	case SnapMidpoint:
-		return "Midpoint"
+		return t.T("snap.midpoint")
 	case SnapCenter:
-		return "Center"
+		return t.T("snap.center")
 	case SnapQuadrant:
-		return "Quadrant"
+		return t.T("snap.quadrant")
 	case SnapIntersection:
-		return "Intersection"
+		return t.T("snap.intersection")
 	case SnapNearest:
-		return "Nearest"
+		return t.T("snap.nearest")
 	}
-	return "Snap"
+	return t.T("snap.generic")
 }
 
 // SnapHit is a found snap point.

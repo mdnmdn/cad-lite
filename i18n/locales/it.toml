@@ -286,6 +286,8 @@ handle_renumbered = "L'handle %[2]s di %[1]s è già in uso; rinumerato in %[3]s
 not_written_r12 = "%s %s non scritto (la classe non esiste in R12; serve il writer più recente, backlog G2)"
 not_written_unsupported = "%s %s non scritto (non supportato dal writer R12)"
 block_not_written = "%s nel blocco %s non scritto (la classe non esiste in R12; serve il writer più recente, backlog G2)"
+non_finite = "%d numeri non finiti (nan/inf) sono stati letti come 0"
+no_eof = "il file non ha il marcatore EOF (potrebbe essere troncato)"
 
 [dxf.err]
 no_value = "dxf: riga %d: il codice di gruppo %q non ha valore"
@@ -295,6 +297,7 @@ no_endsec = "dxf: la sezione %q non ha ENDSEC (file troncato?)"
 [fileio.err]
 no_reader = "nessun lettore per i file %q"
 no_writer = "nessun writer per i file %q"
+not_regular = "%s non è un file regolare"
 
 [settings.warn]
 wrong_type = "%s deve essere %s, trovato %v; uso il valore predefinito"
@@ -391,6 +394,10 @@ permission = "Autorizzazione richiesta"
 answered = "risposto"
 plan = "Piano"
 tab_new = "Nuova"
+thought_tip = "Ragionamento — mostra o nasconde il ragionamento dell'agente"
+tab_tip = "Conversazione — passa a questa scheda"
+session_tip = "Riapri — apre questa conversazione precedente in una scheda"
+permission_tip = "Rispondi — risponde alla richiesta di permesso dell'agente con questa opzione"
 
 [ui.agent.status]
 starting = "avvio di %s..."

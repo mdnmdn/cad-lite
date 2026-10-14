@@ -28,6 +28,16 @@ func cmdKey(name, field string) string { return "cmd." + strings.ToLower(name) +
 // CommandName returns the display name of command name (any case), in the current language.
 func CommandName(name string) string { return T(cmdKey(name, "name")) }
 
+// CommandName returns the display name of command name in the translator's language, or name
+// itself when the command has no catalog entry (a command added by a host or a test).
+func (t Translator) CommandName(name string) string {
+	k := cmdKey(name, "name")
+	if !Has(English, k) {
+		return name
+	}
+	return t.T(k)
+}
+
 // Command returns the current language's metadata for command name (any case).
 func Command(name string) CommandInfo { return CommandIn(Current(), name) }
 

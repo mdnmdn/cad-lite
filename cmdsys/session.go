@@ -1,12 +1,13 @@
 package cmdsys
 
 import (
-	"fmt"
+	"errors"
 	"math"
 	"strings"
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 	"go-draw/render"
 	"go-draw/spatial"
 )
@@ -35,6 +36,8 @@ type Session struct {
 
 	// agentCaller is set while an AI agent drives the session; HumanOnly commands are refused.
 	agentCaller bool
+	// translator, when set, overrides the global language for everything the session prints.
+	translator *i18n.Translator
 
 	// dispatching is set while a command's Start or Input runs.
 	dispatching bool
@@ -55,14 +58,34 @@ const HistoryLimit = 200
 // NewSession returns a session over d showing view, with commands from reg.
 func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 	s := &Session{registry: reg, Snaps: DefaultSnaps, SnapOn: true, Aperture: 8}
-	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, replace: s.SetDrawing, setPath: s.SetFilePath}
+	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath}
 	s.SetDrawing(d)
 	return s
 }
 
 // SetAgentCaller marks the session as driven by an AI agent (true) or a human (false). While it
-// is on, commands implementing HumanOnly are refused with an error line.
+// is on, commands implementing HumanOnly are refused with an error line, and everything the
+// session prints, prompts and matches is English whatever the UI language, so agents always see
+// the language the tool documentation is written in.
 func (s *Session) SetAgentCaller(on bool) { s.agentCaller = on }
+
+// SetTranslator pins the language of the session's output and keyword matching to t, whatever the
+// global language; SetTranslator(nil) goes back to following i18n.Current(). An agent caller is
+// English regardless.
+func (s *Session) SetTranslator(t *i18n.Translator) { s.translator = t }
+
+// Translator returns the translator the session uses now: English for an agent caller, the
+// pinned translator when there is one, else the current global language (so a language change in
+// the settings panel applies to the next line printed).
+func (s *Session) Translator() i18n.Translator {
+	switch {
+	case s.agentCaller:
+		return i18n.For(i18n.English)
+	case s.translator != nil:
+		return *s.translator
+	}
+	return i18n.For(i18n.Current())
+}
 
 func humanOnly(c Command) bool {
 	h, ok := c.(HumanOnly)
@@ -75,7 +98,7 @@ func (s *Session) guard(f func()) (ok bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.dispatching = false
-			name := "command"
+			name := s.Translator().T("session.fallback_command_name")
 			if s.active != nil {
 				name = s.active.Name()
 			}
@@ -87,7 +110,7 @@ func (s *Session) guard(f func()) (ok bool) {
 				s.ctx.Doc.AbortOpen()
 			}
 			s.active, s.prompt = nil, nil
-			s.print(fmt.Sprintf("Error: %s failed: %v.", name, r))
+			s.print(s.Translator().T("session.internal_error", name, r))
 			ok = false
 		}
 	}()
@@ -170,10 +193,11 @@ func (s *Session) Active() string {
 // Prompt returns the current prompt text: the active command's prompt, or
 // "Command:" when idle.
 func (s *Session) Prompt() string {
+	t := s.Translator()
 	if s.prompt == nil {
-		return "Command:"
+		return t.T("session.command_prompt")
 	}
-	return s.prompt.String()
+	return s.prompt.StringIn(t)
 }
 
 // CurrentPrompt returns the active prompt, or nil when idle.
@@ -205,17 +229,18 @@ func (s *Session) Snap() (SnapHit, bool) { return s.snap, s.snapped }
 func (s *Session) Run(name string) bool {
 	cmd, ok := s.registry.Lookup(name)
 	if !ok {
-		s.print("Unknown command \"" + strings.ToUpper(strings.TrimSpace(name)) + "\". Press F1 for help.")
+		s.print(s.Translator().T("session.unknown_command", strings.ToUpper(strings.TrimSpace(name))))
 		return false
 	}
 	if s.agentCaller && humanOnly(cmd) {
-		s.print(cmd.Name() + " is not available to agents.")
+		s.print(s.Translator().T("session.agent_forbidden", cmd.Name()))
 		return false
 	}
 	if s.active != nil {
 		s.Escape()
 	}
-	s.print("Command: " + cmd.Name())
+	t := s.Translator()
+	s.print(t.T("session.command_echo", strings.ToUpper(t.CommandName(cmd.Name()))))
 	s.last = cmd.Name()
 	s.active = cmd
 	var p *Prompt
@@ -255,7 +280,7 @@ func (s *Session) Escape() {
 		return
 	}
 	s.guard(func() { s.active.Cancel(&s.ctx) })
-	s.print("*Cancel*")
+	s.print(s.Translator().T("session.cancel"))
 	s.finish()
 }
 
@@ -275,7 +300,7 @@ func (s *Session) Submit(text string) {
 		return
 	}
 	if s.agentCaller && humanOnly(s.active) {
-		s.print(s.active.Name() + " is not available to agents.")
+		s.print(s.Translator().T("session.agent_forbidden", s.active.Name()))
 		return
 	}
 	p := s.prompt
@@ -283,10 +308,10 @@ func (s *Session) Submit(text string) {
 		s.respond(Input{Kind: InputSelection, Selection: append([]doc.Handle(nil), s.ctx.Selection.Handles()...)}, text)
 		return
 	}
-	in, err := ParseInput(p, text, s.base(), s.cursor)
+	in, err := ParseInputIn(s.Translator(), p, text, s.base(), s.cursor)
 	if err != nil {
 		s.print(s.Prompt() + " " + text)
-		s.print(capitalize(err.Error()) + ".")
+		s.print(s.inputError(err))
 		return
 	}
 	s.respond(in, text)
@@ -415,9 +440,16 @@ func (s *Session) Overlay(dl *render.DisplayList) {
 	}
 }
 
-func capitalize(s string) string {
-	if s == "" {
-		return s
+// inputError maps a ParseInput error to its localized command-line sentence.
+func (s *Session) inputError(err error) string {
+	t := s.Translator()
+	switch {
+	case errors.Is(err, ErrInvalidPoint):
+		return t.T("input.err.invalid_point")
+	case errors.Is(err, ErrInvalidValue):
+		return t.T("input.err.invalid_value")
+	case errors.Is(err, ErrNoBase):
+		return t.T("input.err.no_base")
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	return t.T("input.err.invalid_input")
 }

@@ -23,6 +23,7 @@ import (
 	"go-draw/fileio"
 	"go-draw/fileio/dxf"
 	"go-draw/geom"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 	"go-draw/internal/gpui/ebitenplatform"
 	"go-draw/ui"
@@ -60,6 +61,9 @@ func main() {
 		return
 	}
 
+	// The system language until the settings file is read (-png renders keep it: LANG=it_IT.UTF-8).
+	i18n.Set(i18n.Detect())
+
 	files := &fileio.Registry{}
 	files.AddReader(dxf.Codec{})
 	files.AddWriter(dxf.Codec{})
@@ -87,6 +91,9 @@ func main() {
 		if err := ws.LoadSettings(); err != nil {
 			log.Printf("settings: %v", err)
 		}
+		i18n.Set(i18n.FromSetting(ws.Settings().Language))
+		// A language change in the settings panel switches the catalogs from then on.
+		ws.SetLanguageHandler(func(lang string) { i18n.Set(i18n.FromSetting(lang)) })
 		set := map[string]bool{}
 		flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
 		if win := ws.Settings().Window; win.Width > 0 && win.Height > 0 {

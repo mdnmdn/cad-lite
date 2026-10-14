@@ -5,10 +5,10 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 )
 
 // InputKind is a bit set of the input types a prompt accepts.
@@ -62,27 +62,31 @@ type Prompt struct {
 	Base *geom.Vec2
 }
 
-// String renders the prompt as AutoCAD does:
-// "Specify next point or [Close/Undo] <default>:".
-func (p *Prompt) String() string {
+// String renders the prompt as AutoCAD does, in the current language:
+// "Specify next point or [Close/Undo] <default>:". Message is expected to be translated already
+// by the command; the keywords and the "or" are localized here.
+func (p *Prompt) String() string { return p.StringIn(i18n.For(i18n.Current())) }
+
+// StringIn renders the prompt in the language of t (the session passes English for agents).
+func (p *Prompt) StringIn(t i18n.Translator) string {
 	var b strings.Builder
 	b.WriteString(p.Message)
 	if len(p.Keywords) > 0 && p.Accepts&InputKeyword != 0 {
-		b.WriteString(" or [")
-		b.WriteString(strings.Join(p.Keywords, "/"))
+		b.WriteString(" " + t.T("input.or") + " [")
+		b.WriteString(t.PromptKeywords(p.Keywords))
 		b.WriteString("]")
 	}
 	if p.Default != nil {
-		b.WriteString(" <" + formatInput(*p.Default) + ">")
+		b.WriteString(" <" + formatInput(t, *p.Default) + ">")
 	}
 	b.WriteString(":")
 	return b.String()
 }
 
-func formatInput(in Input) string {
+func formatInput(t i18n.Translator, in Input) string {
 	switch in.Kind {
 	case InputKeyword:
-		return in.Keyword
+		return t.KeywordLabel(in.Keyword)
 	case InputDistance, InputInteger:
 		return strconv.FormatFloat(in.Value, 'f', -1, 64)
 	case InputAngle:
@@ -106,30 +110,6 @@ func FormatNumber(v float64) string {
 	return s
 }
 
-// keywordShortcut returns the capital letters of kw, or its first letter.
-func keywordShortcut(kw string) string {
-	var b strings.Builder
-	for _, r := range kw {
-		if unicode.IsUpper(r) {
-			b.WriteRune(r)
-		}
-	}
-	if b.Len() == 0 && kw != "" {
-		return strings.ToUpper(kw[:1])
-	}
-	return b.String()
-}
-
-// matchKeyword returns the keyword s names, by full name or shortcut.
-func matchKeyword(kws []string, s string) (string, bool) {
-	for _, kw := range kws {
-		if strings.EqualFold(kw, s) || strings.EqualFold(keywordShortcut(kw), s) {
-			return kw, true
-		}
-	}
-	return "", false
-}
-
 // Errors returned by ParseInput, shown on the command line.
 var (
 	ErrInvalidPoint = errors.New("invalid point")
@@ -145,8 +125,14 @@ var (
 // Accepted forms: "" (Enter), a keyword or its shortcut, "x,y", "@dx,dy",
 // "d<angle", "@d<angle", a bare number (a distance, an angle in degrees, an
 // integer, or — at a point prompt with a base — a distance along the
-// cursor direction), and free text.
+// cursor direction), and free text. Keywords match in the current language and in English; a
+// leading "_" forces English.
 func ParseInput(p *Prompt, text string, base *geom.Vec2, cursor geom.Vec2) (Input, error) {
+	return ParseInputIn(i18n.For(i18n.Current()), p, text, base, cursor)
+}
+
+// ParseInputIn is ParseInput with keywords matched in the language of tr (English for agents).
+func ParseInputIn(tr i18n.Translator, p *Prompt, text string, base *geom.Vec2, cursor geom.Vec2) (Input, error) {
 	t := strings.TrimSpace(text)
 	if t == "" {
 		if p.Accepts&InputEnter != 0 {
@@ -158,7 +144,7 @@ func ParseInput(p *Prompt, text string, base *geom.Vec2, cursor geom.Vec2) (Inpu
 		return Input{}, ErrInvalidInput
 	}
 	if p.Accepts&InputKeyword != 0 {
-		if kw, ok := matchKeyword(p.Keywords, t); ok {
+		if kw, ok := tr.MatchKeywords(p.Keywords, t); ok {
 			return Input{Kind: InputKeyword, Keyword: kw}, nil
 		}
 	}

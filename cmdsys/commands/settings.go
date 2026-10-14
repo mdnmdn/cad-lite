@@ -9,7 +9,7 @@ func (*optionsCmd) Name() string { return "OPTIONS" }
 
 func (*optionsCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if !ctx.HasSettings() {
-		ctx.Printf("Settings are not available.")
+		ctx.Say("cmd.options.msg.unavailable")
 		return nil
 	}
 	ctx.OpenSettings()

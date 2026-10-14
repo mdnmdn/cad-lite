@@ -12,10 +12,10 @@ func (*aiCmd) Name() string { return "AI" }
 
 func (*aiCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if !ctx.HasAgent() {
-		ctx.Printf("The AI agent is not available on this platform.")
+		ctx.Say("cmd.ai.msg.unavailable")
 		return nil
 	}
-	return &cmdsys.Prompt{Message: "Ask the agent", Accepts: cmdsys.InputText | cmdsys.InputEnter}
+	return &cmdsys.Prompt{Message: ctx.T("cmd.ai.prompt.ask"), Accepts: cmdsys.InputText | cmdsys.InputEnter}
 }
 
 func (*aiCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {

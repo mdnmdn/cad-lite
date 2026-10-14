@@ -82,14 +82,20 @@ func keywordIn(l Lang, id string) kwEntry {
 
 // KeywordLabel returns keyword id as the current language displays it, with the shortcut letters
 // capitalised: KeywordLabel("Close") is "Chiudi" in Italian.
-func KeywordLabel(id string) string { return keywordIn(Current(), id).label }
+func KeywordLabel(id string) string { return For(Current()).KeywordLabel(id) }
+
+// KeywordLabel returns keyword id as the translator's language displays it.
+func (t Translator) KeywordLabel(id string) string { return keywordIn(t.lang, id).label }
 
 // KeywordShortcut returns the upper-case shortcut of keyword id in the current language.
 func KeywordShortcut(id string) string { return keywordIn(Current(), id).shortcut }
 
 // PromptKeywords renders the bracket content of a prompt: "Chiudi/Annulla".
-func PromptKeywords(ids []string) string {
-	l := Current()
+func PromptKeywords(ids []string) string { return For(Current()).PromptKeywords(ids) }
+
+// PromptKeywords renders the bracket content of a prompt in the translator's language.
+func (t Translator) PromptKeywords(ids []string) string {
+	l := t.lang
 	labels := make([]string, len(ids))
 	for i, id := range ids {
 		labels[i] = keywordIn(l, id).label
@@ -101,6 +107,13 @@ func PromptKeywords(ids []string) string {
 // matching id. The current language is tried first (full name, synonyms, shortcut), then English;
 // "_" before the text restricts it to English.
 func MatchKeywords(ids []string, text string) (string, bool) {
+	return For(Current()).MatchKeywords(ids, text)
+}
+
+// MatchKeywords resolves typed text against a prompt's keyword ids in the translator's language,
+// then English; see the package-level MatchKeywords. An English translator (an agent) matches
+// English only.
+func (tr Translator) MatchKeywords(ids []string, text string) (string, bool) {
 	t := strings.TrimSpace(text)
 	t = strings.TrimPrefix(t, "'")
 	english := false
@@ -110,8 +123,8 @@ func MatchKeywords(ids []string, text string) (string, bool) {
 	if t == "" {
 		return "", false
 	}
-	pass := []Lang{Current(), English}
-	if english || Current() == English {
+	pass := []Lang{tr.lang, English}
+	if english || tr.lang == English {
 		pass = []Lang{English}
 	}
 	for _, l := range pass {

@@ -8,7 +8,7 @@ package dxf
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"io"
 	"math"
 	"sort"
@@ -17,6 +17,7 @@ import (
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 )
 
 // Codec is the DXF reader and writer.
@@ -42,12 +43,12 @@ func readPairs(r io.Reader) ([]pair, error) {
 		line++
 		cs := strings.TrimSpace(sc.Text())
 		if !sc.Scan() {
-			return nil, fmt.Errorf("dxf: line %d: group code %q has no value", line, cs)
+			return nil, errors.New(i18n.T("dxf.err.no_value", line, cs))
 		}
 		line++
 		code, err := strconv.Atoi(cs)
 		if err != nil {
-			return nil, fmt.Errorf("dxf: line %d: bad group code %q (binary DXF is not supported)", line-1, cs)
+			return nil, errors.New(i18n.T("dxf.err.bad_group_code", line-1, cs))
 		}
 		out = append(out, pair{code, strings.TrimRight(sc.Text(), "\r")})
 	}
@@ -118,7 +119,7 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	d.Header.Extra = map[string][]string{}
 	st := &state{kept: map[string]int{}}
 	if n := zeroNonFinite(ps); n > 0 {
-		st.warns = append(st.warns, fmt.Sprintf("%d non-finite numbers (nan/inf) were read as 0", n))
+		st.warns = append(st.warns, i18n.T("dxf.warn.non_finite", n))
 	}
 	var section string
 	var open, sawEOF bool
@@ -144,7 +145,7 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 		switch typ {
 		case "SECTION":
 			if open {
-				return nil, nil, fmt.Errorf("dxf: section %q has no ENDSEC (truncated file?)", section)
+				return nil, nil, errors.New(i18n.T("dxf.err.no_endsec", section))
 			}
 			open = true
 			section = ""
@@ -162,11 +163,11 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 		}
 	}
 	if open {
-		return nil, nil, fmt.Errorf("dxf: section %q has no ENDSEC (truncated file?)", section)
+		return nil, nil, errors.New(i18n.T("dxf.err.no_endsec", section))
 	}
 	warns := st.warns
 	if !sawEOF {
-		warns = append(warns, "file has no EOF marker (it may be truncated)")
+		warns = append(warns, i18n.T("dxf.warn.no_eof"))
 	}
 	types := make([]string, 0, len(st.kept))
 	for t := range st.kept {
@@ -174,7 +175,7 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	}
 	sort.Strings(types)
 	for _, t := range types {
-		warns = append(warns, fmt.Sprintf("kept %d %s entities as unknown objects (not displayed or editable)", st.kept[t], t))
+		warns = append(warns, i18n.T("dxf.warn.kept_unknown", st.kept[t], t))
 	}
 	if d.Layer(d.CurrentLayer) == nil {
 		d.CurrentLayer = "0"
@@ -403,7 +404,7 @@ func readEntities(d *doc.Drawing, objs []object, st *state) {
 			if u, ok := e.(*doc.Unknown); ok {
 				setHandle(u, e.Handle())
 			}
-			st.warns = append(st.warns, fmt.Sprintf("%s handle %s is already used; renumbered to %s", e.Class(), old, e.Handle()))
+			st.warns = append(st.warns, i18n.T("dxf.warn.handle_renumbered", e.Class(), old, e.Handle()))
 			continue
 		}
 		d.Load(e)

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"go-draw/i18n"
 )
 
 // EnvDir names an environment variable that replaces the config directory
@@ -87,7 +89,7 @@ func Parse(data []byte) (Settings, []string, error) {
 	var warn []string
 	extra := map[string]any{}
 	bad := func(key, want string, v any) {
-		warn = append(warn, fmt.Sprintf("%s must be %s, got %v; using the default", key, want, v))
+		warn = append(warn, i18n.T("settings.warn.wrong_type", key, want, v))
 	}
 	for name, v := range raw {
 		keys, known := tables[name]
