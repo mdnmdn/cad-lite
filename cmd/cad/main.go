@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"agentmanager"
 	"go-draw/doc"
 	"go-draw/fileio"
 	"go-draw/fileio/dxf"
@@ -42,6 +43,9 @@ func main() {
 	script := flag.String("script", "", "command script to run after opening (AutoCAD script syntax)")
 	demo := flag.Bool("demo", false, "draw the demo plate at startup (default in -png mode without -open/-script)")
 	hover := flag.String("hover", "", "with -png: model point x,y to put the pointer on before rendering")
+	agent := flag.String("agent", "", "agent harness to select in the agent panel: opencode, claude or codex (opens the panel)")
+	agentCmd := flag.String("agent-cmd", "", "executable to run for the selected agent instead of the one on PATH")
+	agentDemo := flag.Bool("agent-demo", false, "open the agent panel on a canned conversation (for -png)")
 	flag.Parse()
 
 	files := &fileio.Registry{}
@@ -61,6 +65,20 @@ func main() {
 		}
 	}
 	ws := ui.NewWorkspace(d, files)
+	defer ws.CloseAgent()
+	if *agent != "" || *agentCmd != "" {
+		h := agentmanager.Harness(*agent)
+		switch h {
+		case agentmanager.OpenCode, agentmanager.Claude, agentmanager.Codex:
+		default:
+			log.Fatalf("-agent %q: want opencode, claude or codex", *agent)
+		}
+		ws.AgentPanel().Configure(h, *agentCmd)
+		ws.AgentPanel().Show()
+	}
+	if *agentDemo {
+		ui.SeedAgentDemo(ws)
+	}
 	if *demo || (*png != "" && *open == "" && *script == "") {
 		ws.Session().Script(demoScript)
 	}

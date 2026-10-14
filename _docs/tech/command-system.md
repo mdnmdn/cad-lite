@@ -107,6 +107,10 @@ newest on a tie. `cmdsys.SelectBox` selects by box: dragged left to right it is 
 on their tessellation). Entities on locked or off layers are not selectable. The selection set is
 `cmdsys.Selection`; it drops handles that leave the document.
 
+`Session.HistoryTotal` is the monotonic count of lines ever printed; `Session.History` keeps the last
+200, so a caller that wants exactly the lines one operation produced (the agent's `run_script`) records
+the total before and after.
+
 ## Rationale
 
 **The session owns the prompt, not the UI.** The command line, scripts, tests and a future browser

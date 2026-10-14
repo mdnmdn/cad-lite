@@ -7,7 +7,7 @@ summary: How to build, run, test and render go-draw, build the browser binary, a
 read_when: you need a build, run, test or docs command, or you are changing one
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [justfile, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py]
+code_anchors: [justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -25,6 +25,7 @@ output (renders, binaries, experiments) goes in `_tmp/`, which is gitignored and
 | Task | Command | `just` recipe |
 |---|---|---|
 | Verify a change | `gofmt -l .` (must print nothing), `go vet ./...`, `go test ./...` | `just check` |
+| Verify the nested `agentmanager` module (not covered by `./...`) | `cd agentmanager && gofmt -l . && go vet ./... && go test ./...` | `just check-agentmanager` |
 | Run the desktop app | `go run ./cmd/cad` | `just run` |
 | Run with a drawing | `go run ./cmd/cad -open plan.dxf` | `just run -open plan.dxf` |
 | Render headlessly | `go run ./cmd/cad -png _tmp/cad.png` | `just png` |
@@ -62,6 +63,9 @@ Run `go mod tidy` after adding an import.
 | `-width`, `-height` | Window size in logical pixels (default 1280×800) |
 | `-scale` | Device scale for `-png` |
 | `-smoke MS` | Quit the window after MS milliseconds |
+| `-agent NAME` | Select the agent harness (`opencode`, `claude` or `codex`) and open the [agent panel](../features/agent-panel.md); Start launches it |
+| `-agent-cmd PATH` | Run this executable for the selected harness instead of the one on `PATH` |
+| `-agent-demo` | Open the agent panel on a canned transcript; for `-png` renders |
 
 A render that shows an active command with its snap marker:
 

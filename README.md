@@ -43,6 +43,8 @@ commands are in [`_docs/tech/operations.md`](_docs/tech/operations.md).
 | `fileio/` | File format plugins; `fileio/dxf` is the DXF codec |
 | `render/` | Backend-neutral view, display list and tessellation; `render/gpuirender` draws it with gpui |
 | `cmdsys/` | Command session, input parsing, snaps and selection; `cmdsys/commands` holds the commands |
+| `agentmanager/` | Nested module: launches opencode, Claude Code and Codex and speaks to them; imports nothing from go-draw, has its own docs |
+| `cadmcp/` | The drawing as MCP tools for those agents ([`_docs/tech/agent-integration.md`](_docs/tech/agent-integration.md)) |
 | `ui/` | Application shell: toolbar, canvas, panels, command line, status bar |
 | `cmd/cad/` | The executable |
 | `internal/gpui/` | The UI framework, with its own docs ([`internal/gpui/README.md`](internal/gpui/README.md)) |

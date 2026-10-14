@@ -22,6 +22,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | Package | Purpose |
 |---|---|
 | `go-draw/assets/icons` | Package icons holds go-draw's icon set: monochrome 24x24 SVG files, one per registry row in icons.yaml, embedded into the binary. |
+| `go-draw/cadmcp` | Package cadmcp exposes the go-draw drawing to AI agents as MCP tools. |
 | `go-draw/cmd/cad` | Command cad is the go-draw desktop application: an AutoCAD-style 2D drafting editor built on the gpui library and shown in an ebiten window. |
 | `go-draw/cmdsys` | Package cmdsys is the command framework: AutoCAD-style commands as prompt state machines, typed-input parsing, object snaps, ortho and selection. |
 | `go-draw/cmdsys/commands` | Package commands holds the built-in AutoCAD-style commands. |

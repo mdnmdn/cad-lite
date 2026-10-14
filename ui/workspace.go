@@ -19,6 +19,7 @@ type Workspace struct {
 	view    *render.View
 	builder *render.Builder
 	input   *gpui.TextInput
+	agent   *AgentPanel
 
 	canvas canvasState
 	// Grid toggles the background grid (F7).
@@ -35,6 +36,7 @@ const historyLines = 4
 func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	v := render.DefaultView(800, 600)
 	ws := &Workspace{view: &v, Grid: true, fitPending: d.Len() > 0}
+	ws.agent = newAgentPanel(ws)
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
@@ -95,6 +97,7 @@ var (
 	actionOrtho     = gpui.NewAction("cad-toggle-ortho")
 	actionGrid      = gpui.NewAction("cad-toggle-grid")
 	actionZoomExtnt = gpui.NewAction("cad-zoom-extents")
+	actionAgent     = gpui.NewAction("cad-toggle-agent")
 )
 
 // Bindings returns the workspace key bindings, to add to the app keymap.
@@ -108,11 +111,16 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("f7", actionGrid, "cad"),
 		gpui.NewKeyBinding("f8", actionOrtho, "cad"),
 		gpui.NewKeyBinding("ctrl-e", actionZoomExtnt, "cad"),
+		gpui.NewKeyBinding("f2", actionAgent, "cad"),
 	}
 }
 
 // Render builds the window for the current state.
 func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
+	var agentPanel gpui.IntoElement = gpui.NewDiv()
+	if ws.agent.visible {
+		agentPanel = ws.agent.render(w, cx)
+	}
 	cmdline := ws.input.Render(w, cx)
 	if fh := ws.input.FocusHandle(); fh != nil && w.Focus() == nil {
 		w.RequestFocus(fh)
@@ -127,6 +135,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionRedo, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("REDO", w) }).
 		OnAction(actionSnap, toggle(func() { s.SnapOn = !s.SnapOn })).
 		OnAction(actionOrtho, toggle(func() { s.Ortho = !s.Ortho })).
+		OnAction(actionAgent, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.agent.Toggle(w) }).
 		OnAction(actionGrid, toggle(func() { ws.Grid = !ws.Grid })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
 		Child(
@@ -134,6 +143,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 			gpui.NewDiv().FlexRow().Flex1().MinH(0).Child(
 				ws.canvasElement(),
 				ws.sidePanel(),
+				agentPanel,
 			),
 			ws.commandArea(cmdline),
 			ws.statusBar(),
@@ -178,6 +188,8 @@ func (ws *Workspace) toolbar() *gpui.Div {
 		ws.button("undo", "Undo", "UNDO", icons.EditUndo),
 		ws.button("redo", "Redo", "REDO", icons.EditRedo),
 		ws.button("zoom", "Zoom", "ZOOM", icons.ViewZoomWindow),
+		gpui.NewDiv().Flex1(),
+		ws.agentToggle(),
 	)
 }
 

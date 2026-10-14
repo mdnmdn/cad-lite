@@ -72,6 +72,7 @@ in `ui/theme.go`:
 | `colAxisX`, `colAxisY` | The coordinate-system icon |
 | `uiBg`, `uiPanel`, `uiPanelAlt`, `uiBorder` | Shell backgrounds, hover fill, separators |
 | `uiText`, `uiMuted`, `uiAccent`, `uiOn` | Text, secondary text, the active command, toggles that are on |
+| `uiOK`, `uiWarn`, `uiErr` | Status colours of the agent panel: completed, in progress or warning, failed or error |
 
 `TextInput` draws its own light field, so the command-line field is light on the dark shell; the
 library has no styling hook for it (backlog).

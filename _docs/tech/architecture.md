@@ -7,7 +7,7 @@ summary: The layers of go-draw, the dependency rule between them, where each lay
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [go.mod, cmd/cad/main.go, ui/workspace.go]
+code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go]
 depends_on: [prod-overview]
 review_cycle: quarterly
 ---
@@ -39,6 +39,10 @@ UI shell and one rendering adapter touch the graphics stack.
 
 The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenplatform` as its display backend.
 
+AI agents attach on the side: `cadmcp` exposes the drawing as MCP tools on top of `cmdsys`, and the
+nested module `agentmanager` runs the agent CLIs and the MCP server; `ui` hosts the chat panel that
+joins them. `agentmanager` imports nothing from go-draw. See [Agent integration](agent-integration.md).
+
 `cmd/cad` wires the layers together and chooses the platform: an ebiten window, or a headless
 window that renders one frame to PNG. Every package's purpose is listed in the
 [code map](code-map.md), which is generated from the package doc comments.
@@ -47,7 +51,7 @@ window that renders one frame to PNG. Every package's purpose is listed in the
 
 1. **Dependencies point down.** A package imports only packages in layers below it. `geom` imports
    nothing of the project; `spatial` and `doc` import `geom`; `fileio` imports `doc`; `render`
-   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it.
+   imports `doc`; `cmdsys` imports `doc`, `render` and `spatial`; `ui` imports everything below it. `cadmcp` imports `cmdsys` and `doc`; `ui` imports `cadmcp`; nothing in `agentmanager` imports go-draw.
 2. **The core never sees the screen.** `geom`, `doc`, `spatial`, `fileio`, `render` and `cmdsys`
    never import `internal/gpui`, ebiten or any graphics package. Only `render/gpuirender`, `ui` and
    `cmd/` import `internal/gpui`, and only `cmd/` imports `internal/gpui/ebitenplatform`.

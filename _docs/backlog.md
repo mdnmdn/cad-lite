@@ -67,3 +67,7 @@ New lines are appended below this heading.
 | G23 | The view-pan, view-zoom-extents, measure-angle, measure-radius and measure-id-point icons have no toolbar buttons | [Drawing canvas](features/canvas.md) |
 | G24 | A Go render helper so the icon sheets use oksvg, the application's rasterizer, instead of resvg | [Operations](tech/operations.md) |
 | G25 | measure-radius may need a redraw after review | [UI framework](tech/ui-framework.md) |
+| G26 | The agent panel prompt is a single-line field; a multi-line prompt needs `TextInput` support | [Agent panel](features/agent-panel.md) |
+| G27 | Resume a previous agent session, pick a model, persist the transcript with the drawing | [Agent panel](features/agent-panel.md) |
+| G28 | Live smoke tests of the opencode and Codex backends against the real CLIs; only fakes run in CI | [Agent integration](tech/agent-integration.md) |
+| G29 | Alternative to image results: a small CLI, found through an environment variable, that talks to the running instance and writes a PNG for agents whose harness drops MCP images | [Agent integration](tech/agent-integration.md) |

@@ -48,6 +48,7 @@ Shortcuts, active anywhere in the window:
 |---|---|
 | Ctrl+Z, Cmd+Z | UNDO |
 | Ctrl+Y, Cmd+Shift+Z | REDO |
+| F2 | Agent panel on or off |
 | F3 | Object snap on or off |
 | F7 | Grid on or off |
 | F8 | Ortho on or off |

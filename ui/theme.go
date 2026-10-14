@@ -33,4 +33,7 @@ var (
 	uiMuted    = gpui.RgbaOf(140, 150, 162, 255)
 	uiAccent   = gpui.RgbaOf(59, 130, 246, 255)
 	uiOn       = gpui.RgbaOf(96, 165, 250, 255)
+	uiOK       = gpui.RgbaOf(74, 190, 110, 255)
+	uiWarn     = gpui.RgbaOf(235, 175, 60, 255)
+	uiErr      = gpui.RgbaOf(235, 90, 90, 255)
 )
