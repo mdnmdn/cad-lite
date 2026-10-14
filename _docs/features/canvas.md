@@ -96,18 +96,34 @@ class (`LINE × 3`); a single selected entity also shows its layer and handle. T
 
 ### Toolbar
 
-Each button is an icon over a 10px label, in groups separated by a rule: Line, Polyline, Circle,
-Arc, Rect; Move, Copy, Rotate, Scale, Erase; Dist, Area; Undo, Redo, Zoom. At the right end sit the `AI` agent toggle and the gear `Settings` button, which
-opens the [settings](settings.md) panel (also Ctrl+, or `OPTIONS`). A button runs its command
-as if typed, and the button of the running command is highlighted. The icons come from the
-[icon pipeline](../tech/ui-framework.md); a command without a button is still reached by typing it.
+Each button is an icon over a 10px label, in two rows of groups separated by a rule. Top row: Line,
+Polyline, Circle, Arc, Rect; Dist, Area, ID point; Undo, Redo, Zoom; at the right end the `AI` agent
+toggle and the gear `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or
+`OPTIONS`). Second row: Move, Copy, Rotate, Scale, Erase; Mirror, Offset, Fillet, Chamfer; Trim,
+Extend, Break, Join, Explode. A button runs its command as if typed, and the button of the running
+command is highlighted. Every button shows its command's icon from the
+[icon pipeline](../tech/ui-framework.md); a command without a button (LAYER, LIST, NEW, OPEN, SAVE,
+MEASUREGEOM) is still reached by typing it.
+
+Labels come from the catalog (`ui.toolbar.*`, or the command's display name for the buttons without a
+short caption), so they follow the interface language; Italian labels fit the same buttons without
+clipping.
+
+### Tooltips
+
+Every clickable control carries a tooltip that appears after the pointer rests on it for 500 ms
+(`gpui.Div.Tooltip`): toolbar buttons show the command's tip (`i18n.Command(name).Tip`: title,
+what it does, shortcut or alias), the gear and agent buttons, the layer rows (make current), the
+visibility pills and the colour swatches, the status bar toggles and the coordinates readout, and
+every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
+languages. The bubble follows the theme (`tooltipStyle`) and stays on one line.
 
 ### Status bar
 
 | Part | Shows |
 |---|---|
 | Coordinates | The cursor in model units: the snapped point while a point is asked for, otherwise the pointer; `—` while the pointer is not over the canvas |
-| GRID, OSNAP, ORTHO | Toggles, each with a 14px icon. Bright (`uiOn`) when on, muted (`uiMuted`) when off; click or press F7, F3, F8 |
+| GRID, OSNAP, ORTHO | Toggles, each with a 14px icon (captions follow the language, `GRIGLIA`, `SNAP OGG.`, `ORTO` in Italian). Bright (`uiOn`) when on, muted (`uiMuted`) when off; click or press F7, F3, F8 |
 | Right side | `Layer <current>`, the entity count, and `1 px = <size> units` |
 
 ## Contract
@@ -123,7 +139,10 @@ as if typed, and the button of the running command is highlighted. The icons com
 
 `ui.Workspace` in `ui/workspace.go` is the root view: toolbar, then the canvas beside `sidePanel`
 (layers and properties), then `commandArea`, then `statusBar`. `Workspace.button` builds a toolbar
-button around `ui.NewIcon` (`ui/icon.go`), and `statusBar` does the same for the toggles. `Bindings` registers the key bindings for the `cad` key context.
+button around `ui.NewIcon` (`ui/icon.go`) with the tooltip from `i18n.Command`, and `statusBar` does
+the same for the toggles. User-visible text goes through `i18n.T` (`ui.*` keys); `Workspace.Render`
+installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app whenever the theme
+changes. `Bindings` registers the key bindings for the `cad` key context.
 
 `ui/canvas.go` holds the canvas. `Workspace.canvasElement` wires mouse down, move, up and wheel
 to `Session.Click`, `Session.SelectBox`, `Workspace.pointerMoved` and the view. `pointerMoved`

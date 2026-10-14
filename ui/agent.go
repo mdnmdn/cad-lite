@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"agentmanager/store"
 	"agentmanager/transcript"
 	"go-draw/cadmcp"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 )
 
@@ -122,7 +122,7 @@ func newAgentPanel(ws *Workspace) *AgentPanel {
 	p := &AgentPanel{
 		ws:    ws,
 		open:  harnesses.Open,
-		input: themeField(gpui.NewTextInput("Ask the agent")),
+		input: themeField(gpui.NewTextInput(i18n.T("ui.agent.input_placeholder"))),
 	}
 	p.cur = newAgentTab()
 	p.tabs = []*agentTab{p.cur}
@@ -295,7 +295,7 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 	}
 	p.win = w
 	if err := p.ensureServer(w); err != nil {
-		p.apply(t, agentmanager.Log{Level: "error", Message: "cannot start the MCP server: " + err.Error()})
+		p.apply(t, agentmanager.Log{Level: "error", Message: i18n.T("ui.agent.err.mcp", err)})
 		w.Refresh()
 		return
 	}
@@ -432,7 +432,7 @@ func (p *AgentPanel) Send(text string, w *gpui.Window) {
 	switch t.state {
 	case agentIdle:
 		if p.harnessOf(t) == "" {
-			t.tr.Apply(agentmanager.Log{Level: "warn", Message: "No agent is available: install opencode, claude or codex, or pass -agent-cmd."})
+			t.tr.Apply(agentmanager.Log{Level: "warn", Message: i18n.T("ui.agent.warn.no_agent")})
 			w.Refresh()
 			return
 		}
@@ -540,7 +540,7 @@ func (p *AgentPanel) pump(w *gpui.Window) {
 func (p *AgentPanel) started(t *agentTab, res *agentStart) {
 	t.cancelOpen = nil
 	if res.err != nil {
-		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopFailed, Err: "cannot start " + string(t.harness) + ": " + res.err.Error()})
+		p.apply(t, agentmanager.TurnEnd{Reason: agentmanager.StopFailed, Err: i18n.T("ui.agent.err.start", string(t.harness), res.err)})
 		t.queued = ""
 		p.stopTab(t, false)
 		return
@@ -581,20 +581,20 @@ func (p *AgentPanel) statusLine() string {
 	t := p.cur
 	switch t.state {
 	case agentStarting:
-		return fmt.Sprintf("starting %s...", t.harness)
+		return i18n.T("ui.agent.status.starting", t.harness)
 	case agentReady:
 		if t.tr.Running() {
-			return "working..."
+			return i18n.T("ui.agent.status.working")
 		}
-		return "ready"
+		return i18n.T("ui.agent.status.ready")
 	}
-	return "stopped"
+	return i18n.T("ui.agent.status.stopped")
 }
 
 // sendFromCommand sends a prompt typed after the AI command to the active tab.
 func (p *AgentPanel) sendFromCommand(prompt string, w *gpui.Window) {
 	if p.cur.tr.Running() {
-		p.cur.tr.Apply(agentmanager.Log{Level: "warn", Message: "The agent is still working; wait or cancel before asking again."})
+		p.cur.tr.Apply(agentmanager.Log{Level: "warn", Message: i18n.T("ui.agent.warn.busy")})
 		w.Refresh()
 		return
 	}

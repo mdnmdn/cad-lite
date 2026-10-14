@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -9,6 +8,7 @@ import (
 	"agentmanager"
 	"agentmanager/store"
 	"agentmanager/transcript"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 )
 
@@ -73,7 +73,7 @@ func (p *AgentPanel) ensureLoaded() {
 	h.dir = p.ws.projectDir()
 	st, err := store.Open(filepath.Join(h.dir, filepath.FromSlash(agentStoreDir)))
 	if err != nil {
-		p.warnOnce(p.cur, "agent history unavailable: "+err.Error())
+		p.warnOnce(p.cur, i18n.T("ui.agent.warn.history_unavailable", err))
 		return
 	}
 	h.st = st
@@ -117,7 +117,7 @@ func (p *AgentPanel) syncSessions() {
 	}
 	ms, err := p.hist.st.List()
 	if err != nil {
-		p.warnOnce(p.cur, "cannot list agent sessions: "+err.Error())
+		p.warnOnce(p.cur, i18n.T("ui.agent.warn.cannot_list", err))
 	}
 	p.hist.sessions = ms
 }
@@ -178,7 +178,7 @@ func (p *AgentPanel) tabTitle(t *agentTab) string {
 			return clip(m.Title, 18)
 		}
 	}
-	return "New"
+	return i18n.T("ui.agent.tab_new")
 }
 
 // NewTab adds an empty conversation and makes it active; an empty active tab is reused. The
@@ -251,7 +251,7 @@ func (p *AgentPanel) OpenSession(id string, w *gpui.Window) {
 	}
 	rec, err := p.hist.st.Load(id)
 	if err != nil {
-		p.warnOnce(p.cur, "cannot load that agent session: "+err.Error())
+		p.warnOnce(p.cur, i18n.T("ui.agent.warn.cannot_load", err))
 		p.syncSessions()
 		w.Refresh()
 		return
@@ -309,7 +309,7 @@ func (p *AgentPanel) prepareRecord(t *agentTab) {
 	}
 	rec, err := h.st.Create(p.harnessOf(t))
 	if err != nil {
-		p.warnOnce(t, "agent history is not saved: "+err.Error())
+		p.warnOnce(t, i18n.T("ui.agent.warn.not_saved", err))
 		return
 	}
 	t.rec = rec
@@ -354,7 +354,7 @@ func (p *AgentPanel) userMessage(t *agentTab, text string) {
 
 func (p *AgentPanel) check(err error) {
 	if err != nil {
-		p.warnOnce(p.cur, "agent history write failed: "+err.Error())
+		p.warnOnce(p.cur, i18n.T("ui.agent.warn.write_failed", err))
 	}
 }
 
@@ -372,15 +372,15 @@ func relTime(t, now time.Time) string {
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
-		return "just now"
+		return i18n.T("ui.agent.time.just_now")
 	case d < time.Hour:
-		return fmt.Sprintf("%d min ago", int(d/time.Minute))
+		return i18n.T("ui.agent.time.minutes_ago", int(d/time.Minute))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%d h ago", int(d/time.Hour))
+		return i18n.T("ui.agent.time.hours_ago", int(d/time.Hour))
 	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%d d ago", int(d/(24*time.Hour)))
+		return i18n.T("ui.agent.time.days_ago", int(d/(24*time.Hour)))
 	}
-	return t.Format("2 Jan 2006")
+	return t.Format(i18n.T("ui.agent.time.date_layout"))
 }
 
 // HasAgentPanel reports whether the agent panel exists. It is created the first time the panel is

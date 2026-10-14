@@ -72,7 +72,7 @@ type agentRig struct {
 
 // Positions of the panel controls in the 1280x800 window.
 var (
-	posStart  = gpui.Point{X: 1245, Y: 112}
+	posStart  = gpui.Point{X: 1245, Y: 152}
 	posInput  = gpui.Point{X: 1040, Y: 639}
 	posSend   = gpui.Point{X: 1246, Y: 639}
 	posCancel = gpui.Point{X: 1241, Y: 639}
@@ -248,7 +248,7 @@ func TestAgentPermissionButtonAnswers(t *testing.T) {
 			{ID: "r", Name: "Reject", Kind: agentmanager.RejectOnce}}}
 	r.until("permission block", func() bool { return len(r.ws.AgentPanel().Transcript().Blocks()) == 1 })
 	r.hw.Pixels()
-	r.click(gpui.Point{X: 998, Y: 197})
+	r.click(gpui.Point{X: 998, Y: 237})
 	r.fs.mu.Lock()
 	ids, ans := r.fs.answerIDs, r.fs.answers
 	r.fs.mu.Unlock()
@@ -377,4 +377,19 @@ func TestAgentF2TogglesPanel(t *testing.T) {
 	if r.ws.AgentPanel().Visible() {
 		t.Fatal("F2 did not hide the panel")
 	}
+}
+
+func TestAgentPanelButtonTooltip(t *testing.T) {
+	r := openAgent(t)
+	r.hw.Dispatch(gpui.MouseMoveEvent{Position: posStart})
+	if err := r.p.Advance(600 * time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	th := ui.CurrentTheme()
+	for _, q := range r.hw.Window().Scene().Quads {
+		if q.BorderColor == th.Border && q.Bounds.Size.W > 150 && q.Bounds.Size.H < 40 {
+			return
+		}
+	}
+	t.Fatal("no tooltip over the Start button after 600 ms")
 }

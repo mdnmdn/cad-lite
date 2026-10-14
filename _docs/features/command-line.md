@@ -53,6 +53,7 @@ history.
   `@dx,dy`, `d<angle`, `@d<angle`, a bare number for direct distance entry, keywords by name or
   shortcut. An invalid answer prints the error and the prompt stays.
 - Toolbar buttons run their command as if typed; the [canvas](canvas.md) document owns the toolbar's layout and icons.
+- The field's placeholder and the `Command:` label come from the catalog (`ui.cmdline.placeholder`); the placeholder is read when the workspace is created, so it keeps the language of that moment until the next start.
 - The field clears after every submission, cancel and canvas click that answers a prompt.
 
 Shortcuts, active anywhere in the window:

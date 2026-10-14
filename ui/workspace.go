@@ -8,6 +8,7 @@ import (
 	"go-draw/cmdsys"
 	"go-draw/cmdsys/commands"
 	"go-draw/doc"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 	"go-draw/render"
 )
@@ -32,6 +33,8 @@ type Workspace struct {
 	// pan, so the plain wheel always zooms as in AutoCAD. Ctrl+wheel zooms
 	// and Shift+wheel pans either way.
 	WheelZoom bool
+	// tipTheme is the theme whose tooltip style the App currently has.
+	tipTheme string
 	// fitPending zooms to extents once the canvas size is known.
 	fitPending bool
 }
@@ -55,7 +58,7 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 			ws.ToggleSettings(ws.win)
 		}
 	})
-	ws.input = themeField(gpui.NewTextInput("Type a command"))
+	ws.input = themeField(gpui.NewTextInput(i18n.T("ui.cmdline.placeholder")))
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.submit(text, w) })
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) { ws.escape(w) })
 	ws.input.OnChange(func(text string, w *gpui.Window, _ *gpui.App) {
@@ -132,6 +135,10 @@ func Bindings() []gpui.KeyBinding {
 // Render builds the window for the current state.
 func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	ws.win = w
+	if t := CurrentTheme(); ws.tipTheme != t.Name {
+		ws.tipTheme = t.Name
+		cx.SetTooltipStyle(tooltipStyle(t))
+	}
 	var agentPanel gpui.IntoElement = gpui.NewDiv()
 	if ws.agent != nil && ws.agent.visible {
 		agentPanel = ws.agent.render(w, cx)
@@ -168,9 +175,16 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 // toolIconSize is the toolbar icon edge in logical pixels.
 const toolIconSize = 18
 
+// button is a toolbar command button: icon over label, with the command's
+// tooltip. label is the already translated caption; an empty one uses the
+// command's display name.
 func (ws *Workspace) button(id, label, command string, icon icons.Name) *gpui.Div {
 	active := ws.session.Active() == command
-	b := gpui.NewDiv().ID("tool-"+id).FlexCol().ItemsCenter().Gap(2).Px_(6).Py_(4).Rounded(4).
+	info := i18n.Command(command)
+	if label == "" {
+		label = info.Name
+	}
+	b := gpui.NewDiv().ID("tool-"+id).FlexCol().ItemsCenter().Gap(2).Px_(6).Py_(4).Rounded(4).Tooltip(info.Tip).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.run(command, w) }).
 		Child(NewIcon(icon, toolIconSize, uiText), gpui.NewText(label).TextSize(10))
@@ -182,31 +196,51 @@ func (ws *Workspace) button(id, label, command string, icon icons.Name) *gpui.Di
 
 func separator() *gpui.Div { return gpui.NewDiv().SizeWH(1, 28).Bg(uiBorder).Mx(4) }
 
+// tb returns the translated toolbar caption for key.
+func tb(key string) string { return i18n.T("ui.toolbar." + key) }
+
+// toolbar is two rows: drawing, measuring, history and the window buttons on
+// top, the modify commands below. Commands without a short caption of their
+// own show their display name.
 func (ws *Workspace) toolbar() *gpui.Div {
-	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Px_(8).Py_(4).Bg(uiPanel).Child(
+	top := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Child(
 		gpui.NewText("go-draw").FontWeight(700).TextColor(uiOn).Pr(10),
-		ws.button("line", "Line", "LINE", icons.DrawLine),
-		ws.button("pline", "Polyline", "PLINE", icons.DrawPolyline),
-		ws.button("circle", "Circle", "CIRCLE", icons.DrawCircle),
-		ws.button("arc", "Arc", "ARC", icons.DrawArc),
-		ws.button("rect", "Rect", "RECTANG", icons.DrawRectangle),
+		ws.button("line", tb("line"), "LINE", icons.DrawLine),
+		ws.button("pline", tb("pline"), "PLINE", icons.DrawPolyline),
+		ws.button("circle", tb("circle"), "CIRCLE", icons.DrawCircle),
+		ws.button("arc", tb("arc"), "ARC", icons.DrawArc),
+		ws.button("rect", tb("rect"), "RECTANG", icons.DrawRectangle),
 		separator(),
-		ws.button("move", "Move", "MOVE", icons.ModifyMove),
-		ws.button("copy", "Copy", "COPY", icons.ModifyCopy),
-		ws.button("rotate", "Rotate", "ROTATE", icons.ModifyRotate),
-		ws.button("scale", "Scale", "SCALE", icons.ModifyScale),
-		ws.button("erase", "Erase", "ERASE", icons.ModifyErase),
+		ws.button("dist", tb("dist"), "DIST", icons.MeasureDistance),
+		ws.button("area", tb("area"), "AREA", icons.MeasureArea),
+		ws.button("id", "", "ID", icons.MeasureIdPoint),
 		separator(),
-		ws.button("dist", "Dist", "DIST", icons.MeasureDistance),
-		ws.button("area", "Area", "AREA", icons.MeasureArea),
-		separator(),
-		ws.button("undo", "Undo", "UNDO", icons.EditUndo),
-		ws.button("redo", "Redo", "REDO", icons.EditRedo),
-		ws.button("zoom", "Zoom", "ZOOM", icons.ViewZoomWindow),
+		ws.button("undo", tb("undo"), "UNDO", icons.EditUndo),
+		ws.button("redo", tb("redo"), "REDO", icons.EditRedo),
+		ws.button("zoom", tb("zoom"), "ZOOM", icons.ViewZoomWindow),
 		gpui.NewDiv().Flex1(),
 		ws.agentToggle(),
 		ws.settingsButton(),
 	)
+	modify := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Child(
+		ws.button("move", tb("move"), "MOVE", icons.ModifyMove),
+		ws.button("copy", tb("copy"), "COPY", icons.ModifyCopy),
+		ws.button("rotate", tb("rotate"), "ROTATE", icons.ModifyRotate),
+		ws.button("scale", tb("scale"), "SCALE", icons.ModifyScale),
+		ws.button("erase", tb("erase"), "ERASE", icons.ModifyErase),
+		separator(),
+		ws.button("mirror", "", "MIRROR", icons.ModifyMirror),
+		ws.button("offset", "", "OFFSET", icons.ModifyOffset),
+		ws.button("fillet", "", "FILLET", icons.ModifyFillet),
+		ws.button("chamfer", "", "CHAMFER", icons.ModifyChamfer),
+		separator(),
+		ws.button("trim", "", "TRIM", icons.ModifyTrim),
+		ws.button("extend", "", "EXTEND", icons.ModifyExtend),
+		ws.button("break", "", "BREAK", icons.ModifyBreak),
+		ws.button("join", "", "JOIN", icons.ModifyJoin),
+		ws.button("explode", "", "EXPLODE", icons.ModifyExplode),
+	)
+	return gpui.NewDiv().FlexCol().Px_(8).Py_(4).Bg(uiPanel).Child(top, modify)
 }
 
 func (ws *Workspace) sidePanel() *gpui.Div {
@@ -214,23 +248,23 @@ func (ws *Workspace) sidePanel() *gpui.Div {
 	layers := gpui.NewDiv().FlexCol().Gap(2)
 	for _, l := range d.Layers() {
 		l := l
-		swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).Bg(gpuiColor(render.ACI(l.Color)))
+		swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).Bg(gpuiColor(render.ACI(l.Color))).Tooltip(i18n.T("ui.layers.swatch_tip", l.Color))
 		name := gpui.NewText(l.Name).Flex1()
 		if l.Name == d.CurrentLayer {
 			name.FontWeight(700).TextColor(uiOn)
 		}
-		state := "on"
+		state := i18n.T("ui.layers.on")
 		stateCol := uiText
 		if l.Off {
-			state, stateCol = "off", uiMuted
+			state, stateCol = i18n.T("ui.layers.off"), uiMuted
 		}
-		vis := gpui.NewDiv().ID("layer-vis-" + l.Name).Px_(6).Rounded(3).Bg(uiPanelAlt).
+		vis := gpui.NewDiv().ID("layer-vis-" + l.Name).Px_(6).Rounded(3).Bg(uiPanelAlt).Tooltip(i18n.T("ui.layers.visibility_tip")).
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 				l.Off = !l.Off
 				w.Refresh()
 			}).
 			Child(gpui.NewText(state).TextColor(stateCol))
-		layers.Child(gpui.NewDiv().ID("layer-"+l.Name).FlexRow().ItemsCenter().Gap(8).Px_(6).Py_(4).Rounded(4).
+		layers.Child(gpui.NewDiv().ID("layer-"+l.Name).FlexRow().ItemsCenter().Gap(8).Px_(6).Py_(4).Rounded(4).Tooltip(i18n.T("ui.layers.current_tip")).
 			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 				d.CurrentLayer = l.Name
@@ -241,7 +275,7 @@ func (ws *Workspace) sidePanel() *gpui.Div {
 	props := gpui.NewDiv().FlexCol().Gap(4)
 	sel := ws.session.Selection()
 	if sel.Len() == 0 {
-		props.Child(gpui.NewText("No selection").TextColor(uiMuted))
+		props.Child(gpui.NewText(i18n.T("ui.props.none")).TextColor(uiMuted))
 	} else {
 		counts := map[string]int{}
 		var order []string
@@ -253,21 +287,21 @@ func (ws *Workspace) sidePanel() *gpui.Div {
 				counts[e.Class()]++
 			}
 		}
-		props.Child(gpui.NewText(fmt.Sprintf("%d selected", sel.Len())).FontWeight(700))
+		props.Child(gpui.NewText(i18n.Plural("ui.props.selected", sel.Len())).FontWeight(700))
 		for _, c := range order {
 			props.Child(gpui.NewText(fmt.Sprintf("%s × %d", c, counts[c])).TextColor(uiMuted))
 		}
 		if sel.Len() == 1 {
 			e := d.Entity(sel.Handles()[0])
-			props.Child(gpui.NewText("Layer: "+e.Common().Layer).TextColor(uiMuted),
-				gpui.NewText("Handle: "+e.Handle().String()).TextColor(uiMuted))
+			props.Child(gpui.NewText(i18n.T("ui.props.layer", e.Common().Layer)).TextColor(uiMuted),
+				gpui.NewText(i18n.T("ui.props.handle", e.Handle().String())).TextColor(uiMuted))
 		}
 	}
 	heading := func(s string) *gpui.Text {
 		return gpui.NewText(s).FontWeight(700).TextSize(11).TextColor(uiMuted)
 	}
 	return gpui.NewDiv().FlexCol().SizeW(210).Gap(8).P(10).Bg(uiPanel).
-		Child(heading("LAYERS"), layers, heading("PROPERTIES"), props)
+		Child(heading(i18n.T("ui.panel.layers")), layers, heading(i18n.T("ui.panel.properties")), props)
 }
 
 func (ws *Workspace) commandArea(cmdline gpui.IntoElement) *gpui.Div {
@@ -295,23 +329,23 @@ func (ws *Workspace) statusBar() *gpui.Div {
 	if ws.pointerOnCanvas() {
 		coords = fmt.Sprintf("%s, %s", cmdsys.FormatNumber(cur.X), cmdsys.FormatNumber(cur.Y))
 	}
-	flag := func(id, label string, icon icons.Name, on bool, f func()) *gpui.Div {
+	flag := func(id, label, tip string, icon icons.Name, on bool, f func()) *gpui.Div {
 		c := uiMuted
 		if on {
 			c = uiOn
 		}
-		return gpui.NewDiv().ID("status-"+id).FlexRow().ItemsCenter().Gap(4).Px_(8).Py_(2).Rounded(3).
+		return gpui.NewDiv().ID("status-"+id).FlexRow().ItemsCenter().Gap(4).Px_(8).Py_(2).Rounded(3).Tooltip(tip).
 			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(); w.Refresh() }).
 			Child(NewIcon(icon, 14, c), gpui.NewText(label).FontWeight(700).TextColor(c))
 	}
 	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Px_(10).Py_(4).Bg(uiBg).TextSize(12).Child(
-		gpui.NewText(coords).SizeW(170),
-		flag("grid", "GRID", icons.ViewGrid, ws.Grid, func() { ws.Grid = !ws.Grid }),
-		flag("snap", "OSNAP", icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
-		flag("ortho", "ORTHO", icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
+		gpui.NewDiv().SizeW(170).Tooltip(i18n.T("ui.status.coords_tip")).Child(gpui.NewText(coords)),
+		flag("grid", i18n.T("ui.status.grid"), i18n.T("ui.status.grid_tip"), icons.ViewGrid, ws.Grid, func() { ws.Grid = !ws.Grid }),
+		flag("snap", i18n.T("ui.status.osnap"), i18n.T("ui.status.osnap_tip"), icons.SnapOsnap, s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
+		flag("ortho", i18n.T("ui.status.ortho"), i18n.T("ui.status.ortho_tip"), icons.SnapOrtho, s.Ortho, func() { s.Ortho = !s.Ortho }),
 		gpui.NewDiv().Flex1(),
-		gpui.NewText(fmt.Sprintf("Layer %s   ·   %d entities   ·   1 px = %s units", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted),
+		gpui.NewText(i18n.T("ui.status.summary", s.Drawing().CurrentLayer, s.Drawing().Len(), cmdsys.FormatNumber(ws.view.PixelSize()))).TextColor(uiMuted),
 	)
 }
 

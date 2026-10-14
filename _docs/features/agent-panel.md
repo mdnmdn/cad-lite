@@ -60,6 +60,10 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   shows `starting...`, then `ready`. Stop closes the session; the transcript stays. The session also
   ends, with a note, when the agent process exits. Sending a prompt with no session starts one and
   sends the prompt once it is connected.
+- **Tooltips and language.** Every button, tab, chip and history row has a tooltip, and every label,
+  status line (`starting claude...`, `ready`), warning and relative date comes from the catalog
+  (`ui.agent.*`), so the panel follows the interface language. Text sent to and received from the
+  agent (prompts, tool names, permission option names) is not translated.
 - **Prompt.** One line; Enter or Send submits. Only one turn runs at a time, so Send does nothing
   while the agent works. **Cancel** appears while a turn runs and stops it; the session stays usable.
 - **Transcript.** User messages, agent messages and notes in order; thoughts collapsed behind a

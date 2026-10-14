@@ -10,6 +10,7 @@ import (
 
 	"go-draw/doc"
 	"go-draw/geom"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 	"go-draw/settings"
 )
@@ -463,4 +464,47 @@ func TestLanguagePickerFiresHook(t *testing.T) {
 	}
 	ws.SetLanguageHandler(nil)
 	h.clickID("lang-auto")
+}
+
+func TestLanguagePickerSwitchesCatalog(t *testing.T) {
+	t.Cleanup(func() { i18n.Set(i18n.English) })
+	ws := NewWorkspace(doc.New(), nil)
+	h := openSettingsWS(t, ws, 900, 700, 1)
+	h.openPanel()
+	h.clickID("lang-it")
+	if i18n.Current() != i18n.Italian {
+		t.Fatalf("language after picking Italiano = %v", i18n.Current())
+	}
+	h.clickID("lang-en")
+	if i18n.Current() != i18n.English {
+		t.Fatalf("language after picking English = %v", i18n.Current())
+	}
+}
+
+// settingsBubble reports whether a one-line tooltip bubble (themed border,
+// wider than any control) is in the last frame.
+func (h *sHarness) settingsBubble() bool {
+	th := CurrentTheme()
+	for _, q := range h.hw.Window().Scene().Quads {
+		if q.BorderColor == th.Border && q.Bounds.Size.W > 150 && q.Bounds.Size.H < 40 {
+			return true
+		}
+	}
+	return false
+}
+
+func TestSettingsControlsHaveTooltips(t *testing.T) {
+	h := openSettingsApp(t)
+	h.openPanel()
+	for _, id := range []string{"settings-close", "theme-light", "ui-scale-down", "ui-scale-up", "ui-scale-reset",
+		"lang-it", "set-grid", "set-osnap", "set-ortho", "wheel-pan", "agent-claude", "settings-reset"} {
+		p := h.find(id)
+		h.hw.Dispatch(gpui.MouseMoveEvent{Position: gpui.Point{X: 5, Y: 5}})
+		h.hp.Advance(600 * time.Millisecond)
+		h.hw.Dispatch(gpui.MouseMoveEvent{Position: p})
+		h.hp.Advance(600 * time.Millisecond)
+		if !h.settingsBubble() {
+			t.Errorf("%s: no tooltip after 600 ms", id)
+		}
+	}
 }

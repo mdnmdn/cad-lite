@@ -1,9 +1,10 @@
 package ui
 
 import (
-	"fmt"
+	"strings"
 
 	"go-draw/assets/icons"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 	"go-draw/settings"
 )
@@ -21,10 +22,10 @@ const (
 
 // settingsButton is the toolbar's gear button that opens the panel.
 func (ws *Workspace) settingsButton() *gpui.Div {
-	b := gpui.NewDiv().ID("tool-settings").FlexCol().ItemsCenter().Gap(2).Px_(10).Py_(4).Rounded(4).
+	b := gpui.NewDiv().ID("tool-settings").FlexCol().ItemsCenter().Gap(2).Px_(10).Py_(4).Rounded(4).Tooltip(i18n.T("ui.toolbar.settings_tip")).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.ToggleSettings(w) }).
-		Child(NewIcon(icons.AppSettings, toolIconSize, uiText), gpui.NewText("Settings").TextSize(10))
+		Child(NewIcon(icons.AppSettings, toolIconSize, uiText), gpui.NewText(tb("settings")).TextSize(10))
 	if ws.prefs().open {
 		b.Bg(uiAccent)
 	}
@@ -77,12 +78,12 @@ func (ws *Workspace) settingsHeader() *gpui.Div {
 	return gpui.NewDiv().FlexRow().ItemsCenter().Px_(20).Py_(14).
 		Child(
 			NewIcon(icons.AppSettings, 18, uiOn),
-			gpui.NewDiv().Ml(8).Child(gpui.NewText("Settings").FontWeight(700).TextSize(16)),
+			gpui.NewDiv().Ml(8).Child(gpui.NewText(i18n.T("ui.settings.title")).FontWeight(700).TextSize(16)),
 			gpui.NewDiv().Flex1(),
-			gpui.NewDiv().ID("settings-close").Px_(10).Py_(4).Rounded(4).Bg(uiPanelAlt).
+			gpui.NewDiv().ID("settings-close").Px_(10).Py_(4).Rounded(4).Bg(uiPanelAlt).Tooltip(i18n.T("ui.settings.close_tip")).
 				Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiBorder) }).
 				OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { ws.CloseSettings(w) }).
-				Child(gpui.NewText("Close  Esc").TextSize(12)),
+				Child(gpui.NewText(i18n.T("ui.settings.close")).TextSize(12)),
 		)
 }
 
@@ -91,9 +92,10 @@ func sectionTitle(s string) *gpui.Text {
 }
 
 // settingRow is a label on the left and a control on the right.
-func settingRow(label string, control gpui.IntoElement) *gpui.Div {
+// tip, when not empty, is the tooltip of the label.
+func settingRow(label, tip string, control gpui.IntoElement) *gpui.Div {
 	return gpui.NewDiv().FlexRow().ItemsCenter().Gap(12).
-		Child(gpui.NewText(label).SizeW(settingsLabelW).FlexShrink(0), control)
+		Child(gpui.NewDiv().SizeW(settingsLabelW).FlexShrink(0).Tooltip(tip).Child(gpui.NewText(label)), control)
 }
 
 func (ws *Workspace) appearanceSection() *gpui.Div {
@@ -107,8 +109,8 @@ func (ws *Workspace) appearanceSection() *gpui.Div {
 	if p.scale.Dragging() {
 		scale = p.scale.value
 	}
-	step := func(id, label string, d float64) *gpui.Div {
-		return ws.smallButton(id, label, func(w *gpui.Window) {
+	step := func(id, label, tip string, d float64) *gpui.Div {
+		return ws.smallButton(id, label, tip, func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) { s.UIScale = settings.ClampUIScale(s.UIScale + d) })
 		})
 	}
@@ -122,28 +124,31 @@ func (ws *Workspace) appearanceSection() *gpui.Div {
 				ws.change(w, func(s *settings.Settings) { s.UIScale = v })
 			}
 		},
-	}).Flex1().MinW(0)
+	}).Flex1().MinW(0).Tooltip(i18n.T("ui.settings.ui_scale_tip"))
 	scaleRow := gpui.NewDiv().FlexCol().Gap(4).Child(
 		gpui.NewDiv().FlexRow().ItemsCenter().Child(
-			gpui.NewText("UI scale").Flex1(),
-			gpui.NewText(fmt.Sprintf("%d%%", int(scale*100+0.5))).FontWeight(700),
+			gpui.NewDiv().Flex1().Tooltip(i18n.T("ui.settings.ui_scale_tip")).Child(gpui.NewText(i18n.T("ui.settings.ui_scale"))),
+			gpui.NewText(i18n.T("ui.settings.ui_scale_value", int(scale*100+0.5))).FontWeight(700),
 		),
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(8).Child(
-			step("ui-scale-down", "\u2212", -settings.UIScaleStep),
+			step("ui-scale-down", "\u2212", i18n.T("ui.settings.ui_scale_down_tip"), -settings.UIScaleStep),
 			slider,
-			step("ui-scale-up", "+", settings.UIScaleStep),
-			ws.smallButton("ui-scale-reset", "100%", func(w *gpui.Window) {
+			step("ui-scale-up", "+", i18n.T("ui.settings.ui_scale_up_tip"), settings.UIScaleStep),
+			ws.smallButton("ui-scale-reset", "100%", i18n.T("ui.settings.ui_scale_reset_tip"), func(w *gpui.Window) {
 				ws.change(w, func(s *settings.Settings) { s.UIScale = 1 })
 			}).Px_(8),
 		),
 	)
-	lang := settingRow("Language", segmented("lang-", [][2]string{
-		{settings.LangAuto, "Auto"}, {settings.LangEnglish, "English"}, {settings.LangItalian, "Italiano"},
-	}, p.cur.Language, func(v string, w *gpui.Window) {
+	langTip := i18n.T("ui.settings.language_tip")
+	lang := settingRow(i18n.T("ui.settings.language"), langTip, segmented("lang-", [][2]string{
+		{settings.LangAuto, i18n.T("ui.settings.language_auto")}, {settings.LangEnglish, i18n.T("ui.settings.language_en")}, {settings.LangItalian, i18n.T("ui.settings.language_it")},
+	}, langTip, p.cur.Language, func(v string, w *gpui.Window) {
 		ws.change(w, func(s *settings.Settings) { s.Language = v })
 	}).Flex1())
+	hint := gpui.NewText(i18n.T("ui.settings.language_hint")).TextSize(11).TextColor(uiMuted)
 	return gpui.NewDiv().FlexCol().Gap(settingsRowGap).
-		Child(sectionTitle("APPEARANCE"), cards, scaleRow, lang)
+		Child(sectionTitle(i18n.T("ui.settings.section_appearance")), cards, scaleRow,
+			sectionTitle(i18n.T("ui.settings.section_language")), lang, hint)
 }
 
 // themeCard is a clickable swatch: a miniature of the theme's window with its
@@ -187,12 +192,13 @@ func (ws *Workspace) themeCard(t Theme) *gpui.Div {
 				),
 			),
 		)
-	label := gpui.NewText(t.Label).FontWeight(700).TextSize(12)
+	name := i18n.T("ui.settings.theme." + strings.ReplaceAll(t.Name, "-", "_"))
+	label := gpui.NewText(name).FontWeight(700).TextSize(12)
 	if selected {
 		label.TextColor(uiOn)
 	}
 	return gpui.NewDiv().ID("theme-"+t.Name).FlexCol().Gap(6).P(2).Rounded(8).Border(2, border).
-		Bg(uiPanelAlt).SizeW(themeCardWidth+4).
+		Bg(uiPanelAlt).SizeW(themeCardWidth+4).Tooltip(i18n.T("ui.settings.theme_tip", name)).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Border(2, uiOn) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 			ws.change(w, func(s *settings.Settings) { s.Theme = t.Name })
@@ -200,8 +206,8 @@ func (ws *Workspace) themeCard(t Theme) *gpui.Div {
 		Child(preview, gpui.NewDiv().FlexRow().ItemsCenter().Gap(6).Px_(4).Pb(4).Child(label))
 }
 
-func (ws *Workspace) smallButton(id, label string, f func(*gpui.Window)) *gpui.Div {
-	return gpui.NewDiv().ID(id).FlexRow().ItemsCenter().JustifyCenter().SizeH(settingsBtnSize).MinW(settingsBtnSize).
+func (ws *Workspace) smallButton(id, label, tip string, f func(*gpui.Window)) *gpui.Div {
+	return gpui.NewDiv().ID(id).Tooltip(tip).FlexRow().ItemsCenter().JustifyCenter().SizeH(settingsBtnSize).MinW(settingsBtnSize).
 		FlexShrink(0).Rounded(4).Bg(uiPanelAlt).Border(1, uiBorder).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiBorder) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(w) }).
@@ -209,13 +215,13 @@ func (ws *Workspace) smallButton(id, label string, f func(*gpui.Window)) *gpui.D
 }
 
 // toggle is an on/off switch.
-func toggle(id string, on bool, f func(*gpui.Window)) *gpui.Div {
+func toggle(id, tip string, on bool, f func(*gpui.Window)) *gpui.Div {
 	track, knob := uiBorder, uiText
 	pos := gpui.NewDiv().Flex1()
 	if on {
 		track = uiAccent
 	}
-	sw := gpui.NewDiv().ID(id).FlexRow().ItemsCenter().SizeWH(40, 22).P(2).Rounded(11).Bg(track).
+	sw := gpui.NewDiv().ID(id).FlexRow().ItemsCenter().SizeWH(40, 22).P(2).Rounded(11).Bg(track).Tooltip(tip).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(w) })
 	k := gpui.NewDiv().SizeWH(18, 18).Rounded(9).Bg(knob)
 	if on {
@@ -225,11 +231,12 @@ func toggle(id string, on bool, f func(*gpui.Window)) *gpui.Div {
 }
 
 // segmented is a row of mutually exclusive buttons.
-func segmented(idPrefix string, options [][2]string, current string, f func(string, *gpui.Window)) *gpui.Div {
+// tip is the tooltip of every button.
+func segmented(idPrefix string, options [][2]string, tip, current string, f func(string, *gpui.Window)) *gpui.Div {
 	row := gpui.NewDiv().FlexRow().Gap(4).FlexWrap()
 	for _, o := range options {
 		value, label := o[0], o[1]
-		b := gpui.NewDiv().ID(idPrefix+value).Px_(12).Py_(5).Rounded(4).Border(1, uiBorder).
+		b := gpui.NewDiv().ID(idPrefix+value).Px_(12).Py_(5).Rounded(4).Border(1, uiBorder).Tooltip(tip).
 			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { f(value, w) })
 		if value == current {
 			b.Bg(uiAccent).Child(gpui.NewText(label).TextSize(12).FontWeight(700))
@@ -244,32 +251,33 @@ func segmented(idPrefix string, options [][2]string, current string, f func(stri
 
 func (ws *Workspace) drawingSection() *gpui.Div {
 	c := ws.prefs().cur
-	flag := func(id, label string, on bool, set func(*settings.Settings, bool)) *gpui.Div {
-		return settingRow(label, toggle(id, on, func(w *gpui.Window) {
+	flag := func(id, label, tip string, on bool, set func(*settings.Settings, bool)) *gpui.Div {
+		return settingRow(label, tip, toggle(id, tip, on, func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) { set(s, !on) })
 		}))
 	}
+	wheelTip := i18n.T("ui.settings.wheel_tip")
 	wheel := segmented("wheel-", [][2]string{
-		{settings.WheelAuto, "Auto"}, {settings.WheelZoom, "Zoom"}, {settings.WheelPan, "Pan"},
-	}, c.Wheel, func(v string, w *gpui.Window) { ws.change(w, func(s *settings.Settings) { s.Wheel = v }) })
+		{settings.WheelAuto, i18n.T("ui.settings.wheel_auto")}, {settings.WheelZoom, i18n.T("ui.settings.wheel_zoom")}, {settings.WheelPan, i18n.T("ui.settings.wheel_pan")},
+	}, wheelTip, c.Wheel, func(v string, w *gpui.Window) { ws.change(w, func(s *settings.Settings) { s.Wheel = v }) })
 	hint := map[string]string{
-		settings.WheelAuto: "Auto: the wheel zooms, Shift pans.",
-		settings.WheelZoom: "Zoom: the wheel zooms, Shift pans.",
-		settings.WheelPan:  "Pan: the wheel pans, Ctrl or Cmd zooms.",
+		settings.WheelAuto: i18n.T("ui.settings.wheel_hint_auto"),
+		settings.WheelZoom: i18n.T("ui.settings.wheel_hint_zoom"),
+		settings.WheelPan:  i18n.T("ui.settings.wheel_hint_pan"),
 	}[c.Wheel]
 	return gpui.NewDiv().FlexCol().Gap(settingsRowGap).Child(
-		sectionTitle("DRAWING"),
-		gpui.NewText("What a drawing starts with, and what applies right now.").TextColor(uiMuted).TextSize(12),
-		flag("set-grid", "Grid (F7)", c.Grid, func(s *settings.Settings, v bool) { s.Grid = v }),
-		flag("set-osnap", "Object snap (F3)", c.OSnap, func(s *settings.Settings, v bool) { s.OSnap = v }),
-		flag("set-ortho", "Ortho (F8)", c.Ortho, func(s *settings.Settings, v bool) { s.Ortho = v }),
-		settingRow("Mouse wheel", gpui.NewDiv().FlexCol().Gap(4).Flex1().Child(wheel, gpui.NewText(hint).TextSize(11).TextColor(uiMuted))),
+		sectionTitle(i18n.T("ui.settings.section_drawing")),
+		gpui.NewText(i18n.T("ui.settings.drawing_hint")).TextColor(uiMuted).TextSize(12),
+		flag("set-grid", i18n.T("ui.settings.grid"), i18n.T("ui.settings.grid_tip"), c.Grid, func(s *settings.Settings, v bool) { s.Grid = v }),
+		flag("set-osnap", i18n.T("ui.settings.osnap"), i18n.T("ui.settings.osnap_tip"), c.OSnap, func(s *settings.Settings, v bool) { s.OSnap = v }),
+		flag("set-ortho", i18n.T("ui.settings.ortho"), i18n.T("ui.settings.ortho_tip"), c.Ortho, func(s *settings.Settings, v bool) { s.Ortho = v }),
+		settingRow(i18n.T("ui.settings.wheel"), wheelTip, gpui.NewDiv().FlexCol().Gap(4).Flex1().Child(wheel, gpui.NewText(hint).TextSize(11).TextColor(uiMuted))),
 	)
 }
 
 func (ws *Workspace) agentSection() *gpui.Div {
 	c := ws.prefs().cur
-	opts := [][2]string{{"", "Auto"}, {"opencode", "OpenCode"}, {"claude", "Claude"}, {"codex", "Codex"}}
+	opts := [][2]string{{"", i18n.T("ui.settings.harness_auto")}, {"opencode", "OpenCode"}, {"claude", "Claude"}, {"codex", "Codex"}}
 	known := false
 	for _, o := range opts {
 		known = known || o[0] == c.DefaultAgent
@@ -277,20 +285,21 @@ func (ws *Workspace) agentSection() *gpui.Div {
 	if !known {
 		opts = append(opts, [2]string{c.DefaultAgent, c.DefaultAgent})
 	}
+	harnessTip := i18n.T("ui.settings.default_harness_tip")
 	return gpui.NewDiv().FlexCol().Gap(settingsRowGap).Child(
-		sectionTitle("AGENT"),
-		settingRow("Default harness", segmented("agent-", opts, c.DefaultAgent, func(v string, w *gpui.Window) {
+		sectionTitle(i18n.T("ui.settings.section_agent")),
+		settingRow(i18n.T("ui.settings.default_harness"), harnessTip, segmented("agent-", opts, harnessTip, c.DefaultAgent, func(v string, w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) { s.DefaultAgent = v })
 		}).Flex1()),
-		gpui.NewText("Auto picks the first agent installed on PATH.").TextSize(11).TextColor(uiMuted),
+		gpui.NewText(i18n.T("ui.settings.agent_auto_hint")).TextSize(11).TextColor(uiMuted),
 	)
 }
 
 func (ws *Workspace) settingsFooter() *gpui.Div {
 	p := ws.prefs()
-	where := "Kept in memory: no config folder here."
+	where := i18n.T("ui.settings.in_memory")
 	if p.path != "" {
-		where = "Saved to " + p.path
+		where = i18n.T("ui.settings.saved_to", p.path)
 	}
 	foot := gpui.NewDiv().FlexCol().Gap(6).Pt(4).
 		Child(gpui.NewText(where).TextSize(11).TextColor(uiMuted))
@@ -302,7 +311,7 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 	}
 	return gpui.NewDiv().FlexRow().ItemsStart().Gap(12).Child(
 		foot.Flex1().MinW(0),
-		ws.smallButton("settings-reset", "Reset to defaults", func(w *gpui.Window) {
+		ws.smallButton("settings-reset", i18n.T("ui.settings.reset"), i18n.T("ui.settings.reset_tip"), func(w *gpui.Window) {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
 				d.Extra, d.Window = s.Extra, s.Window

@@ -40,6 +40,7 @@ What go-draw uses from the library:
 | `HeadlessPlatform`, `HeadlessWindow.Dispatch` | `-png` renders and UI tests |
 | `ebitenplatform.New` | The desktop window |
 | `Window.PaintGlyph` | Every icon: an alpha mask tinted with one theme colour |
+| `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
 
 `Stroke`, `Canvas` and `TextInput.OnEscape` exist in the library for go-draw. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
@@ -96,6 +97,16 @@ The command line and the agent prompt are `gpui.TextInput`s themed through `them
 `ui/theme.go`, which uses the library's `Style`, `PlaceholderColor` and `SelectionColor`; a new
 field gets the same look by passing through it, and `ApplyTheme` restyles every such field (the
 registry holds them weakly).
+
+## Tooltips
+
+`Div.Tooltip(text)` is set on every button and clickable control; the text comes from the catalog
+(`i18n.T("ui.*_tip")`, `i18n.Command(name).Tip`). The bubble style is one function of the theme,
+`tooltipStyle(Theme)` in `ui/theme.go`: `Field` fill, `Border` outline, `Text` colour, gpui's default
+size and 500 ms delay. `Workspace.Render` hands it to `App.SetTooltipStyle` on the first frame and
+again whenever the current theme differs from the one last applied, so a theme switch restyles the
+bubbles. The style leaves `MaxWidth` at zero: gpui sizes a wrapped bubble one line high, so tips stay
+on one line and are clamped to the window.
 
 ## UI scale
 

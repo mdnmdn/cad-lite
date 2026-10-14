@@ -7,6 +7,7 @@ import (
 	"weak"
 
 	"agentmanager"
+	"go-draw/i18n"
 	"go-draw/internal/gpui"
 	"go-draw/settings"
 )
@@ -210,6 +211,7 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 		ws.applyAppearance(w)
 	}
 	if next.Language != old.Language {
+		i18n.Set(i18n.FromSetting(next.Language))
 		p.fireLanguage()
 	}
 	if next.Grid != old.Grid || next.OSnap != old.OSnap || next.Ortho != old.Ortho {

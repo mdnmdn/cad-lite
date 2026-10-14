@@ -51,3 +51,15 @@ func themeField(in *gpui.TextInput) *gpui.TextInput {
 		PlaceholderColor(uiMuted).
 		SelectionColor(uiSelect)
 }
+
+// tooltipStyle maps a theme onto the gpui tooltip bubble: the input fill
+// (Field, which contrasts with the panels), the theme's border and body text,
+// so tooltips follow the window chrome. Size and timing keep gpui's defaults.
+func tooltipStyle(t Theme) gpui.TooltipStyle {
+	s := gpui.DefaultTooltipStyle()
+	s.Background, s.Border, s.Foreground = t.Field, t.Border, t.Text
+	// gpui sizes a wrapped bubble one line high, so tips stay on one line
+	// (the bubble is still clamped to the window).
+	s.MaxWidth = 0
+	return s
+}
