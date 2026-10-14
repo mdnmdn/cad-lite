@@ -15,6 +15,7 @@ directory and returns the path. Point `Config.Binary` at it and select the proto
 |---|---|
 | `FAKEAGENT_SCENARIO` | path of a scenario JSON file (or pass `--scenario PATH` as an argument) |
 | `FAKEAGENT_LOG` | every line received from the client is appended here, so tests assert what the backend wrote |
+| `FAKEAGENT_MODELS` | the Claude fake answers `initialize` with two models and the Codex fake answers `model/list` (method-not-found otherwise); the ACP fake's equivalent is the builtin option `models`. The Claude and ACP fakes refuse the model `bad-model` |
 | `FAKEAGENT_ARGV` | the fake writes `ARGV`, the arguments, `ENV`, the sorted environment, `CWD`, the working directory, to this file at startup |
 
 Pass them through `Config.Env`.

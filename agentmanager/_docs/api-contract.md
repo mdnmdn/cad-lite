@@ -247,13 +247,39 @@ handshakes (ACP, Codex), returns a Session; MCP injection and Close semantics as
 
 `ToolCallPatch` carries `MCPServer string`: the owning MCP server when the backend knows it. Backends set it (Claude from `mcp__server__tool`, Codex from MCP tool-call items, ACP from the tool call's MCP metadata or title). `AllowMCP` matches `MCPServer` only when it is set; without it only the exact Claude title `mcp__server__tool` counts. A call whose `Kind` is not `other` or `read` is never auto-allowed. ACP derives `MCPServer` strictly: `mcp__server__tool`, or opencode's `<server>_<tool>` with the tool in `[a-z0-9_]+`, and never for execute/edit/delete/move/fetch kinds.
 
+## Models
+
+`Config.Model` picks the model a session starts on. Beyond that, a backend reports the models the agent
+offers and switches while live:
+
+```go
+// ModelInfo is one model an agent offers; ID is what Config.Model and SetModel take, Name a label ("" when none).
+type ModelInfo struct{ ID, Name string }
+// ModelsChanged (an Event) reports the offered models and the one in effect. Available nil = unchanged or
+// unknown; Current "" = the agent did not say.
+type ModelsChanged struct{ Current string; Available []ModelInfo }
+// ModelSetter is implemented by sessions that switch model while live (all three backends). SetModel blocks
+// until the agent accepted or refused, or ctx ends; the switch applies from the next turn and emits
+// ModelsChanged{Current: model}. An empty model returns ErrNoModel.
+type ModelSetter interface{ SetModel(ctx context.Context, model string) error }
+var ErrNoModel error
+```
+
+Where the list comes from: Claude's `initialize` control request (answered before the first prompt), ACP's
+`session/new`/`session/load` result (model config option values, else `models.availableModels`), Codex's
+`model/list`. A backend whose agent offers no list emits no `ModelsChanged`. Wire details are in
+`protocols.md`. The host uses the optional interface with a type assertion and falls back to restarting the
+session with a new `Config.Model` (resuming by `ResumeID`).
+
 ## Package `store` (session persistence)
 
 A directory-based store of conversations, stdlib plus `agentmanager` and `agentmanager/transcript`. One
 session is one file `<dir>/<id>.jsonl` (dir 0700, files 0600), one JSON line per item. A line is the
 envelope `{"k":kind,"t":RFC3339Nano time,"d":payload}`; kinds are `meta` (first line: id, harness,
-created), `user`, `agent_session`, `permission_resolved` and one per `agentmanager.Event` (`session_started`,
-`text`, `thought`, `tool_start`, `tool_update`, `permission`, `plan`, `turn_end`, `log`, `exited`). Event
+created), `user`, `agent_session`, `permission_resolved`, `model` (`{"model":…}`, the user's choice) and
+`drawing` (`{"drawing":…}`, the host's drawing; for both the last line wins), and one per `agentmanager.Event`
+(`session_started`, `models`, `text`, `thought`, `tool_start`, `tool_update`, `permission`, `plan`,
+`turn_end`, `log`, `exited`). Event
 payloads are the event structs' default JSON (no tags on the frozen types); an empty `json.RawMessage`
 reads back as nil. Unknown kinds and unparsable lines are skipped, so a truncated last line costs only that line.
 
@@ -263,6 +289,8 @@ type Meta struct {
 	ID, Harness  string  // Harness is an agentmanager.Harness value
 	AgentSessionID string // backend resume id, "" until the backend reported one
 	Title        string  // first user prompt, whitespace collapsed, at most 80 runes
+	Model        string  // the user's model choice (SetModel), "" = harness default
+	Drawing      string  // the host's drawing key (SetDrawing), "" = none
 	Created, Updated time.Time // Updated is the file's modification time
 }
 var ErrNotFound error
@@ -276,14 +304,22 @@ func (s *Store) Load(id string) (*Record, error)   // ErrNotFound when absent
 func (s *Store) Latest() (*Record, error)          // ErrNotFound when the store is empty
 func (s *Store) Delete(id string) error
 
-// OpenSet is the sessions a host had open (tabs) and the active one. It lives in `<dir>/open.json`
-// (0600, written atomically through a temporary file), separate from the session files.
+// OpenSet is the sessions a host had open (tabs) and the active one, per drawing (a host key such as the
+// drawing's file name; "" = no drawing). The set of "" lives in `<dir>/open.json`, a drawing's in
+// `<dir>/open-<first 16 hex digits of sha256(key)>.json` (0600, written atomically through a temporary file),
+// separate from the session files. Files hold {IDs, Active, Drawing, V:2}; a file without V predates
+// per-drawing sets and loads with Legacy set.
 type OpenSet struct {
 	IDs    []string // session ids in tab order
 	Active string   // one of IDs, or ""
+	Legacy bool     // `json:"-"`: loaded from a file written before per-drawing sets; never saved
 }
-func (s *Store) SaveOpen(o OpenSet) error
-func (s *Store) LoadOpen() (OpenSet, error) // ErrNotFound when never saved; ids whose session is gone are dropped
+func (s *Store) SaveOpen(o OpenSet) error           // SaveOpenFor("", o)
+func (s *Store) LoadOpen() (OpenSet, error)         // LoadOpenFor("")
+func (s *Store) SaveOpenFor(drawing string, o OpenSet) error
+func (s *Store) LoadOpenFor(drawing string) (OpenSet, error) // ErrNotFound when never saved; ids whose session is gone are dropped
+func (s *Store) DeleteOpenFor(drawing string) error // a missing set is not an error
+func (s *Store) CopyTo(dst *Store, id string) error // copies the session file under the same id (ErrNotFound when absent)
 
 // Record is one open session; methods are goroutine-safe. The file opens on the first write, a write
 // after a truncated line starts a new line first, and TurnEnd, Exited and Close fsync.
@@ -293,6 +329,8 @@ func (r *Record) Append(ev agentmanager.Event) error  // SessionStarted also set
 func (r *Record) AddUser(text string) error
 func (r *Record) ResolvePermission(requestID string) error
 func (r *Record) SetAgentSessionID(id string) error
+func (r *Record) SetModel(model string) error         // stores Meta.Model; unchanged writes nothing
+func (r *Record) SetDrawing(drawing string) error     // stores Meta.Drawing; unchanged writes nothing
 func (r *Record) Items() []any                        // loaded and appended items: agentmanager.Event, store.User, store.Resolved
 func (r *Record) Replay(t *transcript.T)              // rebuilds a transcript; an unfinished turn ends with a cancelled TurnEnd
 func (r *Record) Close() error

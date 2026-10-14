@@ -26,7 +26,10 @@ type Workspace struct {
 	agent *AgentPanel
 	// projectPath is the drawing's file, which decides where agent history lives.
 	projectPath string
-	win         *gpui.Window
+	// pathDoc is the drawing projectPath was last set for: the same drawing at the next path
+	// change means it was saved, another one that it was opened or replaced.
+	pathDoc *doc.Drawing
+	win     *gpui.Window
 
 	canvas canvasState
 	// WheelZoom makes a precise (trackpad) vertical scroll zoom instead of
@@ -64,6 +67,7 @@ func NewWorkspace(d *doc.Drawing, files cmdsys.FileHandler) *Workspace {
 	ws.session = cmdsys.NewSession(d, ws.view, commands.NewRegistry())
 	ws.session.SetFiles(files)
 	ws.attach(d)
+	ws.pathDoc = d
 	ws.session.OnDrawing(ws.attach)
 	ws.session.OnFilePath(ws.pathChanged)
 	ws.session.OnFilePath(ws.noteRecentFile)

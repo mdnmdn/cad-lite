@@ -24,7 +24,8 @@ import (
 //
 // Options: nohttp (no MCP capability), badversion (protocolVersion 2), authdefault (advertise
 // _meta.defaultAuthMethodId and require authenticate), authreq (session/new fails -32000),
-// noload (loadSession false), probe (send an unknown request terminal/create during the first turn).
+// noload (loadSession false), probe (send an unknown request terminal/create during the first turn),
+// models (session/new and session/load list two models in the model config option and in models).
 func RunACP(sc *Scenario, in io.Reader, out io.Writer) int {
 	r := NewRunner(in, out)
 	if sc.Builtin == "" {
@@ -103,9 +104,20 @@ func (a *acpFake) run() int {
 			}
 			a.mcp = acpMCPTargets(params["mcpServers"])
 			res := map[string]any{}
+			if a.opts["models"] {
+				res["models"] = map[string]any{"currentModelId": "fake-1", "availableModels": []any{
+					map[string]any{"modelId": "fake-1", "name": "Fake One"}, map[string]any{"modelId": "fake-2", "name": "Fake Two"}}}
+			}
+			if method == "session/new" || a.opts["models"] {
+				opt := map[string]any{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "fake-1"}
+				if a.opts["models"] {
+					opt["options"] = []any{map[string]any{"value": "fake-1", "name": "Fake One"},
+						map[string]any{"group": "more", "name": "More", "options": []any{map[string]any{"value": "fake-2", "name": "Fake Two"}}}}
+				}
+				res["configOptions"] = []any{opt}
+			}
 			if method == "session/new" {
 				res["sessionId"] = a.sid
-				res["configOptions"] = []any{map[string]any{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": "fake-1"}}
 			} else {
 				a.sid, _ = params["sessionId"].(string)
 				a.update(map[string]any{"sessionUpdate": "user_message_chunk", "content": map[string]any{"type": "text", "text": "old question"}})
@@ -113,6 +125,10 @@ func (a *acpFake) run() int {
 			}
 			a.reply(id, res)
 		case "session/set_config_option", "session/set_model":
+			if params["value"] == "bad-model" || params["modelId"] == "bad-model" {
+				a.replyErr(id, -32602, "unknown model")
+				continue
+			}
 			a.reply(id, map[string]any{})
 		case "session/prompt":
 			if code := a.turn(id, params); code >= 0 {

@@ -174,6 +174,7 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	tabs.Child(p.button("agent-history", histLabel, i18n.T("ui.agent.history_tip"), false, func(w *gpui.Window) {
 		p.ensureLoaded()
 		p.hist.menu = !p.hist.menu
+		p.modelMenu = false
 		p.syncSessions()
 		w.Refresh()
 	}))
@@ -199,6 +200,7 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 			}
 			row.Child(chip)
 		}
+		row.Child(p.modelChip())
 		row.Child(gpui.NewDiv().Flex1())
 		if t.state == agentIdle {
 			row.Child(p.button("agent-start", i18n.T("ui.agent.start"), i18n.T("ui.agent.start_tip"), true, p.Start))
@@ -211,6 +213,9 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	top := gpui.NewDiv().FlexCol().Gap(10).P(16).Pb(12).Child(head, tabs, picker)
 	if p.hist.menu {
 		top.Child(p.historyMenu())
+	}
+	if p.modelMenu {
+		top.Child(p.modelMenuView(w, cx))
 	}
 
 	list := gpui.NewDiv().ID("agent-list").FlexCol().Flex1().MinH(0).Gap(8).P(12).OverflowYScroll().TrackScroll(t.scroll)
@@ -258,6 +263,9 @@ func (p *AgentPanel) historyMenu() *gpui.Div {
 			title = i18n.T("ui.agent.history_untitled")
 		}
 		sub := string(m.Harness) + ", " + relTime(m.Updated, now)
+		if m.Drawing != "" && m.Drawing != p.hist.drawing {
+			sub = clip(m.Drawing, 16) + ", " + sub
+		}
 		if open[m.ID] {
 			sub += ", " + i18n.T("ui.agent.history_open")
 		}

@@ -7,7 +7,7 @@ summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, agentmanager/session.go, ui/discovery.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -31,7 +31,7 @@ Three pieces connect an AI agent to a drawing:
   [agent panel](../features/agent-panel.md).
 
 `agentmanager/store` (stdlib, in the nested module) persists conversations as JSONL per session plus an
-open-tab set; Cad-lite keeps them in `<project>/.cad-lite/agent/`. Nothing in this chain exists until the
+open-tab set per drawing; Cad-lite keeps them in `<project>/.cad-lite/agent/`. Nothing in this chain exists until the
 panel or the `AI` command is first used.
 
 ## PATH discovery
@@ -129,9 +129,20 @@ transcript (debug log lines excepted); `TurnEnd` and `Exited` fsync. Every backe
 own session id in `SessionStarted` (Claude only after the first prompt); the record keeps the latest.
 Starting a tab whose record has an id for the same harness sets `Config.ResumeID`: Claude `--resume`,
 Codex `thread/resume`, ACP `session/load`. ACP suppresses the history the agent replays on load, which
-is why Cad-lite shows its own stored transcript. The open tabs and the active one are saved on every
-change and at quit (`Store.SaveOpen`); restoring them reads records only, so no agent starts until the
-user sends. Project switch and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).
+is why Cad-lite shows its own stored transcript. The open tabs and the active one are saved for the
+current drawing (its file name, "" when untitled) on every change and at quit (`Store.SaveOpenFor`);
+restoring them reads records only, so no agent starts until the user sends. Each record also keeps the
+drawing (`Record.SetDrawing`) and the user's model choice (`Record.SetModel`), and stores the
+`ModelsChanged` events, so a restored tab shows its model and the list the agent offered. Drawing and
+project switches and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).
+
+## Models
+
+`Config.Model` is the tab's choice, else `agent.model_<harness>` from the settings. Every backend reports
+what the agent offers as `ModelsChanged` and implements `agentmanager.ModelSetter`; the panel calls
+`SetModel` on a goroutine (it blocks on the agent's answer, up to 15 s) and folds the result back on the
+timer like a session start. A session without a setter, or a change back to the default, is closed and
+restarted with `ResumeID` on the next prompt. Wire details per harness are in `agentmanager/_docs/protocols.md`.
 
 `Env.Changed` runs inside `Do` after every mutating tool (`AgentPanel.agentChanged`) and refreshes the
 window, so the canvas shows the agent's edits between frames. It does not clear the render cache: entity
@@ -156,9 +167,9 @@ table itself.
 
 | harness | status |
 |---|---|
-| Claude Code (`claude`, 2.1.299) | Verified live: start, MCP tool calls through the `cad` server with the auto-allow policy, permission round trips, interrupt. Claude defers MCP tools behind `ToolSearch`, so the first drawing call shows an extra `ToolSearch` tool card in the transcript. |
-| opencode (ACP) | Not run live. Verified against the fake agent only; wire details are marked unverified in `agentmanager/_docs/protocols.md`. |
-| Codex (`codex`) | Not run live. Verified against the fake agent only; wire details unverified, as above. |
+| Claude Code (`claude`, 2.1.299) | Verified live: start, MCP tool calls through the `cad` server with the auto-allow policy, permission round trips, interrupt; the model list (`initialize`) and `set_model`, accepted and refused, without a prompt (`TestLiveClaudeModels`). Claude defers MCP tools behind `ToolSearch`, so the first drawing call shows an extra `ToolSearch` tool card in the transcript. |
+| opencode (ACP) | Not run live (models included). Verified against the fake agent only; wire details are marked unverified in `agentmanager/_docs/protocols.md`. |
+| Codex (`codex`) | Not run live (`model/list` and the `turn/start` model included). Verified against the fake agent only; wire details unverified, as above. |
 
 `ui/agent_e2e_test.go` runs all three backends through the real panel, the real `cad` MCP server and the
 real `Dispatcher`, against `agentmanager`'s fake agent (built with `go build` from the nested module). The

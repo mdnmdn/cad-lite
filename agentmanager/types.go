@@ -39,6 +39,17 @@ type TurnEnd struct {
 // Log is a diagnostic line; Level is "debug", "info", "warn" or "error".
 type Log struct{ Level, Message string }
 
+// ModelInfo is one model an agent offers. ID is what Config.Model and ModelSetter.SetModel take;
+// Name is a human-readable label ("" when the agent gives none).
+type ModelInfo struct{ ID, Name string }
+
+// ModelsChanged reports the models the agent offers and the one in effect. Available is nil when
+// the list is unchanged or unknown; Current is "" when the agent did not say (its default).
+type ModelsChanged struct {
+	Current   string
+	Available []ModelInfo
+}
+
 // Exited is always the last event: the process is gone (Err != "" if unexpected; includes stderr tail).
 type Exited struct{ Err string }
 
@@ -52,6 +63,7 @@ func (PlanUpdate) isEvent()        {}
 func (TurnEnd) isEvent()           {}
 func (Log) isEvent()               {}
 func (Exited) isEvent()            {}
+func (ModelsChanged) isEvent()     {}
 
 // ToolKind classifies a tool call.
 type ToolKind string

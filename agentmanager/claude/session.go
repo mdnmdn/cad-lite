@@ -44,6 +44,16 @@ type session struct {
 	streamed    map[string]bool
 	tools       map[string]agentmanager.ToolCall
 	perms       map[string]*pending
+	// ctl holds the callbacks of our control requests that await a control_response.
+	ctl    map[string]func(controlResult)
+	ctlSeq int
+}
+
+// controlResult is Claude's answer to one of our control requests.
+type controlResult struct {
+	ok       bool
+	errMsg   string
+	response json.RawMessage
 }
 
 func newSession(cfg agentmanager.Config, p *proc.Process, mcpPath string) *session {
@@ -54,6 +64,7 @@ func newSession(cfg agentmanager.Config, p *proc.Process, mcpPath string) *sessi
 		streamed: map[string]bool{},
 		tools:    map[string]agentmanager.ToolCall{},
 		perms:    map[string]*pending{},
+		ctl:      map[string]func(controlResult){},
 	}
 	opts := []jsonrpc.Option{jsonrpc.WithRawHandler(s.handle)}
 	if cfg.Logger != nil {
@@ -63,7 +74,88 @@ func newSession(cfg agentmanager.Config, p *proc.Process, mcpPath string) *sessi
 	}
 	s.conn = jsonrpc.NewConn(p.Stdout(), p.Stdin(), nil, opts...)
 	go s.monitor()
+	s.requestModels()
 	return s
+}
+
+// control sends a control request; done, when set, runs on the reader goroutine with the answer.
+func (s *session) control(subtype string, fields map[string]any, done func(controlResult)) (string, error) {
+	s.mu.Lock()
+	s.ctlSeq++
+	id := fmt.Sprintf("gd-ctl-%d", s.ctlSeq)
+	if done != nil {
+		s.ctl[id] = done
+	}
+	s.mu.Unlock()
+	req := map[string]any{"subtype": subtype}
+	for k, v := range fields {
+		req[k] = v
+	}
+	if err := s.conn.SendRaw(map[string]any{"type": "control_request", "request_id": id, "request": req}); err != nil {
+		s.mu.Lock()
+		delete(s.ctl, id)
+		s.mu.Unlock()
+		return id, agentmanager.ErrClosed
+	}
+	return id, nil
+}
+
+// requestModels sends the initialize control request, whose answer lists the models Claude offers;
+// they are reported as ModelsChanged. A CLI that does not answer it reports nothing.
+func (s *session) requestModels() {
+	_, _ = s.control("initialize", nil, func(r controlResult) {
+		var res struct {
+			Models []struct {
+				Value       string `json:"value"`
+				DisplayName string `json:"displayName"`
+			} `json:"models"`
+		}
+		if !r.ok || json.Unmarshal(r.response, &res) != nil {
+			return
+		}
+		var avail []agentmanager.ModelInfo
+		for _, m := range res.Models {
+			if m.Value != "" {
+				avail = append(avail, agentmanager.ModelInfo{ID: m.Value, Name: m.DisplayName})
+			}
+		}
+		if len(avail) > 0 {
+			s.q.Push(agentmanager.ModelsChanged{Current: s.cfg.Model, Available: avail})
+		}
+	})
+}
+
+// SetModel implements agentmanager.ModelSetter with the set_model control request.
+func (s *session) SetModel(ctx context.Context, model string) error {
+	if model == "" {
+		return agentmanager.ErrNoModel
+	}
+	s.mu.Lock()
+	gone := s.gone()
+	s.mu.Unlock()
+	if gone {
+		return agentmanager.ErrClosed
+	}
+	ch := make(chan controlResult, 1)
+	id, err := s.control("set_model", map[string]any{"model": model}, func(r controlResult) { ch <- r })
+	if err != nil {
+		return err
+	}
+	select {
+	case r := <-ch:
+		if !r.ok {
+			return fmt.Errorf("claude: set model %s: %s", model, r.errMsg)
+		}
+		s.q.Push(agentmanager.ModelsChanged{Current: model})
+		return nil
+	case <-ctx.Done():
+		s.mu.Lock()
+		delete(s.ctl, id)
+		s.mu.Unlock()
+		return ctx.Err()
+	case <-s.conn.Done():
+		return agentmanager.ErrClosed
+	}
 }
 
 func (s *session) log(format string, a ...any) {

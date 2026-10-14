@@ -35,6 +35,10 @@ type session struct {
 	loading bool // session/load replay in progress: updates are dropped
 	perms   map[string]json.RawMessage
 	sysDone bool
+	// modelConfig is the id of the agent's model config option, modelWire whether it offers
+	// session/set_model; set once the session is open.
+	modelConfig string
+	modelWire   bool
 
 	tools map[string]toolInfo // touched by the reader goroutine only
 

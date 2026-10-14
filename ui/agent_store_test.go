@@ -322,7 +322,7 @@ func TestOpeningDrawingInAnotherProjectSwitchesStore(t *testing.T) {
 	}
 
 	s.Run("OPEN")
-	s.Submit(filepath.Join(a, "a.dxf"))
+	s.Submit(filepath.Join(a, "plate.dxf"))
 	if !r.hasText(0, "answer a") || p.Tabs()[0].Live {
 		t.Fatalf("project a not restored: %+v", p.Tabs())
 	}

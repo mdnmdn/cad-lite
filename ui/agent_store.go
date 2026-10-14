@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -23,11 +24,14 @@ const legacyAgentStoreDir = ".go-draw/agent"
 // agentHistoryShown caps the sessions listed in the history menu.
 const agentHistoryShown = 8
 
-// agentHistory is the panel's persistence state for the current project.
+// agentHistory is the panel's persistence state for the current project and drawing.
 type agentHistory struct {
 	// dir is the project directory the store belongs to; "" until the panel is first opened.
-	dir    string
-	loaded bool
+	dir string
+	// drawing is the drawing whose open tabs the panel shows: the file name of the drawing in dir,
+	// "" for an untitled drawing.
+	drawing string
+	loaded  bool
 	// off disables persistence (the canned demo).
 	off      bool
 	st       *store.Store
@@ -50,15 +54,29 @@ func (ws *Workspace) projectDir() string {
 	return wd
 }
 
+// drawingKey names the drawing's open tabs in the project store: the drawing file's name, or ""
+// for an untitled drawing.
+func (ws *Workspace) drawingKey() string {
+	if ws.projectPath == "" {
+		return ""
+	}
+	return filepath.Base(ws.projectPath)
+}
+
 // SetProjectPath tells the workspace which file the drawing was loaded from, for a file opened
 // before the workspace was built. OPEN and SAVE do this themselves.
 func (ws *Workspace) SetProjectPath(path string) { ws.session.SetFilePath(path) }
 
-// pathChanged follows the session's file path: a file in another directory is another project.
+// pathChanged follows the session's file path. The drawing is the same one when it was saved
+// (SAVE, SAVEAS) and another one when it was opened or replaced (OPEN, NEW): a saved drawing takes
+// its agent tabs along, another drawing brings its own.
 func (ws *Workspace) pathChanged(path string) {
+	d := ws.session.Drawing()
+	saved := ws.pathDoc == d
+	ws.pathDoc = d
 	ws.projectPath = path
 	if ws.agent != nil {
-		ws.agent.projectChanged()
+		ws.agent.drawingChanged(saved)
 	}
 }
 
@@ -74,9 +92,9 @@ func (p *AgentPanel) ensureLoaded() {
 	if h.off {
 		return
 	}
-	h.dir = p.ws.projectDir()
+	h.dir, h.drawing = p.ws.projectDir(), p.ws.drawingKey()
 	migrateAgentStore(h.dir)
-	st, err := store.Open(filepath.Join(h.dir, filepath.FromSlash(agentStoreDir)))
+	st, err := agentStore(h.dir)
 	if err != nil {
 		p.warnOnce(p.cur, i18n.T("ui.agent.warn.history_unavailable", err))
 		return
@@ -85,10 +103,24 @@ func (p *AgentPanel) ensureLoaded() {
 	p.syncSessions()
 	var ids []string
 	active := ""
-	if set, err := st.LoadOpen(); err == nil {
+	set, err := st.LoadOpenFor(h.drawing)
+	adopt := false
+	if errors.Is(err, store.ErrNotFound) && h.drawing != "" {
+		// A store from before per-drawing tabs: the first drawing opened takes its open tabs.
+		if legacy, lerr := st.LoadOpen(); lerr == nil && legacy.Legacy {
+			set, err, adopt = legacy, nil, true
+		}
+	}
+	if err == nil {
 		ids, active = set.IDs, set.Active
-	} else if len(h.sessions) > 0 {
-		ids = []string{h.sessions[0].ID}
+	} else if h.drawing == "" {
+		// No open set yet: an untitled drawing shows the latest conversation of no drawing.
+		for _, m := range h.sessions {
+			if m.Drawing == "" {
+				ids = []string{m.ID}
+				break
+			}
+		}
 	}
 	var tabs []*agentTab
 	var cur *agentTab
@@ -97,21 +129,41 @@ func (p *AgentPanel) ensureLoaded() {
 		if err != nil {
 			continue
 		}
-		t := newAgentTab()
-		t.rec = rec
-		rec.Replay(&t.tr)
+		t := storedTab(rec)
 		tabs = append(tabs, t)
 		if id == active {
 			cur = t
 		}
 	}
-	if len(tabs) == 0 {
-		return
+	if len(tabs) > 0 {
+		if cur == nil {
+			cur = tabs[len(tabs)-1]
+		}
+		p.tabs, p.cur = tabs, cur
 	}
-	if cur == nil {
-		cur = tabs[len(tabs)-1]
+	if adopt {
+		p.persistOpen()
+		p.check(st.DeleteOpenFor(""))
 	}
-	p.tabs, p.cur = tabs, cur
+}
+
+// agentStore opens the conversation store of the project directory dir.
+func agentStore(dir string) (*store.Store, error) {
+	return store.Open(filepath.Join(dir, filepath.FromSlash(agentStoreDir)))
+}
+
+// storedTab is a tab showing the stored conversation rec, with the model it was on.
+func storedTab(rec *store.Record) *agentTab {
+	t := newAgentTab()
+	t.rec = rec
+	rec.Replay(&t.tr)
+	t.mdl.chosen = rec.Meta().Model
+	for _, it := range rec.Items() {
+		if ev, ok := it.(agentmanager.Event); ok {
+			t.mdl.observe(ev)
+		}
+	}
+	return t
 }
 
 // syncSessions refreshes the history list from disk.
@@ -127,12 +179,17 @@ func (p *AgentPanel) syncSessions() {
 	p.hist.sessions = ms
 }
 
-// persistOpen stores which sessions are open and which tab is active.
+// persistOpen stores which sessions are open for the drawing and which tab is active.
 func (p *AgentPanel) persistOpen() {
 	h := &p.hist
 	if !h.loaded || h.off || h.st == nil {
 		return
 	}
+	p.check(h.st.SaveOpenFor(h.drawing, p.openSet()))
+}
+
+// openSet lists the stored sessions of the open tabs and the active one.
+func (p *AgentPanel) openSet() store.OpenSet {
 	set := store.OpenSet{}
 	for _, t := range p.tabs {
 		if t.rec != nil {
@@ -142,7 +199,7 @@ func (p *AgentPanel) persistOpen() {
 			}
 		}
 	}
-	p.check(h.st.SaveOpen(set))
+	return set
 }
 
 // Tab describes one panel tab, for the view and tests.
@@ -152,6 +209,9 @@ type Tab struct {
 	// SessionID is the stored id, "" before the first prompt.
 	SessionID string
 	Harness   agentmanager.Harness
+	// Model is the model the tab uses, as the panel shows it: the chosen model's name, else the
+	// default from the settings, else what the agent reported, else "default".
+	Model string
 	// Live is true while an agent session is starting or open.
 	Live      bool
 	Working   bool
@@ -163,7 +223,7 @@ type Tab struct {
 func (p *AgentPanel) Tabs() []Tab {
 	out := make([]Tab, len(p.tabs))
 	for i, t := range p.tabs {
-		out[i] = Tab{Title: p.tabTitle(t), Harness: p.harnessOf(t), Live: t.state != agentIdle,
+		out[i] = Tab{Title: p.tabTitle(t), Harness: p.harnessOf(t), Model: p.modelLabel(t), Live: t.state != agentIdle,
 			Working: t.tr.Running(), Attention: t.attention, Active: t == p.cur}
 		if t.rec != nil {
 			out[i].SessionID = t.rec.Meta().ID
@@ -261,9 +321,7 @@ func (p *AgentPanel) OpenSession(id string, w *gpui.Window) {
 		w.Refresh()
 		return
 	}
-	t := newAgentTab()
-	t.rec = rec
-	rec.Replay(&t.tr)
+	t := storedTab(rec)
 	if c := p.cur; c.rec == nil && c.state == agentIdle && len(c.tr.Blocks()) == 0 {
 		for i := range p.tabs {
 			if p.tabs[i] == c {
@@ -284,23 +342,70 @@ func (p *AgentPanel) Sessions() []store.Meta {
 	return p.hist.sessions
 }
 
-// projectChanged switches to the store of the new project: every live session is closed and its
-// record kept; a panel that was open restores the new project's conversations.
-func (p *AgentPanel) projectChanged() {
+// drawingChanged follows the drawing file. A drawing saved under a new name takes its tabs along:
+// in the same project the open set moves to the new name and the sessions keep running; in another
+// project the open conversations are copied into that project's store and their sessions closed.
+// Another drawing (OPEN, NEW) closes every live session, keeps the records and restores the tabs
+// that drawing had open.
+func (p *AgentPanel) drawingChanged(saved bool) {
 	h := &p.hist
-	if !h.loaded || h.off || p.ws.projectDir() == h.dir {
+	dir, key := p.ws.projectDir(), p.ws.drawingKey()
+	if !h.loaded || h.off || (dir == h.dir && key == h.drawing) {
 		return
 	}
+	if saved && dir == h.dir {
+		old := h.drawing
+		h.drawing = key
+		p.tagDrawing()
+		p.persistOpen()
+		if h.st != nil {
+			p.check(h.st.DeleteOpenFor(old))
+		}
+		p.refresh()
+		return
+	}
+	carry, from, oldKey := p.openSet(), h.st, h.drawing
 	p.stopAll(false)
 	for _, t := range p.tabs {
 		if t.rec != nil {
 			t.rec.Close()
 		}
 	}
+	if saved && from != nil && len(carry.IDs) > 0 {
+		migrateAgentStore(dir)
+		if to, err := agentStore(dir); err == nil {
+			var ids []string
+			for _, id := range carry.IDs {
+				if err := from.CopyTo(to, id); err == nil {
+					ids = append(ids, id)
+				} else {
+					p.check(err)
+				}
+			}
+			p.check(to.SaveOpenFor(key, store.OpenSet{IDs: ids, Active: carry.Active}))
+			p.check(from.DeleteOpenFor(oldKey))
+		}
+	}
 	p.cur = newAgentTab()
 	p.tabs = []*agentTab{p.cur}
 	*h = agentHistory{}
 	p.ensureLoaded()
+	if saved {
+		p.tagDrawing()
+	}
+	p.refresh()
+}
+
+// tagDrawing records the current drawing in the record of every open tab.
+func (p *AgentPanel) tagDrawing() {
+	for _, t := range p.tabs {
+		if t.rec != nil {
+			p.check(t.rec.SetDrawing(p.hist.drawing))
+		}
+	}
+}
+
+func (p *AgentPanel) refresh() {
 	if p.win != nil {
 		p.win.Refresh()
 	}
@@ -318,6 +423,12 @@ func (p *AgentPanel) prepareRecord(t *agentTab) {
 		return
 	}
 	t.rec = rec
+	if h.drawing != "" {
+		p.check(rec.SetDrawing(h.drawing))
+	}
+	if t.mdl.chosen != "" {
+		p.check(rec.SetModel(t.mdl.chosen))
+	}
 	p.syncSessions()
 	p.persistOpen()
 }
@@ -334,6 +445,7 @@ func (p *AgentPanel) resumeID(t *agentTab, h agentmanager.Harness) string {
 // stored. A background tab is flagged when it needs the user.
 func (p *AgentPanel) apply(t *agentTab, ev agentmanager.Event) {
 	t.tr.Apply(ev)
+	t.mdl.observe(ev)
 	if t != p.cur {
 		switch ev.(type) {
 		case agentmanager.PermissionRequest, agentmanager.TurnEnd:

@@ -20,11 +20,13 @@ type session struct {
 	policy agentmanager.PermissionPolicy
 	log    agentmanager.Logger
 
-	mu            sync.Mutex
-	threadID      string
-	closed        bool // Close called or process gone: methods return ErrClosed
-	closing       bool // Close initiated by the caller (exit is expected)
-	turnActive    bool
+	mu         sync.Mutex
+	threadID   string
+	closed     bool // Close called or process gone: methods return ErrClosed
+	closing    bool // Close initiated by the caller (exit is expected)
+	turnActive bool
+	// model overrides the thread's model from the next turn/start on; "" keeps it.
+	model         string
 	turnID        string // "" until turn/start is acknowledged
 	cancelPending bool   // Cancel arrived before the turn id was known
 	asks          map[string]*ask
@@ -115,12 +117,15 @@ func (s *session) Prompt(ctx context.Context, text string) error {
 		return errors.New("codex: a turn is already running")
 	}
 	s.turnActive, s.turnID, s.cancelPending = true, "", false
-	thread := s.threadID
+	thread, model := s.threadID, s.model
 	s.mu.Unlock()
 
 	params := map[string]any{
 		"threadId": thread,
 		"input":    []any{map[string]any{"type": "text", "text": text, "text_elements": []any{}}},
+	}
+	if model != "" {
+		params["model"] = model
 	}
 	_, err := s.conn.CallAsync("turn/start", params, s.turnAcked)
 	if err != nil {
@@ -204,6 +209,65 @@ func (s *session) Cancel() error {
 		s.interrupt(thread, turn)
 	}
 	return nil
+}
+
+// SetModel implements agentmanager.ModelSetter. Codex takes the model as a turn/start override,
+// so nothing goes over the wire until the next prompt, and the override sticks for later turns.
+func (s *session) SetModel(_ context.Context, model string) error {
+	if model == "" {
+		return agentmanager.ErrNoModel
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return agentmanager.ErrClosed
+	}
+	s.model = model
+	s.mu.Unlock()
+	s.q.Push(agentmanager.ModelsChanged{Current: model})
+	return nil
+}
+
+// listModels asks the app-server for its models (model/list, first page) and reports them; an
+// error, such as an older app-server without the method, is ignored.
+func (s *session) listModels(current string) {
+	_, err := s.conn.CallAsync("model/list", map[string]any{}, func(res json.RawMessage, e *jsonrpc.Error) {
+		if e != nil {
+			s.debugf("codex model/list: %s", e.Message)
+			return
+		}
+		var r struct {
+			Data []struct {
+				ID          string `json:"id"`
+				Model       string `json:"model"`
+				DisplayName string `json:"displayName"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(res, &r) != nil {
+			return
+		}
+		var avail []agentmanager.ModelInfo
+		for _, m := range r.Data {
+			id := m.Model
+			if id == "" {
+				id = m.ID
+			}
+			if id != "" {
+				avail = append(avail, agentmanager.ModelInfo{ID: id, Name: m.DisplayName})
+			}
+		}
+		if len(avail) > 0 {
+			s.mu.Lock()
+			if s.model != "" {
+				current = s.model
+			}
+			s.mu.Unlock()
+			s.q.Push(agentmanager.ModelsChanged{Current: current, Available: avail})
+		}
+	})
+	if err != nil {
+		s.debugf("codex model/list: %v", err)
+	}
 }
 
 // Close implements agentmanager.Session.

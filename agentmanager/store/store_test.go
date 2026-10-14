@@ -22,6 +22,8 @@ func allEvents() []agentmanager.Event {
 	kind := agentmanager.KindEdit
 	return []agentmanager.Event{
 		agentmanager.SessionStarted{SessionID: "sess-1", Model: "m"},
+		agentmanager.ModelsChanged{Current: "m", Available: []agentmanager.ModelInfo{{ID: "m", Name: "Em"}, {ID: "n"}}},
+		agentmanager.ModelsChanged{Current: "n"},
 		agentmanager.ThoughtDelta{MessageID: "t1", Text: "think"},
 		agentmanager.TextDelta{MessageID: "a1", Text: "hello "},
 		agentmanager.TextDelta{MessageID: "a1", Text: "world"},

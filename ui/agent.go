@@ -69,9 +69,13 @@ type agentTab struct {
 	// cancelOpen aborts a start in flight.
 	cancelOpen context.CancelFunc
 	rec        *store.Record
+	// mdl is the tab's model choice and what its agent reported.
+	mdl tabModel
 
 	mu       sync.Mutex
 	startRes *agentStart
+	// modelRes is the outcome of a model switch running on a goroutine.
+	modelRes *modelResult
 }
 
 func newAgentTab() *agentTab {
@@ -99,9 +103,12 @@ type AgentPanel struct {
 	probed   bool
 
 	input *gpui.TextInput
-	tabs  []*agentTab
-	cur   *agentTab
-	hist  agentHistory
+	// modelInput is the model menu's free-text field; modelMenu shows the menu.
+	modelInput *gpui.TextInput
+	modelMenu  bool
+	tabs       []*agentTab
+	cur        *agentTab
+	hist       agentHistory
 	// deferred is a prompt from the AI command that waits for the first frame.
 	deferred string
 
@@ -141,6 +148,9 @@ func (ws *Workspace) refreshPlaceholders() {
 	ws.input.SetPlaceholder(i18n.T("ui.cmdline.placeholder"))
 	if ws.agent != nil {
 		ws.agent.input.SetPlaceholder(i18n.T("ui.agent.input_placeholder"))
+		if ws.agent.modelInput != nil {
+			ws.agent.modelInput.SetPlaceholder(i18n.T("ui.agent.model.input_placeholder"))
+		}
 	}
 }
 
@@ -336,12 +346,16 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 		w.Refresh()
 		return
 	}
+	// gen is read under t.mu by start and model-switch goroutines of earlier sessions.
+	t.mu.Lock()
 	t.gen++
 	gen := t.gen
+	t.mu.Unlock()
 	cfg := agentmanager.Config{
 		Harness:      h,
 		Cwd:          p.ws.projectDir(),
 		ResumeID:     p.resumeID(t, h),
+		Model:        p.modelFor(t, h),
 		SystemPrompt: cadmcp.Instructions(),
 		MCPServers:   []agentmanager.MCPServer{{Name: agentMCPName, URL: p.ep.URL, Token: p.ep.Token}},
 		AutoApprove:  agentmanager.AllowMCP(agentMCPName),
@@ -420,6 +434,7 @@ func (p *AgentPanel) stopTab(t *agentTab, wait bool) {
 	t.sess = nil
 	t.state = agentIdle
 	t.queued = ""
+	t.mdl.setting, t.mdl.restart, t.mdl.pending = false, false, false
 	var disp *cadmcp.Dispatcher
 	var srv *mcp.Server
 	if !p.anyLive() {
@@ -558,10 +573,11 @@ func (p *AgentPanel) pump(w *gpui.Window) {
 		if res != nil && res.gen == t.gen {
 			p.started(t, res)
 		}
+		p.adoptModel(t)
 		p.drainEvents(t)
 		if t.state != agentIdle {
 			live = true
-			busy = busy || t.state == agentStarting || t.tr.Running()
+			busy = busy || t.state == agentStarting || t.tr.Running() || t.mdl.setting
 		}
 	}
 	if !live {
@@ -584,6 +600,10 @@ func (p *AgentPanel) started(t *agentTab, res *agentStart) {
 	}
 	t.sess = res.sess
 	t.state = agentReady
+	if t.mdl.pending {
+		t.mdl.pending = false
+		p.applyModel(t)
+	}
 	if q := t.queued; q != "" {
 		t.queued = ""
 		p.prompt(t, q)
@@ -604,6 +624,10 @@ func (p *AgentPanel) drainEvents(t *agentTab) {
 			}
 			p.apply(t, ev)
 			if _, gone := ev.(agentmanager.Exited); gone {
+				p.stopTab(t, false)
+				return
+			}
+			if _, end := ev.(agentmanager.TurnEnd); end && t.mdl.restart {
 				p.stopTab(t, false)
 				return
 			}

@@ -24,6 +24,18 @@ type Session interface {
 	Close() error
 }
 
+// ModelSetter is implemented by sessions that can switch model while live. SetModel blocks until
+// the agent accepted or refused model (a non-empty ModelInfo.ID or any id the harness takes) or ctx
+// ends; the switch applies from the next turn. On success the session emits ModelsChanged with
+// Current set to model. An empty model is an error: to return to the harness default, start a new
+// session without Config.Model.
+type ModelSetter interface {
+	SetModel(ctx context.Context, model string) error
+}
+
+// ErrNoModel is returned by SetModel for an empty model.
+var ErrNoModel = errors.New("agentmanager: empty model")
+
 // Opener starts sessions; every backend package exports one.
 type Opener interface {
 	Open(ctx context.Context, cfg Config) (Session, error)

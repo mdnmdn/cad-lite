@@ -3,11 +3,11 @@ id: feat-agent-panel
 title: Agent panel
 kind: feature
 status: current
-summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex) against the open drawing, as several tabs whose conversations are stored per project, and asks the user before anything beyond drawing is allowed.
-read_when: you are changing the agent panel, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
+summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex) against the open drawing, as several tabs on a model the user picks, whose conversations are stored with the drawing in its project, and asks the user before anything beyond drawing is allowed.
+read_when: you are changing the agent panel, its model picker, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [ui/agent.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -40,19 +40,40 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   MCP server, started with the first session and closed with the last; tool calls still run one at a
   time on the UI goroutine.
 - **History.** `History` lists the project's stored conversations, newest first, with title (the first
-  prompt), harness and relative date; choosing one opens it in a tab, or switches to it if it is open.
-- **Per-project storage.** The project is the directory of the drawing file last given to `-open`,
-  OPEN or SAVE, else the working directory. Conversations live in `<project>/.cad-lite/agent/` (copied once from the old `.go-draw/agent/` when only that exists), one
-  JSONL file per conversation, created with the first prompt (directory 0700, files 0600). Opening the
-  panel restores the tabs that were open when the project was last used, with their transcripts,
-  read-only; no agent process starts. Sending to a restored tab starts its session with the stored agent
-  session id, so the agent continues its own context (Claude `--resume`, Codex `thread/resume`, ACP
-  `session/load`, whose replayed history is suppressed because the stored transcript is shown). A
-  session the agent has lost ends with an error note; open a new tab to continue. OPEN or SAVE of a
-  file in another directory closes every live session, keeps their records and switches to that project's
-  tabs.
-- **Default harness.** The `agent.default` [setting](settings.md) selects the harness at startup and when
+  prompt), harness and relative date, and the drawing's file name for a conversation of another drawing;
+  choosing one opens it in a tab, or switches to it if it is open.
+- **Model.** A chip after the harness chips shows the active tab's model: the chosen model's name, else
+  the harness default from the settings, else the model the agent reported, else `default`. Clicking it
+  opens a menu: *Default*, the models the agent reported (Claude's `initialize` list, ACP's session
+  models, Codex's `model/list`; the list arrives once a session runs and is stored with the
+  conversation), a field for any other model id (Enter applies, Escape closes), and *Make default for
+  <harness>*, which saves the tab's choice as `agent.model_<harness>` in the [settings](settings.md). The
+  choice is per tab and stored with its conversation, so a restored tab keeps it. A tab without a session
+  starts on it. A live session switches from the next turn when the harness can (Claude `set_model`, ACP
+  `session/set_config_option` or `session/set_model`, Codex's `turn/start` model); otherwise, and when
+  going back to *Default*, a note says so and the session ends (after the running turn), and the next
+  prompt starts it again on the new model, resuming the conversation. A model the agent refuses is
+  reported in the transcript and the previous choice comes back.
+- **Storage with the drawing.** The project is the directory of the drawing file last given to `-open`,
+  OPEN or SAVE, else the working directory. Conversations live in `<project>/.cad-lite/agent/` (copied once
+  from the old `.go-draw/agent/` when only that exists), one JSONL file per conversation, created with the
+  first prompt (directory 0700, files 0600) and tagged with the drawing's file name. Each drawing remembers
+  its own open tabs; an untitled drawing has the project's untitled set. Opening the panel restores the
+  tabs that were open when the drawing was last used, with their transcripts, read-only; no agent process
+  starts. Sending to a restored tab starts its session with the stored agent session id, so the agent
+  continues its own context (Claude `--resume`, Codex `thread/resume`, ACP `session/load`, whose replayed
+  history is suppressed because the stored transcript is shown). A session the agent has lost ends with an
+  error note; open a new tab to continue.
+- **Drawing switches.** OPEN of another drawing, or NEW from a saved one, closes every live session, keeps
+  their records and shows the tabs of the new drawing (none for a drawing never used with the agent).
+  Reopening the same file changes nothing. SAVE or SAVEAS under a new name takes the tabs along: in the same
+  directory the sessions keep running and reopening the old name shows no tabs; in another directory the open
+  conversations are copied into that project's store, their sessions close and the tabs reappear there
+  (the originals stay in the old project's History). The first save of an untitled drawing works the same
+  way. A store from before per-drawing tabs gives its open tabs to the first drawing opened.
+- **Default harness and model.** The `agent.default` [setting](settings.md) selects the harness at startup and when
   changed in the settings panel (`AgentPanel.Configure`); empty picks the first agent found (see PATH below).
+  `agent.model_<harness>` is the model a tab without its own choice starts with on that harness.
 - **Harness chips.** One chip per agent CLI found on the effective PATH (`opencode`, `claude`, `codex`): the app's own PATH plus the one the user's login shell reports, probed in the background at startup (chips appear when the probe ends) and again by the settings panel's Check button. An agent whose executable the user chose in the settings (*Executables*, see [Settings](settings.md)) gets a chip while that file exists, and starts from that file. The chips lock
   while the tab has a session or a stored conversation. With none found the panel says so; `-agent` with `-agent-cmd` offers the
   named harness regardless of `PATH`.
@@ -93,11 +114,13 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   [Operations](../tech/operations.md).
 - Panel API: `Workspace.AgentPanel` (creates the panel), `Workspace.HasAgentPanel`,
   `Workspace.SetProjectPath`, `AgentPanel.Configure`, `Start`, `Stop`, `Send`, `Cancel`, `Respond`,
-  `SetOpener`, `Tabs`, `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`, `Sessions`; `Workspace.CloseAgent`;
+  `SetOpener`, `Tabs` (`Tab.Model` is the chip's label), `NewTab`, `SwitchTab`, `CloseTab`, `OpenSession`,
+  `Sessions`, `SetModel`, `SetDefaultModel`, `Models`; `Workspace.CloseAgent`;
   action `cad-toggle-agent` bound to F2. Command `AI` reaches the panel through
   `cmdsys.Session.SetAgentHandler` (the `OPTIONS` command is wired the same way through `SetSettingsHandler`); OPEN and SAVE report the file through `cmdsys.Session.OnFilePath`.
-- Files: `<project>/.cad-lite/agent/<id>.jsonl` and `open.json` (the open tabs), format in the store's
-  section of the agentmanager API contract.
+- Files: `<project>/.cad-lite/agent/<id>.jsonl`, `open.json` (the untitled drawing's open tabs) and
+  `open-<hash>.json` (one drawing's open tabs, keyed by its file name), format in the store's section of the
+  agentmanager API contract. The design is [decision](../tech/decisions.md) D29; model switching is D30.
 - What the agent may do to the drawing is the tool set in [Agent integration](../tech/agent-integration.md).
 
 ## Implementation
@@ -106,7 +129,10 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 `startTab` (shared MCP server, `agentmanager.Config` with `ResumeID`, launch on a goroutine), the timer
 `pump` over every tab and `stopTab`. `ui/agent_store.go` holds the persistence glue: project directory,
 `ensureLoaded` (open set restore), tabs, history and `apply`, which folds each event into the
-transcript and `agentmanager/store`. `ui/agent_view.go` renders the header, tabs, history menu,
+transcript and `agentmanager/store`, and `drawingChanged`, which `Workspace.pathChanged` calls with whether
+the drawing was saved (the same `doc.Drawing`) or replaced. `ui/agent_model.go` holds the model state per
+tab (`tabModel`), `SetModel`/`applyModel` (a `ModelSetter` switch on a goroutine, or a restart), the chip
+and the menu. `ui/agent_view.go` renders the header, tabs, history menu,
 transcript (`agentmanager/transcript`) and prompt row; the prompt is a `gpui.TextInput` made
 `Multiline(agentPromptLines)` in `newAgentPanel` (`ui/agent.go`). `ui/workspace.go` creates the panel lazily and
 hosts the toggle and `agentCommand`; `cmdsys/commands/agent.go` is the `AI` command. `ui/agent_demo.go`
@@ -121,6 +147,9 @@ seeds the canned transcript. Threading and lifecycle rules are in
   and leaves the panel idle; a queued prompt is dropped.
 - A tool call that the UI goroutine cannot run in 15 s returns a busy error to the agent.
 - A failed prompt write ends the turn with the error as a note.
+- A model switch the agent refuses, or that does not answer within 15 s, shows a warning and restores the
+  previous choice; a model id the CLI rejects at start ends the start with the error, as above.
+- A conversation that cannot be copied on SAVE to another directory shows one warning; the others are copied.
 - In the browser build no agent can start; the panel reports the launch error.
 
 ## Related docs
@@ -132,6 +161,5 @@ seeds the canned transcript. Threading and lifecycle rules are in
 ## Next steps
 
 - A multi-line prompt field, once `TextInput` supports it.
-- A model picker.
 - Delete or rename a stored conversation from the history menu.
 - A live resume test against the real CLIs.

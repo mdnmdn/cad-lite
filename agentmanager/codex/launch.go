@@ -162,6 +162,7 @@ func (s *session) handshake(ctx context.Context, cfg agentmanager.Config) error 
 	s.threadID = res.Thread.ID
 	s.mu.Unlock()
 	s.q.Push(agentmanager.SessionStarted{SessionID: res.Thread.ID, Model: res.Model})
+	s.listModels(res.Model)
 	return nil
 }
 

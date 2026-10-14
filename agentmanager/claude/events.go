@@ -24,6 +24,12 @@ type line struct {
 
 	RequestID string          `json:"request_id"`
 	Request   json.RawMessage `json:"request"`
+	Response  struct {
+		Subtype   string          `json:"subtype"`
+		RequestID string          `json:"request_id"`
+		Response  json.RawMessage `json:"response"`
+		Error     string          `json:"error"`
+	} `json:"response"`
 
 	ToolUseResult json.RawMessage `json:"tool_use_result"`
 
@@ -97,6 +103,14 @@ func (s *session) handle(raw []byte) {
 		s.onStream(l)
 	case "control_request":
 		s.onControlRequest(l)
+	case "control_response":
+		s.mu.Lock()
+		done := s.ctl[l.Response.RequestID]
+		delete(s.ctl, l.Response.RequestID)
+		s.mu.Unlock()
+		if done != nil {
+			done(controlResult{ok: l.Response.Subtype == "success", errMsg: l.Response.Error, response: l.Response.Response})
+		}
 	case "control_cancel_request":
 		s.mu.Lock()
 		delete(s.perms, l.RequestID)

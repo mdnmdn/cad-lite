@@ -110,6 +110,9 @@ var tables = map[string]map[string]bool{
 	"recent": {"files": true, "folders": true},
 }
 
+// agentModelKey prefixes the agent table's per-harness model keys (model_claude, ...).
+const agentModelKey = "model_"
+
 // Parse decodes TOML text into Settings: absent keys keep their defaults,
 // values of the wrong type or range are replaced (one warning each) and
 // unknown keys go to Extra.
@@ -136,6 +139,17 @@ func Parse(data []byte) (Settings, []string, error) {
 			continue
 		}
 		for k, v := range tbl {
+			if h, ok := strings.CutPrefix(k, agentModelKey); ok && name == "agent" && h != "" {
+				if x, ok := v.(string); ok {
+					if s.AgentModels == nil {
+						s.AgentModels = map[string]string{}
+					}
+					s.AgentModels[h] = x
+				} else {
+					bad(name+"."+k, "a string", v)
+				}
+				continue
+			}
 			if !keys[k] {
 				extra[name+"."+k] = v
 				continue
@@ -338,9 +352,14 @@ func Marshal(s Settings) []byte {
 	if len(bins) > 0 {
 		binLine = "binaries = " + formatValue(bins)
 	}
-	section("agent", "default: the harness the agent panel selects (empty: first installed). binaries: an executable per harness that wins over the PATH, e.g. { claude = \"/opt/claude/bin/claude\" }.",
-		"default = "+quote(s.DefaultAgent),
-		binLine)
+	agent := []string{"default = " + quote(s.DefaultAgent), binLine}
+	for _, h := range sortedKeys(s.AgentModels) {
+		if m := s.AgentModels[h]; m != "" && bareKey(h) {
+			agent = append(agent, agentModelKey+h+" = "+quote(m))
+		}
+	}
+	section("agent", "default: the harness the agent panel selects (empty: first installed). binaries: an executable per harness that wins over the PATH, e.g. { claude = \"/opt/claude/bin/claude\" }. model_<harness>: the model new tabs on it use (absent: the harness default).",
+		agent...)
 	update := []string{"auto_check = " + strconv.FormatBool(s.AutoUpdate)}
 	if !s.LastUpdateCheck.IsZero() {
 		update = append(update, "last_check = "+s.LastUpdateCheck.UTC().Format(time.RFC3339))
@@ -388,6 +407,16 @@ func formatKey(k string) string {
 		return k
 	}
 	return quote(k)
+}
+
+// bareKey reports whether k can be written as a bare TOML key.
+func bareKey(k string) bool {
+	for _, c := range k {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return k != ""
 }
 
 func quote(s string) string { return strconv.Quote(s) }

@@ -15,6 +15,8 @@ const (
 	kindUser      = "user"
 	kindAgentSess = "agent_session"
 	kindResolved  = "permission_resolved"
+	kindModel     = "model"
+	kindDrawing   = "drawing"
 )
 
 // User is a stored user message.
@@ -37,6 +39,14 @@ type metaLine struct {
 
 type agentSessLine struct {
 	ID string `json:"id"`
+}
+
+type modelLine struct {
+	Model string `json:"model"`
+}
+
+type drawingLine struct {
+	Drawing string `json:"drawing"`
 }
 
 func marshalLine(kind string, at time.Time, payload any) ([]byte, error) {
@@ -69,6 +79,8 @@ func eventKind(ev agentmanager.Event) (string, error) {
 		return "log", nil
 	case agentmanager.Exited:
 		return "exited", nil
+	case agentmanager.ModelsChanged:
+		return "models", nil
 	}
 	return "", fmt.Errorf("store: unsupported event %T", ev)
 }
@@ -123,6 +135,8 @@ func decodeEvent(env envelope) (agentmanager.Event, error) {
 		return decode[agentmanager.Log](env.D)
 	case "exited":
 		return decode[agentmanager.Exited](env.D)
+	case "models":
+		return decode[agentmanager.ModelsChanged](env.D)
 	}
 	return nil, errNotEvent
 }

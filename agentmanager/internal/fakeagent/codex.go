@@ -80,6 +80,14 @@ func (f *fakeCodex) serve() int {
 				}
 			}
 			f.result(m["id"], map[string]any{"thread": map[string]any{"id": f.thread}, "model": "fake-model"})
+		case "model/list":
+			if os.Getenv("FAKEAGENT_MODELS") == "" {
+				f.r.WriteFrame(map[string]any{"id": m["id"], "error": map[string]any{"code": -32601, "message": "method not found"}})
+				continue
+			}
+			f.result(m["id"], map[string]any{"data": []any{
+				map[string]any{"id": "fake-model", "model": "fake-model", "displayName": "Fake Model", "isDefault": true},
+				map[string]any{"id": "fake-mini", "model": "fake-mini", "displayName": "Fake Mini"}}, "nextCursor": nil})
 		case "turn/start":
 			if code, done := f.turn(m); done {
 				return code

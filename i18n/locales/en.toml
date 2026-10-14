@@ -933,6 +933,19 @@ write_failed = "agent history write failed: %v"
 mcp = "cannot start the MCP server: %v"
 start = "cannot start %s: %v"
 
+[ui.agent.model]
+default = "default"
+default_named = "default (%s)"
+tip = "Model — the model this conversation uses; click to choose another"
+pick_tip = "Use this model — it applies from the next turn"
+menu_title = "Model for this %s conversation"
+none_listed = "The agent lists its models once its session starts; type a model id below."
+input_placeholder = "Other model id, Enter to apply"
+make_default = "Make default for %s"
+make_default_tip = "Default — new %s conversations start on this model (saved in the settings)"
+restarts = "Model %s applies from the next prompt; the agent session restarts and resumes this conversation."
+failed = "cannot switch to model %s: %v"
+
 [ui.settings]
 title = "Settings"
 close = "Close  Esc"

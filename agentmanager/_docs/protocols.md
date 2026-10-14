@@ -48,6 +48,10 @@ approval request and `mcpToolCall` item shapes, `thread/resume` params.
 - **Handshake** (10 s per call, reader running first): `initialize` (`experimentalApi`), `initialized`,
   `thread/start {cwd}` or `thread/resume {threadId,cwd,excludeTurns:true}`; `SessionStarted{thread.id, model}`.
   A failing handshake returns an error with the stderr tail.
+- **Models.** After the handshake `model/list {}` is sent asynchronously; its first page (`data[]`: `model`, else
+  `id`, and `displayName`) becomes `ModelsChanged{Current: thread model, Available}`. An error (an older
+  app-server) is ignored. `SetModel` writes nothing: it stores the model, emits `ModelsChanged` and every later
+  `turn/start` carries `"model"` (Codex keeps a turn override for the following turns). Unverified like the rest.
 - **Turns.** One in flight. `Prompt` sends `turn/start` and returns; the ack carries `turn.id`. A failed ack is
   reported as `TurnEnd{Failed}`. `turn/completed` is the only turn end (`interrupted` -> Cancelled,
   `failed` -> Failed with the error message).
@@ -108,7 +112,7 @@ against Claude Code 2.1.299 (see "Live test").
   | `control_request` `can_use_tool` | `PermissionRequest` (options `allow`, `allow_always:<n>` per suggestion, `deny`); `Config.AutoApprove` answers first and emits nothing |
   | other `control_request` | `control_response` `{"subtype":"error","request_id":R,"error":"unsupported"}` |
   | `control_cancel_request` | forgets the pending request |
-  | `control_response` | ignored (reply to our interrupt) |
+  | `control_response` | answers one of our control requests by `request_id` (`initialize`, `set_model`); others (the interrupt's) are ignored |
   | `result` | `TurnEnd`: cancelled when we interrupted, `error_max_turns` -> max_turn_requests, `is_error` or a non-success subtype -> failed (`Err` = result text), `stop_reason` max_tokens/refusal, else end_turn. Usage goes to `Logger.Debugf` only |
   | `log` | `Log` |
 
@@ -116,6 +120,12 @@ against Claude Code 2.1.299 (see "Live test").
   execute; Grep/WebSearch search; WebFetch fetch; TodoWrite/ExitPlanMode think; everything else other. Title is
   `"<Name> <file_path|path|command|pattern|url>"`, or the raw `mcp__srv__tool` name for MCP tools (what `AllowMCP`'s
   title fallback expects).
+- **Models.** `Open` writes `{"type":"control_request","request_id":"gd-ctl-N","request":{"subtype":"initialize"}}`
+  right after the spawn; Claude answers before any prompt with `response.models[]` (`value`, `displayName`), which
+  becomes `ModelsChanged{Current: Config.Model, Available}` (2.1.299 lists aliases such as `default`, `opus`,
+  `sonnet`, `haiku` and full ids). A CLI that does not answer reports nothing. `SetModel` sends
+  `{"subtype":"set_model","model":M}` and waits for `control_response`: `success`, or `error` with `error`
+  (`Model 'x' not found`). Both verified live on 2.1.299 (`TestLiveClaudeModels`, no prompt sent).
 - **Cancel.** Every outstanding permission is denied first (an interrupt with an unanswered ask makes Claude fail the
   tool), then the interrupt is written. stdin stays open, the turn ends `TurnEnd{Cancelled}` and the next prompt
   reaches the same process. An unanswered permission stalls the turn, so `Close` denies first too.
@@ -151,7 +161,10 @@ resuming does not duplicate the transcript. (2) The opencode MCP env fallback re
   Error `-32000` becomes "authentication required" (OpenCode adds ``authenticate the CLI first (`opencode auth login`)``
   plus the advertised method ids). `Config.ResumeID` uses `session/load` (needs `loadSession`); the history the agent
   replays while loading is dropped. `Config.Model` is applied over the wire (`session/set_config_option` on the
-  `model`-category option, else `session/set_model`), never argv; a failure is a warn `Log`. `SessionStarted` follows.
+  `model`-category option, else `session/set_model`), never argv; a failure is a warn `Log`. `SessionStarted` follows,
+  then `ModelsChanged` when the result lists models: the model option's `options` (`value`, `name`; grouped
+  options flattened), else `models.availableModels` (`modelId`, `name`). `SetModel` uses the same two methods
+  and fails when the agent advertised neither.
 - **MCP injection.** With `mcpCapabilities.http`, each `Config.MCPServers` entry is sent in `session/new` as
   `{type:"http", name, url, headers:[{name:"Authorization", value:"Bearer TOKEN"}]}`. Without it, `OpenCode()`
   restarts the process once with `OPENCODE_CONFIG_CONTENT={"mcp":{name:{type:"remote",url,headers,enabled:true}}}` and

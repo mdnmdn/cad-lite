@@ -113,6 +113,10 @@ type Settings struct {
 	// executable the user chose for it, which wins over the PATH lookup. A
 	// harness without an entry is looked up on the PATH. Nil when empty.
 	AgentBinaries map[string]string
+	// AgentModels maps a harness name to the model a new agent tab on it uses;
+	// a missing or empty entry means the harness's own default. Stored as
+	// agent.model_<harness>.
+	AgentModels map[string]string
 	// AutoUpdate turns the periodic background check for a new release on or off.
 	AutoUpdate bool
 	// LastUpdateCheck is when the last check for a release finished; zero means never.
@@ -236,6 +240,14 @@ func (s Settings) Clone() Settings {
 			b[k] = v
 		}
 		s.AgentBinaries = b
+
+	}
+	if s.AgentModels != nil {
+		m := make(map[string]string, len(s.AgentModels))
+		for k, v := range s.AgentModels {
+			m[k] = v
+		}
+		s.AgentModels = m
 	}
 	if s.Extra != nil {
 		e := make(map[string]any, len(s.Extra))

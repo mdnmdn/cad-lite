@@ -937,6 +937,19 @@ write_failed = "scrittura della cronologia dell'agente non riuscita: %v"
 mcp = "impossibile avviare il server MCP: %v"
 start = "impossibile avviare %s: %v"
 
+[ui.agent.model]
+default = "predefinito"
+default_named = "predefinito (%s)"
+tip = "Modello — il modello usato da questa conversazione; fai clic per sceglierne un altro"
+pick_tip = "Usa questo modello — vale dal turno successivo"
+menu_title = "Modello per questa conversazione %s"
+none_listed = "L'agente elenca i suoi modelli quando la sessione parte; scrivi qui sotto l'id di un modello."
+input_placeholder = "Altro id di modello, Invio per applicare"
+make_default = "Rendi predefinito per %s"
+make_default_tip = "Predefinito — le nuove conversazioni %s partono con questo modello (salvato nelle impostazioni)"
+restarts = "Il modello %s vale dal prossimo messaggio; la sessione dell'agente riparte e riprende questa conversazione."
+failed = "impossibile passare al modello %s: %v"
+
 [ui.settings]
 title = "Opzioni"
 close = "Chiudi  Esc"

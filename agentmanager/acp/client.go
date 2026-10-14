@@ -66,13 +66,36 @@ type initResult struct {
 type sessionResult struct {
 	SessionID string `json:"sessionId"`
 	Models    *struct {
-		CurrentModelID string `json:"currentModelId"`
+		CurrentModelID  string `json:"currentModelId"`
+		AvailableModels []struct {
+			ModelID string `json:"modelId"`
+			Name    string `json:"name"`
+		} `json:"availableModels"`
 	} `json:"models"`
 	ConfigOptions []struct {
-		ID           string `json:"id"`
-		Category     string `json:"category"`
-		CurrentValue any    `json:"currentValue"`
+		ID           string         `json:"id"`
+		Category     string         `json:"category"`
+		CurrentValue any            `json:"currentValue"`
+		Options      []configChoice `json:"options"`
 	} `json:"configOptions"`
+}
+
+// configChoice is one value of a select config option, or a group of them.
+type configChoice struct {
+	Value   any            `json:"value"`
+	Name    string         `json:"name"`
+	Options []configChoice `json:"options"`
+}
+
+// flatten appends the values of cs (groups expanded) to out as models.
+func flatten(cs []configChoice, out []agentmanager.ModelInfo) []agentmanager.ModelInfo {
+	for _, c := range cs {
+		if v, ok := c.Value.(string); ok && v != "" {
+			out = append(out, agentmanager.ModelInfo{ID: v, Name: c.Name})
+		}
+		out = flatten(c.Options, out)
+	}
+	return out
 }
 
 // Open implements agentmanager.Opener.
@@ -220,16 +243,26 @@ func (s *session) openSession(ctx context.Context, wire []map[string]any, authID
 	s.mu.Lock()
 	s.id = res.SessionID
 	s.mu.Unlock()
-	model := s.selectModel(ctx, &res)
+	model, avail := s.selectModel(ctx, &res)
 	s.q.Push(agentmanager.SessionStarted{SessionID: res.SessionID, Model: model})
+	if len(avail) > 0 {
+		s.q.Push(agentmanager.ModelsChanged{Current: model, Available: avail})
+	}
 	return nil
 }
 
-// selectModel applies Config.Model through the wire (never argv) and returns the model in effect.
-func (s *session) selectModel(ctx context.Context, res *sessionResult) string {
+// selectModel records how the agent switches models, applies Config.Model through the wire (never
+// argv) and returns the model in effect and the models the agent offers.
+func (s *session) selectModel(ctx context.Context, res *sessionResult) (string, []agentmanager.ModelInfo) {
 	cur := ""
+	var avail []agentmanager.ModelInfo
 	if res.Models != nil {
 		cur = res.Models.CurrentModelID
+		for _, m := range res.Models.AvailableModels {
+			if m.ModelID != "" {
+				avail = append(avail, agentmanager.ModelInfo{ID: m.ModelID, Name: m.Name})
+			}
+		}
 	}
 	configID := ""
 	for _, o := range res.ConfigOptions {
@@ -238,30 +271,72 @@ func (s *session) selectModel(ctx context.Context, res *sessionResult) string {
 			if v, ok := o.CurrentValue.(string); ok {
 				cur = v
 			}
+			if l := flatten(o.Options, nil); len(l) > 0 {
+				avail = l
+			}
 			break
 		}
 	}
+	s.mu.Lock()
+	s.modelConfig, s.modelWire = configID, res.Models != nil
+	s.mu.Unlock()
 	want := s.cfg.Model
 	if want == "" || want == cur {
-		return cur
+		return cur, avail
 	}
+	if err := s.applyModel(ctx, res.SessionID, want); err != nil {
+		s.logEvent("warn", err.Error())
+		return cur, avail
+	}
+	return want, avail
+}
+
+// applyModel switches the session's model with session/set_config_option (preferred) or
+// session/set_model, whichever the agent advertised.
+func (s *session) applyModel(ctx context.Context, sid, want string) error {
+	s.mu.Lock()
+	configID, wire := s.modelConfig, s.modelWire
+	s.mu.Unlock()
 	rctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	var err error
 	switch {
 	case configID != "":
-		err = s.conn.Call(rctx, "session/set_config_option", map[string]any{"sessionId": res.SessionID, "configId": configID, "value": want}, nil)
-	case res.Models != nil:
-		err = s.conn.Call(rctx, "session/set_model", map[string]any{"sessionId": res.SessionID, "modelId": want}, nil)
+		err = s.conn.Call(rctx, "session/set_config_option", map[string]any{"sessionId": sid, "configId": configID, "value": want}, nil)
+	case wire:
+		err = s.conn.Call(rctx, "session/set_model", map[string]any{"sessionId": sid, "modelId": want}, nil)
 	default:
-		s.logEvent("warn", "agent offers no model selection; ignoring model "+want)
-		return cur
+		return errors.New("agent offers no model selection; ignoring model " + want)
 	}
 	if err != nil {
-		s.logEvent("warn", "set model "+want+": "+err.Error())
-		return cur
+		var je *jsonrpc.Error
+		if errors.As(err, &je) {
+			err = errors.New(je.Message)
+		}
+		return fmt.Errorf("set model %s: %w", want, err)
 	}
-	return want
+	return nil
+}
+
+// SetModel implements agentmanager.ModelSetter.
+func (s *session) SetModel(ctx context.Context, model string) error {
+	if model == "" {
+		return agentmanager.ErrNoModel
+	}
+	s.mu.Lock()
+	closed, sid := s.closed, s.id
+	s.mu.Unlock()
+	if closed {
+		return agentmanager.ErrClosed
+	}
+	if err := s.applyModel(ctx, sid, model); err != nil {
+		if errors.Is(err, jsonrpc.ErrClosed) {
+			return agentmanager.ErrClosed
+		}
+		return fmt.Errorf("acp: %w", err)
+	}
+	s.q.Push(agentmanager.ModelsChanged{Current: model})
+	return nil
 }
 
 func httpMCPEntries(servers []agentmanager.MCPServer) []map[string]any {

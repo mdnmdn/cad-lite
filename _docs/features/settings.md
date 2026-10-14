@@ -65,6 +65,8 @@ behaviour and the default agent and where agents are found. Changes show at once
   file. A chosen file wins over the PATH for discovery, for the agent panel's chips and for every
   session start; Reset goes back to the PATH. A chosen file that has since disappeared is flagged in
   red. After a change the discovery probe runs again if it ran before.
+  found, in that order. The default model per harness has no control here: the agent panel's model menu sets
+  it (*Make default for …*, see [Agent panel](agent-panel.md)) and the file keeps it as `agent.model_<harness>`.
 - **Agent discovery.** Which of OpenCode, Claude and Codex were found, each with its full path and the
   version its `--version` reports (marked when it is the executable chosen under AI agent), or `not found`; a line saying where the PATH came from (login shell,
   Windows registry, or the app's own when the probe failed, with the reason) and a `Show PATH` expander
@@ -101,6 +103,7 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 | `drawing.wheel` | `auto`, `zoom`, `pan` | `auto` |
 | `agent.default` | harness name, or empty | empty |
 | `agent.binaries` | inline table of harness name to executable path, e.g. `{ claude = "/opt/claude/bin/claude" }`; empty paths are dropped, unknown names kept | `{}` |
+| `agent.model_<harness>` (`model_opencode`, `model_claude`, `model_codex`) | model id new tabs on that harness start with; absent for the harness's own default | absent |
 | `update.auto_check` | boolean | true |
 | `update.last_check` | timestamp, written by the app | unset |
 | `window.width`, `window.height` | logical pixels, 0 for unset | 1280, 800 |
