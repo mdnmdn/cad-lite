@@ -1339,3 +1339,77 @@ affected `.expect` files, which list `# (verify)` where one of these decides the
 | V44 | The `>>` prompt prefix and its nesting | 1.2 |
 | V45 | Spaces inside text entry in scripts (TEXT content, layer descriptions) | 1.5, 1.9 |
 | V46 | `LASTPOINT` is set by which commands (the first point of LINE, ID, picks...) and what `@` gives right after a new drawing | 1.6 |
+
+---------------------------------------------------------------------------------------------------
+
+## 7. Wave 0 result (cmdsys and doc seam, 2026-10-14)
+
+What the seam split delivered for `cmdsys`, `cmdsys/commands` and `doc`, so the parallel package
+agents can be briefed from it. Behaviour is unchanged except where noted. Not part of this pass (the
+`ui/` split, `cmdsys/pipeline.go`, `cmdsys/events.go` beyond `OnVarChange`, the GUI harness, the
+decision records) and `OSMODE` and the other aid variables, which WP3 registers.
+
+**Deviations from the section 4 proposals.** `AddTextHandler` became two calls (a filter rewrites,
+a handler consumes) in one ordered list; `RegisterVarGroup` takes `func(*Session, *Vars)`;
+`Var.OnChange` is `func(old, new any)`; `Vars.Set` takes a typed value and `SetString` parses text;
+`UndoToMark` returns the number of steps undone; `LASTPOINT`, `ORTHOMODE`, `APERTURE`, `CLAYER` are
+live variables (they read and write the session fields, which stay public, so `ui/` is unaffected).
+
+### Registration rule
+
+`commands.Register` (in `register.go`, frozen) calls one `registerX(r)` per file. Each owner edits only
+its own `registerX` (add `r.Register`, `r.Alias`); a package with two files (CW-A: `polygon.go`,
+`point.go`; CW-B1: `array.go`, `oops.go`) calls its second `registerX` from the first one. `aliases.go`
+is frozen: aliases go through `r.Alias` in the owner's `registerX`. `base.go` is frozen: `base`,
+`selecting`, `selectPrompt`, `immediate`, `yesNo`, `pt`, `previewTol`, `rectPts`, `PreviewColor`; a
+helper another package needs goes in the owner's file and is mentioned in the hand-off.
+`Context.Vars()` is how a command reads a variable; register one from an `init` in the owner's file
+with `cmdsys.RegisterVarGroup`; registering a name twice panics at the first `NewSession`.
+
+### File ownership
+
+| Package | Files it owns (`cmdsys/commands/` unless a path is given) | State at Wave 0 |
+|---|---|---|
+| CW-A draw | `draw.go` (`registerDraw`; LINE PLINE CIRCLE ARC RECTANG; the owner may split it), `polygon.go`, `point.go`, `ellipse.go` (new files), `geom/tangent.go` | `draw.go` only |
+| CW-B1 transform | `modify.go` (`registerModify`; ERASE MOVE COPY ROTATE SCALE), `array.go`, `oops.go` (new) | `modify.go` only |
+| CW-B2 construct | `construct.go` (`registerConstruct`; MIRROR OFFSET FILLET CHAMFER) | G6-1 done: `OFFSETDIST` (default -1), `FILLETRAD`, `CHAMFERA`, `CHAMFERB` are session variables |
+| CW-B3 trim family | `trim.go` (`registerTrim`), `edges.go` (new) | unchanged |
+| CW-C inquiry, units | `inquiry.go` (`registerInquiry`; DIST ID LIST), `measure.go` (`registerMeasure`; AREA MEASUREGEOM), `units.go` (`registerUnits`, stub), `cmdsys/format.go` | `Context.Fmt`, `FmtAngle` done |
+| CW-D view, layers, properties | `view.go` (`registerView`; ZOOM, `ZoomExtents`), `layer.go` (`registerLayer`), `matchprop.go`, `props.go`, `purge.go` (stubs), `render/viewstack.go` | ZOOM and LAYER are transparent-marked |
+| CW-E file, history | `undo.go` (`registerUndo`; UNDO REDO), `files.go` (`registerFiles`; NEW OPEN SAVE), `cmdsys/dirty.go` (new) | journal API in `doc` done (H6) |
+| CW-G command-line core | `cmdsys/names.go`, `cmdsys/sysvars.go`, `cmdsys/transparent.go`, `cmdsys/script.go`, `cmdsys/wording.go`, `cmdsys/input.go`, `cmdsys/lastmem.go`, `sysvar.go` (`registerSysvar`, stub), `script.go` (`registerScript`, stub), the two documents named in section 4 | see the hook table |
+| WP2 selection | `cmdsys/selectopts.go`, `cmdsys/select.go` (new), `cmdsys/selmem.go`, `select.go` (`registerSelect`, stub) | `Previous` memory done |
+| WP3 aids | `cmdsys/cursor.go` (Hover, Click, SelectBox, Overlay moved out of `session.go`), `cmdsys/override.go`, `cmdsys/aids.go` (new), `aids.go` (`registerAids`, stub) | `cmdsys/pipeline.go` not created |
+| WP4 grips | `stretch.go` (`registerStretch`, stub) | |
+| Host | `agent.go`, `settings.go`, `cmdsys/settings_hook.go` | unchanged |
+| Nobody (frozen) | `register.go`, `aliases.go`, `base.go`, `cmdsys/context.go`, `registry.go`, `selection.go`, `command.go`, `session.go` (edit with care: a hook change goes through the Wave 0 owner), `cmdsys/textin.go`, `cmdsys/vars.go` | `session.go` shrank: Script, cursor and Context, Registry, Selection moved out |
+
+Tests go in new `*_test.go` files per package; nobody edits `commands_test.go`. New in Wave 0:
+`cmdsys/vars_test.go`, `cmdsys/hooks_test.go`, `commands/vars_test.go`, `doc/journal_test.go`.
+
+### Hooks (real unless marked stub)
+
+| # | API | Where | Notes |
+|---|---|---|---|
+| H1 | `Session.Vars()`, `Context.Vars() *Vars`. `Vars.Register(Var{Name, Kind (VarInt, VarReal, VarText, VarPoint), Default, Min, Max, ReadOnly, Read, OnChange})`; `Get`, `Int`, `Real`, `Text`, `Point`, `String(name)`; `Set(name, any) error`, `SetString(name, text) error` (errors `ErrVarUnknown`, `ErrVarReadOnly`, `ErrVarType`, `ErrVarRange`), `Store` (bypasses read-only and `OnChange`, for a result variable such as `DISTANCE`), `Has`, `Lookup`, `Names`, `Subscribe`; `Session.OnVarChange`; `RegisterVarGroup(func(*Session, *Vars))` | `cmdsys/vars.go`, live variables in `sysvars.go` | Types: int, float64, string, `geom.Vec2`. `Max <= Min` means unbounded. `Read` makes a variable live. Registered: `ORTHOMODE`, `APERTURE`, `LASTPOINT`, `CLAYER` (live), `LUPREC` 4, `AUPREC` 0, and the four construct variables. CW-G fills the rest of 1.11, the SETVAR messages from the four errors, and the stored no-ops |
+| H2 | `Session.AddTextFilter(order, func(*Session, string) string)`, `AddTextHandler(order, func(*Session, string) bool)`; orders `TextOrderNames` 10, `TextOrderSelection` 20, `TextOrderSnap` 30, `TextOrderHash` 31, `TextOrderVars` 90 | `cmdsys/textin.go`; `Submit` runs it first | Real: order 10 strips `' _ .` at `Command:` (`cmdsys/names.go`, `StripCommandPrefixes`; `.` does not bypass aliases, there is no UNDEFINE). A stage must return `""` for `""`. Filters rewrite and continue; a handler returning true ends `Submit` |
+| H3 | `Context.LastPoint()`, `SetLastPoint(p)`, `LastEntity() (Handle, bool)`, `SetLastEntity`, `LastEnd() (p, tangent, ok)`, `SetLastEnd(p, tangent)` | `cmdsys/lastmem.go` | `LASTPOINT` is set by every point answered at a prompt (as `@` already used); `LastEntity` is set when a command's transaction commits with added entities. `LastEnd` is stub (nobody sets it yet: CW-A for LINE-1 and ARC-3). `@` with no base still follows today's rule (no base is an error), CW-G/WP3 changes it |
+| H4 | `Context.PreviousSelection() []Handle`, `SetPrevious(hs)` | `cmdsys/selmem.go` | `selecting.take` records every non-empty selection; cleared on `SetDrawing`, pruned on erase. WP2 reads it for the P option |
+| H5 | `cmdsys.Transparent{ Transparent() bool }`, `IsTransparent(Command)` | `cmdsys/transparent.go` | Marker only: ZOOM, LAYER, DIST, ID return true; no frame, no `>>`; `'` at a prompt is still an invalid response (CW-G builds frames). At `Command:` the `'` is stripped |
+| H6 | `Drawing.Mark()`, `HasMark()`, `UndoToMark() int`, `BeginGroup()`, `EndGroup()`, `InGroup()`, `UndoN(n) int`, `RedoN(n) int`, `UndoDepth()` | `doc/journal.go` | Real and tested. A marker past the undo depth is dropped; groups nest and merge into one step at the outermost `EndGroup`; `UndoToMark` refuses while a group or transaction is open |
+| H7 | `doc.Layer.Frozen`, `NoPlot`, `Linetype`, `Lineweight` (hundredths of mm, 0 default), `Description` | `doc/drawing.go` | Fields only: render, snap, selection, DXF and the layer command do not read them yet (CW-D) |
+| H8 | `doc.LWPolyline.Widths [][2]float64` (start and end width of the segment leaving vertex i) | `doc/entities.go` | Field and `Clone` only: `Transform` does not scale it, the DXF codec (40, 41, 43) and the renderer ignore it (CW-A with the `doc`, `fileio/dxf` and `render` owners) |
+| H9 | `Context.Fmt(v)`, `FmtAngle(rad)`, `FormatNumberPrec(v, prec)` | `cmdsys/format.go` | Honour `LUPREC` and `AUPREC`; defaults print what `FormatNumber` does. No command calls them yet; CW-C switches commands over, then the prompt defaults (G3-1) |
+| H10 | Key constants `MsgInvalidPoint`, `MsgInvalidValue`, `MsgNoBase`, `MsgInvalidInput`, `MsgCancel`, `MsgUnknownCmd`; `InputErrorKey(err, *Prompt) string` | `cmdsys/wording.go` | `Session.inputError` goes through `InputErrorKey`, which still returns today's keys; CW-G makes it prompt-kind specific and adds the keys to both locale files |
+
+Also real: `StripScriptComments` and `Session.Script` drop `;` comments (G9-1 partly: a final newline
+still sends one more Enter, and `RSCRIPT`, `RESUME`, `DELAY`, tabs are open), G1-1 for `_`, `.` and `_.`
+prefixes at `Command:` (not `MULTIPLE`, not `-NAME` aliases), and G6-1 (per-session construct defaults).
+
+**Corpus.** `GODRAW_ACAD_CORPUS=1` is green. Script `31_prefixes_and_keywords` newly passes (the prefix
+stage), so its `.expect` now declares `go-draw: pass`; the passing set is 01, 20, 21, 31. The harness
+still strips comments itself, which is now redundant and harmless.
+
+**Docs touched.** `tech/command-system.md` (extension points, prefix and script rules),
+`tech/document-model.md` (journal hooks, layer and width fields), `features/command-line.md`,
+`features/drawing-and-editing.md` and `features/dxf-files.md` (file anchors after `util.go` went away).

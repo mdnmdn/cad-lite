@@ -47,7 +47,8 @@ history.
   (`Chiudi` or `C`), and always by its English name or shortcut as well (`Close`). A leading `_`
   (`_C`, `_Close`) means English only, as in AutoCAD, which a script can use to stay language
   independent.
-- Command names and aliases are case-insensitive. An unknown name prints
+- Command names and aliases are case-insensitive, and at `Command:` a name may carry the prefixes `_`, `.`
+  and `'` (`_LINE`, `.ERASE`, `_.LINE`), which are ignored. In a script, `;` starts a comment to the end of the line. An unknown name prints
   `Unknown command "NAME". Press F1 for help.` (`Comando "NAME" sconosciuto. Premere F1 per la guida.` in Italian) and starts nothing.
 - Typed answers take the forms the [command system](../tech/command-system.md) lists: `x,y`,
   `@dx,dy`, `d<angle`, `@d<angle`, a bare number for direct distance entry, keywords by name or

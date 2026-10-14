@@ -7,7 +7,7 @@ summary: Every built-in command with its prompts and aliases, how selection, obj
 read_when: you are adding or changing a command, an alias, or what a click does while a command runs
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/util.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/snap.go]
+code_anchors: [cmdsys/commands/draw.go, cmdsys/commands/modify.go, cmdsys/commands/view.go, cmdsys/commands/layer.go, cmdsys/commands/inquiry.go, cmdsys/commands/files.go, cmdsys/commands/undo.go, cmdsys/commands/register.go, cmdsys/commands/measure.go, cmdsys/commands/construct.go, cmdsys/commands/trim.go, cmdsys/snap.go]
 depends_on: [tech-command-system, tech-document-model]
 review_cycle: monthly
 ---
@@ -101,8 +101,10 @@ with their handles. Selections, view changes and layer table edits are not undoa
 
 The draw commands are in `cmdsys/commands/draw.go` (`lineCmd`, `plineCmd`, `circleCmd`, `arcCmd`,
 `rectCmd`), the modify commands in `modify.go` (`eraseCmd`, `moveCmd` for MOVE and COPY,
-`transformCmd` for ROTATE and SCALE, all sharing `selecting`), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, the construct commands in `construct.go` (`mirrorCmd`, `offsetCmd`, `cornerCmd` for FILLET and CHAMFER, on `geom/offset.go` and `geom/fillet.go`), the trim family in `trim.go` (`trimCmd`, `extendCmd`, `breakCmd`, `joinCmd`, `explodeCmd`, on `geom/split.go`), and the rest in `util.go`, which also
-holds `Register`, `Aliases` and `ZoomExtents`. Snaps, picking and box selection are
+`transformCmd` for ROTATE and SCALE, all sharing `selecting`), measurement (`areaCmd`, `measureGeomCmd`, with the area formulas in `geom/area.go`) in `measure.go`, the construct commands in `construct.go` (`mirrorCmd`, `offsetCmd`, `cornerCmd` for FILLET and CHAMFER, on `geom/offset.go` and `geom/fillet.go`), the trim family in `trim.go` (`trimCmd`, `extendCmd`, `breakCmd`, `joinCmd`, `explodeCmd`, on `geom/split.go`), and one file per remaining group: `view.go` (ZOOM, `ZoomExtents`), `layer.go`, `inquiry.go` (DIST, ID, LIST),
+`files.go` (NEW, OPEN, SAVE), `undo.go` (UNDO, REDO). `register.go` holds `Register`, which calls one `registerX` per
+file, and `aliases.go` the `Aliases` text; `base.go` holds the helpers every command shares (`base`, `selecting`,
+`immediate`). Snaps, picking and box selection are
 `cmdsys.FindSnap`, `cmdsys.Pick` and `cmdsys.SelectBox`; the UI forwards clicks and drags to
 `Session.Click` and `Session.SelectBox` from `ui/canvas.go`.
 

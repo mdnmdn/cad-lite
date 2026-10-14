@@ -10,15 +10,17 @@ import (
 	"go-draw/render"
 )
 
-// Settings the construct commands remember between runs, as AutoCAD keeps
-// them in system variables: the last OFFSET distance (0 means Through), the
-// FILLET radius and the two CHAMFER distances.
-var (
-	lastOffset   float64
-	filletRadius float64
-	chamferD1    float64
-	chamferD2    float64
-)
+// The settings the construct commands remember between runs are system variables of the session
+// (AutoCAD keeps them the same way, and two sessions never share them): OFFSETDIST (negative
+// means Through), FILLETRAD, CHAMFERA and CHAMFERB.
+func init() {
+	cmdsys.RegisterVarGroup(func(_ *cmdsys.Session, v *cmdsys.Vars) {
+		v.Register(cmdsys.Var{Name: "OFFSETDIST", Kind: cmdsys.VarReal, Default: -1.0})
+		v.Register(cmdsys.Var{Name: "FILLETRAD", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "CHAMFERA", Kind: cmdsys.VarReal, Default: 0.0})
+		v.Register(cmdsys.Var{Name: "CHAMFERB", Kind: cmdsys.VarReal, Default: 0.0})
+	})
+}
 
 // pickAperturePx is the pick aperture of the construct commands, in pixels.
 const pickAperturePx = 8
@@ -147,8 +149,8 @@ func (*offsetCmd) Name() string { return "OFFSET" }
 
 func (c *offsetCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	def := keywordInput("Through")
-	if lastOffset > 0 {
-		def = distanceInput(lastOffset)
+	if d := ctx.Vars().Real("OFFSETDIST"); d > 0 {
+		def = distanceInput(d)
 	}
 	return &cmdsys.Prompt{Message: ctx.T("cmd.offset.prompt.distance"), Accepts: cmdsys.InputDistance | cmdsys.InputPoint | cmdsys.InputKeyword,
 		Keywords: []string{"Through"}, Default: def}
@@ -175,7 +177,7 @@ func (c *offsetCmd) setDistance(ctx *cmdsys.Context, d float64) *cmdsys.Prompt {
 		return c.Start(ctx)
 	}
 	c.dist, c.haveDst = d, true
-	lastOffset = d
+	_ = ctx.Vars().Set("OFFSETDIST", d)
 	return c.selectPrompt(ctx)
 }
 
@@ -354,9 +356,9 @@ func (c *cornerCmd) noun() string {
 
 func (c *cornerCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	if c.chamfer {
-		ctx.Say("cmd.corner.msg.chamfer_settings", cmdsys.FormatNumber(chamferD1), cmdsys.FormatNumber(chamferD2))
+		ctx.Say("cmd.corner.msg.chamfer_settings", cmdsys.FormatNumber(ctx.Vars().Real("CHAMFERA")), cmdsys.FormatNumber(ctx.Vars().Real("CHAMFERB")))
 	} else {
-		ctx.Say("cmd.corner.msg.fillet_settings", cmdsys.FormatNumber(filletRadius))
+		ctx.Say("cmd.corner.msg.fillet_settings", cmdsys.FormatNumber(ctx.Vars().Real("FILLETRAD")))
 	}
 	return c.firstPrompt(ctx)
 }
@@ -377,9 +379,9 @@ func (c *cornerCmd) secondPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 func (c *cornerCmd) askPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
 	switch c.ask {
 	case "radius":
-		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.fillet_radius"), Accepts: cmdsys.InputDistance, Default: distanceInput(filletRadius)}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.fillet_radius"), Accepts: cmdsys.InputDistance, Default: distanceInput(ctx.Vars().Real("FILLETRAD"))}
 	case "d1":
-		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d1"), Accepts: cmdsys.InputDistance, Default: distanceInput(chamferD1)}
+		return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d1"), Accepts: cmdsys.InputDistance, Default: distanceInput(ctx.Vars().Real("CHAMFERA"))}
 	}
 	return &cmdsys.Prompt{Message: ctx.T("cmd.corner.prompt.chamfer_d2"), Accepts: cmdsys.InputDistance, Default: distanceInput(c.d1)}
 }
@@ -401,14 +403,15 @@ func (c *cornerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 		switch c.ask {
 		case "radius":
-			filletRadius = in.Value
+			_ = ctx.Vars().Set("FILLETRAD", in.Value)
 			return c.firstPrompt(ctx)
 		case "d1":
-			c.d1, chamferD1 = in.Value, in.Value
+			c.d1 = in.Value
+			_ = ctx.Vars().Set("CHAMFERA", in.Value)
 			c.ask = "d2"
 			return c.askPrompt(ctx)
 		}
-		chamferD2 = in.Value
+		_ = ctx.Vars().Set("CHAMFERB", in.Value)
 		return c.firstPrompt(ctx)
 	}
 	if in.Kind == cmdsys.InputKeyword {
@@ -444,7 +447,7 @@ func (c *cornerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		return c.secondPrompt(ctx)
 	}
 	l1 := ctx.Doc.Entity(c.h1).(*doc.Line)
-	corner, err := c.compute(l1, l2, c.p1, in.Point)
+	corner, err := c.compute(ctx, l1, l2, c.p1, in.Point)
 	if err != nil {
 		switch {
 		case errors.Is(err, geom.ErrParallel):
@@ -478,12 +481,12 @@ func (c *cornerCmd) title(ctx *cmdsys.Context) string {
 	return ctx.Translator().CommandName(c.Name())
 }
 
-func (c *cornerCmd) compute(l1, l2 *doc.Line, p1, p2 geom.Vec2) (geom.Corner, error) {
+func (c *cornerCmd) compute(ctx *cmdsys.Context, l1, l2 *doc.Line, p1, p2 geom.Vec2) (geom.Corner, error) {
 	a, b := geom.Line{A: l1.Start, B: l1.End}, geom.Line{A: l2.Start, B: l2.End}
 	if c.chamfer {
-		return geom.ChamferLines(a, b, p1, p2, chamferD1, chamferD2)
+		return geom.ChamferLines(a, b, p1, p2, ctx.Vars().Real("CHAMFERA"), ctx.Vars().Real("CHAMFERB"))
 	}
-	return geom.FilletLines(a, b, p1, p2, filletRadius)
+	return geom.FilletLines(a, b, p1, p2, ctx.Vars().Real("FILLETRAD"))
 }
 
 // cutLine moves the end of l that is farther from far to join, keeping far.
@@ -504,7 +507,7 @@ func (c *cornerCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.Displ
 	if l1 == nil || l2 == nil || h2 == c.h1 {
 		return
 	}
-	corner, err := c.compute(l1, l2, c.p1, cur)
+	corner, err := c.compute(ctx, l1, l2, c.p1, cur)
 	if err != nil {
 		return
 	}

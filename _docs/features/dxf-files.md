@@ -7,7 +7,7 @@ summary: Opening and saving DXF drawings from the command line and the -open fla
 read_when: you are changing OPEN, SAVE or the -open flag, or how file problems are reported to the user
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/commands/util.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go]
+code_anchors: [cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -79,7 +79,7 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
 
 ## Implementation
 
-`fileCmd` in `cmdsys/commands/util.go` serves OPEN and SAVE: `Start` checks for a handler and
+`fileCmd` in `cmdsys/commands/files.go` serves OPEN and SAVE: `Start` checks for a handler and
 prompts, `Input` calls `Files.Open` or `Files.Save`, prints the warnings through `printWarnings`
 (the limit of five) and the result line, and `ZoomExtents` frames the new drawing. `fileio.Registry`
 in `fileio/format.go` picks the codec by extension; `fileio/dxf.Codec` reads and writes. `cmd/cad`

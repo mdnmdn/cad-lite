@@ -1,8 +1,6 @@
 package cmdsys
 
 import (
-	"errors"
-	"math"
 	"strings"
 
 	"go-draw/doc"
@@ -42,10 +40,16 @@ type Session struct {
 	// dispatching is set while a command's Start or Input runs.
 	dispatching bool
 
-	cursor    geom.Vec2
-	snap      SnapHit
-	snapped   bool
-	lastPoint *geom.Vec2
+	cursor  geom.Vec2
+	snap    SnapHit
+	snapped bool
+
+	// vars is the system-variable registry; mem and prev are the Last and Previous memories the
+	// Context exposes; stages are the ordered text pre-processors Submit runs.
+	vars   *Vars
+	mem    *lastState
+	prev   *selMemory
+	stages []textStage
 
 	onDrawing []func(*doc.Drawing)
 	onPath    []func(string)
@@ -57,9 +61,15 @@ const HistoryLimit = 200
 
 // NewSession returns a session over d showing view, with commands from reg.
 func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
-	s := &Session{registry: reg, Snaps: DefaultSnaps, SnapOn: true, Aperture: 8}
-	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath}
+	s := &Session{registry: reg, Snaps: DefaultSnaps, SnapOn: true, Aperture: 8,
+		vars: NewVars(), mem: &lastState{}, prev: &selMemory{}}
+	s.ctx = Context{View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath,
+		vars: s.vars, last: s.mem, prev: s.prev}
+	s.AddTextFilter(TextOrderNames, stripNamePrefixes)
 	s.SetDrawing(d)
+	for _, g := range varGroups {
+		g(s, s.vars)
+	}
 	return s
 }
 
@@ -156,11 +166,13 @@ func (s *Session) SetDrawing(d *doc.Drawing) {
 	s.ctx.Index = spatial.New()
 	s.ctx.Index.Build(d)
 	s.ctx.Selection.Clear()
+	s.prev.hs = nil
 	ix := s.ctx.Index
 	sel := s.ctx.Selection
 	d.OnChange(func(cs doc.ChangeSet) {
 		ix.Apply(d, cs)
 		sel.Prune(d)
+		s.prev.prune(d)
 	})
 	for _, f := range s.onDrawing {
 		f(d)
@@ -219,12 +231,6 @@ func (s *Session) print(line string) {
 	}
 }
 
-// Cursor returns the effective cursor: snapped, or ortho-constrained.
-func (s *Session) Cursor() geom.Vec2 { return s.cursor }
-
-// Snap returns the snap the cursor is on, if any.
-func (s *Session) Snap() (SnapHit, bool) { return s.snap, s.snapped }
-
 // Run starts the named command, cancelling any running one.
 func (s *Session) Run(name string) bool {
 	cmd, ok := s.registry.Lookup(name)
@@ -264,7 +270,9 @@ func (s *Session) next(p *Prompt) {
 
 func (s *Session) finish() {
 	if s.ctx.txn != nil {
-		s.ctx.txn.Commit()
+		if cs := s.ctx.txn.Commit(); len(cs.Added) > 0 {
+			s.ctx.SetLastEntity(cs.Added[len(cs.Added)-1])
+		}
 		s.ctx.txn = nil
 	}
 	s.active, s.prompt = nil, nil
@@ -288,6 +296,10 @@ func (s *Session) Escape() {
 // command name (Enter alone repeats the last command); otherwise it is a
 // response to the prompt.
 func (s *Session) Submit(text string) {
+	text, handled := s.preprocess(text)
+	if handled {
+		return
+	}
 	if s.active == nil {
 		t := strings.TrimSpace(text)
 		if t == "" {
@@ -317,21 +329,10 @@ func (s *Session) Submit(text string) {
 	s.respond(in, text)
 }
 
-// Script runs AutoCAD script text: tokens separated by single spaces or
-// newlines, each submitted in turn; an empty token (two separators in a
-// row) is Enter.
-func (s *Session) Script(text string) {
-	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\n", " ")
-	for _, tok := range strings.Split(text, " ") {
-		s.Submit(tok)
-	}
-}
-
 func (s *Session) respond(in Input, echo string) {
 	s.print(s.Prompt() + " " + echo)
 	if in.Kind == InputPoint {
-		p := in.Point
-		s.lastPoint = &p
+		s.mem.SetPoint(in.Point)
 	}
 	var p *Prompt
 	s.dispatching = true
@@ -348,108 +349,10 @@ func (s *Session) base() *geom.Vec2 {
 	if s.prompt != nil && s.prompt.Base != nil {
 		return s.prompt.Base
 	}
-	return s.lastPoint
-}
-
-// aperture returns the pick/snap radius in model units.
-func (s *Session) aperture() float64 { return s.Aperture * s.ctx.View.PixelSize() }
-
-// Hover updates the cursor from a raw model point: object snap first, then
-// ortho relative to the prompt's base.
-func (s *Session) Hover(p geom.Vec2) {
-	s.snapped = false
-	if s.SnapOn && s.wantsPoint() {
-		if hit, ok := FindSnap(s.ctx.Doc, s.ctx.Index, p, s.aperture(), s.Snaps); ok {
-			s.snap, s.snapped = hit, true
-			s.cursor = hit.Point
-			return
-		}
-	}
-	s.cursor = s.constrain(p)
-}
-
-func (s *Session) wantsPoint() bool {
-	return s.prompt != nil && s.prompt.Accepts&(InputPoint|InputDistance|InputAngle) != 0
-}
-
-func (s *Session) constrain(p geom.Vec2) geom.Vec2 {
-	if !s.Ortho || s.prompt == nil || s.prompt.Base == nil {
-		return p
-	}
-	b := *s.prompt.Base
-	d := p.Sub(b)
-	if math.Abs(d.X) >= math.Abs(d.Y) {
-		return geom.V(p.X, b.Y)
-	}
-	return geom.V(b.X, p.Y)
-}
-
-// Click handles a primary click at raw model point p. At a point, distance
-// or angle prompt it answers with the snapped cursor; at a selection prompt
-// or when idle it picks the entity under the cursor (toggling it off when
-// remove is set).
-func (s *Session) Click(p geom.Vec2, remove bool) {
-	s.Hover(p)
-	if s.prompt != nil {
-		pr := s.prompt
-		switch {
-		case pr.Accepts&InputPoint != 0:
-			s.respond(Input{Kind: InputPoint, Point: s.cursor}, FormatPoint(s.cursor))
-			return
-		case pr.Accepts&InputDistance != 0 && pr.Base != nil:
-			v := s.cursor.Dist(*pr.Base)
-			s.respond(Input{Kind: InputDistance, Value: v, Point: s.cursor}, FormatNumber(v))
-			return
-		case pr.Accepts&InputAngle != 0 && pr.Base != nil:
-			v := s.cursor.Sub(*pr.Base).Angle()
-			s.respond(Input{Kind: InputAngle, Value: v, Point: s.cursor}, FormatNumber(v*180/math.Pi))
-			return
-		case pr.Accepts&InputSelection == 0:
-			return
-		}
-	}
-	h, ok := Pick(s.ctx.Doc, s.ctx.Index, p, s.aperture())
-	switch {
-	case !ok:
-	case remove:
-		s.ctx.Selection.Remove(h)
-	default:
-		s.ctx.Selection.Add(h)
-	}
-}
-
-// SelectBox handles a box drag from a to b (raw model points): a window or
-// crossing selection when idle or at a selection prompt.
-func (s *Session) SelectBox(a, b geom.Vec2, remove bool) {
-	if s.prompt != nil && s.prompt.Accepts&InputSelection == 0 {
-		return
-	}
-	hs := SelectBox(s.ctx.Doc, s.ctx.Index, a, b, s.ctx.View.PixelSize()/2)
-	if remove {
-		s.ctx.Selection.Remove(hs...)
-	} else {
-		s.ctx.Selection.Add(hs...)
-	}
-}
-
-// Overlay appends the active command's rubber-band preview for the current
-// cursor.
-func (s *Session) Overlay(dl *render.DisplayList) {
-	if s.active != nil && s.prompt != nil {
-		s.guard(func() { s.active.Preview(&s.ctx, s.cursor, dl) })
-	}
+	return s.mem.base()
 }
 
 // inputError maps a ParseInput error to its localized command-line sentence.
 func (s *Session) inputError(err error) string {
-	t := s.Translator()
-	switch {
-	case errors.Is(err, ErrInvalidPoint):
-		return t.T("input.err.invalid_point")
-	case errors.Is(err, ErrInvalidValue):
-		return t.T("input.err.invalid_value")
-	case errors.Is(err, ErrNoBase):
-		return t.T("input.err.no_base")
-	}
-	return t.T("input.err.invalid_input")
+	return s.Translator().T(InputErrorKey(err, s.prompt))
 }

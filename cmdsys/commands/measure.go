@@ -361,3 +361,9 @@ func (c *measureGeomCmd) Cancel(ctx *cmdsys.Context) {
 		c.sub.Cancel(ctx)
 	}
 }
+
+// registerMeasure adds AREA and MEASUREGEOM.
+func registerMeasure(r *cmdsys.Registry) {
+	r.Register("AREA", func() cmdsys.Command { return &areaCmd{} })
+	r.Register("MEASUREGEOM", func() cmdsys.Command { return &measureGeomCmd{} })
+}

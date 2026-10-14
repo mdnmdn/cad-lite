@@ -9,53 +9,6 @@ import (
 	"go-draw/render"
 )
 
-// selecting is the "Select objects:" phase shared by the modify commands:
-// a non-empty pre-selection is used as is (noun-verb editing), otherwise
-// the command asks for one.
-type selecting struct {
-	hs []doc.Handle
-}
-
-func selectPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
-	return &cmdsys.Prompt{Message: ctx.T("cmd.common.prompt.select_objects"), Accepts: cmdsys.InputSelection}
-}
-
-// begin takes the pre-selection; it returns false when the command must
-// prompt for objects.
-func (s *selecting) begin(ctx *cmdsys.Context) bool {
-	if ctx.Selection.Len() == 0 {
-		return false
-	}
-	s.hs = append([]doc.Handle(nil), ctx.Selection.Handles()...)
-	ctx.Selection.Clear()
-	return true
-}
-
-// take accepts a selection response; it returns false when it was empty.
-func (s *selecting) take(ctx *cmdsys.Context, in cmdsys.Input) bool {
-	s.hs = in.Selection
-	ctx.Selection.Clear()
-	if len(s.hs) == 0 {
-		return false
-	}
-	ctx.SayPlural("cmd.common.msg.found", len(s.hs))
-	return true
-}
-
-// previewTransformed draws the selected entities under m.
-func (s *selecting) previewTransformed(ctx *cmdsys.Context, m geom.Mat3, dl *render.DisplayList) {
-	tol := previewTol(ctx)
-	for _, h := range s.hs {
-		e := ctx.Doc.Entity(h)
-		if e == nil {
-			continue
-		}
-		for _, c := range e.Geometry() {
-			dl.Curve(c.Transform(m), tol, PreviewColor, 1)
-		}
-	}
-}
-
 // --- ERASE --------------------------------------------------------------
 
 type eraseCmd struct {
@@ -236,4 +189,13 @@ func (c *transformCmd) Preview(ctx *cmdsys.Context, cur geom.Vec2, dl *render.Di
 	}
 	dl.Polyline([]geom.Vec2{*c.center, cur}, PreviewColor.WithAlpha(120), 0, false)
 	c.previewTransformed(ctx, c.matrix(v), dl)
+}
+
+// registerModify adds the transform commands.
+func registerModify(r *cmdsys.Registry) {
+	r.Register("ERASE", func() cmdsys.Command { return &eraseCmd{} })
+	r.Register("MOVE", func() cmdsys.Command { return &moveCmd{} })
+	r.Register("COPY", func() cmdsys.Command { return &moveCmd{copy: true} })
+	r.Register("ROTATE", func() cmdsys.Command { return &transformCmd{} })
+	r.Register("SCALE", func() cmdsys.Command { return &transformCmd{scale: true} })
 }

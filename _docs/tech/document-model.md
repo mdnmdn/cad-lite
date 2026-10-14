@@ -7,7 +7,7 @@ summary: How a drawing is stored — handles, entities, layers, the header — a
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go, doc/unknown.go]
+code_anchors: [doc/object.go, doc/entities.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/unknown.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -31,12 +31,15 @@ Zero means "no object". The model-space block record is `doc.ModelSpace`, the ow
 **Objects and entities.** `doc.Object` is anything stored: handle, owner, DXF class name and a deep
 `Clone`. `doc.Entity` adds the graphical part: `Common()` (handle, owner, layer, colour), `Bounds`,
 `Geometry` (the curves used for snapping, picking and display) and `Transform`. The entity types are
-`Line`, `Circle`, `Arc` and `LWPolyline`. Arc angles are radians; the DXF codec converts degrees.
+`Line`, `Circle`, `Arc` and `LWPolyline`. An `LWPolyline` also carries `Widths`, the start and end width per
+segment; it is nil today, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
 
 **Colour.** An entity's `Color` is an AutoCAD Color Index from 1 to 255, or `doc.ByLayer` (256),
 which a transaction assigns when the colour is unset.
 
-**Layers.** `doc.Layer` has a name, a colour index and the `Off` and `Locked` flags. Layer "0"
+**Layers.** `doc.Layer` has a name, a colour index and the `Off` and `Locked` flags, plus the stored
+fields `Frozen`, `NoPlot`, `Linetype`, `Lineweight` and `Description`, which the layer commands will
+honour (render, snap and selection do not read `Frozen` yet). Layer "0"
 always exists. `Drawing.CurrentLayer` is the layer new entities go on. Layer table edits are direct
 and not journalled.
 
@@ -75,6 +78,12 @@ on top.
    selection and the render cache are the listeners in the application.
 8. `Drawing.Load` inserts an entity outside any transaction and journal. Only file readers use it,
    on a drawing nobody else holds yet.
+
+`journal.go` adds the hooks the UNDO commands use, all over the same steps: `Drawing.Mark` pushes a marker at
+the current depth and `UndoToMark` undoes back to the latest one (a marker the history has been undone
+past is dropped); `BeginGroup` and `EndGroup` merge the transactions committed between them into one undo
+step (groups nest; only the outermost end merges); `UndoN` and `RedoN` step several times; `UndoDepth` and
+`HasMark` report state. A group or open transaction refuses `UndoToMark`.
 
 `Drawing.AbortOpen` aborts the open transaction if there is one, and does nothing otherwise. A host uses
 it to recover when a panic left a transaction open (`cmdsys.Session.guard`, `cadmcp`).

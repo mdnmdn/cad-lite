@@ -92,6 +92,11 @@ type LWPolyline struct {
 	// Bulges[i] is the bulge of the segment leaving vertex i.
 	Bulges []float64
 	Closed bool
+	// Widths[i] is the {start, end} width of the segment leaving vertex i (DXF codes 40 and 41);
+	// nil means zero width everywhere and a shorter slice means zero for the missing segments.
+	// The field is carried through Clone only: the DXF codec, the renderer and Transform (which
+	// does not scale it) ignore it until the polyline-width work lands.
+	Widths [][2]float64
 }
 
 // Class implements Object.
@@ -102,6 +107,7 @@ func (e *LWPolyline) Clone() Object {
 	c := *e
 	c.Points = append([]geom.Vec2(nil), e.Points...)
 	c.Bulges = append([]float64(nil), e.Bulges...)
+	c.Widths = append([][2]float64(nil), e.Widths...)
 	return &c
 }
 

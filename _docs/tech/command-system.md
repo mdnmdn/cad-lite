@@ -7,7 +7,7 @@ summary: The command model, the session state machine, typed-input parsing, the 
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
 updated: 2026-10-14
 verified: 2026-10-14
-code_anchors: [cmdsys/command.go, cmdsys/session.go, cmdsys/input.go, cmdsys/snap.go]
+code_anchors: [cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -52,7 +52,9 @@ text, integer and Enter. `cmdsys.Input` carries the response.
 2. **Starting a command cancels the running one.** Replacing the drawing (OPEN, NEW) from inside a
    command does not print a cancel.
 3. **Enter at `Command:` repeats the last command.** An unknown name prints
-   `Unknown command "NAME". Press F1 for help.` and starts nothing.
+   `Unknown command "NAME". Press F1 for help.` and starts nothing. At `Command:` the name prefixes
+   `'`, `_` and `.` are stripped in any order (`_.LINE`, `'_ZOOM`; `cmdsys/names.go`); a leading `-` is part
+   of the name, and at a prompt nothing is stripped.
 4. **Typed input** is parsed by `cmdsys.ParseInputIn` (`ParseInput` for the current language), in this order:
    - empty → Enter if accepted, else the default, else an error;
    - a keyword or its shortcut, case-insensitive, in the session's language or English; a leading
@@ -66,8 +68,10 @@ text, integer and Enter. `cmdsys.Input` carries the response.
    A parse error is printed to the history and the prompt stays. Numbers must be finite: `nan`,
    `inf` and values that overflow (`1e999`) are rejected as an invalid value, and a point whose result overflows
    to infinity as an invalid point.
-5. **Scripts** follow AutoCAD script rules: `Session.Script` splits on single spaces and newlines and
-   submits each token; an empty token (two separators in a row) is Enter.
+5. **Scripts** follow AutoCAD script rules: `Session.Script` drops `;` comments to the end of the line
+   (`StripScriptComments`; a comment-only line vanishes, an empty line stays), splits on single spaces and
+   newlines and submits each token; an empty token (two separators in a row) is Enter. A final newline
+   still sends one more Enter.
 6. **A selection prompt answers with the selection set** when the user presses Enter. Modify commands
    take a non-empty pre-selection without prompting (noun-verb editing) and clear the selection.
 
@@ -79,6 +83,41 @@ text, integer and Enter. `cmdsys.Input` carries the response.
    with `NAME is not available to agents.` while `Session.SetAgentCaller(true)` is on, by name or alias,
    and an agent cannot answer the prompt of one a human started. `cadmcp` sets the flag around every
    tool body; see [Agent integration](agent-integration.md).
+
+## Session extension points
+
+The seam split gives each later change its own file instead of one shared function. Each point has a
+default that changes nothing.
+
+- **System variables** (`vars.go`). `Session.Vars()` and `Context.Vars()` return the session's `Vars`
+  registry: `Register(Var{Name, Kind, Default, Min, Max, ReadOnly, Read, OnChange})`, typed getters
+  `Int/Real/Text/Point`, `Set` (typed value) and `SetString` (parsed text, for SETVAR) returning
+  `ErrVarUnknown`, `ErrVarReadOnly`, `ErrVarType` or `ErrVarRange`, `Store` (the owner of a read-only
+  variable), `Names`, `String`, `Subscribe` and `Session.OnVarChange`. `Register` panics on a duplicate
+  name. A package registers its variables from an `init` in its own file with `RegisterVarGroup`;
+  `NewSession` runs the groups. `sysvars.go` registers the live ones (`ORTHOMODE`, `APERTURE`,
+  `LASTPOINT`, `CLAYER`, which read and write session state) and `LUPREC`, `AUPREC`; `commands/construct.go`
+  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, so the construct defaults are per session.
+- **Text stages** (`textin.go`). `Session.AddTextFilter(order, f)` rewrites the line and
+  `AddTextHandler(order, f)` may consume it; `Submit` runs them in ascending `TextOrder*` order before
+  anything else. The name-prefix filter is order 10.
+- **Last state** (`lastmem.go`). `Context.LastPoint`/`SetLastPoint` (what `@` measures from; the session
+  records every point answered), `LastEntity` (set when a command's transaction commits) and
+  `LastEnd`/`SetLastEnd` (end and tangent of the last line or arc, set by the draw commands).
+- **Previous selection** (`selmem.go`). `Context.PreviousSelection`/`SetPrevious`; `selecting.take` records
+  each non-empty selection, and erased handles are pruned.
+- **Transparent marker** (`transparent.go`). `cmdsys.Transparent` and `IsTransparent`; ZOOM, LAYER, DIST
+  and ID implement it. Frames (`>>`, resuming the interrupted prompt) are not built: `'` at a prompt is
+  still an invalid response.
+- **Number formatting** (`format.go`). `Context.Fmt` and `FmtAngle` honour `LUPREC` and `AUPREC`; the
+  defaults print exactly what `FormatNumber` does.
+- **Wording** (`wording.go`). Catalog-key constants for the session's own messages and `InputErrorKey`,
+  the one place that maps a parse error and a prompt to its sentence.
+
+The command package mirrors this split: one file per command group, each with a `registerX` function that
+`commands.Register` calls, a frozen `aliases.go` (a package registers its own aliases with `Registry.Alias`
+in its `registerX`) and `base.go` for the shared helpers. The table of which package owns which file is in
+the AutoCAD command specification's Wave 0 result (`_docs/inbox/autocad-commands.md`).
 
 ## Language
 
@@ -97,7 +136,7 @@ next line printed. Catalogs and the language choice are owned by `i18n` and the
 - **Names.** `Register` ends with `i18n.RegisterAliases`, so the Italian command names are aliases in
   every language; canonical names stay English. `SnapMode.String` is localized (`SnapMode.In` takes
   a translator).
-- **Parse errors** map to `input.err.*` keys in `Session.inputError`.
+- **Parse errors** map to `input.err.*` keys through `InputErrorKey` in `Session.inputError`.
 
 ## Input pipeline
 

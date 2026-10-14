@@ -15,6 +15,18 @@ type Layer struct {
 	Off bool
 	// Locked layers display but cannot be selected for editing.
 	Locked bool
+	// Frozen hides the layer like Off and, in AutoCAD, also leaves it out of regeneration. The
+	// field is stored and round-trips in memory only: render, snap and selection do not honour
+	// it yet (the layer commands land that).
+	Frozen bool
+	// NoPlot excludes the layer from plotting (negated so the zero value plots, as new layers do).
+	NoPlot bool
+	// Linetype is the layer's linetype name; "" means CONTINUOUS.
+	Linetype string
+	// Lineweight is the layer's lineweight in hundredths of a millimetre; 0 means the default.
+	Lineweight int
+	// Description is the layer's free-text description.
+	Description string
 }
 
 // Header holds the drawing's header variables.

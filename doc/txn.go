@@ -180,6 +180,11 @@ type JournalStep struct {
 // Journal is the undo/redo history of committed transactions.
 type Journal struct {
 	undo, redo []JournalStep
+	// marks are undo depths recorded by Mark, oldest first.
+	marks []int
+	// groups is the BeginGroup nesting depth; groupStart is the undo depth the outermost group
+	// began at.
+	groups, groupStart int
 }
 
 func (j *Journal) record(s JournalStep) {
@@ -202,6 +207,7 @@ func (d *Drawing) Undo() bool {
 	s := j.undo[len(j.undo)-1]
 	j.undo = j.undo[:len(j.undo)-1]
 	j.redo = append(j.redo, s)
+	j.dropMarks()
 	d.apply(s.Before)
 	return true
 }

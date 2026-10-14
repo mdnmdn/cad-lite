@@ -9,19 +9,6 @@ import (
 	"go-draw/render"
 )
 
-// PreviewColor is the rubber-band colour of command previews.
-var PreviewColor = render.Color{R: 120, G: 200, B: 255, A: 255}
-
-func pt(p geom.Vec2) *geom.Vec2 { return &p }
-
-func previewTol(ctx *cmdsys.Context) float64 { return ctx.View.PixelSize() / 4 }
-
-// base embeds the no-op parts of cmdsys.Command.
-type base struct{}
-
-func (base) Preview(*cmdsys.Context, geom.Vec2, *render.DisplayList) {}
-func (base) Cancel(*cmdsys.Context)                                  {}
-
 // --- LINE ---------------------------------------------------------------
 
 type lineCmd struct {
@@ -244,10 +231,6 @@ func (c *rectCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 	return &cmdsys.Prompt{Message: ctx.T("cmd.rectang.prompt.first_corner"), Accepts: cmdsys.InputPoint}
 }
 
-func rectPts(a, b geom.Vec2) []geom.Vec2 {
-	return []geom.Vec2{a, {X: b.X, Y: a.Y}, b, {X: a.X, Y: b.Y}}
-}
-
 func (c *rectCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	if c.first == nil {
 		c.first = pt(in.Point)
@@ -261,4 +244,13 @@ func (c *rectCmd) Preview(_ *cmdsys.Context, cur geom.Vec2, dl *render.DisplayLi
 	if c.first != nil {
 		dl.Polyline(rectPts(*c.first, cur), PreviewColor, 1, true)
 	}
+}
+
+// registerDraw adds the draw commands.
+func registerDraw(r *cmdsys.Registry) {
+	r.Register("LINE", func() cmdsys.Command { return &lineCmd{} })
+	r.Register("PLINE", func() cmdsys.Command { return &plineCmd{} })
+	r.Register("CIRCLE", func() cmdsys.Command { return &circleCmd{} })
+	r.Register("ARC", func() cmdsys.Command { return &arcCmd{} })
+	r.Register("RECTANG", func() cmdsys.Command { return &rectCmd{} })
 }
