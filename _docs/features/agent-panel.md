@@ -7,7 +7,7 @@ summary: The on-demand docked chat panel that runs AI coding agents (opencode, C
 read_when: you are changing the agent panel, its model picker, image attachments, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/doctabs.go, ui/agent.go, ui/agent_markdown.go, ui/agent_markdown_view.go, ui/agent_message.go, ui/agent_queue.go, ui/agent_working.go, ui/agent_model.go, ui/agent_image.go, ui/agent_install.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+code_anchors: [ui/doctabs.go, ui/agent.go, ui/agent_markdown.go, ui/agent_markdown_view.go, ui/agent_message.go, ui/agent_queue.go, ui/agent_working.go, ui/agent_model.go, ui/agent_image.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -118,7 +118,8 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
   half-downloaded. On success the installed OpenCode becomes its executable (`agent.binaries`, as if
   chosen with Browse, so a restart keeps it), its chip appears, and when `opencode auth list` shows no
   credential a terminal opens running `opencode auth login`; the card says which terminal opened, and
-  *Sign in…* opens it again. A failure shows the error with *Retry* and *Close*. Quitting the application cancels a running installation and waits for it to stop its processes and remove what it half-wrote.
+  *Sign in…* opens it again. On Windows the sign-in console accepts keyboard input and shows the
+  login prompts; it skips PowerShell startup profiles and stays open after login finishes. A failure shows the error with *Retry* and *Close*. Quitting the application cancels a running installation and waits for it to stop its processes and remove what it half-wrote.
 - **Start and Stop.** Start launches the selected agent with the drawing's MCP server attached and
   shows `starting...`, then `ready`. **Stop** (a square icon on the harness row) ends the session; the transcript
   stays. Stop and Cancel differ: Stop = end the session, Cancel = cancel the running turn and keep the
@@ -247,7 +248,8 @@ hosts the toggle and `agentCommand`; `cmdsys/commands/agent.go` is the `AI` comm
 seeds the canned transcript. `ui/agent_install.go` is the Install OpenCode card and its flow
 (`askInstall`, `startInstall` running the `AgentInstaller` on a goroutine, the poll `pollInstall`,
 `cancelInstall`, `openLogin`); tests install fakes with `Workspace.SetAgentInstaller` and
-`SetTerminalOpener`. Threading and lifecycle rules are in
+`SetTerminalOpener`. `ui/terminal.go`, `OpenTerminalCommand`, launches sign-in; the Windows console
+startup and command quoting are described in the Settings document. Threading and lifecycle rules are in
 [Agent integration](../tech/agent-integration.md).
 
 ## Failure

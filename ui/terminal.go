@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode/utf16"
 
 	"agentmanager/shellenv"
 	"cad-lite/i18n"
@@ -34,10 +37,9 @@ func OpenTerminalCommand(dir string, argv []string) (string, error) {
 	if len(argv) > 0 {
 		cmd.Env = append(os.Environ(), shellenv.Env()...)
 	}
-	if err := cmd.Start(); err != nil {
+	if err := startTerminal(cmd); err != nil {
 		return "", fmt.Errorf("%s: %w", name, err)
 	}
-	go func() { _ = cmd.Wait() }()
 	return name, nil
 }
 
@@ -129,9 +131,9 @@ func terminalCommandArgs(goos, dir, userTerm string, argv []string, look func(st
 const keepOpenScript = `"$@"; echo; printf '%s\n' "$0"; read _`
 
 // windowsTerminal runs argv in a new PowerShell console that stays open, or in
-// cmd /k when PowerShell is missing. The command line is handed to Windows
-// verbatim (newConsole), because cmd's quoting rules are not the ones Go
-// escapes arguments for.
+// cmd /k when PowerShell is missing. PowerShell receives a UTF-16LE encoded
+// script, so Windows argument escaping cannot alter its shell literals.
+// The cmd fallback uses a verbatim command line for its special quoting rules.
 func windowsTerminal(dir string, argv []string, look func(string) (string, error)) (*exec.Cmd, string, error) {
 	var cmd *exec.Cmd
 	name := "PowerShell"
@@ -141,8 +143,13 @@ func windowsTerminal(dir string, argv []string, look func(string) (string, error
 			parts[i] = "'" + strings.ReplaceAll(a, "'", "''") + "'"
 		}
 		script := "& " + strings.Join(parts, " ")
-		cmd = exec.Command(ps, "-NoExit", "-Command", script)
-		newConsole(cmd, `powershell.exe -NoExit -Command "`+strings.ReplaceAll(script, `"`, `\"`)+`"`)
+		units := utf16.Encode([]rune(script))
+		encoded := make([]byte, len(units)*2)
+		for i, unit := range units {
+			binary.LittleEndian.PutUint16(encoded[i*2:], unit)
+		}
+		cmd = exec.Command(ps, "-NoProfile", "-NoExit", "-EncodedCommand", base64.StdEncoding.EncodeToString(encoded))
+		newConsole(cmd, "")
 	} else {
 		name = "cmd"
 		parts := make([]string, len(argv))

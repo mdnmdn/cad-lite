@@ -7,7 +7,7 @@ summary: The settings panel and its General, AI and Updates tabs (theme, UI scal
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
+code_anchors: [settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
@@ -82,7 +82,9 @@ behaviour and the default agent and where agents are found. Changes show at once
   Windows registry, or the app's own when the probe failed, with the reason) and a `Show PATH` expander
   that lists the folders the login shell added. **Check** runs the probe again (the button shows
   `Checking…` meanwhile); **Open terminal** opens the user's terminal in the project folder, to install or
-  log in to an agent by hand, and reports when none could be started. The probe runs once in the background
+  log in to an agent by hand, and reports when none could be started. Sign-in commands on Windows
+  open an interactive console with working keyboard input and visible output, skip PowerShell startup
+  profiles, and leave the shell open after the command ends. The probe runs once in the background
   at startup, so `auto` works without a click. Nothing is persisted. While OpenCode is not found, or an
   installation is under way, the section ends with the *Install OpenCode* card described in the
   [agent panel](agent-panel.md). How the PATH is found and used is in
@@ -150,7 +152,9 @@ On a 1280x800 window at device scale 2 a frame without the panel costs about 7 t
 35 ms depending on the tab and the machine's load (the AI tab is the slowest, measured up to about 34 ms), most
 of it the bands' blend, where one backdrop layer and the shadow would cost about 70 ms
 (`ui/settings_bench_test.go`, `go test ./ui -run X -bench Settings`); `ui/slider.go` is the reusable
-`Slider`. `ui/agent_binary.go` holds the executables rows: `applyAgentBinaries` hands `Settings.AgentBinaries` to `harnesses.SetBinary` (on load and on every change) and reprobes the agent panel; `browseAgentBinary` runs the workspace's `FileDialog.Open` and `harnesses.Check` on a goroutine, and `pollBinary` adopts the answer on the UI goroutine (tests install a fake dialog with `SetFileDialog`). `ui/discovery.go` holds the discovery state (a worker goroutine hands its result to the UI goroutine through a poll timer, as the update check does), `ui/discovery_view.go` the section and `ui/terminal.go` `OpenTerminal` (macOS `open -a Terminal`, Windows `cmd /c start powershell`, elsewhere `$TERMINAL`, x-terminal-emulator, gnome-terminal, konsole or xterm, the first installed) and `OpenTerminalCommand`, which runs a program in that terminal and keeps the window open afterwards (macOS `osascript` with Terminal's `do script`, Windows a new PowerShell `-NoExit` console or `cmd /k`, elsewhere `sh -c` waiting for Enter). Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
+`Slider`. `ui/agent_binary.go` holds the executables rows: `applyAgentBinaries` hands `Settings.AgentBinaries` to `harnesses.SetBinary` (on load and on every change) and reprobes the agent panel; `browseAgentBinary` runs the workspace's `FileDialog.Open` and `harnesses.Check` on a goroutine, and `pollBinary` adopts the answer on the UI goroutine (tests install a fake dialog with `SetFileDialog`). `ui/discovery.go` holds the discovery state (a worker goroutine hands its result to the UI goroutine through a poll timer, as the update check does), `ui/discovery_view.go` the section and `ui/terminal.go` `OpenTerminal` (macOS `open -a Terminal`, Windows `cmd /c start powershell`, elsewhere `$TERMINAL`, x-terminal-emulator, gnome-terminal, konsole or xterm, the first installed) and `OpenTerminalCommand`, which runs a program in that terminal and keeps the window open afterwards (macOS `osascript` with Terminal's `do script`, Windows a new PowerShell `-NoProfile -NoExit` console or `cmd /k`, elsewhere `sh -c` waiting for Enter). `ui/terminal_windows.go`, `startTerminal`, creates the
+Windows console without inherited standard handles so the shell uses its own console rather than
+NUL streams; PowerShell receives an encoded script to preserve literal paths and arguments. Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
 applies the stored language with `i18n.Set` and takes the window size from it; a loaded UI scale
 applies on the first frame. The wording of the warnings is in `i18n/locales` (`settings.warn.*`).
 

@@ -285,7 +285,7 @@ func TestTerminalCommandRunsAProgram(t *testing.T) {
 		t.Errorf("darwin: %q %q %v", cmd.Args, name, err)
 	}
 	cmd, name, err = terminalCommandArgs("windows", dir, "", argv, only("powershell"))
-	if err != nil || name != "PowerShell" || strings.Join(cmd.Args[1:], " ") != "-NoExit -Command & '/opt/it''s/opencode' 'auth' 'login'" || cmd.Dir != dir {
+	if err != nil || name != "PowerShell" || strings.Join(cmd.Args[1:4], " ") != "-NoProfile -NoExit -EncodedCommand" || cmd.Dir != dir {
 		t.Errorf("windows: %q %q %v", cmd.Args, name, err)
 	}
 	cmd, name, err = terminalCommandArgs("windows", dir, "", argv, only())

@@ -6,8 +6,8 @@ a bundle built here matches a released one apart from signing.
 | Platform | Script | Output (in `_tmp/dist/`) | `just` |
 |---|---|---|---|
 | macOS | `macos/bundle.sh`, then `macos/package.sh` (CI only) | `macos/Cad-lite.app`, `cad-lite-<v>-macos-universal.{zip,dmg}` | `just bundle-mac` |
-| Windows | `windows/bundle.sh`, `windows/cad-lite.iss` | `windows/cad-lite-<v>-windows-<arch>.zip`, `...-setup.exe` | `just bundle-win` |
-| Linux | `linux/bundle.sh` | `linux/cad-lite-<v>-linux-<arch>.tar.gz` | `just bundle-linux` |
+| Windows | `windows/bundle.sh`, `windows/cad-lite.iss` | `windows/cad-lite-<v>-windows-amd64.zip`, `...-setup.exe` | `just bundle-win` |
+| Linux | `linux/bundle.sh` | `linux/cad-lite-<v>-linux-amd64.tar.gz` | `just bundle-linux` |
 
 Version: `$VERSION`, else the tag (`v1.2.3` gives `1.2.3`), else `git describe`. A non-semver value
 (an untagged build) stamps `0.0.0` into the numeric fields. `-X main.version` is added when
@@ -17,9 +17,11 @@ the release tag. CI builds stamp `0.0.0-ci+<shortsha>`.
 ## Pure-Go cross builds
 
 macOS and Windows need no cgo: ebiten uses purego on both, so `CGO_ENABLED=0` cross-compiles all
-four targets (`darwin/{arm64,amd64}`, `windows/{amd64,arm64}`) from any host. The macOS bundle
+release targets (`darwin/{arm64,amd64}`, `windows/amd64`) from any host. Windows bundles
+default to `amd64`; the release workflow publishes no Windows or Linux ARM artifacts. The macOS bundle
 holds a universal binary (`lipo`, so it needs a Mac; elsewhere run `ARCHS=arm64 packaging/macos/bundle.sh`).
-Linux needs cgo and the X11/GL headers, so it is built natively:
+Linux releases use an x64 runner and `GOARCH=amd64`. Linux needs cgo and the X11/GL headers,
+so it is built natively:
 `libc6-dev libgl1-mesa-dev libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config`
 (`librsvg2-bin` renders the icon from `assets/appicon/appicon.svg`; without it the committed
 `window-256.png` is used).
@@ -62,10 +64,13 @@ download against it and installs from the `.zip` and `.tar.gz`, never the `-setu
 notes; a tag containing `-` is a prerelease.
 
 Or release from the Actions tab (`release` → Run workflow) with `version` set to `0.2.0` (no
-leading `v`): the run checks the version is well formed and its tag is new, builds, then creates the
-tag `v0.2.0` on that commit and publishes the release. Tick `draft` to review it first (the tag is
+leading `v`). The `macos`, `windows` and `linux` boxes select which platforms to build; all
+are selected by default and at least one must remain selected. The run checks the selection,
+that the version is well formed and its tag is new, builds the selected platforms, then creates the
+tag `v0.2.0` on that commit and publishes their packages. Publishing requires all selected builds
+to succeed; unselected builds are skipped. Tick `draft` to review it first (the tag is
 created when you publish the draft). With `version` empty the run only builds and keeps the
-packages as run artifacts.
+selected packages as run artifacts, even when the chosen ref is a tag.
 
 ## Local checks
 

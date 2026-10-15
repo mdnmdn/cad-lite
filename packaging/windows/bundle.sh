@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build cad-lite.exe with the icon and version resources embedded; see packaging/README.md.
-#   ARCHS="amd64 arm64"  GOARCH values
+#   ARCHS=amd64          GOARCH values (release default: amd64)
 #   VERSION=1.2.3        defaults to the tag / git describe
 #   OUT=_tmp/dist/windows  output; per arch: $OUT/cad-lite-windows-<arch>/cad-lite.exe and a .zip
 # Needs go-winres on PATH (go install github.com/tc-hib/go-winres@v0.3.3). Runs on any OS.
@@ -8,7 +8,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$root/packaging/lib.sh"
 resolve_version
-ARCHS="${ARCHS:-amd64 arm64}"
+ARCHS="${ARCHS:-amd64}"
 OUT="${OUT:-$root/_tmp/dist/windows}"
 mkdir -p "$OUT"
 

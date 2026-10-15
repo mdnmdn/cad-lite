@@ -53,9 +53,11 @@ and the installation follow without further action; a dialog then asks before th
   only after that worked (restored if it did not); a quarantine attribute on the new copy, if it has
   one, is cleared; the restart is `open -n`. Linux and a bare macOS binary: the binary is replaced the
   same way. The installation is found with `os.Executable` and symlinks resolved.
-- **Assets.** The updater installs from `cad-lite-<v>-windows-<amd64|arm64>.zip`,
-  `cad-lite-<v>-macos-universal.zip` and `cad-lite-<v>-linux-amd64.tar.gz`; the `-setup.exe` and `.dmg`
-  are for people installing by hand and are never chosen by the updater. Releases published under the
+- **Assets.** Releases publish `cad-lite-<v>-windows-amd64.zip`,
+  `cad-lite-<v>-macos-universal.zip` and `cad-lite-<v>-linux-amd64.tar.gz` for their selected platforms.
+  Windows and Linux ARM packages are not published; historical Windows and Linux ARM archives
+  remain accepted by the updater. The `-setup.exe` and `.dmg` are for people installing by hand
+  and are never chosen by the updater. Releases published under the
   old name (`go-draw-<v>-...`, binary `go-draw`) are still accepted, so an installation can update
   across the rename; the new bundle replaces the installed one under its installed name.
 
@@ -69,6 +71,10 @@ Package `updater`: `Client` (`NewClient`, `Check`, `CheckForce`, `Download`, `Up
 `UpdateAvailable`, `RelaunchIfPending`.
 
 ## Implementation
+
+`.github/workflows/release.yml` selects release platforms on manual runs and includes every
+platform on tag pushes; the asset names and publication steps are in
+[Operations](../tech/operations.md).
 
 `updater` is stdlib only and never imports the UI. `Client.Check` reads
 `/repos/mdnmdn/cad-lite/releases/latest` (base URL, repository, platform and install path are fields,

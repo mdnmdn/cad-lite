@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How to build, run, test and render Cad-lite, build the browser binary, and run the documentation tooling.
 read_when: you need a build, run, test or docs command, or you are changing one
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/bundle.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -136,8 +136,8 @@ logged and the defaults apply) and saves it, with the window size, when the wind
 ## Releases
 
 `.github/workflows/release.yml` runs on a pushed `v*` tag and on manual dispatch. It builds the
-macOS universal `.app` as `cad-lite-<v>-macos-universal.zip` and `.dmg`, the Windows `amd64` and
-`arm64` zips with an Inno Setup `-setup.exe` each, and the Linux `cad-lite-<v>-linux-amd64.tar.gz`; a
+macOS universal `.app` as `cad-lite-<v>-macos-universal.zip` and `.dmg`, the Windows `amd64`
+zip with an Inno Setup `-setup.exe`, and the Linux `cad-lite-<v>-linux-amd64.tar.gz`; a
 `publish` job attaches them with `SHA256SUMS.txt` to a GitHub Release, on a tag or on a manual run that
 names a version. The signing secrets
 are optional (see `packaging/README.md`); without them the macOS app is ad-hoc signed. The scripts
@@ -151,18 +151,22 @@ Windows and macOS).
 ### Release steps and update assets
 
 1. Either push a tag `vX.Y.Z`, or run the `release` workflow by hand (Actions → release → Run
-   workflow) with `version` set to `X.Y.Z`: a `check` job first refuses a malformed version or a tag
-   that exists, and `publish` creates the tag `vX.Y.Z` on the commit it built. The `draft` box keeps the
-   release a draft; GitHub then creates the tag when the draft is published. A manual run with an empty
-   `version` only builds the packages and keeps them as run artifacts. A version with `-` is a
-   pre-release and is never offered by the [updater](../features/updates.md).
+   workflow) with `version` set to `X.Y.Z`. Manual runs have `macos`, `windows` and `linux`
+   boxes, all selected by default; at least one must remain selected. Tag pushes build all three.
+   A `check` job first refuses an empty selection, a malformed version or a tag that exists, and
+   `publish` creates the tag `vX.Y.Z` on the commit it built after all selected builds succeed.
+   Unselected platform jobs are skipped and their packages are absent from the release. The `draft`
+   box keeps the release a draft; GitHub then creates the tag when the draft is published. A manual run with an empty
+   `version` only builds the selected packages and keeps them as run artifacts, even on a tag ref.
+   A version with `-` is a pre-release and is never offered by the [updater](../features/updates.md).
 2. `packaging/lib.sh` turns the tag into the version and every bundle script links it with
    `-ldflags "-X main.version=X.Y.Z"` (also into `Info.plist` and the Windows version resource).
    CI stamps `0.0.0-ci+<shortsha>` so its binaries show where they came from.
-3. The release carries, per platform: `cad-lite-X.Y.Z-windows-<amd64|arm64>.zip` and
-   `cad-lite-X.Y.Z-windows-<arch>-setup.exe`, `cad-lite-X.Y.Z-macos-universal.zip` and `.dmg`,
+3. The release carries, for each selected platform: `cad-lite-X.Y.Z-windows-amd64.zip` and
+   `cad-lite-X.Y.Z-windows-amd64-setup.exe`, `cad-lite-X.Y.Z-macos-universal.zip` and `.dmg`,
    `cad-lite-X.Y.Z-linux-amd64.tar.gz`, and `SHA256SUMS.txt` (sha256sum format, every file). The
-   updater installs from the zips and the tar.gz and verifies them against `SHA256SUMS.txt`; renaming
+   workflow publishes no Windows or Linux ARM artifacts. The updater installs from the zips and
+   the tar.gz and verifies them against `SHA256SUMS.txt`; renaming
    an asset means changing `updater.AssetName` too.
 4. `CADLITE_NO_UPDATE=1` turns the in-app update checks off.
 

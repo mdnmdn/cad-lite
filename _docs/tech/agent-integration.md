@@ -7,7 +7,7 @@ summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/terminal_windows_test.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -100,7 +100,18 @@ runs `Install` on a goroutine and adopts the result through a poll timer, like t
 installed executable is stored as `agent.binaries.opencode`, which `applyAgentBinaries` hands to
 `harnesses.SetBinary`. `Workspace.CloseAgent` (quit) cancels a running installation and waits up to 10 s for
 it to kill its processes and remove what it half-wrote. When there is no credential, `OpenTerminalCommand`
-opens a terminal running `opencode auth login` (`agentinstall.LoginArgs`). Tests serve a fake release (a
+opens a terminal running `opencode auth login` (`agentinstall.LoginArgs`). On Windows,
+`ui/terminal_windows.go`, `startTerminal`, uses `CreateProcess` with `CREATE_NEW_CONSOLE` and
+without `STARTF_USESTDHANDLES`: the new shell gets console input and output instead of the NUL
+streams Go assigns to a command with nil standard streams. Handles are not inherited, and the
+launcher closes its process and thread handles after startup; the console remains independent.
+The working directory and effective environment, including the discovered PATH, are preserved.
+PowerShell runs without startup profiles and receives its single-quoted arguments in a UTF-16LE
+encoded command so paths containing spaces, apostrophes, Unicode and backslashes remain literal.
+`ui/terminal_windows_test.go`, `TestWindowsTerminalConsoleHandles`, checks the three console handles,
+Unicode environment and working directory on Windows; command-construction tests run headlessly
+on every host. The native Windows test and interactive sign-in are not run in the agent environment.
+Tests serve a fake release (a
 tarball holding a shell-script mise that writes a fake opencode) from `httptest`; covered are checksum
 refusal, cancellation during the download and during `mise install` (child process killed, partial folder
 removed), each fallback, the node rule, the service stop, and the isolation variables. Run for real once on

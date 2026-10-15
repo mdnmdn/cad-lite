@@ -9,6 +9,21 @@ on:
         description: "Version to release (e.g. 0.3.0, no leading v). Creates tag v<version> and publishes the release; empty only builds"
         required: false
         default: ""
+      macos:
+        description: "Build macOS (universal Intel and Apple Silicon)"
+        type: boolean
+        required: false
+        default: true
+      windows:
+        description: "Build Windows (x64)"
+        type: boolean
+        required: false
+        default: true
+      linux:
+        description: "Build Linux (x64)"
+        type: boolean
+        required: false
+        default: true
       draft:
         description: "Keep the release as a draft (the tag is created when you publish it)"
         type: boolean
@@ -27,10 +42,15 @@ env:
   CGO_ENABLED: "0"
 
 jobs:
-  # A manual run with a version must name a new, well-formed version before anything is built.
+  # Validate manual platform selection and any release version before anything is built.
   check:
     runs-on: ubuntu-latest
     steps:
+      - name: Require at least one platform
+        if: github.event_name == 'workflow_dispatch' && !inputs.macos && !inputs.windows && !inputs.linux
+        run: |
+          echo "::error::Select at least one platform to build"
+          exit 1
       - uses: actions/checkout@v4
         if: github.event_name == 'workflow_dispatch' && inputs.version != ''
         with:
@@ -49,6 +69,7 @@ jobs:
 
   macos:
     needs: check
+    if: github.event_name != 'workflow_dispatch' || inputs.macos
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +101,7 @@ jobs:
 
   windows:
     needs: check
+    if: github.event_name != 'workflow_dispatch' || inputs.windows
     runs-on: windows-latest
     defaults:
       run:
@@ -95,21 +117,18 @@ jobs:
         run: |
           go install github.com/tc-hib/go-winres@v0.3.3
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-      # Cross-builds amd64 and arm64 with the icon and version resources linked in.
-      - name: Build exe and zip per arch
-        run: packaging/windows/bundle.sh
+      - name: Build x64 exe and zip
+        run: ARCHS=amd64 packaging/windows/bundle.sh
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
-      - name: Build installers
+      - name: Build x64 installer
         shell: pwsh
         run: |
           $v = (Get-ChildItem _tmp/dist/windows -Filter 'cad-lite-*-windows-amd64.zip').Name -replace '^cad-lite-(.*)-windows-amd64\.zip$', '$1'
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          foreach ($arch in 'amd64', 'arm64') {
-            & $iscc "/DMyAppVersion=$v" "/DMyArch=$arch" packaging\windows\cad-lite.iss
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
+          & $iscc "/DMyAppVersion=$v" "/DMyArch=amd64" packaging\windows\cad-lite.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # Authenticode signing is not wired: see packaging/README.md.
       - uses: actions/upload-artifact@v4
         with:
@@ -121,6 +140,7 @@ jobs:
 
   linux:
     needs: check
+    if: github.event_name != 'workflow_dispatch' || inputs.linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,8 +154,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libc6-dev libgl1-mesa-dev libx11-dev \
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config librsvg2-bin
-      - name: Build tar.gz
-        run: CGO_ENABLED=1 packaging/linux/bundle.sh
+      - name: Build x64 tar.gz
+        run: GOARCH=amd64 CGO_ENABLED=1 packaging/linux/bundle.sh
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux
@@ -145,8 +165,16 @@ jobs:
   # Publishes on a pushed v* tag, or on a manual run with a version: that run creates the tag
   # v<version> on the commit it built (when the release is published, if it is kept as a draft).
   publish:
-    needs: [macos, windows, linux]
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.version != '')
+    needs: [check, macos, windows, linux]
+    # !cancelled() permits skipped dependencies; only unselected platforms may be skipped.
+    if: >-
+      !cancelled() && needs.check.result == 'success' &&
+      needs.macos.result == (github.event_name == 'workflow_dispatch' && !inputs.macos && 'skipped' || 'success') &&
+      needs.windows.result == (github.event_name == 'workflow_dispatch' && !inputs.windows && 'skipped' || 'success') &&
+      needs.linux.result == (github.event_name == 'workflow_dispatch' && !inputs.linux && 'skipped' || 'success') &&
+      (needs.macos.result == 'success' || needs.windows.result == 'success' || needs.linux.result == 'success') &&
+      ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+       (github.event_name == 'workflow_dispatch' && inputs.version != ''))
     runs-on: ubuntu-latest
     permissions:
       contents: write
