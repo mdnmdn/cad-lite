@@ -1682,3 +1682,34 @@ object_is_not_a_block_reference = "L’oggetto non è un riferimento di blocco"
 object_is_on_a_locked_or_hidden_layer = "L’oggetto appartiene a un layer bloccato o nascosto"
 scale_must_be_finite_and_positive = "La scala deve essere finita e positiva"
 unsupported_group_member = "Membro del gruppo non supportato"
+[cmd.textedit]
+name = "Modifica testo"
+desc = "Modifica contenuto e proprietà di base di un TESTO o TESTOM esistente"
+aliases = ["MODTESTO"]
+
+[cmd.textedit.prompt]
+pick = "Selezionare TESTO o TESTOM da modificare:"
+
+[cmd.textedit.msg]
+target = "Selezionare un TESTO o TESTOM modificabile nello spazio modello."
+unavailable = "L'editor di testo non è disponibile."
+
+[ui.textedit]
+title = "Modifica %s · %s"
+content = "Contenuto"
+height = "Altezza"
+rotation = "Rotazione (gradi)"
+justify = "Allineamento / attacco"
+style = "Stile di testo esistente"
+width = "Larghezza (0 = senza ritorno a capo)"
+plain_hint = "Testo semplice. Cambiare il contenuto sostituisce la formattazione interna; modificare solo le proprietà la conserva. Invio aggiunge un paragrafo."
+apply = "Applica"
+apply_tip = "Salva queste modifiche come un solo passaggio di annullamento"
+cancel = "Annulla"
+cancel_tip = "Chiude senza modificare il disegno (Esc)"
+invalid_number = "Inserire un valore finito valido per %s. Altezza positiva e larghezza non negativa."
+invalid_content = "TESTO accetta una sola riga; i caratteri di controllo non supportati non sono ammessi."
+invalid_justify = "Scegliere uno dei nomi di allineamento o attacco elencati."
+invalid_style = "Scegliere uno stile di testo esistente in questo disegno."
+stale = "L'oggetto è cambiato o non è più modificabile. Annullare e riaprire l'editor."
+busy = "Un'altra transazione è aperta. Terminarla prima di applicare la modifica."

@@ -31,6 +31,8 @@ func TestScriptsCannotReachFileOrDestructiveCommands(t *testing.T) {
 		{"run_script", `{"script":"save x.dxf"}`},
 		{"run_command", `{"input":"NEW"}`},
 		{"run_command", `{"input":"SAVE"}`},
+		{"run_script", `{"script":"TEXTEDIT"}`},
+		{"run_command", `{"input":"DDEDIT"}`},
 	}
 	for _, c := range cases {
 		m := r.must(c.tool, c.args)

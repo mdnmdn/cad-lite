@@ -31,6 +31,7 @@ type Context struct {
 	agent   func(string)
 	// settings opens the host's settings panel; nil when the host has none.
 	settings func()
+	textEdit func(doc.Handle) bool
 
 	// vars, last and prev are the session's system variables and its Last and Previous
 	// memories (Vars, LastPoint, PreviousSelection).
@@ -107,6 +108,12 @@ func (c *Context) SetFilePath(path string) {
 
 // HasSettings reports whether the host installed a settings handler.
 func (c *Context) HasSettings() bool { return c.settings != nil }
+
+// OpenTextEditor asks the host to edit the model-space text h without changing it yet. It reports
+// false when no editor is installed or the host refuses the target.
+func (c *Context) OpenTextEditor(h doc.Handle) bool {
+	return c.textEdit != nil && c.textEdit(h)
+}
 
 // OpenSettings asks the host to show (or toggle) its settings panel. It reports false when the
 // host has none.

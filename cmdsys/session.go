@@ -144,6 +144,10 @@ func (s *Session) guard(f func()) (ok bool) {
 // SetFiles installs the file handler OPEN and SAVE use.
 func (s *Session) SetFiles(f FileHandler) { s.ctx.Files = f }
 
+// SetTextEditHandler installs the host's draft editor for TEXTEDIT. The command ends after the
+// handler accepts a target; the host validates and commits Apply as one named transaction.
+func (s *Session) SetTextEditHandler(f func(doc.Handle) bool) { s.ctx.textEdit = f }
+
 // OnDrawing registers f to be called whenever the session's drawing is
 // replaced (OPEN, NEW), including the replacement's first change listener
 // wiring.

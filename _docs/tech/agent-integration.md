@@ -270,11 +270,13 @@ goroutine, so the window stalls only for the render.
 
 **Agents cannot run file or destructive commands.** `cadmcp` runs every tool body through `call`, which
 sets `Session.SetAgentCaller(true)` for its duration. A command that implements `cmdsys.HumanOnly` (NEW,
-OPEN and SAVE today) is refused with `<NAME> is not available to agents.`, whatever alias or script
+OPEN, SAVE, TEXTEDIT and WBLOCK among them) is refused with `<NAME> is not available to agents.`, whatever alias or script
 reached it, and an agent cannot answer a file prompt that a human started. A future QUIT or SAVEAS opts
 in by implementing the interface. `call` also recovers a panic in a tool body, aborts any open
 transaction (`doc.Drawing.AbortOpen`) and returns an error, so a bad tool call leaves the drawing usable;
 the session's own guard is in the [command system](command-system.md).
+
+TEXTEDIT is an interactive draft modal for humans; automated text changes use `update_text`.
 
 **Agents always see English.** While `SetAgentCaller(true)` is on, the session's history lines,
 prompts and errors are English whatever the UI language, and keywords match in English only, so an

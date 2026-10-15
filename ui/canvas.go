@@ -96,6 +96,10 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			case gpui.MouseRight:
 				ws.submit("", w)
 			case gpui.MouseLeft:
+				if e.ClickCount == 2 && ws.session.Active() == "" && ws.beginTextEditAt(e.Position, w) {
+					c.pressed, c.boxing, c.panning = false, false, false
+					break
+				}
 				if ws.wantsPoint() {
 					ws.session.Click(ws.model(e.Position), e.Modifiers&gpui.Shift != 0)
 					ws.input.SetText("")

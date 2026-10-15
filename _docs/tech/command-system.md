@@ -7,7 +7,7 @@ summary: The command model, the session state machine, typed-input parsing, the 
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go]
+code_anchors: [cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -31,6 +31,11 @@ rubber-band geometry for the cursor to a display list) and `Cancel`.
 
 **Context.** A command reaches the document, the view, the spatial index, the selection and the file
 handler through `cmdsys.Context`. `Context.Tx` opens the command's transaction on first use.
+
+`Session.SetTextEditHandler` installs a host callback that `Context.OpenTextEditor` asks to open a
+draft for an existing text handle. TEXTEDIT ends after the callback accepts it; no transaction is
+opened by the command. The host's Apply validates that the same drawing and target are editable and
+the session is idle, then commits one transaction named TEXTEDIT. Cancel has no document effect.
 
 **Work in progress** (`inflight.go`). What a command adds, changes or erases before it ends is real
 document state at once, as in AutoCAD (each LINE segment is an entity the moment it is placed). The
@@ -130,7 +135,7 @@ REDO reverses a whole `UNDO n`. When a command ends the session names the undo s
    `Input`, `Cancel` and `Preview`. On a panic it aborts the open transaction (`doc.Drawing.AbortOpen`),
    ends the command and its prompt, and prints `Error: NAME failed: ...` (key `session.internal_error`); the session accepts the next
    command.
-8. **Human-only commands.** A command that implements `cmdsys.HumanOnly` (NEW, OPEN, SAVE) is refused
+8. **Human-only commands.** A command that implements `cmdsys.HumanOnly` (NEW, OPEN, SAVE, TEXTEDIT) is refused
    with `NAME is not available to agents.` while `Session.SetAgentCaller(true)` is on, by name or alias,
    and an agent cannot answer the prompt of one a human started. `cadmcp` sets the flag around every
    tool body; see [Agent integration](agent-integration.md).

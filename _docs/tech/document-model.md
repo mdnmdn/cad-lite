@@ -7,7 +7,7 @@ summary: How a drawing is stored — handles, entities, layers, the header — a
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go]
+code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -48,6 +48,10 @@ codes (`\P` breaks a paragraph; `MTextPlain` strips the rest, `MTextEscape` esca
 drawing knows (Standard, the STYLE records kept from its file, the styles its texts name) and `FindTextStyle`
 matches one without regard to case. Both
 satisfy `doc.Annotation` (`Anchor`, `HitBox`, `Box`, `CharHeight`, `Greek`, `MirrorReadable`).
+
+The manual TEXTEDIT host keeps its draft outside the document and applies it through `Txn.Modify`,
+preserving the entity handle and common fields. MTEXT property-only edits preserve raw `Value`;
+replacement contents use `MTextEscape` and paragraph separators, as the editing feature describes.
 
 Text geometry is computed in `doc`, without the UI: every style draws with one built-in single-stroke font, Hershey
 Roman Simplex (`doc/fonts/romans.jhf`, the design AutoCAD's `romans.shx` comes from; licence acknowledgements in

@@ -56,6 +56,7 @@ func (ws *Workspace) newDocTab(d *doc.Drawing) *docTab {
 	s.OnFilePath(func(path string) { ws.pathChanged(t, path) })
 	s.OnFilePath(ws.noteRecentFile)
 	s.SetAgentHandler(ws.agentCommand)
+	s.SetTextEditHandler(func(h doc.Handle) bool { return ws.openTextEditor(t, h) })
 	s.SetSettingsHandler(func() {
 		if ws.win != nil {
 			ws.ToggleSettings(ws.win)
@@ -167,6 +168,7 @@ func (ws *Workspace) activate(t *docTab) {
 	if t == ws.docTab {
 		return
 	}
+	ws.closeTextEditor(ws.win)
 	if cur := ws.docTab; cur != nil {
 		c := &cur.canvas
 		c.pressed, c.boxing, c.panning = false, false, false

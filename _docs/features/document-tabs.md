@@ -36,6 +36,8 @@ command line field) is shared and shows the active tab.
   panels, the title bar's document chip and the agent panel then show that drawing. A command running
   in the tab left keeps its prompt there and goes on when the tab is shown again; the command line's
   text is cleared. The view (centre and scale) and the drafting toggles are per tab.
+  TEXTEDIT's modal blocks tab switching through clicks and shortcuts. If the host switches tabs or
+  replaces the drawing, its uncommitted draft is discarded without changing the old document.
 - **OPEN.** A typed OPEN, the Open button and dialog, the recent files menu, the start panel and files
   from the operating system all run OPEN, which opens the file in a new tab and makes it active; the
   current drawing is not discarded, so no `Save changes` question is asked. The file opens in place of

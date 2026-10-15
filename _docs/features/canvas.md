@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, rulers, cro
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go]
+code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -106,6 +106,13 @@ file opened. A press on the card never reaches the canvas. The lists and what cl
   box. Shift-click removes from the selection. What the click does inside a command belongs to
   [Drawing and editing commands](drawing-and-editing.md).
 - **Right click** is Enter.
+- **Double left click** on editable TEXT or MTEXT while idle opens the basic TEXTEDIT modal. During
+  a command it keeps the command's point or selection behavior and opens no editor. The modal owns
+  keyboard and pointer input, including drawing shortcuts, file drops and the wheel; Tab and
+  Shift+Tab cycle its fields and buttons. Opening it ends any splitter, command-history or zoom
+  drag; pointer movement in the modal cannot continue those background drags. Its body scrolls on small windows while Apply and Cancel
+  stay visible. Escape cancels. The text-editing contract is in
+  [Drawing and editing commands](drawing-and-editing.md).
 - A press on the canvas moves keyboard focus to the command line.
 
 ### Layers panel
@@ -272,6 +279,14 @@ line at the right.
   `Layer.Locked` and `Drawing.CurrentLayer` directly, outside a transaction.
 
 ## Implementation
+
+`ui/textedit.go` holds the text-editing draft, target snapshot, validation and one-transaction Apply;
+`ui/textedit_view.go` builds the modal from existing `TextInput` fields, with multiline contents for
+MTEXT. `Workspace.withTextEditor` mounts it after the other overlays. TEXTEDIT reaches it through
+the session's host callback; idle double-click uses `beginTextEditAt` and clears the canvas drag.
+Apply checks the drawing, active command, target properties and layer eligibility again. A changed
+or removed target reports an error; changing the active tab or replacing the drawing discards the
+draft. The normal transaction listeners update the index, dirty counter and render cache.
 
 `ui.Workspace` in `ui/workspace.go` is the root view: `titleBar` (`ui/titlebar.go`), `ribbon`, then a row of the
 canvas column (the document tab strip `tabStrip` of `ui/doctabs.go`, then `canvasElement` over `commandArea`), `sidePanel` (`ui/sidepanel.go`) and the agent panel, then

@@ -7,7 +7,7 @@ summary: The command line under the canvas — typing commands and answers, the 
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go]
+code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, ui/textedit_view.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
 ---
@@ -57,6 +57,9 @@ history. It sits under the canvas only: the layers and agent columns run down be
   does. So with the list open the arrows move its highlight, and Escape first, or an empty field, gives the arrows to
   recall.
 - **Enter** submits the field. At `Command:` an empty Enter repeats the last command.
+- **TEXTEDIT** hands input to its modal after selecting the target. In its MTEXT contents field,
+  Enter adds a paragraph; Apply commits and Escape cancels. Its Tab navigation stays inside the modal,
+  and drawing shortcuts do not run while it is open.
 - **Space** submits like Enter, except at a prompt that takes text (a layer name, a file path, TEXT content), where
   it types a space.
 - **Right-click** on the canvas is Enter.

@@ -55,7 +55,8 @@ type Workspace struct {
 	// dirty tab first (doctabs.go).
 	quit quitState
 	// aidsSet is true once the settings' drawing aids were applied; a new tab takes them too.
-	aidsSet bool
+	aidsSet    bool
+	textEditor *textEditState
 }
 
 // NewWorkspace returns a workspace editing d in its one tab. files may be nil, which
@@ -170,6 +171,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	win := float32(w.Bounds().Size.W)
 	ws.winH = float32(w.Bounds().Size.H)
 	ws.winW = win
+	ws.validateTextEditor(w)
 	sideW, agentW := ws.widths(win)
 	cmdline := ws.input.Render(w, cx)
 	if fh := ws.input.FocusHandle(); fh != nil && w.Focus() == nil {
@@ -183,7 +185,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	for command, action := range commandKeys {
 		root.OnAction(action, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run(command, w) })
 	}
-	return ws.withSettings(cx, root.
+	return ws.withTextEditor(w, cx, ws.withSettings(cx, root.
 		OnAction(actionOpen, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.openFile(w) }).
 		OnAction(actionSave, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFile(w) }).
 		OnAction(actionSaveAs, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.saveFileAs(w) }).
@@ -197,6 +199,9 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionSnapGrid, toggle(func() { s.SetSnapGrid(!s.SnapGrid()) })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
+			if ws.textEditor != nil {
+				return
+			}
 			ws.zoom.Move(e.Position, w)
 			ws.dragMove(e.Position, w)
 		}).
@@ -206,7 +211,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		}).
 		OnFileDrop(ws.onFileDrop).
 		Child(ws.chrome(win, sideW, agentW, cmdline, w, cx)...).
-		Child(ws.statusBar(), ws.openMenuOverlay()))
+		Child(ws.statusBar(), ws.openMenuOverlay())))
 }
 
 // chrome returns the window's rows above the status bar: the title bar, the ribbon unless it is

@@ -1653,3 +1653,34 @@ object_is_not_a_block_reference = "object is not a block reference"
 object_is_on_a_locked_or_hidden_layer = "object is on a locked or hidden layer"
 scale_must_be_finite_and_positive = "scale must be finite and positive"
 unsupported_group_member = "unsupported group member"
+[cmd.textedit]
+name = "Edit text"
+desc = "Edits the contents and basic properties of existing TEXT or MTEXT"
+aliases = ["ED", "DDEDIT"]
+
+[cmd.textedit.prompt]
+pick = "Select TEXT or MTEXT to edit:"
+
+[cmd.textedit.msg]
+target = "Select editable model-space TEXT or MTEXT."
+unavailable = "The text editor is not available."
+
+[ui.textedit]
+title = "Edit %s · %s"
+content = "Contents"
+height = "Height"
+rotation = "Rotation (degrees)"
+justify = "Alignment / attachment"
+style = "Existing text style"
+width = "Wrapping width (0 = no wrapping)"
+plain_hint = "Plain text. Changing contents replaces inline formatting; property-only edits preserve it. Enter adds a paragraph."
+apply = "Apply"
+apply_tip = "Save these changes as one undo step"
+cancel = "Cancel"
+cancel_tip = "Close without changing the drawing (Escape)"
+invalid_number = "Enter a finite valid value for %s. Height must be positive and width nonnegative."
+invalid_content = "TEXT accepts a single line; unsupported control characters are not allowed."
+invalid_justify = "Choose one of the listed alignment or attachment names."
+invalid_style = "Choose an existing text style from this drawing."
+stale = "The target changed or is no longer editable. Cancel and reopen the editor."
+busy = "Another transaction is open. Finish it before applying this edit."
