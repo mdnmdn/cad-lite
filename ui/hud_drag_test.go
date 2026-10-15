@@ -223,3 +223,64 @@ func TestPropertiesHUDOverflowScrollDoesNotZoomCanvas(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPropertiesHUDHidesWithoutUsableCanvas(t *testing.T) {
+	for _, size := range [][2]float32{{640, 400}, {800, 400}, {1280, 400}, {640, 500}, {320, 800}} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			h := openSettingsWS(t, NewWorkspace(doc.New(), nil), size[0], size[1], 1)
+			h.ws.togglePropsHUD()
+			h.hw.Window().Refresh()
+			for i := 0; i < 3; i++ {
+				h.hw.Pixels()
+			}
+			ids := h.frameIDs()
+			if ids["props-hud"] || ids["props-hud-handle"] || ids["props-hud-drag-shield"] {
+				t.Fatal("HUD retains a hitbox when its header cannot fit")
+			}
+			for _, q := range h.hw.Window().Scene().Quads {
+				if q.Fill.A == hudAlpha && float32(q.Bounds.Size.W) > zoomHUDWidth+1 {
+					t.Fatal("Properties background painted without usable canvas space")
+				}
+			}
+			if !h.ws.PropsHUDShown() {
+				t.Fatal("temporary lack of space changed the PROPS toggle")
+			}
+		})
+	}
+}
+
+func TestPropertiesHUDSpaceRecoveryCancelsDragAndReappears(t *testing.T) {
+	ws := NewWorkspace(doc.New(), nil)
+	ws.lay.ribbonOff = true
+	h := openSettingsWS(t, ws, 1280, 400, 1)
+	ws.togglePropsHUD()
+	h.hw.Window().Refresh()
+	h.hw.Pixels()
+	h.hw.Pixels()
+	if !h.frameIDs()["props-hud-handle"] {
+		t.Fatal("fixture needs a visible HUD before shrinking canvas")
+	}
+	p := ws.hudPosition()
+	start := h.find("props-hud-handle")
+	h.hw.Dispatch(gpui.MouseDownEvent{Position: start, Button: gpui.MouseLeft, ClickCount: 1})
+	h.hw.Pixels()
+	if !ws.propsDragActive() {
+		t.Fatal("fixture did not begin HUD drag")
+	}
+	ws.lay.ribbonOff = false
+	h.hw.Window().Refresh()
+	for i := 0; i < 3; i++ {
+		h.hw.Pixels()
+	}
+	if ws.propsDragActive() || h.frameIDs()["props-hud-handle"] || h.frameIDs()["props-hud-drag-shield"] {
+		t.Fatal("shrinking canvas did not hide HUD and cancel drag")
+	}
+	ws.lay.ribbonOff = true
+	h.hw.Window().Refresh()
+	for i := 0; i < 3; i++ {
+		h.hw.Pixels()
+	}
+	if !h.frameIDs()["props-hud-handle"] || !ws.PropsHUDShown() || ws.hudPosition() != p || ws.propsDragActive() {
+		t.Fatal("HUD did not recover its session position without resuming drag")
+	}
+}

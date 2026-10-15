@@ -162,7 +162,10 @@ Dragging the header moves Properties freely within the canvas. Releasing within 
 slot snaps it there with a 16 px canvas/ruler margin. The top-right slot clears the zoom column by
 8 px; the top-left sits below the viewport label, and the bottom-left clears the UCS icon. Narrow
 spaces and tall content retain these clearances by limiting the panel's height and scrolling its body.
-Positions follow canvas resize, ruler changes and selection-height changes. During the drag a
+Positions follow canvas resize, ruler changes and selection-height changes. A
+panel narrower than 112 px or with less than 32 px of usable height is hidden and its drag ends;
+the PROPS toggle and session position are retained, so it reappears when space returns.
+During the drag a
 transparent window-sized input layer and root move/release routing prevent canvas selection or pan
 and end the drag over other controls. Hiding Properties, switching drawings or opening TEXTEDIT ends
 the drag. Visibility remains shared across tabs and off at start; position and corner are remembered

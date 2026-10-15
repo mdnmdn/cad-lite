@@ -105,7 +105,7 @@ After rulers, status bar and agent chat land: a complete review of the whole unc
 |---|---|---|---|
 | N11 groups and reusable blocks | `n11`; reviewer `mcp_followups` | done | Design first: transactional groups/definitions, selection, instances, attributes, shared updates and file/library round trips. Implementation follows agreed contracts. |
 | N26 manual text editing | `ui_fixes`; reviewer `mcp_followups` | done | Follows N11. User confirms basic content/existing-property editing; font and rich formatting remain N27. |
-| N24 compact movable HUDs | `ui_fixes`; reviewer `mcp_followups` | in review | Follows N26. Both backgrounds semitransparent; properties HUD draggable with corner snap and inset margin. |
+| N24 compact movable HUDs | `ui_fixes`; reviewer `mcp_followups` | done | Follows N26. Both backgrounds semitransparent; properties HUD draggable with corner snap and inset margin. |
 | N23 reorder layers | unassigned | ready | Follows N24. User confirms both list and drawing stacking order, persisted on save/reopen. |
 
 One subagent at a time; no nested delegation. Coordinator owns combined verification, acceptance and commits without attribution. No push is requested.
@@ -133,3 +133,7 @@ One subagent at a time; no nested delegation. Coordinator owns combined verifica
 - N26 committed as `77f615d` without attribution. N24 starts with `ui_fixes`: compact semitransparent zoom/properties HUDs, draggable properties and four-corner snapping inside the canvas with margin. Keep overlays/drag lifetime coherent with the N26 modal handoff. N23 remains queued.
 
 - N24 implementation released for independent review. Compact 36×100 zoom / 184px properties and alpha200 backgrounds visually inspected at normal/narrow sizes in dark/light themes. Four cleared corner slots use16px margin; free movement and per-session positions retain workspace-global HUD visibility. Focused drag/lifecycle/zoom/resize checks pass; coordinator-found wheel suppression repaired with a failing-first overflow regression. Docs/vet/formatting/catalog checks pass. Independent review precedes combined full verification to avoid concurrent heavy UI suites.
+
+- N24 review interrupted once by workspace-credit failure, then resumed at user request. The working tree was committed externally as `3558087` during the pause; no rewrite is planned. Review remains open: a tiny/zero-height canvas lets the properties header/padding paint outside the canvas, pending a bounded hide-when-unusable repair. No full post-review verification is claimed.
+
+- N24 accepted after small-canvas repair. Original independent bounds probe rerun by coordinator passes (1.439 s); permanent no-paint/hitbox, resize recovery and drag-cancel regressions pass. Final combined verification over repaired code passes: root full tests (UI353.720 s), root vet, global formatting, docs lint, diff check, and `just check-agentmanager`. Normal/overflow/narrow before-after renders inspected in dark/light themes; live interaction unavailable. Main implementation remains external commit `3558087`; this follow-up records acceptance and tiny-canvas repair. N24 leaves open backlog.

@@ -7,7 +7,9 @@ import (
 
 // Properties HUD metrics, in logical pixels.
 const (
-	hudWidth = 184
+	hudWidth     = 184
+	hudMinWidth  = 112
+	hudMinHeight = 32
 	// hudAlpha is the shared zoom and Properties background opacity; labels stay opaque.
 	hudAlpha = 200
 )
@@ -34,6 +36,14 @@ func (ws *Workspace) propsHUD() *gpui.Div {
 	p := ws.hudPosition()
 	box := ws.hudBox(p)
 	top, bottom := ws.hudVerticalRange(box.x, box.w)
+	if !ws.hudFits(box) {
+		st.hudDrag.active = false
+		return gpui.NewDiv().Absolute().SizeWH(0, 0).Child(gpui.NewCanvas(func(_ gpui.Bounds, w *gpui.Window, _ *gpui.App) {
+			if ws.canvas.bounds != b || st.barTop != barTop {
+				w.Refresh()
+			}
+		}))
+	}
 	check := gpui.NewCanvas(func(actual gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 		h := float32(actual.Size.H)
 		if p.height != h || ws.canvas.bounds != b || st.barTop != barTop {

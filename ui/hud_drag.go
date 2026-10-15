@@ -106,7 +106,15 @@ func (ws *Workspace) propsDragActive() bool {
 	if !s.hud || s.hudDrag.session != weak.Make(ws.session) || ws.textEditor != nil || ws.SettingsOpen() {
 		s.hudDrag.active = false
 	}
+	if s.hudDrag.active && !ws.hudFits(ws.hudBox(ws.hudPosition())) {
+		s.hudDrag.active = false
+	}
 	return s.hudDrag.active
+}
+
+func (ws *Workspace) hudFits(box hudRect) bool {
+	top, bottom := ws.hudVerticalRange(box.x, box.w)
+	return box.w >= hudMinWidth && box.h >= hudMinHeight && bottom-top >= hudMinHeight
 }
 
 func (ws *Workspace) beginPropsDrag(at gpui.Point, w *gpui.Window) {
