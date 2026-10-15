@@ -158,6 +158,7 @@ func keywordMatches(e kwEntry, t string) bool {
 // proves each group conflict-free in every language; add a group when a command gains a keyword
 // prompt.
 var KeywordGroups = map[string][]string{
+	"GROUP operations":      {"List", "REname", "Add", "Remove", "Selectable", "Delete"},
 	"ORTHO mode":            {"ON", "OFF"},
 	"GRID option":           {"ON", "OFF", "Snap", "Major", "Aspect"},
 	"SNAP option":           {"ON", "OFF", "Aspect", "Style", "Type"},

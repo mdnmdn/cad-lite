@@ -323,8 +323,8 @@ func TestWriteKeepsR12UnknownEntitiesVerbatimAndWarnsForTheRest(t *testing.T) {
 			t.Fatalf("%s: %v vs %v", h, before[h], after[h])
 		}
 	}
-	if len(after) != 3 || len(back.Preserved.Blocks) != 1 || len(back.Preserved.Tables["LTYPE"]) != 1 {
-		t.Fatalf("reread: %d unknown, %d blocks, %v", len(after), len(back.Preserved.Blocks), back.Preserved.Tables)
+	if len(after) != 3 || len(back.Blocks()) != 1 || len(back.Preserved.Tables["LTYPE"]) != 1 {
+		t.Fatalf("reread: %d unknown, %d blocks, %v", len(after), len(back.Blocks()), back.Preserved.Tables)
 	}
 }
 
@@ -337,8 +337,8 @@ func TestPreservedTablesAndBlocks(t *testing.T) {
 	if len(lt) != 1 || lt[0].Name() != "DASHED" || lt[0].Type() != "LTYPE" {
 		t.Fatalf("linetypes = %+v", lt)
 	}
-	if len(d.Preserved.Blocks) != 1 || d.Preserved.Blocks[0].Name() != "B1" || len(d.Preserved.Blocks[0].Pairs) != 19 {
-		t.Fatalf("blocks = %+v", d.Preserved.Blocks)
+	if len(d.Blocks()) != 1 || d.Block("B1") == nil || len(d.Block("B1").Entities) != 1 {
+		t.Fatalf("blocks = %+v", d.Blocks())
 	}
 	if d.Header.HandSeed <= 0x62 {
 		t.Fatalf("handseed %v not above the block handles", d.Header.HandSeed)
@@ -399,11 +399,11 @@ func TestWriteDropsR13GroupsAndNonR12BlockEntities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(warns) != 1 || !strings.HasPrefix(warns[0], "LWPOLYLINE in block B1 not written") {
+	if len(warns) != 0 {
 		t.Fatalf("warnings = %q", warns)
 	}
 	out := buf.String()
-	if strings.Contains(out, "AcDb") || strings.Contains(out, "LWPOLYLINE") || !strings.Contains(out, "ENDBLK") {
+	if strings.Contains(out, "AcDb") || strings.Contains(out, "LWPOLYLINE") || !strings.Contains(out, "ENDBLK") || !strings.Contains(out, "POLYLINE") {
 		t.Fatalf("output:\n%s", out)
 	}
 }

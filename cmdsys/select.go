@@ -182,6 +182,7 @@ func (e *selEngine) selPrompt() *Prompt {
 // returns whether SIngle ends the prompt now.
 func (e *selEngine) apply(hs []doc.Handle) bool {
 	ctx := &e.s.ctx
+	hs = e.s.expandGroupSelection(hs)
 	sel := ctx.Selection
 	before := sel.Len()
 	e.undo = append(e.undo, slices.Clone(sel.Handles()))
@@ -382,4 +383,22 @@ func (c *selSub) Preview(ctx *Context, cursor geom.Vec2, dl *render.DisplayList)
 	if c.kind != subFence {
 		line(cursor, c.pts[0])
 	}
+}
+
+func (s *Session) expandGroupSelection(hs []doc.Handle) []doc.Handle {
+	if s.vars.Int("PICKSTYLE")&1 == 0 {
+		return hs
+	}
+	if s.active != nil {
+		switch s.active.Name() {
+		case "GROUP", "-GROUP", "UNGROUP":
+			return hs
+		}
+	}
+	out := s.ctx.Doc.ExpandGroups(hs)
+	seeds := map[doc.Handle]bool{}
+	for _, h := range hs {
+		seeds[h] = true
+	}
+	return slices.DeleteFunc(out, func(h doc.Handle) bool { return !seeds[h] && !selectable(s.ctx.Doc, s.ctx.Doc.Entity(h), false) })
 }

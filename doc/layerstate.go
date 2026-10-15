@@ -12,7 +12,9 @@ func (l *Layer) Editable() bool { return l.Visible() && (l == nil || !l.Locked) 
 func (d *Drawing) EntityVisible(e Entity) bool { return d.Layer(e.Common().Layer).Visible() }
 
 // EntityEditable reports whether e is on an editable layer (see Layer.Editable).
-func (d *Drawing) EntityEditable(e Entity) bool { return d.Layer(e.Common().Layer).Editable() }
+func (d *Drawing) EntityEditable(e Entity) bool {
+	return e != nil && d.Layer(e.Common().Layer).Editable()
+}
 
 // RemoveLayer deletes the named layer from the table and reports whether it did. Layer 0, the
 // current layer and a layer that does not exist are kept, and so is a layer an entity is on:
@@ -24,6 +26,13 @@ func (d *Drawing) RemoveLayer(name string) bool {
 	for _, e := range d.entities {
 		if e.Common().Layer == name {
 			return false
+		}
+	}
+	for _, b := range d.blocks {
+		for _, e := range b.Entities {
+			if e.Common().Layer == name {
+				return false
+			}
 		}
 	}
 	for i, l := range d.layers {

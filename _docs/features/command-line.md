@@ -141,6 +141,11 @@ Shortcuts, active anywhere in the window:
 
 ## Implementation
 
+Symbol commands use the shared prompt pipeline: GROUP operations are localized keyword options,
+block names and library paths are text, placements are points, scale is a distance and rotation an
+angle. Attribute prompts accept spaces and preserve them as values. The command list and aliases
+belong to [Drawing and editing](drawing-and-editing.md).
+
 `ui.NewWorkspace` creates the `gpui.TextInput` and wires its callbacks: `OnSubmit` →
 `Workspace.submit` → `Session.Submit`; `OnEscape` → `Workspace.escape` → `Session.Escape`;
 `OnChange` turns a trailing space into a submission unless `Workspace.acceptsText`.

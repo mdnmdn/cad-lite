@@ -27,7 +27,7 @@ type Codec struct{}
 func (Codec) Extensions() []string { return []string{".dxf"} }
 
 // Versions implements fileio.Writer.
-func (Codec) Versions() []string { return []string{"AC1009"} }
+func (Codec) Versions() []string { return []string{"AC1009", "AC1015"} }
 
 type pair struct {
 	code int
@@ -183,6 +183,14 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	if d.Layer(d.CurrentLayer) == nil {
 		d.CurrentLayer = "0"
 	}
+	for _, h := range d.Handles() {
+		if in, ok := d.Entity(h).(*doc.Insert); ok {
+			if err := d.InsertError(in); err != nil {
+				d.Load(&doc.Unknown{EntityCommon: *in.Common(), Type: "INSERT", Raw: append([]doc.Pair(nil), in.Source[1:]...)})
+				warns = append(warns, i18n.T("dxf.warn.invalid_block_reference", h, err.Error()))
+			}
+		}
+	}
 	return d, warns, nil
 }
 
@@ -206,7 +214,9 @@ func applySection(d *doc.Drawing, section string, objs []object, st *state) erro
 	case "TABLES":
 		readTables(d, objs)
 	case "BLOCKS":
-		readBlocks(d, objs)
+		readModeledBlocks(d, objs, st)
+	case "OBJECTS":
+		readObjects(d, objs)
 	case "ENTITIES":
 		readEntities(d, objs, st)
 	}
@@ -243,6 +253,14 @@ func readTables(d *doc.Drawing, objs []object) {
 			table = o.str(2)
 		case "ENDTAB":
 			table = ""
+		case "BLOCK_RECORD":
+			h, _ := doc.ParseHandle(o.str(5))
+			switch strings.ToUpper(o.str(2)) {
+			case "*MODEL_SPACE":
+				d.Preserved.ModelOwner = h
+			case "*PAPER_SPACE":
+				d.Preserved.PaperOwner = h
+			}
 		case "LAYER":
 			readLayer(d, o)
 		default:
@@ -392,7 +410,7 @@ func common(o object) doc.EntityCommon {
 		c.H = h
 	}
 	if o.has(62) {
-		if v := o.int(62); v >= 1 && v <= 255 {
+		if v := o.int(62); v >= 0 && v <= 256 {
 			c.Color = v
 		}
 	}
@@ -421,6 +439,33 @@ func readEntities(d *doc.Drawing, objs []object, st *state) {
 			e = &doc.Arc{EntityCommon: c, Center: vec(o, 10), Radius: o.float(40), StartAngle: deg(o.float(50)), EndAngle: deg(o.float(51))}
 		case "LWPOLYLINE":
 			e = readLWPolyline(o, c)
+		case "ATTDEF":
+			e = readAttdef(o, c)
+		case "INSERT":
+			if o.int(66) == 1 {
+				for i+1 < len(objs) {
+					i++
+					if objs[i].typ == "SEQEND" {
+						break
+					}
+				}
+			}
+			supported := supportedInsert(o)
+			for _, sub := range objs[start+1 : i+1] {
+				if sub.typ == "ATTRIB" && (!sub.has(10) || !sub.has(40)) {
+					supported = false
+				}
+			}
+			if supported {
+				e = readInsert(o, objs[start+1:i+1], c)
+				in := e.(*doc.Insert)
+				in.Source = rawPairs(o)
+				for _, sub := range objs[start+1 : i+1] {
+					in.Source = append(in.Source, rawPairs(sub)...)
+				}
+			} else {
+				e = unknown(o, objs[start+1:i+1], c)
+			}
 		case "TEXT":
 			e = readText(o, c)
 		case "MTEXT":

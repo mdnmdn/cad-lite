@@ -7,7 +7,7 @@ summary: How entities become pixels — the view, camera-relative coordinates, t
 read_when: you are changing what or how the canvas draws, adding a display primitive, or chasing jitter or a stale render
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [doc/textfont.go, render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
+code_anchors: [doc/textfont.go, render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, doc/insert.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
 depends_on: [tech-architecture, tech-document-model]
 review_cycle: quarterly
 ---
@@ -71,6 +71,17 @@ tessellation.
 contrasts with the background. `render.ACI` maps the other indices through `doc.ACIRGB`: 1–9 and the greys 250–255 are
 AutoCAD's values, 10–249 follow the palette's hue and shade layout closely but not exactly.
 `doc.NearestACI` is the inverse, used where a true colour must become an index (the DWG reader).
+
+**Blocks.** `Builder.Items` resolves `Insert.Parts`, drawing each child with layer 0 and ByBlock
+inheritance. Bounds include hidden children so later layer toggles need no index rebuild; picking and
+display use visible geometry. `SyncLayers` includes off/frozen state, invalidating cached reference
+parts when a child layer changes visibility. Definition changes and restoration invalidate every
+reference through document change sets; live edits reach the same handles through `Txn.TakeEdits`.
+Anisotropic references use affine circular curves rather than a similarity-scaled circle. Similarity
+detection compares normalized axis directions and relative lengths across coordinate magnitudes;
+unsafe determinant magnitudes retain the affine adapter. Tessellation scales its local tolerance
+without an absolute minimum transform scale. Attribute
+instances retain their own placement and values, and invisible attributes stay hidden.
 
 ## The frame
 

@@ -14,8 +14,13 @@ import (
 )
 
 type writer struct {
-	w   *bufio.Writer
-	err error
+	w            *bufio.Writer
+	err          error
+	modern       bool
+	d            *doc.Drawing
+	modelOwner   string
+	typeOverride string
+	reactors     map[doc.Handle][]doc.Handle
 }
 
 func (w *writer) pair(code int, val string) {
@@ -47,6 +52,9 @@ func (w *writer) point(code int, p geom.Vec2) {
 // without the groups R12 lacks (see pairs). Only the CONTINUOUS linetype, the
 // layers and the entities are generated.
 func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
+	if len(d.Blocks()) > 0 || len(d.Groups()) > 0 || len(d.Preserved.Objects) > 0 || hasAttdef(d) {
+		return writeSymbols(out, d)
+	}
 	w := &writer{w: bufio.NewWriter(out)}
 	var warns []string
 	sub := d.Header.HandSeed
@@ -358,11 +366,40 @@ func (w *writer) head(typ string, e doc.Entity) {
 
 // headAs writes an entity's type, the handle h, the layer and a colour other than ByLayer.
 func (w *writer) headAs(typ, h string, c *doc.EntityCommon) {
+	if w.typeOverride != "" {
+		typ = w.typeOverride
+		w.typeOverride = ""
+	}
 	w.pair(0, typ)
 	w.pair(5, h)
+	if w.modern {
+		if hs := w.reactors[c.H]; len(hs) > 0 {
+			w.pair(102, "{ACAD_REACTORS")
+			for _, g := range hs {
+				w.pair(330, g.String())
+			}
+			w.pair(102, "}")
+		}
+		owner := c.Owner
+		if owner == 0 {
+			owner = doc.ModelSpace
+		}
+		if owner == doc.ModelSpace && w.modelOwner != "" {
+			w.pair(330, w.modelOwner)
+		} else {
+			w.pair(330, owner.String())
+		}
+		w.pair(100, "AcDbEntity")
+	}
 	w.pair(8, c.Layer)
-	if c.Color != doc.ByLayer && c.Color > 0 {
+	if c.Color != doc.ByLayer && c.Color >= 0 {
 		w.int(62, c.Color)
+	}
+	if w.modern {
+		sub := map[string]string{"LINE": "AcDbLine", "CIRCLE": "AcDbCircle", "ARC": "AcDbCircle", "TEXT": "AcDbText", "MTEXT": "AcDbMText", "ATTDEF": "AcDbText", "ATTRIB": "AcDbText", "LWPOLYLINE": "AcDbPolyline", "INSERT": "AcDbBlockReference"}[typ]
+		if sub != "" {
+			w.pair(100, sub)
+		}
 	}
 }
 

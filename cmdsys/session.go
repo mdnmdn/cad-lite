@@ -78,7 +78,7 @@ func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 		vars: NewVars(), mem: &lastState{}, prev: &selMemory{}}
 	s.files = newFileState(func() string { return s.filePath })
 	s.ctx = Context{commit: s.commitOpen, files: s.files, View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath,
-		vars: s.vars, last: s.mem, prev: s.prev, script: s.queueScript}
+		agentCaller: func() bool { return s.agentCaller }, vars: s.vars, last: s.mem, prev: s.prev, script: s.queueScript}
 	installCommandLine(s)
 	s.SetDrawing(d)
 	for _, g := range varGroups {

@@ -498,6 +498,20 @@ func (c *explodeCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt 
 func (c *explodeCmd) run(ctx *cmdsys.Context) {
 	exploded, refused := 0, 0
 	for _, h := range c.hs {
+		if in, ok := ctx.Doc.Entity(h).(*doc.Insert); ok {
+			parts, err := in.Explode()
+			if err != nil {
+				symbolError(ctx, err)
+				refused++
+				continue
+			}
+			for _, e := range parts {
+				ctx.Tx().Add(e)
+			}
+			ctx.Tx().Erase(h)
+			exploded++
+			continue
+		}
 		pl, ok := ctx.Doc.Entity(h).(*doc.LWPolyline)
 		if !ok {
 			refused++

@@ -58,6 +58,8 @@ type Drawing struct {
 	// 0 or ByLayer for the layer's colour.
 	CurrentColor int
 
+	groups map[Handle]*Group
+	blocks map[string]*Block
 	layers []*Layer
 	// layerIndex maps a layer name to its record in layers, so Layer is O(1).
 	layerIndex map[string]*Layer
@@ -80,7 +82,8 @@ func New() *Drawing {
 		Header:       Header{HandSeed: 0x100, InsUnits: 4},
 		CurrentLayer: "0",
 		entities:     map[Handle]Entity{},
-		sorted:       true,
+		groups:       map[Handle]*Group{}, blocks: map[string]*Block{},
+		sorted: true,
 	}
 	d.layers = []*Layer{{Name: "0", Color: 7}}
 	d.reindexLayers()
@@ -170,7 +173,11 @@ func (d *Drawing) Extents() geom.Box2 {
 		if _, ok := e.(*Unknown); ok {
 			continue
 		}
-		b = b.Union(e.Bounds())
+		if in, ok := e.(*Insert); ok {
+			b = b.Union(in.VisibleBounds())
+		} else {
+			b = b.Union(e.Bounds())
+		}
 	}
 	return b
 }
@@ -201,6 +208,7 @@ func (d *Drawing) insert(e Entity) {
 		}
 	}
 	d.entities[h] = e
+	d.bindEntity(e)
 	if h >= d.Header.HandSeed {
 		d.Header.HandSeed = h + 1
 	}

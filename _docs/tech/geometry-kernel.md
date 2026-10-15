@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: The numeric policy, the curve types and operations of geom, and the spatial index that serves culling, picking and snapping.
 read_when: you are adding a curve type or a geometric operation, comparing floats, or querying entities by location
-updated: 2026-10-14
-verified: 2026-10-14
+updated: 2026-10-15
+verified: 2026-10-15
 code_anchors: [geom/vec.go, geom/curves.go, geom/intersect.go, geom/area.go, geom/offset.go, geom/fillet.go, geom/filletpoly.go, geom/split.go, geom/tol.go, spatial/index.go, spatial/bench_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -110,6 +110,16 @@ small entities, which is the case a grid serves best: filing and moving an entit
 cells, with no rebalancing. The few long entities that would bloat a grid go to the short list. The
 query functions are the ones an R-tree serves, so a drawing that proves the grid wrong can change
 the implementation without touching a caller (D26).
+
+## Affine block curves
+
+`geom.Intersect` first offers either curve the optional `IntersectCurve(Curve, float64)` protocol.
+An implementation returns points and true when it handles the pair; false delegates to the existing
+primitive dispatcher. This keeps the geometry kernel independent of document types. The document's
+block adapter uses inverse coordinates for line intersections and bounded parameter root searches for
+ellipse pairs, retaining arc clipping and world-space tolerance. The numeric path has a fixed search
+budget; very close roots below numerical resolution can coalesce. It does not tessellate a whole
+ellipse at an arbitrarily small command tolerance.
 
 ## Related docs
 

@@ -6,7 +6,7 @@ status: current
 summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line, the -open flag and files the OS hands over (dropped, opened from Finder or the Dock, file arguments), how warnings and errors are reported, and where the lossy edges are.
 read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
 updated: 2026-10-15
-verified: 2026-10-14
+verified: 2026-10-15
 code_anchors: [ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
@@ -115,6 +115,12 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   custom classes) are left out of the saved file, with a warning that names each one. The
   `list_entities` agent tool lists them with `unknown: true`.
 
+Named blocks open and save as shared definitions with INSERT references and attributes. Groups use
+native AC1015 GROUP objects and dictionaries; plain symbol drawings retain R12 output. Invalid,
+cyclic or over-budget references remain preserved without display and produce warnings. INSERT also
+loads DXF symbol libraries, and WBLOCK exports them; both external-file operations require a human.
+DWG block import remains unsupported and keeps its existing skip warning.
+
 ### Opening from Windows Explorer
 
 The Windows installer registers Cad-lite with the shell; the keys are listed in
@@ -178,6 +184,10 @@ handler (the browser), OPEN and SAVE print `File commands are not available on t
   command and clears the selection; otherwise `cmdsys.DocumentHost.OpenNew` gives the drawing a tab (`Context.Documents`).
 
 ## Implementation
+
+`fileio/dxf/blocks.go`, `groups.go` and `symbolwrite.go` read and write native symbols and
+groups; the document model owns validation and undo. `cmdsys/commands/block.go` uses the file
+registry for WBLOCK and library INSERT, keeping atomic file writes and caller restrictions.
 
 `fileCmd` in `cmdsys/commands/files.go` serves OPEN and SAVE: `Start` checks for a handler and
 prompts, `Input` calls `Files.Open` or `Files.Save`, prints the warnings through `printWarnings`

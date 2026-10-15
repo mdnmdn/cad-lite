@@ -70,6 +70,15 @@ prompts, and the English output of an agent caller. `go run ./i18n/cmd/i18ncheck
 cmdsys,fileio,settings -strict` reports string literals at user-facing call sites that have no
 catalog key and must stay clean.
 
+## Symbol integration tests
+
+`doc/block_test.go` covers metadata undo/redo/abort, overlapping group membership, affine bounds,
+nearest points, intersections, depth/expansion budgets and transactional library support. Import undo
+preserves unrelated layer edits. `cmdsys/commands/block_test.go` exercises the public command flow,
+group selection, hidden/locked members, ALL, attributes, libraries, cancellation and Italian aliases.
+`fileio/dxf/symbols_test.go` repeats native R12/R2000 symbol round trips and checks opaque preservation.
+`render/block_test.go` verifies inherited colour, child-layer toggles, bounds/index and cache invalidation.
+
 ## Performance targets
 
 | Scenario | Target |

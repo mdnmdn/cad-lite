@@ -388,6 +388,11 @@ environment-variable fallback restarts the agent process once, so the session ma
 `agentmanager` and `cadmcp` compile for `js/wasm` (the launch fails at run time there), so the browser
 build keeps building and the panel reports the error on Start.
 
+Named INSERT remains available through `run_command` and `run_script`. WBLOCK is human-only, and
+INSERT checks `Context.AgentCaller` before any DXF-path access, including an answer to a human-started
+prompt and aliases. Entity queries expose a reference's definition name, placement, scales and
+attributes. `cadmcp/safety_test.go` covers the file boundary.
+
 ## Related docs
 
 - [Agent panel](../features/agent-panel.md) — what the user sees

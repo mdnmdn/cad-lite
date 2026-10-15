@@ -20,7 +20,8 @@ type Context struct {
 	// Files is how file commands reach the I/O layer; nil disables them.
 	Files FileHandler
 
-	txn *doc.Txn
+	agentCaller func() bool
+	txn         *doc.Txn
 	// commit commits txn the way the session does (Session.commitOpen).
 	commit  func() doc.ChangeSet
 	out     func(string)
@@ -129,3 +130,6 @@ func (c *Context) Agent(prompt string) bool {
 	c.agent(prompt)
 	return true
 }
+
+// AgentCaller reports whether an agent is supplying the current input.
+func (c *Context) AgentCaller() bool { return c.agentCaller != nil && c.agentCaller() }

@@ -7,7 +7,7 @@ summary: How a drawing is stored — handles, entities, layers, the header — a
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/unknown.go, doc/aci.go]
+code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -16,8 +16,8 @@ review_cycle: quarterly
 
 ## What it is
 
-`doc` is the document database. Its model mirrors the DWG/DXF object model so that a drawing read
-from a file can be written back unchanged: every object has a persistent 64-bit handle, objects refer
+`doc` is the document database. Its model mirrors the DWG/DXF object model so that supported content read
+from a file can be written back: every object has a persistent 64-bit handle, objects refer
 to each other by handle, and the drawing's header variables travel with it. A `doc.Drawing` holds
 one document: its header, its layer table, the entities of model space and the undo journal.
 
@@ -31,7 +31,7 @@ Zero means "no object". The model-space block record is `doc.ModelSpace`, the ow
 **Objects and entities.** `doc.Object` is anything stored: handle, owner, DXF class name and a deep
 `Clone`. `doc.Entity` adds the graphical part: `Common()` (handle, owner, layer, colour), `Bounds`,
 `Geometry` (the curves used for snapping, picking and display) and `Transform`. The entity types are
-`Line`, `Circle`, `Arc`, `LWPolyline`, `Text` and `MText`. An `LWPolyline` also carries `Widths`, the start and end width per
+`Line`, `Circle`, `Arc`, `LWPolyline`, `Text`, `MText`, `Insert` and `AttributeDefinition`. An `LWPolyline` also carries `Widths`, the start and end width per
 segment; only the DWG reader fills it, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
 
 **Text.** `Text` is a single-line TEXT with DXF's fields, all exported: `Insert` and `Align` (the first and
@@ -92,7 +92,7 @@ reader does not model, kept as read.
 **Unknown entities and preserved records.** `doc.Unknown` keeps an entity of a class the document
 does not model. `Type` is the class name and `Raw` the groups after its `0 CLASS` line in file order,
 including 5, 8, 62 and 330; `EntityCommon` is a parsed view of `Raw`, and the writer emits `Raw`. It
-has no geometry, so it is never drawn, picked, snapped to or selected. `Bounds` is the box of its
+has no geometry, so it is never drawn, picked, snapped to or selected, including through a group. `Bounds` is the box of its
 point groups, a hint only, and `Drawing.Extents` ignores it. It is never editable: `Txn.Modify` does
 not call the edit function, `Txn.Erase` does nothing and `Txn.Add` returns 0. Only `Drawing.Load`
 creates one. `Drawing.Preserved` holds the table records and blocks the document does not model, as
@@ -139,6 +139,34 @@ it to recover when a panic left a transaction open (`cmdsys.Session.guard`, `cad
 
 The command system makes one command one transaction, so one command is one undo step; see the
 [command system](command-system.md).
+
+## Groups and block definitions
+
+Groups and named blocks are document objects edited inside `Txn`. Group membership keeps independent
+model-space handles; overlapping selectable groups expand selection transitively by default.
+`Group` and `Block` read APIs return deep copies. `Txn.AddGroup`, `ModifyGroup`, `EraseGroup`,
+`DefineBlock` and `EraseBlock` validate edits before applying them. Entity deletion removes membership
+in the same transaction. Metadata snapshots accompany entity snapshots in each journal step, including
+abort, grouped undo and redo. Metadata-only changes publish a nonempty `ChangeSet` and mark the drawing dirty.
+`Txn.ImportBlockSupport` snapshots supporting layers and preserved STYLE/LTYPE tables, remaps imported
+record handles and references, and restores that support state with the same import undo step.
+`ChangeSet.Support` identifies these support-table changes; ordinary layer commands retain their
+direct-edit policy. Removing an imported current layer through undo selects existing layer 0,
+so the current layer always exists; unrelated direct layer property edits survive the undo.
+
+A `Block` holds a case-insensitive name, base point and owned geometry outside model space. An
+`Insert` references it with position, rotation and per-axis scale, and owns instance attributes.
+Definition replacement updates direct and nested references. Definition changes queue those references
+through `TakeEdits` and publish their handles as modified at commit, restoration and undo, so bounds,
+spatial queries and cached drawing stay synchronized. New cycles, unresolved definitions, nesting beyond `MaxBlockDepth` and expansion beyond
+`MaxBlockEntities` are rejected. The expansion budget counts each visited reference, even one
+whose definition has no leaf geometry, and instance attribute work; sums stop at the limit. `Drawing.InsertError` includes the root reference’s
+own attributes in that same budget before addition, modification, initialization, geometry resolution
+and file-import quarantine. Default attributes are preflighted before initialization, and definition
+replacement also checks affected live roots. Validation includes ancestors affected by replacement. Imported invalid
+references remain opaque with a warning, preserving their source records.
+Layer 0 and ByBlock appearance inherit the insertion's layer and colour; explicit child layers retain
+visibility and appearance. Unsupported imported content stays preserved with a warning.
 
 ## Rationale
 

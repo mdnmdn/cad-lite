@@ -1,7 +1,6 @@
 # Catalogo italiano di Cad-lite. Stesse chiavi di en.toml, stessi segnaposto.
 # Terminologia: AutoCAD italiano ("Specificare primo punto", "Selezionare oggetti", ...).
 # Le voci contrassegnate "(verify)" in i18n/MIGRATION.md vanno riviste da un madrelingua CAD.
-
 [common]
 yes = "Sì"
 no = "No"
@@ -76,6 +75,10 @@ unsupported = "L'osnap %s non è supportato."
 none_found = "Nessun osnap trovato."
 
 [kw]
+list = "ELenco"
+delete = "Elimina"
+selectable = "Selezionabile"
+rename = "RiNomina"
 height = "Altezza"
 justify = "Giustifica"
 left = "Sinistra"
@@ -787,6 +790,7 @@ unavailable = "L'agente IA non è disponibile su questa piattaforma."
 ask = "Chiedere all'agente"
 
 [dxf.warn]
+invalid_block_reference = "INSERT %s conservato senza visualizzazione: %s"
 mtext_ignored = "%d oggetti MTEXT hanno un'estrusione specchiata o inclinata o una direzione dall'alto in basso, che vengono ignorate: sono disegnati in piano, da sinistra a destra"
 mtext_as_text = "MTEXT scritto come TEXT, uno per riga, perdendo riquadro e a capo (R12 non ha MTEXT; backlog G2): %d oggetti"
 kept_unknown = "mantenute %d entità %s come oggetti sconosciuti (non visualizzate né modificabili)"
@@ -1569,3 +1573,112 @@ each = "Eliminare il layer %q?"
 deleted = "Eliminato il layer %q."
 zero_length_one = "%d oggetto di lunghezza zero eliminato."
 zero_length_other = "%d oggetti di lunghezza zero eliminati."
+
+[cmd.symbol.prompt]
+group_name = "Nome del gruppo (vuoto per anonimo), o opzione:"
+existing_group = "Nome del gruppo esistente:"
+new_name = "Nuovo nome:"
+block_name = "Nome del blocco o percorso della libreria DXF:"
+insert_point = "Specificare il punto di inserimento:"
+library_path = "Percorso del file DXF della libreria:"
+base_point = "Specificare il punto base del blocco:"
+scale = "Specificare la scala uniforme <1>:"
+rotation = "Specificare la rotazione <0>:"
+attribute = "%s <%s>:"
+pick_insert = "Selezionare il riferimento di blocco:"
+tag = "Tag dell’attributo:"
+value = "Valore dell’attributo:"
+attribute_prompt = "Richiesta dell’attributo:"
+default = "Valore predefinito dell’attributo:"
+height = "Specificare l’altezza dell’attributo <2.5>:"
+
+[cmd.symbol.msg]
+error = "Errore: %s"
+group = "%s: %d membri"
+
+[cmd.group]
+name = "Gruppo"
+desc = "Raggruppa oggetti"
+aliases = ["GRUPPO"]
+
+[cmd.-group]
+name = "-Gruppo"
+desc = "Raggruppa oggetti"
+aliases = ["-GRUPPO"]
+
+[cmd.ungroup]
+name = "SeparaGruppo"
+desc = "Scioglie gruppi di oggetti"
+aliases = ["SEPARAGRUPPO"]
+
+[cmd.block]
+name = "Blocco"
+desc = "Definisce geometria riutilizzabile"
+aliases = ["BLOCCO"]
+
+[cmd.-block]
+name = "-Blocco"
+desc = "Definisce geometria riutilizzabile"
+aliases = ["-BLOCCO"]
+
+[cmd.insert]
+name = "Inserisci"
+desc = "Posiziona un simbolo riutilizzabile"
+aliases = ["INSERISCI"]
+
+[cmd.-insert]
+name = "-Inserisci"
+desc = "Posiziona un simbolo riutilizzabile"
+aliases = ["-INSERISCI"]
+
+[cmd.attdef]
+name = "DefAttributo"
+desc = "Definisce un attributo di blocco"
+aliases = ["DEFATTRIBUTO"]
+
+[cmd.attedit]
+name = "ModAttributo"
+desc = "Modifica i valori degli attributi"
+aliases = ["MODATTRIBUTO"]
+
+[cmd.blockredefine]
+name = "RidefinisciBlocco"
+desc = "Sostituisce la geometria condivisa"
+aliases = ["RIDEFINISCIBLOCCO"]
+
+[cmd.wblock]
+name = "EsportaBlocco"
+desc = "Esporta una libreria di simboli DXF"
+aliases = ["ESPORTABLOCCO"]
+
+[cmd.symbol.error]
+attribute_tag_must_be_a_nonempty_word = "Il tag deve essere una parola non vuota"
+block_already_exists_use_blockredefine = "Il blocco esiste già; usare BLOCKREDEFINE"
+block_definition_does_not_exist = "La definizione del blocco non esiste"
+block_does_not_exist = "Il blocco non esiste"
+block_does_not_exist_a_library_path_must_end_in_dxf = "Il blocco non esiste; il percorso della libreria deve terminare con .dxf"
+block_is_referenced = "Il blocco è utilizzato da un riferimento"
+cannot_explode_a_nonuniformly_scaled_reference = "Impossibile esplodere un riferimento con scala non uniforme"
+cannot_explode_unsupported_block_objects = "Impossibile esplodere oggetti del blocco non supportati"
+cyclic_block_definition = "Definizione di blocco ciclica"
+editable_attribute_tag_does_not_exist = "Il tag di attributo modificabile non esiste"
+file_service_unavailable = "Servizio file non disponibile"
+group_does_not_exist = "Il gruppo non esiste"
+group_member_does_not_exist = "Un membro del gruppo non esiste"
+group_name_already_exists = "Il nome del gruppo esiste già"
+group_name_is_empty = "Il nome del gruppo è vuoto"
+invalid_attribute_height = "Altezza di attributo non valida"
+invalid_block_base_point = "Punto base del blocco non valido"
+invalid_block_name = "Nome del blocco non valido"
+invalid_block_reference = "Riferimento di blocco non valido"
+invalid_insertion_transform = "Trasformazione di inserimento non valida"
+library_block_name_conflicts = "Nome del blocco della libreria in conflitto"
+library_definition_name_conflicts = "Nome della definizione della libreria in conflitto"
+library_drawing_is_empty = "Il disegno della libreria è vuoto"
+library_has_cyclic_or_missing_definitions = "La libreria contiene definizioni cicliche o mancanti"
+library_has_unsupported_objects = "La libreria contiene oggetti non supportati"
+no_block_reference_selected = "Nessun riferimento di blocco selezionato"
+object_is_not_a_block_reference = "L’oggetto non è un riferimento di blocco"
+object_is_on_a_locked_or_hidden_layer = "L’oggetto appartiene a un layer bloccato o nascosto"
+scale_must_be_finite_and_positive = "La scala deve essere finita e positiva"
+unsupported_group_member = "Membro del gruppo non supportato"

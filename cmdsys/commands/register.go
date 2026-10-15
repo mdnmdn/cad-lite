@@ -10,6 +10,9 @@ import (
 // registerX (every owned file already has one, see the ownership table in
 // _docs/tech/command-system.md), so this list does not change after the seam split.
 func Register(r *cmdsys.Registry) {
+	registerGroup(r)
+	registerBlock(r)
+	registerAttribute(r)
 	registerDraw(r)      // draw.go, polygon.go, point.go: CW-A
 	registerModify(r)    // modify.go, array.go, oops.go: CW-B1
 	registerConstruct(r) // construct.go: CW-B2

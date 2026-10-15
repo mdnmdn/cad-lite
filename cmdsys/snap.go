@@ -26,7 +26,7 @@ const (
 	SnapQuadrant
 	// SnapIntersection snaps to where two curves cross.
 	SnapIntersection
-	// SnapInsertion snaps to the insertion point of TEXT and MTEXT; blocks do not exist yet.
+	// SnapInsertion snaps to the insertion point of TEXT, MTEXT and block references.
 	SnapInsertion
 	// SnapPerpendicular snaps to the foot of the perpendicular from the previous point.
 	SnapPerpendicular
@@ -138,6 +138,9 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 			break
 		}
 		n++
+		if in, ok := e.(*doc.Insert); ok {
+			inserts = append(inserts, in.Position)
+		}
 		if t, ok := e.(doc.Annotation); ok {
 			// Text offers only its insertion point, as in AutoCAD: its strokes are glyphs, not
 			// edges to snap to.
@@ -172,6 +175,23 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 		consider(pt, SnapInsertion)
 	}
 	for _, c := range curves {
+		if a, ok := c.(interface {
+			SnapPoints() ([]geom.Vec2, []geom.Vec2, []geom.Vec2, []geom.Vec2)
+		}); ok {
+			ep, mp, cp, qp := a.SnapPoints()
+			for _, p := range ep {
+				consider(p, SnapEndpoint)
+			}
+			for _, p := range mp {
+				consider(p, SnapMidpoint)
+			}
+			for _, p := range cp {
+				consider(p, SnapCenter)
+			}
+			for _, p := range qp {
+				consider(p, SnapQuadrant)
+			}
+		}
 		switch c := c.(type) {
 		case geom.Line:
 			consider(c.A, SnapEndpoint)
@@ -355,6 +375,9 @@ func SelectBox(d *doc.Drawing, ix *spatial.Index, a, b geom.Vec2, tol float64) [
 // selectBounds is the box a window must contain to select e: its bounds, or for a text the
 // corners of its text box, as AutoCAD selects text by its box.
 func selectBounds(e doc.Entity) geom.Box2 {
+	if in, ok := e.(*doc.Insert); ok {
+		return in.VisibleBounds()
+	}
 	if t, ok := e.(doc.Annotation); ok {
 		q := t.Box()
 		return geom.BoxOf(q[0], q[1]).Extend(q[2]).Extend(q[3])

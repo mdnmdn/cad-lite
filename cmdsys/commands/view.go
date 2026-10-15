@@ -23,7 +23,11 @@ func visibleExtents(d *doc.Drawing) geom.Box2 {
 	for _, h := range d.Handles() {
 		if e := d.Entity(h); e != nil && d.EntityVisible(e) {
 			if _, unknown := e.(*doc.Unknown); !unknown {
-				b = b.Union(e.Bounds())
+				if in, ok := e.(*doc.Insert); ok {
+					b = b.Union(in.VisibleBounds())
+				} else {
+					b = b.Union(e.Bounds())
+				}
 			}
 		}
 	}
@@ -230,7 +234,11 @@ func (c *zoomCmd) object(ctx *cmdsys.Context, hs []doc.Handle) {
 	box := geom.EmptyBox()
 	for _, h := range hs {
 		if e := ctx.Doc.Entity(h); e != nil {
-			box = box.Union(e.Bounds())
+			if in, ok := e.(*doc.Insert); ok {
+				box = box.Union(in.VisibleBounds())
+			} else {
+				box = box.Union(e.Bounds())
+			}
 		}
 	}
 	ctx.Selection.Clear()

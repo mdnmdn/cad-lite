@@ -113,6 +113,11 @@ register records it.
 renderer with retained buffers, an SVG or PDF exporter) consumes the same display list without
 touching the core.
 
+Groups, shared definitions and attributes remain in `doc`; command and file handlers never resolve
+symbols in the UI. The block adapter implements affine geometry against `geom`'s optional intersection
+protocol, keeping `geom` independent of `doc`. The renderer resolves effective child layers/colours
+without changing core/UI dependencies.
+
 ## Related docs
 
 - [Code map](code-map.md) — every package and its purpose

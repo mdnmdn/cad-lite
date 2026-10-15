@@ -8,10 +8,16 @@ import (
 // ChangeSet lists the handles a commit, undo or redo touched.
 type ChangeSet struct {
 	Added, Modified, Erased []Handle
+	// Groups and Blocks list changed metadata objects.
+	Groups, Blocks []Handle
+	// Support reports an imported supporting-layer or symbol-table change.
+	Support bool
 }
 
 // Empty reports whether the change set touches nothing.
-func (c ChangeSet) Empty() bool { return len(c.Added)+len(c.Modified)+len(c.Erased) == 0 }
+func (c ChangeSet) Empty() bool {
+	return len(c.Added)+len(c.Modified)+len(c.Erased)+len(c.Groups)+len(c.Blocks) == 0 && !c.Support
+}
 
 // ErrTxnOpen is returned by Begin while another transaction is open.
 var ErrTxnOpen = errors.New("doc: a transaction is already open")
@@ -22,8 +28,11 @@ type Txn struct {
 	d *Drawing
 	// before holds each touched entity's state at its first touch; nil for
 	// an entity the transaction added.
-	before map[Handle]Entity
-	order  []Handle
+	supportBefore *blockSupport
+	groupsBefore  map[Handle]*Group
+	blocksBefore  map[string]*Block
+	before        map[Handle]Entity
+	order         []Handle
 	// edits lists every handle Add, Modify and Erase touched since Begin or the last TakeEdits.
 	edits []Handle
 	done  bool
@@ -58,9 +67,26 @@ func (t *Txn) Add(e Entity) Handle {
 	if _, ok := e.(*Unknown); ok {
 		return 0
 	}
+	if in, ok := e.(*Insert); ok {
+		if t.d.InsertError(in) != nil || !in.initializeAttributes(t.d) || t.d.InsertError(in) != nil {
+			return 0
+		}
+		in.d = t.d
+		if box := in.Bounds(); !box.IsEmpty() && (!finitePoint(box.Min) || !finitePoint(box.Max)) {
+			return 0
+		}
+	}
 	c := e.Common()
 	c.H = t.d.allocHandle()
 	c.Owner = ModelSpace
+	if in, ok := e.(*Insert); ok {
+		for i := range in.Attributes {
+			if in.Attributes[i].Text != nil {
+				in.Attributes[i].Text.H = t.d.allocHandle()
+				in.Attributes[i].Text.Owner = c.H
+			}
+		}
+	}
 	if c.Layer == "" {
 		c.Layer = t.d.CurrentLayer
 	}
@@ -86,7 +112,21 @@ func (t *Txn) Modify(h Handle, fn func(Entity)) {
 	}
 	t.touch(h)
 	t.edits = append(t.edits, h)
+	var beforeInsert *Insert
+	if in, ok := e.(*Insert); ok {
+		beforeInsert = in.Clone().(*Insert)
+	}
 	fn(e)
+	if in, ok := e.(*Insert); ok {
+		if t.d.InsertError(in) != nil {
+			*in = *beforeInsert
+			return
+		}
+		box := in.Bounds()
+		if !box.IsEmpty() && (!finitePoint(box.Min) || !finitePoint(box.Max)) {
+			*in = *beforeInsert
+		}
+	}
 }
 
 // Erase removes the entity h. It does nothing for an *Unknown.
@@ -97,6 +137,11 @@ func (t *Txn) Erase(h Handle) {
 	}
 	t.touch(h)
 	t.edits = append(t.edits, h)
+	for _, g := range t.d.GroupsFor(h) {
+		_ = t.ModifyGroup(g.H, func(group *Group) {
+			group.Members = slices.DeleteFunc(group.Members, func(member Handle) bool { return member == h })
+		})
+	}
 	t.d.remove(h)
 }
 
@@ -129,6 +174,7 @@ func (t *Txn) Commit() ChangeSet {
 			step.After[h] = nil
 		}
 	}
+	t.finishMetadata(&step, &cs)
 	if !cs.Empty() {
 		t.d.journal.record(step)
 	}
@@ -147,6 +193,7 @@ func (t *Txn) Abort() {
 	for _, h := range slices.Backward(t.order) {
 		cs = t.d.restore(h, t.before[h], cs)
 	}
+	t.restoreMetadata(&cs)
 	t.d.publish(cs)
 }
 
@@ -159,7 +206,9 @@ func (d *Drawing) AbortOpen() {
 }
 
 // Touched reports whether the transaction has changed anything yet.
-func (t *Txn) Touched() bool { return len(t.order) > 0 }
+func (t *Txn) Touched() bool {
+	return len(t.order) > 0 || t.groupsBefore != nil || t.blocksBefore != nil || t.supportBefore != nil
+}
 
 // TakeEdits returns the handles Add, Modify and Erase touched since Begin or the previous call, in
 // call order and possibly repeated, and starts a new list. Whether a handle now exists says which
@@ -193,7 +242,12 @@ func (d *Drawing) restore(h Handle, state Entity, cs ChangeSet) ChangeSet {
 // JournalStep is one undoable unit: each touched handle's state before and
 // after (nil = absent).
 type JournalStep struct {
-	Before, After map[Handle]Entity
+	Before, After               map[Handle]Entity
+	supportBefore, supportAfter *blockSupport
+	// GroupsBefore and GroupsAfter snapshot group membership; nil means untouched.
+	GroupsBefore, GroupsAfter map[Handle]*Group
+	// BlocksBefore and BlocksAfter snapshot shared definitions; nil means untouched.
+	BlocksBefore, BlocksAfter map[string]*Block
 	// Name is the command that made the step, when the session recorded it (NameLastStep).
 	Name string
 }
@@ -229,7 +283,9 @@ func (d *Drawing) Undo() bool {
 	j.undo = j.undo[:len(j.undo)-1]
 	j.redo = append(j.redo, s)
 	j.dropMarks()
-	d.apply(s.Before)
+	d.restoreSupport(s.supportBefore, s.supportAfter)
+	d.applyMetadata(s.GroupsBefore, s.BlocksBefore)
+	d.applyWithMetadata(s.Before, s.GroupsBefore, s.BlocksBefore, s.supportBefore)
 	return true
 }
 
@@ -242,11 +298,13 @@ func (d *Drawing) Redo() bool {
 	s := j.redo[len(j.redo)-1]
 	j.redo = j.redo[:len(j.redo)-1]
 	j.undo = append(j.undo, s)
-	d.apply(s.After)
+	d.restoreSupport(s.supportAfter, s.supportBefore)
+	d.applyMetadata(s.GroupsAfter, s.BlocksAfter)
+	d.applyWithMetadata(s.After, s.GroupsAfter, s.BlocksAfter, s.supportAfter)
 	return true
 }
 
-func (d *Drawing) apply(states map[Handle]Entity) {
+func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]*Group, blocks map[string]*Block, support *blockSupport) {
 	hs := make([]Handle, 0, len(states))
 	for h := range states {
 		hs = append(hs, h)
@@ -256,5 +314,87 @@ func (d *Drawing) apply(states map[Handle]Entity) {
 	for _, h := range hs {
 		cs = d.restore(h, states[h], cs)
 	}
+	d.metadataChanges(&cs, groups, blocks)
+	if support != nil {
+		cs.Support = true
+		for _, h := range d.insertHandles() {
+			if !slices.Contains(cs.Modified, h) && !slices.Contains(cs.Added, h) {
+				cs.Modified = append(cs.Modified, h)
+			}
+		}
+	}
 	d.publish(cs)
+}
+
+func (t *Txn) finishMetadata(step *JournalStep, cs *ChangeSet) {
+	if t.supportBefore != nil {
+		step.supportBefore = t.supportBefore
+		step.supportAfter = t.d.snapshotSupport()
+		cs.Support = true
+		for _, h := range t.d.insertHandles() {
+			if !slices.Contains(cs.Added, h) && !slices.Contains(cs.Modified, h) {
+				cs.Modified = append(cs.Modified, h)
+			}
+		}
+	}
+	if t.groupsBefore != nil {
+		step.GroupsBefore = t.groupsBefore
+		step.GroupsAfter = cloneGroups(t.d.groups)
+	}
+	if t.blocksBefore != nil {
+		step.BlocksBefore = t.blocksBefore
+		step.BlocksAfter = cloneBlocks(t.d.blocks)
+	}
+	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore)
+}
+func (t *Txn) restoreMetadata(cs *ChangeSet) {
+	if t.supportBefore != nil {
+		t.d.restoreSupport(t.supportBefore, t.d.snapshotSupport())
+		cs.Support = true
+		cs.Modified = append(cs.Modified, t.d.insertHandles()...)
+	}
+	t.d.applyMetadata(t.groupsBefore, t.blocksBefore)
+	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore)
+}
+func (d *Drawing) applyMetadata(groups map[Handle]*Group, blocks map[string]*Block) {
+	if groups != nil {
+		d.groups = cloneGroups(groups)
+	}
+	if blocks != nil {
+		d.blocks = cloneBlocks(blocks)
+		d.bindBlocks()
+	}
+}
+func (d *Drawing) metadataChanges(cs *ChangeSet, groups map[Handle]*Group, blocks map[string]*Block) {
+	if groups != nil {
+		for h := range groups {
+			cs.Groups = append(cs.Groups, h)
+		}
+		for h := range d.groups {
+			if !slices.Contains(cs.Groups, h) {
+				cs.Groups = append(cs.Groups, h)
+			}
+		}
+		if len(cs.Groups) == 0 {
+			cs.Groups = append(cs.Groups, 0)
+		}
+	}
+	if blocks != nil {
+		for _, b := range blocks {
+			cs.Blocks = append(cs.Blocks, b.H)
+		}
+		for _, b := range d.blocks {
+			if !slices.Contains(cs.Blocks, b.H) {
+				cs.Blocks = append(cs.Blocks, b.H)
+			}
+		}
+		if len(cs.Blocks) == 0 {
+			cs.Blocks = append(cs.Blocks, 0)
+		}
+		for _, h := range d.insertHandles() {
+			if !slices.Contains(cs.Added, h) && !slices.Contains(cs.Modified, h) {
+				cs.Modified = append(cs.Modified, h)
+			}
+		}
+	}
 }

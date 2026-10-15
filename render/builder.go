@@ -30,9 +30,10 @@ type Builder struct {
 
 // layerLook is the part of a layer that cached items depend on.
 type layerLook struct {
-	name       string
-	color      int
-	lineweight int
+	name        string
+	color       int
+	lineweight  int
+	off, frozen bool
 }
 
 type cached struct {
@@ -85,7 +86,7 @@ func (b *Builder) SyncLayers() bool {
 	ls := b.d.Layers()
 	same := len(ls) == len(b.layers)
 	for i := 0; same && i < len(ls); i++ {
-		same = b.layers[i] == layerLook{ls[i].Name, ls[i].Color, ls[i].Lineweight}
+		same = b.layers[i] == layerLook{ls[i].Name, ls[i].Color, ls[i].Lineweight, ls[i].Off, ls[i].Frozen}
 	}
 	if same {
 		return false
@@ -97,7 +98,7 @@ func (b *Builder) SyncLayers() bool {
 // lookLayers appends the appearance of every layer to dst.
 func (b *Builder) lookLayers(dst []layerLook) []layerLook {
 	for _, l := range b.d.Layers() {
-		dst = append(dst, layerLook{l.Name, l.Color, l.Lineweight})
+		dst = append(dst, layerLook{l.Name, l.Color, l.Lineweight, l.Off, l.Frozen})
 	}
 	return dst
 }
@@ -139,6 +140,17 @@ func (b *Builder) Items(h doc.Handle, v View) []DisplayItem {
 		return nil
 	}
 	tol := BandTolerance(band)
+	if in, ok := e.(*doc.Insert); ok {
+		var items []DisplayItem
+		for _, part := range in.Parts() {
+			proxy := &doc.Line{EntityCommon: doc.EntityCommon{Layer: part.Layer, Color: part.Color}}
+			for _, curve := range part.Geometry {
+				items = append(items, DisplayItem{Owner: h, Kind: ItemPolyline, Points: curve.Tessellate(tol, nil), Color: b.EntityColor(proxy), Weight: b.weightOf(proxy)})
+			}
+		}
+		b.cache[h] = cached{band: band, items: items}
+		return items
+	}
 	col := b.EntityColor(e)
 	var items []DisplayItem
 	weight := b.weightOf(e)

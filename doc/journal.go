@@ -56,6 +56,24 @@ func (d *Drawing) EndGroup() {
 	if len(steps) > 1 {
 		merged := JournalStep{Before: map[Handle]Entity{}, After: map[Handle]Entity{}}
 		for _, s := range steps {
+			if s.supportBefore != nil {
+				if merged.supportBefore == nil {
+					merged.supportBefore = s.supportBefore
+				}
+				merged.supportAfter = s.supportAfter
+			}
+			if s.GroupsBefore != nil {
+				if merged.GroupsBefore == nil {
+					merged.GroupsBefore = s.GroupsBefore
+				}
+				merged.GroupsAfter = s.GroupsAfter
+			}
+			if s.BlocksBefore != nil {
+				if merged.BlocksBefore == nil {
+					merged.BlocksBefore = s.BlocksBefore
+				}
+				merged.BlocksAfter = s.BlocksAfter
+			}
 			for h, b := range s.Before {
 				if _, ok := merged.Before[h]; !ok {
 					merged.Before[h] = b

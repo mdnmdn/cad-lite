@@ -42,6 +42,10 @@ func entityInfo(e doc.Entity) map[string]any {
 		m["color"] = c.Color
 	}
 	switch e := e.(type) {
+	case *doc.Insert:
+		m["block"], m["position"], m["rotation"], m["scale_x"], m["scale_y"], m["attributes"] = e.BlockName, xy(e.Position), degrees(e.Rotation), e.ScaleX, e.ScaleY, e.Attributes
+	case *doc.AttributeDefinition:
+		m["tag"], m["prompt"], m["value"] = e.Tag, e.Prompt, e.Value
 	case *doc.Unknown:
 		m["unknown"] = true
 	case *doc.Line:

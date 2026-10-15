@@ -14,6 +14,21 @@ func Primitives(c Curve) []Curve {
 // Intersect returns the points where a and b cross or touch, within tol.
 // Overlapping collinear or concentric pieces report no points.
 func Intersect(a, b Curve, tol float64) []Vec2 {
+	if c, ok := a.(interface {
+		IntersectCurve(Curve, float64) ([]Vec2, bool)
+	}); ok {
+		if ps, handled := c.IntersectCurve(b, tol); handled {
+			return ps
+		}
+	}
+	if c, ok := b.(interface {
+		IntersectCurve(Curve, float64) ([]Vec2, bool)
+	}); ok {
+		if ps, handled := c.IntersectCurve(a, tol); handled {
+			return ps
+		}
+	}
+
 	var out []Vec2
 	for _, pa := range Primitives(a) {
 		for _, pb := range Primitives(b) {

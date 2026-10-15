@@ -1,6 +1,7 @@
 package cmdsys
 
 import (
+	"cad-lite/doc"
 	"math"
 
 	"cad-lite/geom"
@@ -121,9 +122,9 @@ func (s *Session) Click(p geom.Vec2, remove bool) {
 	switch {
 	case !ok:
 	case remove:
-		s.ctx.Selection.Remove(h)
+		s.ctx.Selection.Remove(s.expandGroupSelection([]doc.Handle{h})...)
 	default:
-		s.ctx.Selection.Add(h)
+		s.ctx.Selection.Add(s.expandGroupSelection([]doc.Handle{h})...)
 	}
 }
 
@@ -140,7 +141,7 @@ func (s *Session) SelectBox(a, b geom.Vec2, remove bool) {
 	if s.prompt != nil && s.prompt.Accepts&InputSelection == 0 {
 		return
 	}
-	hs := SelectBox(s.ctx.Doc, s.ctx.Index, a, b, s.ctx.View.PixelSize()/2)
+	hs := s.expandGroupSelection(SelectBox(s.ctx.Doc, s.ctx.Index, a, b, s.ctx.View.PixelSize()/2))
 	if remove {
 		s.ctx.Selection.Remove(hs...)
 	} else {

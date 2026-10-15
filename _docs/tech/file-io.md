@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The format plugin interface and registry, what the DXF codec reads and writes, and what the pure-Go DWG reader reads, skips and refuses.
 read_when: you are adding a file format, changing what the DXF codec reads or writes, changing what the DWG reader imports, or asked to write DWG
-updated: 2026-10-14
-verified: 2026-10-14
-code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, fileio/dxf/text_test.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go, fileio/dwg/read.go, fileio/dwg/container.go, fileio/dwg/objects.go, fileio/dwg/entities.go, fileio/dwg/import_entities.go, fileio/dwg/header.go, fileio/dwg/read_test.go, doc/aci.go]
+updated: 2026-10-15
+verified: 2026-10-15
+code_anchors: [fileio/format.go, fileio/dxf/read.go, fileio/dxf/write.go, fileio/dxf/blocks.go, fileio/dxf/groups.go, fileio/dxf/symbolwrite.go, fileio/dxf/text_test.go, doc/unknown.go, fileio/dxf/dxf_test.go, fileio/format_test.go, fileio/dwg/read.go, fileio/dwg/container.go, fileio/dwg/objects.go, fileio/dwg/entities.go, fileio/dwg/import_entities.go, fileio/dwg/header.go, fileio/dwg/read_test.go, doc/aci.go]
 depends_on: [tech-document-model]
 review_cycle: quarterly
 ---
@@ -39,6 +39,21 @@ Warnings and errors are localized sentences (`dxf.warn.*`, `dxf.err.*`, `dwg.war
 and `fileio.err.*` in the `i18n` catalogs), in the language active when the file is read or
 written; DXF tokens inside them (class names, section names, handles) stay as written in the file.
 
+## Groups and reusable block files
+
+`fileio/dxf/blocks.go`, `groups.go` and `symbolwrite.go` own native BLOCK, INSERT, ATTDEF and ATTRIB records round-trip named symbols and their instance values.
+Ordinary drawings retain AC1009 output. Drawings with groups use AC1015 with block records, owners,
+reactors and the named-object/ACAD_GROUP dictionaries, so GROUP membership survives in other CAD tools.
+This branch models GROUP rather than substituting private application data. Unsupported block content
+and object records remain preserved; warnings identify unsupported reference forms. File-space owner
+handles and object-dictionary pointers are remapped on output; logical `doc.ModelSpace` does not
+reserve a foreign persistent handle. The output hand seed follows every generated handle. Preserved external blocks reuse the original
+BLOCK_RECORD handle carried by their owner links, keeping BLOCK, ENDBLK and dependent object pointers
+consistent; blocks missing an owner receive one generated consistently across their records. Imported
+attribute records retain placement, formatting, invisibility and additional fields. WBLOCK exports a
+symbol with its dependency definitions; INSERT imports a DXF library drawing through the file registry.
+DWG block import remains outside this contract.
+
 ## The DXF codec
 
 `fileio/dxf.Codec` is a native Go reader and writer.
@@ -49,7 +64,7 @@ written; DXF tokens inside them (class names, section names, handles) stay as wr
 |---|---|
 | HEADER | `$HANDSEED`, `$INSUNITS`, `$CLAYER`; every other variable is kept in `Header.Extra` |
 | TABLES | `LAYER` records: name, colour (negative means off), the frozen (1) and locked (4) flags, the linetype name (6), and the plot flag (290) and lineweight (370) of newer versions; the `CADLITE_LAYER` extended data (below; `GODRAW_LAYER`, the name before the rename, is still read) |
-| ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline`, `TEXT` and `MTEXT` (below) |
+| ENTITIES | `LINE`, `CIRCLE`, `ARC` (degrees converted to radians), `LWPOLYLINE` with bulges, 2D `POLYLINE`/`VERTEX`/`SEQEND` as an `LWPolyline`, `TEXT`, `MTEXT`, `INSERT` and `ATTDEF` (below) |
 
 **TEXT** (`readText`) keeps the first and second alignment points (10, 11; without 11 the second is the first),
 height (40), value (1, spaces kept, `\U+XXXX` escapes decoded), rotation (50) and obliquing angle (51) in
@@ -68,15 +83,16 @@ Entity handles (code 5), layers (8) and colours (62) are kept. Every other entit
 polylines and meshes, is kept as a `doc.Unknown` holding its raw group list and the sub-records it
 owns (ATTRIB, VERTEX, SEQEND); the reader returns one warning per class with the count. Tables the
 document does not model (VPORT, LTYPE other than CONTINUOUS, STYLE, VIEW, UCS, APPID, DIMSTYLE) and
-every block except `*Model_Space` and `*Paper_Space` go to `Drawing.Preserved`. An entity whose
-handle duplicates one read earlier is renumbered, with a warning. OBJECTS, CLASSES and the thumbnail are not
+unsupported external-reference blocks go to `Drawing.Preserved`; ordinary named blocks become `doc.Block`. An entity whose
+handle duplicates one read earlier is renumbered, with a warning. OBJECTS supplies GROUP definitions and preserves other records; CLASSES and the thumbnail are not
 read. A file whose group codes are not integers (binary DXF), that ends inside a pair, or that has a
 section without `ENDSEC` (a truncated file, including a `SECTION` nested in another) is an error. A
 file with no `EOF` marker reads with the warning `file has no EOF marker (it may be truncated)`. A
 non-finite number (`nan`, `inf`, `1e999`) in a numeric group (codes 10 to 59, 110 to 149 and 210 to 239)
 is read as 0, with one warning that counts them, so the drawing never holds a non-finite coordinate.
 
-**Writing** emits R12 (`AC1009`), the most widely readable version, in this order: the header
+**Writing** emits R12 for plain drawings and native symbols; GROUP or preserved OBJECTS content uses
+the targeted AC1015 path described above. The R12 path emits R12 (`AC1009`), the most widely readable version, in this order: the header
 (`$ACADVER`, `$CLAYER`, `$HANDLING`, `$HANDSEED`), the `CONTINUOUS` linetype followed by the
 preserved linetypes, the layer table with colours and the off, frozen and locked states and the linetype name (only when the LTYPE table defines it, else `CONTINUOUS`; R12 has no plot flag, lineweight or description, so a layer with any of them carries them as extended data of the application `CADLITE_LAYER`, registered in the APPID table, which the reader restores and does not preserve), the other preserved
 tables, the preserved blocks, and the entities with their handles. An `LWPolyline` is written as

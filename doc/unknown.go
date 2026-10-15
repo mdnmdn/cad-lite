@@ -121,9 +121,13 @@ func (r RawRecord) Name() string {
 type Preserved struct {
 	Tables map[string][]RawRecord
 	Blocks []RawRecord
+	// Objects preserves unmodeled non-graphical DXF records.
+	Objects []RawRecord
+	// ModelOwner and PaperOwner are foreign space block record handles used for remapping.
+	ModelOwner, PaperOwner Handle
 }
 
 // Empty reports whether nothing is preserved.
 func (p *Preserved) Empty() bool {
-	return len(p.Blocks) == 0 && len(p.Tables) == 0
+	return len(p.Blocks) == 0 && len(p.Tables) == 0 && len(p.Objects) == 0
 }

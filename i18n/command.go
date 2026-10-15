@@ -8,7 +8,7 @@ var Commands = []string{
 	"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "POLYGON", "ERASE", "MOVE", "COPY", "ROTATE", "SCALE",
 	"UNDO", "U", "REDO", "ZOOM", "LAYER", "DIST", "AREA", "MEASUREGEOM", "ID", "LIST", "UNITS", "NEW", "OPEN",
 	"SAVE", "MIRROR", "OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "BREAKATPOINT", "JOIN", "EXPLODE", "STRETCH",
-	"AI", "OPTIONS",
+	"AI", "OPTIONS", "GROUP", "-GROUP", "UNGROUP", "BLOCK", "-BLOCK", "INSERT", "-INSERT", "ATTDEF", "ATTEDIT", "BLOCKREDEFINE", "WBLOCK",
 }
 
 // CommandInfo is a command's localized metadata.

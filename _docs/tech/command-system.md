@@ -7,7 +7,7 @@ summary: The command model, the session state machine, typed-input parsing, the 
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go]
+code_anchors: [cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -267,7 +267,7 @@ and considers:
 | Center | Circle and arc centres |
 | Quadrant | The 0°, 90°, 180° and 270° points of circles, and of arcs where they lie on the arc |
 | Intersection | Every pairwise crossing of the candidate curves |
-| Insertion | The insertion point (`Anchor`) of TEXT and MTEXT (`doc.Annotation`); text offers no other snap point, because its strokes are glyphs |
+| Insertion | The insertion point (`Anchor`) of TEXT and MTEXT (`doc.Annotation`) and the base point of INSERT; text offers no other snap point, because its strokes are glyphs |
 | Perpendicular, Tangent | Feet and tangent points from the prompt's `Base` (`FindSnapFrom`); nothing without a base |
 | Nearest | The closest point on any candidate, only when nothing else is in range |
 
@@ -299,6 +299,15 @@ inside an O. Entities on locked, off or frozen layers are not selectable (`doc.L
 `Session.HistoryTotal` is the monotonic count of lines ever printed; `Session.History` keeps the last
 200, so a caller that wants exactly the lines one operation produced (the agent's `run_script`) records
 the total before and after.
+
+## Groups, blocks and external libraries
+
+`PICKSTYLE` enables whole-group selection by default. Group membership editing selects individual
+members. `BLOCK`, `INSERT`, `ATTDEF`, `ATTEDIT` and `BLOCKREDEFINE` use the same transaction and prompt
+pipeline as other edits. `Context.AgentCaller` reports the current caller at each input, including a
+prompt a human started. Named INSERT is available to agents; INSERT from a DXF path refuses an agent
+caller before opening a file. WBLOCK is human-only. Library import validates names and dependencies
+before changing the drawing, and fails atomically on conflicting definitions.
 
 ## Rationale
 

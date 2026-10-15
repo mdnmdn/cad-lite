@@ -3,10 +3,9 @@
 # Key = table path + leaf name. Values use fmt verbs (%s, %d, %q, %v); %[2]s reorders arguments.
 # A string used WITHOUT arguments is returned as written, so a literal percent sign is a single %;
 # a string used WITH arguments needs %%. Keys ending in _one/_other are plural forms (i18n.Plural).
-# Keyword values (table [kw]) mark the shortcut letters in capitals; "a|b" adds synonyms.
+# Keyword values (table [kw]) mark shortcut letters with capitals.
 # cmd.<name>.aliases are extra typed names for the command (arrays).
 # it.toml must define exactly the same keys with the same placeholders: go run ./i18n/cmd/i18ncheck
-
 [common]
 yes = "Yes"
 no = "No"
@@ -81,6 +80,10 @@ unsupported = "Object snap %s is not supported."
 none_found = "No object snap found."
 
 [kw]
+list = "List"
+delete = "Delete"
+selectable = "Selectable"
+rename = "REname"
 height = "Height"
 justify = "Justify"
 left = "Left"
@@ -786,6 +789,7 @@ unavailable = "The AI agent is not available on this platform."
 ask = "Ask the agent"
 
 [dxf.warn]
+invalid_block_reference = "INSERT %s preserved without display: %s"
 mtext_ignored = "%d MTEXT objects have a mirrored or tilted extrusion or a top-to-bottom direction, which are ignored: they are drawn flat, left to right"
 mtext_as_text = "MTEXT written as TEXT, one per line, losing its box and wrapping (R12 has no MTEXT; backlog G2): %d objects"
 kept_unknown = "kept %d %s entities as unknown objects (not displayed or editable)"
@@ -1540,3 +1544,112 @@ each = "Purge layer %q?"
 deleted = "Deleted layer %q."
 zero_length_one = "%d zero-length object deleted."
 zero_length_other = "%d zero-length objects deleted."
+
+[cmd.symbol.prompt]
+group_name = "Enter group name (blank for unnamed), or List/Rename/Add/Remove/Selectable/Delete:"
+existing_group = "Enter existing group name:"
+new_name = "Enter new name:"
+block_name = "Enter block name or DXF library path:"
+insert_point = "Specify insertion point:"
+library_path = "Enter DXF library output path:"
+base_point = "Specify block base point:"
+scale = "Specify uniform scale <1>:"
+rotation = "Specify rotation angle <0>:"
+attribute = "%s <%s>:"
+pick_insert = "Select block reference:"
+tag = "Enter attribute tag:"
+value = "Enter attribute value:"
+attribute_prompt = "Enter attribute prompt:"
+default = "Enter attribute default:"
+height = "Specify attribute height <2.5>:"
+
+[cmd.symbol.msg]
+error = "Error: %s"
+group = "%s: %d members"
+
+[cmd.group]
+name = "Group"
+desc = "Groups objects"
+aliases = []
+
+[cmd.-group]
+name = "-Group"
+desc = "Groups objects"
+aliases = []
+
+[cmd.ungroup]
+name = "Ungroup"
+desc = "Dissolves object groups"
+aliases = []
+
+[cmd.block]
+name = "Block"
+desc = "Defines reusable geometry"
+aliases = []
+
+[cmd.-block]
+name = "-Block"
+desc = "Defines reusable geometry"
+aliases = []
+
+[cmd.insert]
+name = "Insert"
+desc = "Places a reusable symbol"
+aliases = []
+
+[cmd.-insert]
+name = "-Insert"
+desc = "Places a reusable symbol"
+aliases = []
+
+[cmd.attdef]
+name = "Attdef"
+desc = "Defines a block attribute"
+aliases = []
+
+[cmd.attedit]
+name = "Attedit"
+desc = "Edits reference attribute values"
+aliases = []
+
+[cmd.blockredefine]
+name = "Blockredefine"
+desc = "Replaces shared definition geometry"
+aliases = []
+
+[cmd.wblock]
+name = "Wblock"
+desc = "Exports a DXF symbol library"
+aliases = []
+
+[cmd.symbol.error]
+attribute_tag_must_be_a_nonempty_word = "attribute tag must be a nonempty word"
+block_already_exists_use_blockredefine = "block already exists; use BLOCKREDEFINE"
+block_definition_does_not_exist = "block definition does not exist"
+block_does_not_exist = "block does not exist"
+block_does_not_exist_a_library_path_must_end_in_dxf = "block does not exist; a library path must end in .dxf"
+block_is_referenced = "block is referenced"
+cannot_explode_a_nonuniformly_scaled_reference = "cannot explode a nonuniformly scaled reference"
+cannot_explode_unsupported_block_objects = "cannot explode unsupported block objects"
+cyclic_block_definition = "cyclic block definition"
+editable_attribute_tag_does_not_exist = "editable attribute tag does not exist"
+file_service_unavailable = "file service unavailable"
+group_does_not_exist = "group does not exist"
+group_member_does_not_exist = "group member does not exist"
+group_name_already_exists = "group name already exists"
+group_name_is_empty = "group name is empty"
+invalid_attribute_height = "invalid attribute height"
+invalid_block_base_point = "invalid block base point"
+invalid_block_name = "invalid block name"
+invalid_block_reference = "invalid block reference"
+invalid_insertion_transform = "invalid insertion transform"
+library_block_name_conflicts = "library block name conflicts"
+library_definition_name_conflicts = "library definition name conflicts"
+library_drawing_is_empty = "library drawing is empty"
+library_has_cyclic_or_missing_definitions = "library has cyclic or missing definitions"
+library_has_unsupported_objects = "library has unsupported objects"
+no_block_reference_selected = "no block reference selected"
+object_is_not_a_block_reference = "object is not a block reference"
+object_is_on_a_locked_or_hidden_layer = "object is on a locked or hidden layer"
+scale_must_be_finite_and_positive = "scale must be finite and positive"
+unsupported_group_member = "unsupported group member"
