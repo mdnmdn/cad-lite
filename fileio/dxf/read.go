@@ -246,6 +246,8 @@ func bumpSeed(d *doc.Drawing, ps []doc.Pair) {
 }
 
 func readTables(d *doc.Drawing, objs []object) {
+	var layerOrder []string
+	seenLayers := map[string]bool{}
 	table := ""
 	for _, o := range objs {
 		switch o.typ {
@@ -263,6 +265,11 @@ func readTables(d *doc.Drawing, objs []object) {
 			}
 		case "LAYER":
 			readLayer(d, o)
+			name := o.str(2)
+			if d.Layer(name) != nil && !seenLayers[name] {
+				layerOrder = append(layerOrder, name)
+				seenLayers[name] = true
+			}
 		default:
 			if !preservedTables[table] || o.typ != table {
 				continue
@@ -280,6 +287,14 @@ func readTables(d *doc.Drawing, objs []object) {
 			}
 			d.Preserved.Tables[table] = append(d.Preserved.Tables[table], r)
 		}
+	}
+	if len(layerOrder) > 0 {
+		for _, l := range d.Layers() {
+			if !seenLayers[l.Name] {
+				layerOrder = append(layerOrder, l.Name)
+			}
+		}
+		_ = d.LoadLayerOrder(layerOrder)
 	}
 }
 

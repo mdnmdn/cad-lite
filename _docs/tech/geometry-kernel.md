@@ -79,8 +79,9 @@ updated from every change set (`Apply`). Two queries serve the layers above:
 - `Query(box)` — the handles whose boxes intersect a box: viewport culling and box selection;
 - `Near(p, r)` — the handles whose boxes come within `r` of `p`: picking and snap candidates.
 
-Results are in ascending handle order, which is draw order, so a tie between overlapping entities
-goes to the newest one.
+Results remain in ascending handle order for stable storage and spatial queries. Rendering orders
+candidates by layer; picking resolves equal-distance ties by front layer, then the newest handle
+within that layer (see [Command system](command-system.md)).
 
 The structure is a uniform grid over the drawing's extent, laid out by `Build` with a cell side of
 about one and a half times the square root of the area per entity, capped at 1024 cells per axis.

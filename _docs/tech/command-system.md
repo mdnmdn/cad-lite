@@ -292,7 +292,7 @@ it. State whose substitute prompt has been replaced (Escape, the command moved o
 ## Selection
 
 `cmdsys.Pick` returns the entity whose curves come closest to the point within the aperture, the
-newest on a tie; a point inside a text's box (`doc.Annotation.HitBox`) picks the text, ranked as a
+front layer on a tie, then the newest within that layer; a point inside a text's box (`doc.Annotation.HitBox`) picks the text, ranked as a
 stroke at the edge of the aperture, so a curve nearer the point (a line across the text) wins. `cmdsys.SelectBox` selects by box: dragged left to right it is a **window**
 (entities entirely inside); right to left it is a **crossing** (entities inside or touching, tested
 on their tessellation). A text counts by its text box rather than its glyph strokes (`selectBounds`,

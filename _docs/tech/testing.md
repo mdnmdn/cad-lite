@@ -81,6 +81,16 @@ group selection, hidden/locked members, ALL, attributes, libraries, cancellation
 `fileio/dxf/symbols_test.go` repeats native R12/R2000 symbol round trips and checks opaque preservation.
 `render/block_test.go` verifies inherited colour, child-layer toggles, bounds/index and cache invalidation.
 
+## Layer-order tests
+
+`doc/layerorder_test.go` covers permutation validation, no-op/net-no-op transactions, abort, grouped
+undo and supporting-layer imports while preserving later layers, direct properties and current layer.
+`render/layerorder_test.go` keeps candidate/storage order stable and verifies root INSERT ownership.
+`cmdsys/layerorder_test.go` checks nearest picking and layer/handle ties. DXF layer-order tests repeat
+R12/GROUP round trips, foreign table order, duplicates and the default layer. Headless
+`ui/layerorder_test.go` drives both row entry points, filtering, busy guards, dirty state, undo and
+save prompts; it also renders panel/popover/narrow controls.
+
 ## Performance targets
 
 | Scenario | Target |

@@ -106,6 +106,8 @@ picks or drags boxes and presses Enter.
   adds it to the selection; Shift-click removes it (in `Remove` mode of `Select objects:` a plain click removes and Shift-click adds).
 - Dragging a box selects too: left to right is a **window** (blue; entities entirely inside), right
   to left a **crossing** (green; entities inside or touching).
+- Picking chooses the nearest geometry; equal-distance ties prefer the front layer, then the newest
+  entity within that layer.
 - The entity under the pickbox is highlighted while hovering; selected entities are highlighted in
   blue.
 - Entities on locked layers or layers that are off cannot be selected.
@@ -171,7 +173,7 @@ picks or drags boxes and presses Enter.
 ### Undo
 
 Each command, including one cancelled part-way, is one undo step; the `Undo` option inside LINE,
-PLINE, OFFSET and TRIM steps back within it. Undo and redo restore entities
+PLINE, OFFSET and TRIM steps back within it. Undo and redo restore entities and transactional layer order
 with their handles. Selections, view changes and layer table edits are not undoable. UNDO Mark and Back,
 BEgin and End, counts, REDO and MREDO are in the command table; `DBMOD` is 1 while the drawing has unsaved
 changes (every committed command, undo and redo counts).

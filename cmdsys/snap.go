@@ -321,11 +321,25 @@ func layerLocked(d *doc.Drawing, e doc.Entity) bool {
 	return !d.EntityEditable(e)
 }
 
-// Pick returns the selectable entity closest to p within aperture, the
-// newest one on a tie.
+// Pick returns the selectable entity closest to p within aperture.
+// Ties prefer the front layer, then the newest entity within that layer.
 func Pick(d *doc.Drawing, ix *spatial.Index, p geom.Vec2, aperture float64) (doc.Handle, bool) {
 	var best doc.Handle
 	bestD := math.Inf(1)
+	better := func(h doc.Handle, distance float64) bool {
+		if distance < bestD {
+			return true
+		}
+		if distance != bestD {
+			return false
+		}
+		if best == 0 {
+			return true
+		}
+		rank := d.LayerRank(d.Entity(h).Common().Layer)
+		bestRank := d.LayerRank(d.Entity(best).Common().Layer)
+		return rank < bestRank || (rank == bestRank && h > best)
+	}
 	for _, h := range ix.Near(p, aperture) {
 		e := d.Entity(h)
 		if e == nil || isUnknown(e) || layerLocked(d, e) {
@@ -334,13 +348,13 @@ func Pick(d *doc.Drawing, ix *spatial.Index, p geom.Vec2, aperture float64) (doc
 		if t, ok := e.(doc.Annotation); ok && t.HitBox(p) {
 			// A point inside a text's box picks it, as AutoCAD does, ranked as a stroke at the
 			// edge of the aperture so that a stroke nearer the cursor wins.
-			if aperture <= bestD {
+			if better(h, aperture) {
 				best, bestD = h, aperture
 			}
 			continue
 		}
 		for _, c := range e.Geometry() {
-			if dd := geom.Closest(c, p).Dist(p); dd <= aperture && dd <= bestD {
+			if dd := geom.Closest(c, p).Dist(p); dd <= aperture && better(h, dd) {
 				best, bestD = h, dd
 			}
 		}

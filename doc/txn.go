@@ -12,11 +12,13 @@ type ChangeSet struct {
 	Groups, Blocks []Handle
 	// Support reports an imported supporting-layer or symbol-table change.
 	Support bool
+	// LayerOrder reports a change to the canonical front-to-back order.
+	LayerOrder bool
 }
 
 // Empty reports whether the change set touches nothing.
 func (c ChangeSet) Empty() bool {
-	return len(c.Added)+len(c.Modified)+len(c.Erased)+len(c.Groups)+len(c.Blocks) == 0 && !c.Support
+	return len(c.Added)+len(c.Modified)+len(c.Erased)+len(c.Groups)+len(c.Blocks) == 0 && !c.Support && !c.LayerOrder
 }
 
 // ErrTxnOpen is returned by Begin while another transaction is open.
@@ -25,14 +27,14 @@ var ErrTxnOpen = errors.New("doc: a transaction is already open")
 // Txn is an open transaction. Every modification of a drawing happens inside
 // one; Commit records it in the journal as a single undo step.
 type Txn struct {
-	d *Drawing
-	// before holds each touched entity's state at its first touch; nil for
-	// an entity the transaction added.
-	supportBefore *blockSupport
-	groupsBefore  map[Handle]*Group
-	blocksBefore  map[string]*Block
-	before        map[Handle]Entity
-	order         []Handle
+	d                *Drawing
+	layerOrderBefore []string
+	supportBefore    *blockSupport
+	groupsBefore     map[Handle]*Group
+	blocksBefore     map[string]*Block
+	// before holds each touched entity at its first touch; nil for an addition.
+	before map[Handle]Entity
+	order  []Handle
 	// edits lists every handle Add, Modify and Erase touched since Begin or the last TakeEdits.
 	edits []Handle
 	done  bool
@@ -207,7 +209,7 @@ func (d *Drawing) AbortOpen() {
 
 // Touched reports whether the transaction has changed anything yet.
 func (t *Txn) Touched() bool {
-	return len(t.order) > 0 || t.groupsBefore != nil || t.blocksBefore != nil || t.supportBefore != nil
+	return len(t.order) > 0 || t.groupsBefore != nil || t.blocksBefore != nil || t.supportBefore != nil || (t.layerOrderBefore != nil && !slices.Equal(t.layerOrderBefore, t.d.layerNames()))
 }
 
 // TakeEdits returns the handles Add, Modify and Erase touched since Begin or the previous call, in
@@ -242,8 +244,9 @@ func (d *Drawing) restore(h Handle, state Entity, cs ChangeSet) ChangeSet {
 // JournalStep is one undoable unit: each touched handle's state before and
 // after (nil = absent).
 type JournalStep struct {
-	Before, After               map[Handle]Entity
-	supportBefore, supportAfter *blockSupport
+	Before, After                     map[Handle]Entity
+	supportBefore, supportAfter       *blockSupport
+	layerOrderBefore, layerOrderAfter []string
 	// GroupsBefore and GroupsAfter snapshot group membership; nil means untouched.
 	GroupsBefore, GroupsAfter map[Handle]*Group
 	// BlocksBefore and BlocksAfter snapshot shared definitions; nil means untouched.
@@ -285,7 +288,8 @@ func (d *Drawing) Undo() bool {
 	j.dropMarks()
 	d.restoreSupport(s.supportBefore, s.supportAfter)
 	d.applyMetadata(s.GroupsBefore, s.BlocksBefore)
-	d.applyWithMetadata(s.Before, s.GroupsBefore, s.BlocksBefore, s.supportBefore)
+	orderChanged := d.restoreLayerOrder(s.layerOrderBefore)
+	d.applyWithMetadata(s.Before, s.GroupsBefore, s.BlocksBefore, s.supportBefore, orderChanged)
 	return true
 }
 
@@ -300,17 +304,18 @@ func (d *Drawing) Redo() bool {
 	j.undo = append(j.undo, s)
 	d.restoreSupport(s.supportAfter, s.supportBefore)
 	d.applyMetadata(s.GroupsAfter, s.BlocksAfter)
-	d.applyWithMetadata(s.After, s.GroupsAfter, s.BlocksAfter, s.supportAfter)
+	orderChanged := d.restoreLayerOrder(s.layerOrderAfter)
+	d.applyWithMetadata(s.After, s.GroupsAfter, s.BlocksAfter, s.supportAfter, orderChanged)
 	return true
 }
 
-func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]*Group, blocks map[string]*Block, support *blockSupport) {
+func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]*Group, blocks map[string]*Block, support *blockSupport, orderChanged bool) {
 	hs := make([]Handle, 0, len(states))
 	for h := range states {
 		hs = append(hs, h)
 	}
 	slices.Sort(hs)
-	var cs ChangeSet
+	cs := ChangeSet{LayerOrder: orderChanged}
 	for _, h := range hs {
 		cs = d.restore(h, states[h], cs)
 	}
@@ -327,6 +332,11 @@ func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]
 }
 
 func (t *Txn) finishMetadata(step *JournalStep, cs *ChangeSet) {
+	if t.layerOrderBefore != nil && !slices.Equal(t.layerOrderBefore, t.d.layerNames()) {
+		step.layerOrderBefore = t.layerOrderBefore
+		step.layerOrderAfter = t.d.layerNames()
+		cs.LayerOrder = true
+	}
 	if t.supportBefore != nil {
 		step.supportBefore = t.supportBefore
 		step.supportAfter = t.d.snapshotSupport()
@@ -354,6 +364,7 @@ func (t *Txn) restoreMetadata(cs *ChangeSet) {
 		cs.Modified = append(cs.Modified, t.d.insertHandles()...)
 	}
 	t.d.applyMetadata(t.groupsBefore, t.blocksBefore)
+	cs.LayerOrder = t.d.restoreLayerOrder(t.layerOrderBefore)
 	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore)
 }
 func (d *Drawing) applyMetadata(groups map[Handle]*Group, blocks map[string]*Block) {

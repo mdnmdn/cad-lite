@@ -2,6 +2,7 @@ package render
 
 import (
 	"math"
+	"slices"
 
 	"cad-lite/doc"
 )
@@ -169,9 +170,31 @@ func (b *Builder) Items(h doc.Handle, v View) []DisplayItem {
 	return items
 }
 
-// Build appends to dl the items of every handle in hs whose layer is on.
+// Build appends visible entities back to front by their owning layer, then ascending handle.
+// The candidate slice is copied; its storage/index order is unchanged.
 func (b *Builder) Build(hs []doc.Handle, v View, dl *DisplayList) {
-	for _, h := range hs {
+	ordered := slices.Clone(hs)
+	slices.SortFunc(ordered, func(a, c doc.Handle) int {
+		ea, ec := b.d.Entity(a), b.d.Entity(c)
+		ra, rc := len(b.d.Layers()), len(b.d.Layers())
+		if ea != nil {
+			ra = b.d.LayerRank(ea.Common().Layer)
+		}
+		if ec != nil {
+			rc = b.d.LayerRank(ec.Common().Layer)
+		}
+		if ra != rc {
+			return rc - ra
+		}
+		if a < c {
+			return -1
+		}
+		if a > c {
+			return 1
+		}
+		return 0
+	})
+	for _, h := range ordered {
 		if e := b.d.Entity(h); e != nil && b.Visible(e) {
 			dl.Add(b.Items(h, v)...)
 		}

@@ -5,7 +5,7 @@ kind: wip
 status: draft
 summary: Progress ledger for the transcript virtualization and the agent drawing API backlog items N9 to N20, wave by wave.
 read_when: you are picking up or reviewing work on the agent transcript list or backlog items N9 to N20
-updated: 2026-10-14
+updated: 2026-10-15
 verified: 2026-10-14
 code_anchors: []
 depends_on: []
@@ -106,7 +106,7 @@ After rulers, status bar and agent chat land: a complete review of the whole unc
 | N11 groups and reusable blocks | `n11`; reviewer `mcp_followups` | done | Design first: transactional groups/definitions, selection, instances, attributes, shared updates and file/library round trips. Implementation follows agreed contracts. |
 | N26 manual text editing | `ui_fixes`; reviewer `mcp_followups` | done | Follows N11. User confirms basic content/existing-property editing; font and rich formatting remain N27. |
 | N24 compact movable HUDs | `ui_fixes`; reviewer `mcp_followups` | done | Follows N26. Both backgrounds semitransparent; properties HUD draggable with corner snap and inset margin. |
-| N23 reorder layers | unassigned | ready | Follows N24. User confirms both list and drawing stacking order, persisted on save/reopen. |
+| N23 reorder layers | `n11`; reviewer `mcp_followups` | done | Follows N24. User confirms both list and drawing stacking order, persisted on save/reopen. |
 
 One subagent at a time; no nested delegation. Coordinator owns combined verification, acceptance and commits without attribution. No push is requested.
 
@@ -137,3 +137,13 @@ One subagent at a time; no nested delegation. Coordinator owns combined verifica
 - N24 review interrupted once by workspace-credit failure, then resumed at user request. The working tree was committed externally as `3558087` during the pause; no rewrite is planned. Review remains open: a tiny/zero-height canvas lets the properties header/padding paint outside the canvas, pending a bounded hide-when-unusable repair. No full post-review verification is claimed.
 
 - N24 accepted after small-canvas repair. Original independent bounds probe rerun by coordinator passes (1.439 s); permanent no-paint/hitbox, resize recovery and drag-cancel regressions pass. Final combined verification over repaired code passes: root full tests (UI353.720 s), root vet, global formatting, docs lint, diff check, and `just check-agentmanager`. Normal/overflow/narrow before-after renders inspected in dark/light themes; live interaction unavailable. Main implementation remains external commit `3558087`; this follow-up records acceptance and tiny-canvas repair. N24 leaves open backlog.
+
+- N24 follow-up committed as `7c90e3d` without attribution. N23 starts with `n11`: one layer-table order controls both UI lists and drawing stacking, higher rows in front, persisted on DXF save/reopen including layer0. Reordering is transactional; ascending entity Handles remain a storage invariant. No push requested.
+
+- N23 contract approved: exact-permutation `Txn.SetLayerOrder`, name-only snapshots and `ChangeSet.LayerOrder` for real net changes, loader-only order restoration for file records. Undo/redo/abort preserve later layer objects in their current slots and retain direct flags/current layer. Ascending entity Handles stay unchanged; rendering sorts copied candidates by root layer then handle, and nearest picking uses front-layer/newest-handle tie breaks. Shared UI row controls refuse busy transactions and preserve popover highlight identity.
+
+- N23 implementation released for independent review. Focused model/render/pick/DXF/i18n tests, UI layer/popover/chrome checks (23.372 s), scoped vet/strict catalogs/docs/global formatting/tidy/diff pass. Coordinator independently audited R12/AC1015 reordered fixtures (including nonfirst layer0), zero errors/fixes; overlap/list/popover/narrow renders inspected. Legacy row-center click regression repaired. Approved full-scene snapshot case0 baseline changes exactly20 overlap pixels and0 ruler-strip pixels, independently reproduced; other two hashes unchanged. Full final verification follows review.
+
+- N23 independent code review passes targeted model/render/pick/DXF/UI coverage with no significant defect found. Two low wording corrections remain: geometry-kernel docs equate ascending handles with draw order, and the `list_entities` description promises draw order while retaining ascending storage order. `n11` owns description-only corrections before final combined verification.
+
+- N23 accepted and all four requested items are done. Final combined verification after review/wording fixes passes: root `go test -json ./...` (UI436.319 s,394 passing UI tests/subtests, zero failures), `go vet ./...`, global `gofmt -l .` empty, docs lint (34 documents), diff checks, tidy with no manifest change, and `just check-agentmanager`. Independent review finds no significant N23 code defect; two low description drifts are corrected. Native R12/GROUP DXF audits and final overlap/panel/popover/narrow renders pass. Live window/GPU testing is unavailable. N23 leaves the open backlog; commits contain no attribution and no push is requested.

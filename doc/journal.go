@@ -56,6 +56,12 @@ func (d *Drawing) EndGroup() {
 	if len(steps) > 1 {
 		merged := JournalStep{Before: map[Handle]Entity{}, After: map[Handle]Entity{}}
 		for _, s := range steps {
+			if s.layerOrderBefore != nil {
+				if merged.layerOrderBefore == nil {
+					merged.layerOrderBefore = s.layerOrderBefore
+				}
+				merged.layerOrderAfter = s.layerOrderAfter
+			}
 			if s.supportBefore != nil {
 				if merged.supportBefore == nil {
 					merged.supportBefore = s.supportBefore

@@ -908,6 +908,11 @@ agent_splitter_tip = "Trascina a sinistra o a destra per ridimensionare il panne
 section_splitter_tip = "Trascina in alto o in basso per ridimensionare l'elenco dei layer (non supera mai le sue righe); doppio clic per adattarlo alle righe"
 
 [ui.layers]
+move_up_tip = "Sposta il layer in alto; disegna davanti"
+move_down_tip = "Sposta il layer in basso; disegna dietro"
+reorder_busy = "Completare o annullare l’operazione corrente prima di riordinare i layer."
+reorder_invalid = "Impossibile modificare l’ordine dei layer."
+
 frozen = "congelato"
 # (verify)
 on = "on"

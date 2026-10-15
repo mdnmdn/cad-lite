@@ -63,6 +63,7 @@ type Drawing struct {
 	layers []*Layer
 	// layerIndex maps a layer name to its record in layers, so Layer is O(1).
 	layerIndex map[string]*Layer
+	layerRanks map[string]int
 	entities   map[Handle]Entity
 	// order holds the handles for Handles. Erasing leaves a handle behind (a tombstone) and
 	// re-inserting may append it again; Handles drops both when it next sorts, so erasing is
@@ -90,7 +91,8 @@ func New() *Drawing {
 	return d
 }
 
-// Layers returns the layer table in definition order.
+// Layers returns the canonical front-to-back layer order.
+// The slice order is read-only; change it through Txn.SetLayerOrder.
 func (d *Drawing) Layers() []*Layer { return d.layers }
 
 // Layer returns the named layer, or nil. The name matches exactly; the lookup is a map read,
@@ -109,9 +111,11 @@ func (d *Drawing) Layer(name string) *Layer {
 // scan it replaces did.
 func (d *Drawing) reindexLayers() {
 	d.layerIndex = make(map[string]*Layer, len(d.layers))
-	for _, l := range d.layers {
+	d.layerRanks = make(map[string]int, len(d.layers))
+	for i, l := range d.layers {
 		if _, ok := d.layerIndex[l.Name]; !ok {
 			d.layerIndex[l.Name] = l
+			d.layerRanks[l.Name] = i
 		}
 	}
 }
@@ -125,6 +129,7 @@ func (d *Drawing) AddLayer(name string, color int) *Layer {
 	l := &Layer{Name: name, Color: color}
 	d.layers = append(d.layers, l)
 	d.layerIndex[name] = l
+	d.layerRanks[name] = len(d.layers) - 1
 	return l
 }
 
@@ -134,8 +139,8 @@ func (d *Drawing) Entity(h Handle) Entity { return d.entities[h] }
 // Len returns the number of entities.
 func (d *Drawing) Len() int { return len(d.entities) }
 
-// Handles returns the entity handles in draw order (ascending handle, so
-// newer entities draw on top). The slice is shared; do not modify it, and
+// Handles returns the entity handles in ascending storage and spatial-index order.
+// Rendering orders candidates by layer, then ascending handle within each layer. The slice is shared; do not modify it, and
 // do not keep it across an edit.
 func (d *Drawing) Handles() []Handle {
 	if d.stale > 0 {

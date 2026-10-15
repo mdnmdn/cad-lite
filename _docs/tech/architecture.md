@@ -118,6 +118,10 @@ symbols in the UI. The block adapter implements affine geometry against `geom`'s
 protocol, keeping `geom` independent of `doc`. The renderer resolves effective child layers/colours
 without changing core/UI dependencies.
 
+Layer order lives in the document as transactionally edited metadata. UI rows call the shared order
+handler; render and pick resolve front-to-back ranks from the document. Ascending entity handles remain
+a storage/index invariant, and DXF table order carries persistence without a private file extension.
+
 ## Related docs
 
 - [Code map](code-map.md) — every package and its purpose

@@ -61,7 +61,7 @@ band, so between 3 and 6 pixels on screen; 3000 labels of 3.5 px render in 0.35 
 per **zoom band** — `render.Band(scale)` is `floor(log2(scale))`, and the band's chord tolerance
 (`BandTolerance`) is a quarter pixel at the band's lowest scale — so zooming within a band reuses the
 tessellation. `Invalidate` drops the entries of a change set's handles; `InvalidateAll` drops
-everything (a background, theme or lineweight-display change). Layer edits are not journalled, so
+everything (a background, theme or lineweight-display change). Ordinary layer property edits are not journalled, so
 after every command-line submission and every mutating MCP call the workspace calls `SyncLayers`
 instead (D27): it drops everything only when the layer table's names, colours or lineweights differ
 from those the cache was built against, so a single-entity edit keeps every other entity's
@@ -82,6 +82,12 @@ detection compares normalized axis directions and relative lengths across coordi
 unsafe determinant magnitudes retain the affine adapter. Tessellation scales its local tolerance
 without an absolute minimum transform scale. Attribute
 instances retain their own placement and values, and invisible attributes stay hidden.
+
+**Layer stacking.** `Builder.Build` copies its candidates and sorts back to front by
+`Drawing.LayerRank`, then ascending handle within each layer. The caller's handles and spatial index
+remain unchanged. Layer-order notifications do not require retessellation: each Build reads the current
+order. INSERT display items remain contiguous in their definition's authored order; the root entity's
+layer positions the complete reference, while explicit child layers retain visibility and appearance.
 
 ## The frame
 

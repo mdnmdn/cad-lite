@@ -139,7 +139,7 @@ func Tools(e Env) []mcp.Tool {
 		def(e, "run_command", "Send one response line to the command line: a command name when idle, otherwise an answer to the current prompt. Does not cancel anything. Returns the lines printed, the prompt and the active command.", schemaRunCommand, true, runCommand),
 		def(e, "list_commands", "List the command names the script accepts.", schemaEmpty, false, listCommands),
 		def(e, "get_drawing", "Summary of the drawing: layers, current layer, entity counts per class, extents, undo/redo availability, selection size, active command and prompt.", schemaEmpty, false, getDrawing),
-		def(e, "list_entities", "List entities (paginated, in draw order) with handle, class, layer, bounds and geometry. Filters combine with AND.", schemaListEntities, false, listEntities),
+		def(e, "list_entities", "List entities (paginated, in ascending handle/storage order) with handle, class, layer, bounds and geometry. Filters combine with AND.", schemaListEntities, false, listEntities),
 		def(e, "get_selection", "Return the handles of the selected entities.", schemaEmpty, false, getSelection),
 		def(e, "set_selection", "Replace the selection with the given handles (empty list clears it), or add to it.", schemaSetSelection, true, setSelection),
 		def(e, "add_line", "Add a LINE entity on the current layer (or on layer).", schemaAddLine, true, addLine),

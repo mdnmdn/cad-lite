@@ -54,6 +54,12 @@ attribute records retain placement, formatting, invisibility and additional fiel
 symbol with its dependency definitions; INSERT imports a DXF library drawing through the file registry.
 DWG block import remains outside this contract.
 
+Layer order is the LAYER table record order in both R12 and AC1015 output. The reader explicitly
+applies that order after loading the records: preinstalled layer 0 stays at its file position rather
+than being forced first. Duplicate records retain one position (the first occurrence) with the existing
+last-record metadata policy. Required default layers absent from the table remain present after the
+file's ordered records. Loading creates no undo step or dirty notification.
+
 ## The DXF codec
 
 `fileio/dxf.Codec` is a native Go reader and writer.

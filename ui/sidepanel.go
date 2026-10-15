@@ -87,7 +87,7 @@ func (ws *Workspace) sidePanel(width float32) *gpui.Div {
 
 // layerRow is one layer of a layer list, shared by the side panel and the status bar's layer
 // popover so both look and act alike: the colour swatch, the name (bold and accented when the
-// layer is current), the lock switch and the visibility switch. idPrefix starts every element id
+// layer is current), reorder arrows, the lock switch and the visibility switch. idPrefix starts every element id
 // ("layer-" in the panel, so the row is "layer-<name>" and its switches "layer-vis-<name>" and
 // "layer-lock-<name>"). A click on the row runs pick, except on a frozen layer, which cannot be
 // current (as -LAYER Set refuses it; the row's tooltip says so); the switches flip their flag
@@ -130,14 +130,14 @@ func (ws *Workspace) layerRow(idPrefix string, d *doc.Drawing, l *doc.Layer, hi 
 	if l.Frozen {
 		tip = i18n.T("ui.layers.frozen_current_tip")
 	}
-	row := gpui.NewDiv().ID(idPrefix+l.Name).FlexRow().ItemsCenter().Gap(8).Px_(6).SizeH(layerRowHeight).FlexShrink(0).Rounded(4).Tooltip(tip).
+	row := gpui.NewDiv().ID(idPrefix+l.Name).FlexRow().ItemsCenter().Gap(4).Px_(6).SizeH(layerRowHeight).FlexShrink(0).Rounded(4).Tooltip(tip).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 			if !l.Frozen {
 				pick(w)
 			}
 		}).
-		Child(swatch, name, lock, vis)
+		Child(swatch, ws.layerOrderButtons(idPrefix, d, l), name, lock, vis)
 	if hi {
 		row.Bg(activeFill())
 	}

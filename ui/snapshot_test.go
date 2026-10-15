@@ -148,14 +148,15 @@ func TestSnapshotSample(t *testing.T) {
 
 // TestSnapshotRulersUnchanged pins the pixels of render_png's rulers: the canvas rulers share
 // their code (ruler.go), and agents compare renders, so the MCP image must not move. A deliberate
-// change to the MCP rulers updates these hashes.
+// change to the MCP rulers updates these hashes. These hashes cover the whole scene, so an
+// intentional geometry stacking change also updates the affected case.
 func TestSnapshotRulersUnchanged(t *testing.T) {
 	s, _ := snapSession(snapScript)
 	cases := []struct {
 		view render.View
 		want string
 	}{
-		{render.View{Center: geom.V(110, 65), Scale: 3.5}, "945475342e92d42b"},
+		{render.View{Center: geom.V(110, 65), Scale: 3.5}, "5eabc0d63367725a"},
 		{render.View{Center: geom.V(-2500, 1e6), Scale: 0.02}, "b26e8c1890d49ff7"},
 		{render.View{Center: geom.V(0.3, -0.2), Scale: 900}, "8674e58bb86fc872"},
 	}

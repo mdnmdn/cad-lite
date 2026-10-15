@@ -907,6 +907,11 @@ agent_splitter_tip = "Drag left or right to resize the agent panel; double-click
 section_splitter_tip = "Drag up or down to resize the Layers list (it never grows past its rows); double-click to fit it to its rows"
 
 [ui.layers]
+move_up_tip = "Move layer up; draw in front"
+move_down_tip = "Move layer down; draw behind"
+reorder_busy = "Finish or cancel the current operation before reordering layers."
+reorder_invalid = "Layer order could not be changed."
+
 frozen = "frozen"
 on = "on"
 off = "off"

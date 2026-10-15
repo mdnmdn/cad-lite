@@ -7,7 +7,7 @@ summary: How a drawing is stored — handles, entities, layers, the header — a
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go, ui/textedit.go]
+code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/layerorder.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -82,8 +82,8 @@ true colour read from a file has no other place to go: the document has no true 
 reached for an entity as `Drawing.EntityVisible` and `EntityEditable`; render, snap and selection all
 call them, so a new layer flag is honoured by changing that file. `Drawing.RemoveLayer` deletes an
 unreferenced layer (never "0" or the current one). Layer "0"
-always exists. `Drawing.CurrentLayer` is the layer new entities go on. Layer table edits are direct
-and not journalled. A host that changes layer metadata calls `Session.MarkModified` after the
+always exists. `Drawing.CurrentLayer` is the layer new entities go on. Ordinary layer property edits are direct
+and not journalled; layer order uses the transaction contract below. A host that changes layer metadata calls `Session.MarkModified` after the
 actual edit to record unsaved changes without an entity undo step; the counter belongs to the
 [command system](command-system.md). `Drawing.Layer` matches a name exactly (case-sensitive) through a name-keyed index
 that `New`, `AddLayer` and `RemoveLayer` keep in step with the table, so render, snap and selection
@@ -103,8 +103,8 @@ creates one. `Drawing.Preserved` holds the table records and blocks the document
 `doc.RawRecord` groups; the user cannot change them. [File I/O](file-io.md) says what the DXF codec
 keeps and writes.
 
-**Draw order.** `Drawing.Handles` returns entity handles in ascending order, so newer entities draw
-on top. Erasing is O(1): it leaves the handle in the order slice as a tombstone, and `Handles` sorts
+**Storage order.** `Drawing.Handles` returns entity handles in ascending order for stable storage and
+spatial queries. Layer stacking is separate, as described below. Erasing is O(1): it leaves the handle in the order slice as a tombstone, and `Handles` sorts
 and drops tombstones and duplicates on its next call (or the drawing compacts once tombstones
 outnumber live entities). The slice `Handles` returns is shared and valid until the next edit.
 
@@ -171,6 +171,23 @@ replacement also checks affected live roots. Validation includes ancestors affec
 references remain opaque with a warning, preserving their source records.
 Layer 0 and ByBlock appearance inherit the insertion's layer and colour; explicit child layers retain
 visibility and appearance. Unsupported imported content stays preserved with a warning.
+
+## Layer order
+
+`Drawing.Layers` is the canonical front-to-back layer order, shared by the layer lists and drawing
+stacking. `Txn.SetLayerOrder` accepts an exact permutation of every existing layer name, including 0.
+Invalid, duplicate or missing names leave the table unchanged. A real net change creates one undo
+step and publishes `ChangeSet.LayerOrder`; a no-op publishes and journals nothing. Snapshots store
+names only. Undo, redo and abort reorder surviving named layers within their current slots, preserving
+later added layers, direct property edits and the current layer. Imported support restores before
+order restoration. `Drawing.LoadLayerOrder` supplies the same validation for file readers without
+creating undo history. Ordinary layer property edits retain their existing direct-edit policy.
+
+`Drawing.Handles` remains ascending storage/index order. The renderer sorts a copied candidate list
+back to front by the owning entity's layer, then by ascending handle. INSERT is atomic for this order:
+its root layer positions the complete reference, while child layers keep visibility/appearance and
+children keep authored internal order. Nearest picking is unchanged; ties choose the front layer,
+then the newest entity within that layer.
 
 ## Rationale
 

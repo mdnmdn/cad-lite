@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, rulers, cro
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
+code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/layerorder.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -117,21 +117,26 @@ file opened. A press on the card never reaches the canvas. The lists and what cl
 
 ### Layers panel
 
+Layer rows in both the side panel and status-bar popover have up/down controls. They move relative
+to the full canonical order, even while the popover is filtered, preserving the highlighted layer's
+identity and the current layer. Higher rows draw in front. Reordering while a command or another
+document transaction is active is refused with a message; no partial change occurs.
+
 The column's top section is headed `Layers` (semibold, normal case, behind a disclosure chevron) with a
-`+` icon button at its right that runs `LAYER` and a chevron that folds the whole column, where `name=colour` creates a layer. Each layer shows its colour swatch, its name, a lock switch (an open or closed padlock) and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
+`+` icon button at its right that runs `LAYER` and a chevron that folds the whole column, where `name=colour` creates a layer. Each layer shows its colour swatch, its name, reorder arrows, a lock switch (an open or closed padlock) and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
 is bold. Clicking a row makes that layer current, except a frozen layer, which cannot be current (as
 `-LAYER Set` refuses it; the row's tooltip says to thaw it). Clicking the button toggles the layer off or on;
 entities on an off layer are neither drawn nor selectable. Clicking the padlock locks or unlocks the layer:
 a locked layer is drawn but its entities cannot be selected. The switches never make their layer current.
 Changing the current layer, visibility or lock marks the drawing modified, so `CLOSE` and `QUIT` ask to save.
 Selecting the current layer again, or trying to select a frozen layer, leaves that state unchanged.
-Layer metadata edits do not create an undo step.
+Ordinary layer property edits do not create an undo step; reordering creates one.
 
 ### Layer popover
 
 Pressing `Layer <current>` in the status bar (AutoCAD's Layer drop-down) opens a popover above it: a filter
 field that has the keyboard, the layers whose name contains the filter (ignoring case), at most ten rows
-before the list scrolls, and a `New layer…` row. The rows are the Layers panel's rows (swatch, name, lock,
+before the list scrolls, and a `New layer…` row. The rows are the Layers panel's rows (swatch, name, reorder arrows, lock,
 visibility), with the same effects, and the two always agree. Typing filters and highlights the first match;
 Up and Down move the highlight; Enter makes the only match current, or else the highlighted one, and closes
 the popover; a click on a row does the same. The switches act without closing it. `New layer…` closes it and
@@ -292,6 +297,11 @@ line at the right.
   `Layer.Locked` and `Drawing.CurrentLayer` directly, outside a transaction.
 
 ## Implementation
+
+`ui/layerorder.go` builds the shared row chevrons and handles full-order moves. It refuses active
+commands and open transactions, commits `Txn.SetLayerOrder` once, and preserves the popover highlight
+by layer identity after a filtered move. Order notifications mark the session dirty through the normal
+document listener; row actions do not mark it a second time.
 
 `ui/textedit.go` holds the text-editing draft, target snapshot, validation and one-transaction Apply;
 `ui/textedit_view.go` builds the modal from existing `TextInput` fields, with multiline contents for

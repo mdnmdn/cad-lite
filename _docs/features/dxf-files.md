@@ -168,6 +168,10 @@ A failure ends the command and leaves the drawing as it was:
 With `-open`, a failure prints the error and exits with a non-zero status. In a build with no file
 handler (the browser), OPEN and SAVE print `File commands are not available on this platform.`
 
+Layer-list order and drawing stacking survive save/reopen through the DXF LAYER table order,
+including layer 0 in the middle or at the end. Both the ordinary R12 path and GROUP drawings' AC1015
+path preserve it; loading restores it without an edit-history entry.
+
 ## Contract
 
 - Entry point: `Workspace.OpenPaths(paths)` is the one function for files the OS hands over; it runs
