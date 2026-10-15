@@ -925,6 +925,7 @@ new_named = "Nuovo layer “%s”"
 new_tip = "Nuovo layer — crea un layer e lo rende corrente (LAYER / LA); con un filtro scritto, il layer prende quel nome"
 
 [ui.props]
+drag_tip = "Trascinare Proprietà per spostare; rilasciare vicino a un angolo per agganciare"
 none = "Nessuna selezione"
 selected_one = "%d selezionato"
 selected_other = "%d selezionati"

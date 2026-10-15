@@ -169,6 +169,7 @@ func (ws *Workspace) activate(t *docTab) {
 		return
 	}
 	ws.closeTextEditor(ws.win)
+	ws.status().hudDrag.active = false
 	if cur := ws.docTab; cur != nil {
 		c := &cur.canvas
 		c.pressed, c.boxing, c.panning = false, false, false

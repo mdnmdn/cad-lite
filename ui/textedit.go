@@ -50,6 +50,7 @@ func (ws *Workspace) openTextEditor(t *docTab, h doc.Handle) bool {
 	}
 	ws.zoom.End(ws.win)
 	ws.endDrag(ws.win)
+	ws.status().hudDrag.active = false
 	s := &textEditState{tab: t, drawing: d, original: e.Clone().(doc.Entity),
 		fields: map[string]*gpui.TextInput{}, initial: map[string]string{}, buttons: map[string]*gpui.FocusHandle{}, scroll: gpui.NewScrollHandle(), focusWanted: true}
 	var height, rotation, width float64

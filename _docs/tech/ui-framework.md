@@ -7,7 +7,7 @@ summary: The boundary between Cad-lite and the internal/gpui library, what the a
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/agent_view.go, ui/icon.go, cmdsys/sysvars.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go, internal/gpui/list.go, ui/textedit_view.go]
+code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/agent_view.go, ui/icon.go, cmdsys/sysvars.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go, internal/gpui/list.go, ui/textedit_view.go, ui/hud.go, ui/hud_drag.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -90,6 +90,10 @@ their caches. Views name a token, never a colour; the tokens, one `Theme` field 
 | `uiOK`, `uiWarn`, `uiErr` | Status colours of the agent panel: completed, in progress or warning, failed or error |
 | `Primary`, `OnPrimary` (`uiPrimary`, `uiOnPrimary`) | The call-to-action button (Send) and its text; the soft accent fill and border of active chips and buttons are `mix`es of `uiAccent` with the shell colours (`activeFill`, `activeBorder`) |
 | `uiBackdrop` | The dim layer behind a modal panel |
+
+The floating zoom and Properties HUDs use `uiPanel` with background alpha 200/255. Labels and icons
+retain their theme colours without element-wide opacity. Properties header dragging uses a temporary
+transparent input layer over the window; the root also routes move/release, with no gpui capture API.
 
 The per-theme values are the literals in `ui/themes.go`; the canvas of each, for reference:
 

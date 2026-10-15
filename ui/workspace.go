@@ -199,13 +199,19 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		OnAction(actionSnapGrid, toggle(func() { s.SetSnapGrid(!s.SnapGrid()) })).
 		OnAction(actionZoomExtnt, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.run("ZOOM", w); ws.submit("e", w) }).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
+			if ws.movePropsHUD(e.Position, w) {
+				return
+			}
 			if ws.textEditor != nil {
 				return
 			}
 			ws.zoom.Move(e.Position, w)
 			ws.dragMove(e.Position, w)
 		}).
-		OnMouseUp(func(_ *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
+		OnMouseUp(func(e *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
+			if e.Button == gpui.MouseLeft {
+				ws.endPropsDrag(w)
+			}
 			ws.zoom.End(w)
 			ws.endDrag(w)
 		}).

@@ -7,7 +7,7 @@ summary: The canvas and the chrome around it — pan and zoom, grid, rulers, cro
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-15
 verified: 2026-10-15
-code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go]
+code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -88,7 +88,7 @@ side panel and command line.
 
 Two overlays float over the canvas, and a third at startup. At the top left a monospace, muted caption `[-][Top][2D Wireframe]`
 (`ui.canvas.viewport_label`) names the view, the only one Cad-lite has. At the top right a rounded
-column of three icon buttons zooms in and out by a step of 1.25 about the canvas centre and zooms
+compact 36 by 100 px column of three 30 px icon buttons zooms in and out by a step of 1.25 about the canvas centre and zooms
 to extents; each is a step of its own for ZOOM Previous, has a tooltip, and a press on the column
 never reaches the canvas, so it neither picks nor answers a point prompt.
 
@@ -151,13 +151,23 @@ class (`LINE × 3`); a single selected entity also shows its layer and handle.
 ### Properties HUD
 
 The `PROPS` chip in the status bar shows a small read-only panel floating over the canvas at its top right,
-left of and level with the zoom buttons (below the top ruler when the rulers show), with the same lines as the Properties section (`No selection` included) under a
-`Properties` caption. Its fill is the panel colour at 90% opacity, behind its own box only; presses and the
-wheel on it stay on it, and everywhere else the canvas gets them as usual; releases go through, so a splitter or
-slider drag let go over it ends. It is off at start, the same for every document tab, and not saved (the status
-bar toggles are not either). Measured with `ui/hud_bench_test.go` (1280x800 at device scale 2), it adds roughly
-0.5 to 2 ms to a frame, depending on the run; an opaque fill would cost about 0.1 ms. The lines are worked out
-once per selection and drawing change (`selectionSummary`), not per frame.
+left of and level with the zoom buttons by default, with the same lines as the Properties section
+(`No selection` included). It is 184 px wide, narrowing when space requires, with 12 px body text and a
+`Properties` header with a short grip and a drag tooltip. Both HUD backgrounds use the panel colour at
+200/255 opacity (about 78%); their text and icons stay opaque. Presses stay on the HUD; the wheel
+scrolls overflowing Properties content without zooming the canvas. Other releases go through so an
+existing splitter or slider drag still ends.
+
+Dragging the header moves Properties freely within the canvas. Releasing within 28 px of a corner
+slot snaps it there with a 16 px canvas/ruler margin. The top-right slot clears the zoom column by
+8 px; the top-left sits below the viewport label, and the bottom-left clears the UCS icon. Narrow
+spaces and tall content retain these clearances by limiting the panel's height and scrolling its body.
+Positions follow canvas resize, ruler changes and selection-height changes. During the drag a
+transparent window-sized input layer and root move/release routing prevent canvas selection or pan
+and end the drag over other controls. Hiding Properties, switching drawings or opening TEXTEDIT ends
+the drag. Visibility remains shared across tabs and off at start; position and corner are remembered
+per drawing for this session only. Neither is saved. The lines are worked out once per selection and
+drawing change (`selectionSummary`), not per frame; `ui/hud_bench_test.go` measures whole-frame cost.
 
 Both sections scroll when their rows do not fit. The column defaults to a sixth of the window wide, between
 220 and 340 px, on the panel colour; with the agent panel open it sits between the canvas column and the
@@ -326,7 +336,11 @@ opened popover cannot retain its window and drawing. Layer controls call `Sessio
 for an actual persistent metadata change; selecting the unchanged current layer does not call it.
 A zero-size marker records the bar's top and a zero-width one the layer item's position while painting; the
 HUD (`ui/hud.go`) is placed from the canvas's bounds of the previous frame and asks for another frame when
-they moved. User-visible text goes through `i18n.T`
+they moved. `ui/hud_drag.go` constrains its placement around canvas chrome, keeps session-keyed
+positions weakly in the status state, and handles free movement and corner snapping. During a drag,
+`statusOverlays` adds the transparent release layer and the workspace routes move/up events; the
+Properties body's scroll handle consumes the wheel before it can reach the canvas.
+User-visible text goes through `i18n.T`
 (`ui.*` keys); `Workspace.Render` installs the themed tooltip style (`tooltipStyle` in `ui/theme.go`) on the app
 whenever the theme changes. `ui/brand.go` holds the title bar brand: `Brand`, `BrandForOS`, and a colour bitmap
 element that paints `appicon.Image` as runs of device-pixel quads (gpui has no colour image primitive). `Bindings`

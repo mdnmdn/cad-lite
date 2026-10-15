@@ -922,6 +922,7 @@ new_named = "New layer “%s”"
 new_tip = "New layer — creates a layer and makes it current (LAYER / LA); with a filter typed, the layer is named after it"
 
 [ui.props]
+drag_tip = "Drag Properties to move; release near a corner to snap"
 none = "No selection"
 selected_one = "%d selected"
 selected_other = "%d selected"

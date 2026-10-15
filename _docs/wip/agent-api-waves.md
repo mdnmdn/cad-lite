@@ -105,7 +105,7 @@ After rulers, status bar and agent chat land: a complete review of the whole unc
 |---|---|---|---|
 | N11 groups and reusable blocks | `n11`; reviewer `mcp_followups` | done | Design first: transactional groups/definitions, selection, instances, attributes, shared updates and file/library round trips. Implementation follows agreed contracts. |
 | N26 manual text editing | `ui_fixes`; reviewer `mcp_followups` | done | Follows N11. User confirms basic content/existing-property editing; font and rich formatting remain N27. |
-| N24 compact movable HUDs | unassigned | ready | Follows N26. Both backgrounds semitransparent; properties HUD draggable with corner snap and inset margin. |
+| N24 compact movable HUDs | `ui_fixes`; reviewer `mcp_followups` | in review | Follows N26. Both backgrounds semitransparent; properties HUD draggable with corner snap and inset margin. |
 | N23 reorder layers | unassigned | ready | Follows N24. User confirms both list and drawing stacking order, persisted on save/reopen. |
 
 One subagent at a time; no nested delegation. Coordinator owns combined verification, acceptance and commits without attribution. No push is requested.
@@ -129,3 +129,7 @@ One subagent at a time; no nested delegation. Coordinator owns combined verifica
 - N26 independent review confirms one medium modal-transition defect: existing splitter/zoom drag continues behind the dialog and its release can be swallowed. `ui_fixes` owns the narrow repair and failing-first drag regressions. Pre-repair combined verification passes: full root tests (UI 366.016 s), root vet, global formatting, docs lint and nested `just check-agentmanager`. Affected checks and reviewer recheck follow the repair.
 
 - N26 accepted after independent review and drag-transition repair. Original review probe and permanent side/history/zoom regressions pass on recheck; coordinator reruns affected UI (14.403 s), root vet, global formatting/docs/diff checks. Full root tests and nested checks passed before the narrow repair. TEXTEDIT/ED/DDEDIT and idle double-click open the basic editor; Apply one named undo step, Cancel/no-op unchanged, existing MTEXT raw data preserved for property-only edits. Normal/small-window renders inspected; live window unavailable. N26 leaves open backlog; typography stays N27.
+
+- N26 committed as `77f615d` without attribution. N24 starts with `ui_fixes`: compact semitransparent zoom/properties HUDs, draggable properties and four-corner snapping inside the canvas with margin. Keep overlays/drag lifetime coherent with the N26 modal handoff. N23 remains queued.
+
+- N24 implementation released for independent review. Compact 36×100 zoom / 184px properties and alpha200 backgrounds visually inspected at normal/narrow sizes in dark/light themes. Four cleared corner slots use16px margin; free movement and per-session positions retain workspace-global HUD visibility. Focused drag/lifecycle/zoom/resize checks pass; coordinator-found wheel suppression repaired with a failing-first overflow regression. Docs/vet/formatting/catalog checks pass. Independent review precedes combined full verification to avoid concurrent heavy UI suites.

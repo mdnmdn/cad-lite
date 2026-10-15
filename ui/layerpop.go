@@ -39,7 +39,9 @@ type statusState struct {
 	// filter field needs it.
 	app weak.Pointer[gpui.App]
 	// hud shows the properties HUD over the canvas; it is not saved.
-	hud bool
+	hud       bool
+	hudPlaces map[weak.Pointer[cmdsys.Session]]*hudPosition
+	hudDrag   hudDrag
 	// popSession is the session the popover was opened for; another one (a tab switch) closes it.
 	// Weak, like every reference from here to what the Workspace owns: see layerFilter.
 	popSession weak.Pointer[cmdsys.Session]
@@ -319,7 +321,16 @@ func (ws *Workspace) statusOverlays(w *gpui.Window) []gpui.IntoElement {
 	out := []gpui.IntoElement{gpui.NewDiv().Absolute().Left(0).Top(0).SizeWH(0, 0).
 		Child(gpui.NewCanvas(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) { s.barTop = float32(b.Origin.Y) }))}
 	if s.hud {
-		out = append(out, ws.propsHUD(winW))
+		out = append(out, ws.propsHUD())
+	}
+	if ws.propsDragActive() {
+		out = append(out, gpui.NewDiv().ID("props-hud-drag-shield").Absolute().Left(0).Bottom(0).SizeWH(winW, winH).
+			OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) { ws.movePropsHUD(e.Position, w) }).
+			OnMouseUp(func(e *gpui.MouseUpEvent, w *gpui.Window, _ *gpui.App) {
+				if e.Button == gpui.MouseLeft {
+					ws.endPropsDrag(w)
+				}
+			}))
 	}
 	if s.pop {
 		// The popover is the backdrop's child: placed from its bottom, it needs a parent as tall as

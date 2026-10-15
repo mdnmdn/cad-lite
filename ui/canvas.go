@@ -80,6 +80,9 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 	c := &ws.canvas
 	return gpui.NewDiv().ID("canvas").Relative().Flex1().MinW(0).MinH(0).OverflowHidden().
 		OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
+			if ws.propsDragActive() {
+				return
+			}
 			ws.dismissStart()
 			if fh := ws.input.FocusHandle(); fh != nil {
 				w.RequestFocus(fh)
@@ -110,6 +113,9 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			w.Refresh()
 		}).
 		OnMouseMove(func(e *gpui.MouseMoveEvent, w *gpui.Window, _ *gpui.App) {
+			if ws.propsDragActive() {
+				return
+			}
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
@@ -149,7 +155,9 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 
 // Overlay metrics, in logical pixels from the canvas's edges.
 const (
-	overlayInset = 16
+	overlayInset  = 16
+	zoomHUDWidth  = 36
+	zoomHUDHeight = 100
 	// ucsInset is the UCS icon origin's distance from the canvas's left and bottom edges, ucsLen
 	// the length of its axes.
 	ucsInset = 30
@@ -170,11 +178,13 @@ func (ws *Workspace) viewportLabel() *gpui.Div {
 func (ws *Workspace) zoomPill() *gpui.Div {
 	btn := func(id, tip string, icon icons.Name, f func()) *gpui.Div {
 		b := iconButton(id, tip, icon, false, func(w *gpui.Window) { f(); w.Refresh() })
-		return b.SizeWH(40, 40)
+		return b.SizeWH(30, 30)
 	}
 	_, top := ws.rulerInsets()
-	return gpui.NewDiv().ID("canvas-zoom").Absolute().Top(top+overlayInset).Right(overlayInset).FlexCol().Gap(2).P(4).Rounded(10).
-		Bg(uiPanel).Border(1, uiBorder).
+	fill := uiPanel
+	fill.A = hudAlpha
+	return gpui.NewDiv().ID("canvas-zoom").Absolute().Top(top+overlayInset).Right(overlayInset).FlexCol().Gap(2).P(3).Rounded(6).
+		Bg(fill).Border(1, uiBorder).
 		OnMouseDown(func(_ *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
 		OnScrollWheel(func(_ *gpui.ScrollWheelEvent, w *gpui.Window, _ *gpui.App) { w.StopPropagation() }).
 		Child(
