@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"cad-lite/geom"
+	"cad-lite/i18n"
 )
 
 // This file is the typed object snap overrides of a point prompt (TextOrderSnap): END, MID, CEN,
@@ -72,6 +73,9 @@ const (
 
 // classifyOverride reads one typed name. canon is the three letter name shown in the "of" prompt.
 func classifyOverride(t string) (w ovWord, mode SnapMode, canon string) {
+	if localized, ok := i18n.CanonicalSnapName(t); ok {
+		t = localized
+	}
 	u := strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(t), "_"))
 	switch u {
 	case "M2P", "MTP":
@@ -369,7 +373,8 @@ func SnapListString(mode SnapMode) string {
 }
 
 // ParseSnapList reads a -OSNAP answer: a comma list of snap names (three letters suffice, any
-// case) or NONe. It returns the mode set, and the first word it could not read with ok false.
+// case), an exact localized snap alias, or NONe. A leading underscore restricts a name to
+// English. It returns the mode set, and the first word it could not read with ok false.
 func ParseSnapList(text string) (mode SnapMode, bad string, ok bool) {
 	for _, part := range strings.Split(text, ",") {
 		w, m, _ := classifyOverride(part)

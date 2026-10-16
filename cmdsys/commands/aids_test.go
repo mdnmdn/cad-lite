@@ -1,12 +1,14 @@
 package commands_test
 
 import (
+	"math"
 	"strings"
 	"testing"
 
 	"cad-lite/cmdsys"
 	"cad-lite/doc"
 	"cad-lite/geom"
+	"cad-lite/i18n"
 )
 
 func aidVar(t *testing.T, s *cmdsys.Session, name string) string {
@@ -321,5 +323,138 @@ func TestRemoveModeClickRemovesAndShiftAdds(t *testing.T) {
 	s.Click(geom.V(50, 0), true) // Shift in Remove mode adds
 	if s.Selection().Len() != 2 {
 		t.Fatalf("shift-click in Remove mode left %d selected", s.Selection().Len())
+	}
+}
+
+func TestItalianSnapAliases(t *testing.T) {
+	for _, tc := range []struct {
+		name, pick string
+		objects    []doc.Entity
+		want       geom.Vec2
+	}{
+		{"fine", "70,0", []doc.Entity{line(geom.V(0, 0), geom.V(100, 0))}, geom.V(100, 0)},
+		{"  pUnTo   FiNaLe  ", "70,0", []doc.Entity{line(geom.V(0, 0), geom.V(100, 0))}, geom.V(100, 0)},
+		{"FINE, INMEZZO", "45,0", []doc.Entity{line(geom.V(0, 0), geom.V(100, 0))}, geom.V(50, 0)},
+		{"INMEZZO", "70,0", []doc.Entity{line(geom.V(0, 0), geom.V(100, 0))}, geom.V(50, 0)},
+		{"PUNTO MEDIO", "9,1", []doc.Entity{&doc.Arc{Center: geom.V(0, 0), Radius: 10, StartAngle: 0, EndAngle: math.Pi}}, geom.V(0, 10)},
+		{"INTERSEZIONE", "50.5,50", []doc.Entity{line(geom.V(0, 0), geom.V(100, 100)), line(geom.V(0, 100), geom.V(100, 0))}, geom.V(50, 50)},
+		{"VICINO", "6.3,8.4", []doc.Entity{&doc.Arc{Center: geom.V(0, 0), Radius: 10, StartAngle: 0, EndAngle: math.Pi}}, geom.V(6, 8)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newSession(t)
+			s.SnapOn = false
+			addEntities(t, s, tc.objects...)
+			n := len(sortedLines(s))
+			s.Run("LINE")
+			s.Submit(tc.name)
+			s.Submit(tc.pick)
+			s.Submit("0,50")
+			s.Submit("")
+			ls := sortedLines(s)
+			found := false
+			for _, l := range ls[n:] {
+				if l.Start.Sub(tc.want).Len() < 1e-8 && l.End == geom.V(0, 50) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("snap %q: %v; history %s", tc.name, dumpLines(ls), history(s))
+			}
+		})
+	}
+}
+
+func TestItalianSnapListAliases(t *testing.T) {
+	for _, text := range []string{"FINE, INMEZZO, INTERSEZIONE, VICINO", " punto finale , punto medio , INT, _nea", "END,MID,INT,NEA"} {
+		want := cmdsys.SnapEndpoint | cmdsys.SnapMidpoint | cmdsys.SnapIntersection | cmdsys.SnapNearest
+		got, bad, ok := cmdsys.ParseSnapList(text)
+		if !ok || got != want {
+			t.Errorf("%q = %v, %q, %v", text, got, bad, ok)
+		}
+		s := newSession(t)
+		s.Run("-OSNAP")
+		s.Submit(text)
+		if s.Snaps != want || !s.SnapOn {
+			t.Errorf("-OSNAP %q = %v; %s", text, s.Snaps, history(s))
+		}
+	}
+	for _, text := range []string{"_FINE", "_PUNTO MEDIO", "_INMEZZO", "_INTERSEZIONE", "_VICINO", "IN MEZZO", "FIN", "IN", ""} {
+		if _, _, ok := cmdsys.ParseSnapList(text); ok {
+			t.Errorf("unexpected accepted snap %q", text)
+		}
+	}
+}
+
+func TestItalianSnapKeywordPriorityAndUnderscore(t *testing.T) {
+	italian(t)
+	s := newSession(t)
+	s.Run("ARC")
+	s.Submit("10,0")
+	s.Submit("Fine")
+	if strings.HasSuffix(s.Prompt(), "di:") || !strings.Contains(s.Prompt(), "finale") {
+		t.Fatalf("Fine keyword lost: %s", s.Prompt())
+	}
+	s.Escape()
+	s.Run("LINE")
+	before := s.Prompt()
+	s.Submit("_FINE")
+	if s.Prompt() != before {
+		t.Fatalf("_FINE armed localized snap: %s", s.Prompt())
+	}
+	s.Submit("_END")
+	if !strings.Contains(s.Prompt(), "END di:") {
+		t.Fatalf("English snap rejected: %s", s.Prompt())
+	}
+}
+
+func TestSnapAliasesKeepSessionLanguageAndScriptRules(t *testing.T) {
+	italian(t)
+	english := newSession(t)
+	en := i18n.For(i18n.English)
+	english.SetTranslator(&en)
+	italianSession := newSession(t)
+	it := i18n.For(i18n.Italian)
+	italianSession.SetTranslator(&it)
+	for _, s := range []*cmdsys.Session{english, italianSession} {
+		s.SnapOn = false
+		addEntities(t, s, line(geom.V(0, 0), geom.V(100, 0)))
+		s.Script("LINE\nFINE\n70,0\n0,50\n\n")
+		if !hasLine(sortedLines(s), geom.V(100, 0), geom.V(0, 50)) {
+			t.Fatalf("script alias failed: %s", history(s))
+		}
+	}
+	if english.Prompt() != "Command:" || italianSession.Prompt() != "Comando:" {
+		t.Fatalf("session languages leaked: %q %q", english.Prompt(), italianSession.Prompt())
+	}
+	for _, s := range []*cmdsys.Session{english, italianSession} {
+		s.Run("ARC")
+		s.Submit("10,0")
+	}
+	english.Submit("Fine")
+	if !strings.HasSuffix(english.Prompt(), "of:") {
+		t.Fatalf("English session unexpectedly matched Italian ARC keyword: %s", english.Prompt())
+	}
+	italianSession.Submit("Fine")
+	if strings.HasSuffix(italianSession.Prompt(), "di:") {
+		t.Fatalf("Italian ARC keyword lost priority: %s", italianSession.Prompt())
+	}
+}
+
+func TestSnapListEnglishRoundTrip(t *testing.T) {
+	for mode := cmdsys.SnapMode(0); mode < 1<<14; mode++ {
+		text := cmdsys.SnapListString(mode)
+		if got, bad, ok := cmdsys.ParseSnapList(text); !ok || got != mode {
+			t.Fatalf("roundtrip %d %q: %d %q %v", mode, text, got, bad, ok)
+		}
+	}
+}
+
+func TestInmezzoSnapScript(t *testing.T) {
+	s := newSession(t)
+	s.SnapOn = false
+	addEntities(t, s, line(geom.V(0, 0), geom.V(100, 0)))
+	s.Script("LINE\nINMEZZO\n70,0\n0,50\n\n")
+	if !hasLine(sortedLines(s), geom.V(50, 0), geom.V(0, 50)) {
+		t.Fatalf("INMEZZO script failed: %s", history(s))
 	}
 }

@@ -5,9 +5,9 @@ kind: feature
 status: current
 summary: The command line under the canvas — typing commands and answers, the prompt, AutoComplete suggestions, Up/Down recall, the resizable history and recent commands, Enter, Space, Escape and right-click, and the keyboard shortcuts.
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
-updated: 2026-10-15
-verified: 2026-10-15
-code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, ui/textedit_view.go]
+updated: 2026-10-16
+verified: 2026-10-16
+code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, ui/textedit_view.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
 ---
@@ -61,7 +61,8 @@ history. It sits under the canvas only: the layers and agent columns run down be
   Enter adds a paragraph; Apply commits and Escape cancels. Its Tab navigation stays inside the modal,
   and drawing shortcuts do not run while it is open.
 - **Space** submits like Enter, except at a prompt that takes text (a layer name, a file path, TEXT content), where
-  it types a space.
+  it types a space. Snap names use the same submission rule as every other point answer;
+  `INMEZZO` followed by Space submits the midpoint override.
 - **Right-click** on the canvas is Enter.
 - **Escape** cancels the running command and prints `*Cancel*`; with no command running it clears
   the selection. What a command committed before Escape stays in the drawing. It also closes the Open menu and
@@ -71,10 +72,13 @@ history. It sits under the canvas only: the layers and agent columns run down be
   `Comando: LINEA` and `LINE` asks `Specificare punto successivo o [Chiudi/Annulla]:`.
 - **Italian names.** The Italian names of the commands (`LINEA`, `POLILINEA`, `CERCHIO`, `ARCO`,
   `RETTANGOLO`, `CANCELLA`, `SPOSTA`, `COPIA`, `RUOTA`, `SCALA`, `ANNULLA`, `ZOOM`, `DISTANZA`,
-  `TAGLIA`, `ESTENDI`, `SPEZZA`, `UNISCI`, `ESPLODI` and the rest of the catalog) are aliases that
+  `TAGLIA`, `ESTENDI`, `SPEZZA`, `UNISCI`, `ESPLODI`, `SERIE` (ARRAY), `ORTO` (ORTHO),
+  `SPECCHIA` (MIRROR), `RACCORDA` (FILLET), `CIMA` (CHAMFER) and the rest of the catalog) are aliases that
   run the English command. They are registered in every language, so they work in an English
   session too. The canonical names stay English: `LINE`, `L` and a script written in English run
   unchanged in an Italian session.
+- **Snap input names.** The typed snap names and script restrictions are listed under Object snaps
+  and ortho in Drawing and editing.
 - **Keywords.** An option is typed by its full name or its shortcut in the current language
   (`Chiudi` or `C`), and always by its English name or shortcut as well (`Close`). A leading `_`
   (`_C`, `_Close`) means English only, as in AutoCAD, which a script can use to stay language
@@ -143,6 +147,11 @@ Shortcuts, active anywhere in the window:
 - Key context `cad` and the actions in `ui.Bindings`.
 
 ## Implementation
+
+`i18n/command.go` registers the catalog command aliases in every language. `i18n/snap.go`
+resolves exact snap input aliases from the catalogs before the English snap parser runs.
+`ui/cmdcomplete.go`, `wireCommandLine`, submits a trailing Space whenever the prompt does not
+accept `InputText`.
 
 Symbol commands use the shared prompt pipeline: GROUP operations are localized keyword options,
 block names and library paths are text, placements are points, scale is a distance and rotation an

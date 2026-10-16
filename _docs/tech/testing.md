@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: What each level of test covers and where it lives, how UI behaviour is tested without a display, and the performance targets.
 read_when: you are adding a feature or fixing a bug and need to know which test to write and where
-updated: 2026-10-15
-verified: 2026-10-15
-code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, cmdsys/commands/inflight_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, ui/ruler_test.go, ui/hud_test.go, ui/layerpop_test.go, ui/cmdcomplete_test.go, ui/settings_tabs_test.go, ui/agent_review_test.go, ui/agent_review_internal_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go, fileio/dwg/read_test.go, fileio/dwg/fuzz_test.go, spatial/bench_test.go, cmdsys/commands/textedit_test.go, ui/textedit_test.go, ui/hud_drag_test.go]
+updated: 2026-10-16
+verified: 2026-10-16
+code_anchors: [geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, cmdsys/commands/inflight_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, ui/ruler_test.go, ui/hud_test.go, ui/layerpop_test.go, ui/cmdcomplete_test.go, ui/settings_tabs_test.go, ui/agent_review_test.go, ui/agent_review_internal_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, cmdsys/commands/aids_test.go, ui/italian_snap_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go, fileio/dwg/read_test.go, fileio/dwg/fuzz_test.go, spatial/bench_test.go, cmdsys/commands/textedit_test.go, ui/textedit_test.go, ui/hud_drag_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -71,6 +71,14 @@ is `italian` in `cmdsys/commands/i18n_test.go`, which also covers the Italian al
 prompts, and the English output of an agent caller. `go run ./i18n/cmd/i18ncheck -scan
 cmdsys,fileio,settings -strict` reports string literals at user-facing call sites that have no
 catalog key and must stay clean.
+
+`cmdsys/commands/i18n_test.go` checks Italian command aliases against the registry and the
+Italian ARRAY/ORTHO metadata. `cmdsys/commands/aids_test.go` verifies localized snap input against
+line and arc geometry, comma-list parsing, English-only underscores, prompt keyword priority,
+pinned session languages and English snap-list round trips. `ui/italian_snap_test.go` types
+`INMEZZO` followed by Space through real headless keyboard events and checks the resulting
+geometry. It also guards Space submission for incomplete names, English input, object picks and
+prompt keywords, while text prompts retain spaces. The command tests exercise `INMEZZO` in scripts.
 
 ## Symbol integration tests
 

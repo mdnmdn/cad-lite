@@ -237,3 +237,24 @@ func TestEveryCommandRunsWithoutMissingItalianKeys(t *testing.T) {
 	}
 	_ = geom.V(0, 0)
 }
+
+func TestScreenshotItalianCommandAliases(t *testing.T) {
+	r := commands.NewRegistry()
+	for alias, canonical := range map[string]string{
+		"SPOSTA": "MOVE", "RUOTA": "ROTATE", "TAGLIA": "TRIM", "ESTENDI": "EXTEND", "COPIA": "COPY", "SPECCHIA": "MIRROR", "RACCORDA": "FILLET", "CIMA": "CHAMFER", "STIRA": "STRETCH", "SCALA": "SCALE", "SERIE": "ARRAY", "OFFSET": "OFFSET", "SPEZZA": "BREAK", "ORTO": "ORTHO",
+	} {
+		c, ok := r.Lookup(alias)
+		if !ok {
+			t.Errorf("%s not registered", alias)
+			continue
+		}
+		if c.Name() != canonical {
+			t.Errorf("%s = %s, want %s", alias, c.Name(), canonical)
+		}
+	}
+	for command, name := range map[string]string{"ARRAY": "Serie", "ORTHO": "Orto"} {
+		if got := i18n.CommandIn(i18n.Italian, command); got.Name != name || got.Desc == "" {
+			t.Errorf("%s metadata = %+v", command, got)
+		}
+	}
+}

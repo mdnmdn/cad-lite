@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The command model, the session state machine, typed-input parsing, the input pipeline from pointer to point, object snaps, ortho and selection.
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
-updated: 2026-10-15
-verified: 2026-10-15
-code_anchors: [cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
+updated: 2026-10-16
+verified: 2026-10-16
+code_anchors: [i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -282,7 +282,17 @@ all (`Session.SnapOn`). `SnapMode` bits are AutoCAD's `OSMODE` values; the `OSMO
 `Snaps` plus 16384 when `SnapOn` is off, and `GRIDMODE`, `SNAPMODE`, `GRIDUNIT`, `SNAPUNIT` read and write
 the grid state (`Session.Grid`, `SnapGrid`, `GridSpacing`, `SnapSpacing`).
 
-**Typed overrides** (`override.go`, text stage `TextOrderSnap`). `cmdsys.FindTyped` resolves one: the objects within
+**Typed overrides** (`override.go`, text stage `TextOrderSnap`). `cmdsys/override.go` shares `classifyOverride` with `ParseSnapList`. Before English prefix
+matching, `i18n/snap.go`, `CanonicalSnapName`, resolves exact aliases from the catalog
+`snap.aliases` arrays for Endpoint, Midpoint, Intersection and Nearest. Like command aliases,
+they match in every language, independently of the current translator, ignoring case and repeated
+whitespace. A leading `_` skips localized aliases. Prompt keywords are tested first using the
+session translator. Snap aliases do not change the command field's Space submission rule;
+single-word aliases work in scripts without changing tokenization. The aliases and script whitespace
+restrictions are listed in
+[Drawing and editing](../features/drawing-and-editing.md).
+
+`cmdsys.FindTyped` resolves one: the objects within
 the aperture of the pick are candidates, and the nearest listed snap point on them wins wherever it lies
 (`INT` needs both curves within the aperture). A name arms an `overrideState` on the session and swaps in a
 substitute prompt (`MID of:`, `Base point:`, `<Offset>:`); the next click or typed point (read as the pick

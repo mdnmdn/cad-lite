@@ -1690,3 +1690,19 @@ invalid_justify = "Choose one of the listed alignment or attachment names."
 invalid_style = "Choose an existing text style from this drawing."
 stale = "The target changed or is no longer editable. Cancel and reopen the editor."
 busy = "Another transaction is open. Finish it before applying this edit."
+
+[cmd.array]
+name = "Array"
+desc = "Creates copies of objects in a rectangular or polar array."
+aliases = []
+
+[cmd.ortho]
+name = "Ortho"
+desc = "Turns orthogonal drawing on or off."
+aliases = []
+
+[snap.aliases]
+endpoint = []
+midpoint = []
+intersection = []
+nearest = []

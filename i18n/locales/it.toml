@@ -1429,7 +1429,7 @@ aliases = ["SALVA"]
 name = "Specchio"
 desc = "Crea una copia speculare degli oggetti selezionati rispetto a una linea"
 # (verify)
-aliases = ["SPECCHIO"]
+aliases = ["SPECCHIO", "SPECCHIA"]
 
 [cmd.offset]
 name = "Offset"
@@ -1439,13 +1439,13 @@ aliases = []
 [cmd.fillet]
 name = "Raccordo"
 desc = "Raccorda lo spigolo tra due oggetti con un raggio"
-aliases = ["RACCORDO"]
+aliases = ["RACCORDO", "RACCORDA"]
 
 [cmd.chamfer]
 name = "Smusso"
 desc = "Smussa lo spigolo tra due linee con due distanze"
 # (verify)
-aliases = ["SMUSSO", "CIMATURA", "SMUSSA"]
+aliases = ["SMUSSO", "CIMATURA", "SMUSSA", "CIMA"]
 
 [cmd.trim]
 name = "Taglia"
@@ -1719,3 +1719,19 @@ invalid_justify = "Scegliere uno dei nomi di allineamento o attacco elencati."
 invalid_style = "Scegliere uno stile di testo esistente in questo disegno."
 stale = "L'oggetto è cambiato o non è più modificabile. Annullare e riaprire l'editor."
 busy = "Un'altra transazione è aperta. Terminarla prima di applicare la modifica."
+
+[cmd.array]
+name = "Serie"
+desc = "Crea copie degli oggetti in una serie rettangolare o polare."
+aliases = ["SERIE"]
+
+[cmd.ortho]
+name = "Orto"
+desc = "Attiva o disattiva il disegno ortogonale."
+aliases = ["ORTO"]
+
+[snap.aliases]
+endpoint = ["FINE", "PUNTO FINALE"]
+midpoint = ["INMEZZO", "PUNTO MEDIO"]
+intersection = ["INTERSEZIONE"]
+nearest = ["VICINO"]
