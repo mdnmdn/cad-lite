@@ -6,7 +6,7 @@ status: current
 summary: How Cad-lite finds a newer GitHub release, shows it in the settings panel, and on one press downloads, verifies, installs and restarts into it.
 read_when: you are changing the update check, the Update button, the release asset names or checksums, or how the installation is replaced
 updated: 2026-10-15
-verified: 2026-10-15
+verified: 2026-10-16
 code_anchors: [updater/check.go, updater/assets.go, updater/download.go, updater/install.go, updater/extract.go, updater/version.go, ui/update.go, ui/update_view.go, ui/settings_view.go, cmd/cad/main.go, .github/workflows/release.yml, packaging/lib.sh]
 depends_on: [feat-settings, tech-operations, tech-architecture]
 review_cycle: monthly

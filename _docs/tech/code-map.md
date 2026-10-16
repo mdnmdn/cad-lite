@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: Every Go package in the module and its purpose, generated from the package doc comments.
 read_when: you need to know which package owns something before opening files
-updated: 2026-10-14
-verified: 2026-10-14
+updated: 2026-10-16
+verified: 2026-10-16
 code_anchors: [go.mod]
 depends_on: [tech-architecture]
 review_cycle: monthly
@@ -35,6 +35,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `cad-lite/fileio/dwg` | Package dwg reads Autodesk DWG drawings in pure Go: no cgo, no external library, so it builds for every platform the application does, the browser included. |
 | `cad-lite/fileio/dxf` | Package dxf reads and writes ASCII DXF. |
 | `cad-lite/geom` | Package geom is the geometry kernel: double-precision 2D vectors, affine transforms, boxes and curves. |
+| `cad-lite/harnessspike` | Package harnessspike embeds Harness as an experimental drawing agent using OpenAI-compatible cloud providers, independently of the CLI backends. |
 | `cad-lite/i18n` | Package i18n is Cad-lite's internationalisation foundation: English and Italian message catalogs, language selection and detection, plurals, localized command-line keywords and the per-command metadata (display name, description, typed aliases). |
 | `cad-lite/i18n/cmd/i18ncheck` | Command i18ncheck verifies Cad-lite's message catalogs and finds user-facing string literals that are not catalog keys yet. |
 | `cad-lite/internal/gpui` |  |

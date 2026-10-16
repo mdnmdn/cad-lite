@@ -2,6 +2,12 @@
 
 One section per wire protocol or protocol-like component.
 
+All structured agent launches use `internal/proc.Start` with piped stdin/stdout and captured
+stderr. On Windows, `internal/proc.HideWindow` applies `CREATE_NO_WINDOW` and `HideWindow`
+to suppress a console; the same helper is used for harness `--version` probes. Existing
+process attributes are preserved. Host-requested interactive terminals use a separate launch
+path and remain visible.
+
 ## MCP (package `mcp`)
 
 In-process MCP server for injecting tools (the `cad` drawing tools) into agents. stdlib `net/http`,

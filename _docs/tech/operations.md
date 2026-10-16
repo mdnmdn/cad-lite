@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: How to build, run, test and render Cad-lite, build the browser binary, and run the documentation tooling.
 read_when: you need a build, run, test or docs command, or you are changing one
-updated: 2026-10-15
-verified: 2026-10-15
+updated: 2026-10-16
+verified: 2026-10-16
 code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/bundle.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -76,7 +76,13 @@ Run `go mod tidy` after adding an import.
 | `-save-on-exit PATH` | Write the drawing to this DXF path when the window closes or on SIGINT or SIGTERM; the real-window tests assert on that file |
 | `-agent NAME` | Select the agent harness (`opencode`, `claude` or `codex`) and open the [agent panel](../features/agent-panel.md); Start launches it |
 | `-agent-cmd PATH` | Run this executable for the selected harness instead of the one on `PATH` |
+| `-harness-spike` | Open the experimental in-process Harness panel with Ollama Cloud / OpenCode Go provider, model and API-key controls |
 | `-agent-demo` | Open the agent panel on a canned transcript; for `-png` renders |
+
+Run the cloud spike with `go run ./cmd/cad -harness-spike`. Select the provider, enter its
+API key and model, press Save, then send a prompt. The second provider retains its own key.
+`go run ./cmd/cad -harness-spike -png _tmp/harness.png` previews the controls without
+loading settings or contacting a cloud service.
 
 A render in Italian takes the language from the environment (`-png` does not read the settings file):
 

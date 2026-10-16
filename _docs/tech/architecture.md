@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: The layers of Cad-lite, the dependency rule between them, where each layer lives, and how an edit flows from input to pixels.
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
-updated: 2026-10-15
-verified: 2026-10-15
+updated: 2026-10-16
+verified: 2026-10-16
 code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go, cmdsys/inflight.go, cmdsys/session.go, i18n/i18n.go]
 depends_on: [prod-overview]
 review_cycle: quarterly
@@ -55,7 +55,9 @@ restarts the application. Only `ui`, `cmd/cad` and `agentinstall` use it; it imp
 
 AI agents attach on the side: `cadmcp` exposes the drawing as MCP tools on top of `cmdsys`, and the
 nested module `agentmanager` runs the agent CLIs and the MCP server; `ui` hosts the chat panel that
-joins them. `agentmanager` imports nothing from Cad-lite. See [Agent integration](agent-integration.md).
+joins them. The opt-in `harnessspike` adapter embeds a third-party runtime in the root module
+and implements the same session interface; it imports no gpui and registers only drawing tools.
+`agentmanager` imports nothing from Cad-lite. See [Agent integration](agent-integration.md).
 
 `cmd/cad` wires the layers together and chooses the platform: an ebiten window, or a headless
 window that renders one frame to PNG. Every package's purpose is listed in the

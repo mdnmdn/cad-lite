@@ -11,7 +11,11 @@ and opencode/codex run sandboxed read-only where the protocol allows.
 - `jsonrpc.Error` has json tags (`code`, `message`, `data`).
 - `internal/fakeagent` entry points are `RunACP`, `RunClaude`, `RunCodex` (three `Run` would clash in one package).
 - `transcript` imports `agentmanager` for the event and tool types.
-- `internal/proc` API is new (see `internal/proc/proc.go`).
+- `internal/proc` API is new (see `internal/proc/proc.go`). Its internal helper
+  `func HideWindow(cmd *exec.Cmd)` suppresses Windows console allocation with
+  `CREATE_NO_WINDOW` and `HideWindow`, preserving existing process attributes;
+  on other platforms it leaves the command alone. Agent launches and version
+  probes use it. Structured agent I/O remains piped; interactive terminals belong to the host.
 
 # Frozen API (package `agentmanager`; parallel packages compile against this)
 

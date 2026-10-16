@@ -32,12 +32,14 @@ type Process struct {
 	once   sync.Once
 }
 
-// Start spawns the child (own process group on unix) with stdin/stdout piped and stderr captured.
+// Start spawns the child (own process group on unix, hidden console on Windows)
+// with stdin/stdout piped and stderr captured.
 func Start(o Options) (*Process, error) {
 	cmd := exec.Command(o.Path, o.Args...)
 	cmd.Dir = o.Dir
 	cmd.Env = Env(os.Environ(), o.RemoveEnv, o.Env)
 	setGroup(cmd)
+	HideWindow(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

@@ -6,7 +6,7 @@ status: current
 summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line, the -open flag and files the OS hands over (dropped, opened from Finder or the Dock, file arguments), how warnings and errors are reported, and where the lossy edges are.
 read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
 updated: 2026-10-15
-verified: 2026-10-15
+verified: 2026-10-16
 code_anchors: [ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly

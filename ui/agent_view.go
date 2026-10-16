@@ -269,6 +269,9 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	}
 
 	top := gpui.NewDiv().FlexCol().Gap(10).P(16).Pb(12).Child(head, tabs, picker)
+	if p.spike != nil {
+		top.Child(p.harnessSpikeControls(w, cx))
+	}
 	if p.ws.installWanted(len(p.choices) == 0) {
 		top.Child(p.ws.agentInstallBlock("agent"))
 	}

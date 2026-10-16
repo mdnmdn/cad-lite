@@ -17,6 +17,7 @@ import (
 	"agentmanager/transcript"
 	"cad-lite/cadmcp"
 	"cad-lite/cmdsys"
+	"cad-lite/harnessspike"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/updater"
@@ -165,6 +166,7 @@ type AgentPanel struct {
 	explicit bool
 	binary   string
 	binFor   agentmanager.Harness
+	spike    *harnessSpikeState
 	open     AgentOpener
 	probed   bool
 
@@ -415,6 +417,9 @@ func (p *AgentPanel) reprobe() {
 }
 
 func (p *AgentPanel) addFound() {
+	if p.spike != nil {
+		return
+	}
 	for _, h := range harnesses.All {
 		if _, ok := harnesses.Available(h); ok && !slices.Contains(p.choices, h) {
 			p.choices = append(p.choices, h)
@@ -491,6 +496,11 @@ func (p *AgentPanel) Start(w *gpui.Window) {
 
 func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 	h := p.harnessOf(t)
+	if p.spike != nil && h != agentmanager.Harness(harnessspike.Harness) {
+		p.note(t, "This conversation uses a CLI backend. Open a new tab for the Harness spike.")
+		w.Refresh()
+		return
+	}
 	if t.state != agentIdle || h == "" {
 		return
 	}
@@ -527,6 +537,12 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 	t.state = agentStarting
 	t.harness = h
 	open := p.open
+	if p.spike != nil && h == agentmanager.Harness(harnessspike.Harness) {
+		cloud := p.spike.config
+		open = func(ctx context.Context, cfg agentmanager.Config) (agentmanager.Session, error) {
+			return harnessspike.Open(ctx, cfg, cloud)
+		}
+	}
 	p.openers.Add(1)
 	go func() {
 		defer p.openers.Done()

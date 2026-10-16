@@ -6,7 +6,7 @@ status: current
 summary: How entities become pixels — the view, camera-relative coordinates, the display list, the per-band tessellation cache and the gpui adapter.
 read_when: you are changing what or how the canvas draws, adding a display primitive, or chasing jitter or a stale render
 updated: 2026-10-15
-verified: 2026-10-15
+verified: 2026-10-16
 code_anchors: [doc/textfont.go, render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, doc/insert.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
 depends_on: [tech-architecture, tech-document-model]
 review_cycle: quarterly

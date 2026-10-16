@@ -216,6 +216,9 @@ func (p *AgentPanel) visionOf(t *agentTab) agentmanager.Vision {
 		}
 	}
 	h := p.harnessOf(t)
+	if p.spike != nil && h == p.selected {
+		return agentmanager.VisionNo
+	}
 	id := p.modelFor(t, h)
 	if id == "" {
 		id = t.mdl.current

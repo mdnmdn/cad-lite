@@ -17,6 +17,7 @@ import (
 	"agentmanager/acp"
 	"agentmanager/claude"
 	"agentmanager/codex"
+	"agentmanager/internal/proc"
 	"agentmanager/shellenv"
 )
 
@@ -176,6 +177,7 @@ func version(ctx context.Context, bin, path string) string {
 	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, "--version")
+	proc.HideWindow(cmd)
 	cmd.Env = append(cmd.Environ(), "PATH="+path)
 	cmd.WaitDelay = 200 * time.Millisecond
 	b, err := cmd.Output()

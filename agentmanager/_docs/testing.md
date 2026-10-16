@@ -76,3 +76,10 @@ Gated by `AGENTMANAGER_LIVE=1`; they skip otherwise and need the real CLI and cr
 ## Commands
 
 From `agentmanager/`: `gofmt -l .` (prints nothing), `go vet ./...`, `go test -race ./...`.
+
+Windows console regressions: `internal/proc/hide_windows_test.go` checks both console flags
+and preservation of existing process settings. `internal/proc/console_windows_test.go` and
+`harnesses/console_windows_test.go` launch the test executable as a helper and check that
+`GetConsoleWindow` returns zero for agent launches and version probes. The existing proc
+round-trip test checks that piped input/output still works. Native console tests require Windows;
+compiling them on another host does not verify desktop behaviour.

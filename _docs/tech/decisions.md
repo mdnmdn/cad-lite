@@ -5,7 +5,7 @@ kind: tech
 status: current
 summary: Append-only register of structural choices — what was chosen, why, and what it costs.
 read_when: you are about to reverse a structural choice, or wonder why something is the way it is
-updated: 2026-10-15
+updated: 2026-10-16
 verified: 2026-10-15
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -59,3 +59,5 @@ that cites the old one.
 | D36 | 2026-10-15 | Plain drawings and blocks retain R12 output; groups or preserved OBJECTS select targeted AC1015 with real GROUP dictionaries and ownership | AutoCAD GROUP has no R12 representation; native interoperability avoids private grouping extensions | Two writer paths; this covers symbols/groups rather than all newer DXF features in G2 |
 
 | D37 | 2026-10-15 | Canonical layer-list order also defines drawing stacking, with higher rows in front; INSERT stacks by its root layer as an atomic reference | One order keeps the UI, file and visible overlap consistent without changing entity handles or authoring order inside definitions | Layer reordering affects overlap and pick ties; imported definitions retain child visibility/colour while using their root layer for stacking |
+
+| D38 | 2026-10-16 | Keep the embedded Harness experiment behind `-harness-spike` in a root-module adapter implementing `agentmanager.Session`, with only cad MCP tools | Compare a direct cloud agent loop against CLI backends while keeping the reusable agentmanager module stdlib-only | Harness adds SDK dependencies to the application; provider profiles use a separate owner-only plaintext file; the spike supports text prompts and manual model IDs |

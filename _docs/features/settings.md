@@ -6,7 +6,7 @@ status: current
 summary: The settings panel and its General, AI and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, default agent, updates) and the TOML file in the user config folder that keeps them.
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-15
-verified: 2026-10-15
+verified: 2026-10-16
 code_anchors: [settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly

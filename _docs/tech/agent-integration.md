@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-process MCP server `cad`, the rule that only the UI goroutine touches the drawing, and the permission policy.
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
-updated: 2026-10-15
-verified: 2026-10-15
-code_anchors: [ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/terminal_windows_test.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+updated: 2026-10-16
+verified: 2026-10-16
+code_anchors: [agentmanager/internal/proc/proc.go, agentmanager/internal/proc/hide_windows.go, harnessspike/config.go, harnessspike/session.go, ui/harness_spike.go, ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/terminal_windows_test.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -33,6 +33,44 @@ Three pieces connect an AI agent to a drawing:
 `agentmanager/store` (stdlib, in the nested module) persists conversations as JSONL per session plus an
 open-tab set per drawing; Cad-lite keeps them in `<project>/.cad-lite/agent/`. Nothing in this chain exists until the
 panel or the `AI` command is first used.
+
+## Harness spike
+
+`harnessspike` is a root-module adapter, independent of the stdlib-only `agentmanager`
+module. `-harness-spike` selects it explicitly; it implements `agentmanager.Session` using
+[Harness v0.6.0](https://github.com/sausheong/harness/tree/v0.6.0), with only the authenticated
+`cad` MCP server registered. No shell, file, browser or subagent tools are registered.
+The existing dispatcher and transaction rules still own drawing edits. The adapter maps
+text, completed tool arguments, tool results and terminal events into the panel's queue.
+Cancel interrupts the turn; Close joins it, closes MCP and releases the session writer.
+Harness JSONL sessions keep full model context and resume using the panel's stored session key.
+
+Both providers use OpenAI-compatible Chat Completions with bearer authentication:
+[Ollama Cloud](https://docs.ollama.com/api/openai-compatibility) at `https://ollama.com/v1`,
+and [OpenCode Go](https://opencode.ai/v2/docs/console/go) at
+`https://opencode.ai/zen/go/v1`. OpenCode's `/v2/docs/api` describes its local agent server;
+that API does not serve model inference for this spike. Keys and bare model IDs are
+host-owned configuration, separate per provider. Provider errors produce a generic failure
+without copying their response body into the transcript. Images and model discovery are
+outside this spike; the selected model is the only offered entry. The provider controls and
+credential file contract are in the agent panel feature document.
+
+Local HTTP fixtures verify bearer auth, model IDs, streaming, real MCP tool calls,
+conversation resume, cancellation and overlapping-prompt rejection. Live cloud calls require
+user credentials and are not part of this verification.
+
+## Background processes on Windows
+
+`agentmanager/internal/proc.Start` launches all three CLI backends with piped input/output
+and captured stderr. Its `HideWindow` helper sets `CREATE_NO_WINDOW` and `HideWindow` on
+Windows while preserving other process attributes. `harnesses.version` uses the same helper
+for discovery and executable checks, so those probes also avoid opening a console. Other
+platforms retain their existing process-group setup. Explicit terminal and sign-in actions
+continue through the host's separate visible-terminal launcher.
+
+The Windows regression tests check the process flags and launch helpers that report their
+console window handle. Cross-compilation verifies their build; native Windows execution is
+required to verify the actual absence of a console.
 
 ## PATH discovery
 

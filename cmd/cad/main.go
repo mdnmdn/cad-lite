@@ -59,6 +59,7 @@ func main() {
 	hover := flag.String("hover", "", "with -png: model point x,y to put the pointer on before rendering")
 	agent := flag.String("agent", "", "agent harness to select in the agent panel: opencode, claude or codex (opens the panel)")
 	agentCmd := flag.String("agent-cmd", "", "executable to run for the selected agent instead of the one on PATH")
+	harnessSpike := flag.Bool("harness-spike", false, "use in-process Harness with Ollama Cloud or OpenCode Go")
 	agentDemo := flag.Bool("agent-demo", false, "open the agent panel on a canned conversation (for -png)")
 	saveOnExit := flag.String("save-on-exit", "", "dev: write the drawing to this DXF path when the window closes or on SIGINT/SIGTERM (GUI tests)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -152,6 +153,9 @@ func main() {
 		}
 		ws.AgentPanel().Configure(h, *agentCmd)
 		ws.AgentPanel().Show()
+	}
+	if *harnessSpike {
+		ws.AgentPanel().EnableHarnessSpike()
 	}
 	if *agentDemo {
 		ui.SeedAgentDemo(ws)

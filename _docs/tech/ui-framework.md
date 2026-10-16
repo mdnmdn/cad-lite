@@ -6,7 +6,7 @@ status: current
 summary: The boundary between Cad-lite and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
 updated: 2026-10-15
-verified: 2026-10-15
+verified: 2026-10-16
 code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/agent_view.go, ui/icon.go, cmdsys/sysvars.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go, internal/gpui/list.go, ui/textedit_view.go, ui/hud.go, ui/hud_drag.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly

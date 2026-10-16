@@ -6,7 +6,7 @@ status: current
 summary: Several drawings open at once, one tab each above the canvas, each with its own session, undo history, view and agent conversations; how OPEN, NEW, CLOSE, QUIT and files from the OS choose a tab, and what follows the active tab.
 read_when: you are changing the document tab strip, which tab a file opens in, closing or quitting with several drawings, or what is per drawing and what the window shares
 updated: 2026-10-15
-verified: 2026-10-15
+verified: 2026-10-16
 code_anchors: [ui/doctabs.go, ui/workspace.go, ui/openpaths.go, ui/agent.go, ui/agent_store.go, cmdsys/dirty.go, cmdsys/commands/files.go, cmd/cad/main.go]
 depends_on: [feat-dxf-files, feat-canvas, feat-agent-panel, tech-command-system]
 review_cycle: monthly

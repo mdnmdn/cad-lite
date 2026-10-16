@@ -3,11 +3,11 @@ id: feat-agent-panel
 title: Agent panel
 kind: feature
 status: current
-summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex) against the open drawing, as several tabs on a model the user picks (free models first on opencode), with images dropped or pasted into the prompt, whose conversations are stored with the drawing in its project, and asks the user before anything beyond drawing is allowed.
+summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex, plus the opt-in Harness cloud spike) against the open drawing, as several tabs on a model the user picks (free models first on opencode), with images dropped or pasted into the prompt, whose conversations are stored with the drawing in its project, and asks the user before anything beyond drawing is allowed.
 read_when: you are changing the agent panel, its model picker, image attachments, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
-updated: 2026-10-15
-verified: 2026-10-15
-code_anchors: [ui/doctabs.go, ui/agent.go, ui/agent_markdown.go, ui/agent_markdown_view.go, ui/agent_message.go, ui/agent_queue.go, ui/agent_working.go, ui/agent_model.go, ui/agent_image.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
+updated: 2026-10-16
+verified: 2026-10-16
+code_anchors: [agentmanager/internal/proc/hide_windows.go, agentmanager/internal/proc/proc.go, ui/harness_spike.go, harnessspike/config.go, harnessspike/session.go, ui/doctabs.go, ui/agent.go, ui/agent_markdown.go, ui/agent_markdown_view.go, ui/agent_message.go, ui/agent_queue.go, ui/agent_working.go, ui/agent_model.go, ui/agent_image.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
 review_cycle: monthly
 ---
@@ -21,6 +21,23 @@ same commands the command line runs, so every change is one undo step and shows 
 happens. The panel is a transcript, a prompt field and the controls to start, stop and cancel.
 
 ## Behaviour
+
+- **Background agents on Windows.** Starting OpenCode, Claude Code or Codex and checking
+  their versions creates no terminal window. The chat panel continues to carry their input,
+  replies and errors. Explicit Open terminal and Sign in actions open a visible terminal.
+
+- **Harness spike.** `-harness-spike` opens the panel on the in-process Harness backend.
+  Its cloud settings select Ollama Cloud or OpenCode Go, with a model field and a separate
+  API key for each provider. Save retains an existing key when its textbox is empty and
+  clears that textbox after saving; saved keys are never filled back into the field.
+  The JSON credentials file is `harness-spike.json` beside `settings.toml`, owner-only (0600),
+  plaintext; without a settings path the values stay in memory. Provider and model changes
+  apply when a session next starts; Stop then Start applies them to a live conversation.
+  The model chip can override the profile's model for a tab. The spike offers text prompts,
+  streams replies and drawing tool cards, and supports Cancel and conversation resume.
+  It exposes only the trusted `cad` drawing tools. Saved CLI conversations remain readable;
+  starting one in spike mode reports that a new Harness tab is needed. Profile models use
+  the service's bare model IDs; there is no remote model discovery in the spike.
 
 - **On demand.** Nothing agent related runs or exists until the user asks: no panel object, no MCP
   server, no process, no timer and no files. Three things ask: the `Agent` icon button at the right end of
@@ -189,6 +206,9 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 
 ## Contract
 
+Experimental entry point: `-harness-spike`, `AgentPanel.EnableHarnessSpike`; provider configuration
+`harnessspike.Config` and `Profile`.
+
 - Flags `-agent opencode|claude|codex` (select and open), `-agent-cmd PATH` (executable instead of the
   one on `PATH`) and `-agent-demo` (open on a canned transcript, for `-png`) are listed in
   [Operations](../tech/operations.md).
@@ -209,6 +229,18 @@ happens. The panel is a transcript, a prompt field and the controls to start, st
 - What the agent may do to the drawing is the tool set in [Agent integration](../tech/agent-integration.md).
 
 ## Implementation
+
+`agentmanager/internal/proc/hide_windows.go`, `HideWindow`, configures background agent
+launches and `agentmanager/harnesses/harnesses.go`, `version`, to suppress Windows consoles.
+The host's interactive terminal launcher remains in `ui/terminal_windows.go`.
+
+`ui/harness_spike.go`, `AgentPanel.EnableHarnessSpike`, owns the opt-in provider controls.
+`AgentPanel.startTab` snapshots their settings before opening `harnessspike.Open` on its
+worker. The adapter uses Harness v0.6.0's runtime, OpenAI-compatible provider and MCP client;
+its events feed the existing transcript and its tools use the existing drawing dispatcher.
+Harness context lives in `<project>/.cad-lite/agent/harness/`, separately from the panel's
+stored transcript. Each prompt is limited to five minutes and 25 model iterations.
+
 
 `ui/agent.go` holds `AgentPanel`, `agentSet` (one document tab's conversations, history state and MCP
 server; the panel embeds the active tab's and `follow` swaps it) and `agentTab` (transcript, record,
