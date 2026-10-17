@@ -23,3 +23,15 @@ resolve_version() {
     LDFLAGS_VERSION="-X main.version=$VERSION"
   fi
 }
+
+# resolve_feedback supplies optional desktop intake settings without shell-sensitive linker values.
+# These credentials are extractable from a desktop executable; never inject them in browser builds.
+resolve_feedback() {
+  LDFLAGS_FEEDBACK=""
+  if [ -n "${FEEDBACK_URL:-}" ] && [ -n "${FEEDBACK_KEY:-}" ]; then
+    local feedback_url_encoded feedback_key_encoded
+    feedback_url_encoded="$(printf '%s' "$FEEDBACK_URL" | base64 | tr -d '\r\n')"
+    feedback_key_encoded="$(printf '%s' "$FEEDBACK_KEY" | base64 | tr -d '\r\n')"
+    LDFLAGS_FEEDBACK="-X main.feedbackURLBase64=$feedback_url_encoded -X main.feedbackKeyBase64=$feedback_key_encoded"
+  fi
+}

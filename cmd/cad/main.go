@@ -10,6 +10,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -25,6 +26,7 @@ import (
 	"cad-lite/appenv"
 	"cad-lite/assets/appicon"
 	"cad-lite/doc"
+	"cad-lite/feedback"
 	"cad-lite/filedialog"
 	"cad-lite/fileio"
 	"cad-lite/fileio/dwg"
@@ -46,6 +48,9 @@ const demoScript = `LAYER outline=4 REC 0,0 220,130 PLINE 70,95 150,95 150,111 7
 
 // version is the release version; packaging sets it with -ldflags "-X main.version=...".
 var version = "dev"
+
+// Feedback credentials are base64 encoded by desktop packaging before linker injection.
+var feedbackURLBase64, feedbackKeyBase64 string
 
 func main() {
 	png := flag.String("png", "", "render one frame headlessly to this PNG path and exit")
@@ -108,8 +113,9 @@ func main() {
 		}
 	}()
 	defer ws.CloseAgent()
+	defer ws.ShutdownFeedback()
 	// fatal stops the agent subprocess first: log.Fatal and os.Exit skip deferred calls.
-	fatal := func(v ...any) { ws.CloseAgent(); log.Fatal(v...) }
+	fatal := func(v ...any) { ws.CloseAgent(); ws.ShutdownFeedback(); log.Fatal(v...) }
 	if *open != "" {
 		ws.SetProjectPath(*open)
 	}
@@ -121,6 +127,13 @@ func main() {
 			log.Printf("settings: %v", err)
 		}
 		i18n.Set(i18n.FromSetting(ws.Settings().Language))
+		if runtime.GOOS != "js" {
+			url, urlErr := base64.StdEncoding.DecodeString(feedbackURLBase64)
+			key, keyErr := base64.StdEncoding.DecodeString(feedbackKeyBase64)
+			if urlErr == nil && keyErr == nil {
+				ws.ConfigureFeedback(&feedback.Client{URL: string(url), Key: string(key)})
+			}
+		}
 		// A language change in the settings panel switches the catalogs from then on.
 		ws.SetLanguageHandler(func(lang string) { i18n.Set(i18n.FromSetting(lang)) })
 		set := map[string]bool{}
@@ -199,6 +212,7 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		ws.CloseAgent()
+		ws.ShutdownFeedback()
 		os.Exit(1)
 	}
 	if err := ws.SaveSettings(); err != nil {

@@ -77,7 +77,7 @@ var ribbonGroupButtons = [][]string{
 }
 
 // titleButtons are the title bar's buttons from left to right.
-var titleButtons = []string{"open", "save", "undo", "redo", "ribbon", "agent", "settings"}
+var titleButtons = []string{"open", "save", "undo", "redo", "ribbon", "agent", "feedback", "settings"}
 
 func TestRibbonReflowsWithWidth(t *testing.T) {
 	for _, c := range []struct {
@@ -151,7 +151,7 @@ func TestTitleBarButtonsFitAndSitInOrder(t *testing.T) {
 			}
 			prev = b.x1
 		}
-		// Agent and Settings sit at the right end.
+		// Agent, Feedback and Settings sit at the right end.
 		settings, _ := r.bounds("tool-settings")
 		if settings.x1 < float32(width)-20 {
 			t.Fatalf("width %d: settings button not at the right end: %v", width, settings)

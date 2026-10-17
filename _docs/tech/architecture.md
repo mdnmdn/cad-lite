@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: The layers of Cad-lite, the dependency rule between them, where each layer lives, and how an edit flows from input to pixels.
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
-updated: 2026-10-16
-verified: 2026-10-16
+updated: 2026-10-17
+verified: 2026-10-17
 code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go, cmdsys/inflight.go, cmdsys/session.go, i18n/i18n.go]
 depends_on: [prod-overview]
 review_cycle: quarterly
@@ -40,6 +40,10 @@ UI shell and one rendering adapter touch the graphics stack.
 `i18n` is a leaf beside the core: the English and Italian message catalogs, language detection,
 plurals, localized command keywords and command aliases. It imports nothing of the project, and
 `cmdsys`, `fileio`, `settings`, `cadmcp` and `ui` may import it.
+
+`feedback` is a UI-independent leaf for intake HTTP, a private delivery outbox, runtime metadata
+and screenshot annotations. Only the UI and desktop host configure it; it never imports gpui or
+changes CAD documents. See [Feedback](../features/feedback.md).
 
 The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenplatform` as its display backend.
 

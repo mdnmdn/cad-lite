@@ -30,6 +30,9 @@ const (
 	// AppCopy: copy this text to the clipboard, two overlapping sheets
 	AppCopy Name = "app-copy"
 
+	// AppFeedback: send application feedback, a speech balloon with an exclamation mark
+	AppFeedback Name = "app-feedback"
+
 	// AppHistory: what was done earlier, a clock
 	AppHistory Name = "app-history"
 
@@ -216,6 +219,7 @@ var All = []Name{
 	AppChevronRight,
 	AppChevronUp,
 	AppCopy,
+	AppFeedback,
 	AppHistory,
 	AppKeyEnter,
 	AppRemove,

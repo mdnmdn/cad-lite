@@ -214,6 +214,9 @@ categories:
     app-agent:
       goal: talk to the AI agent, a speech bubble with two eyes
       keywords: [agent, ai, chat, assistant, bubble, message]
+    app-feedback:
+      goal: send application feedback, a speech balloon with an exclamation mark
+      keywords: [feedback, report, issue, suggestion, balloon]
     app-warning:
       goal: something needs attention, a triangle with an exclamation mark
       keywords: [warning, alert, caution, attention, problem]

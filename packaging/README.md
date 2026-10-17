@@ -14,6 +14,16 @@ Version: `$VERSION`, else the tag (`v1.2.3` gives `1.2.3`), else `git describe`.
 `cmd/cad/main.go` declares a `version` variable, which it does; the in-app updater compares it with
 the release tag. CI builds stamp `0.0.0-ci+<shortsha>`.
 
+## Feedback configuration
+
+Desktop bundle scripts accept optional `FEEDBACK_URL` and `FEEDBACK_KEY`. CI and release builds
+read repository variable `FEEDBACK_URL` and secret `FEEDBACK_KEY`. Both must be present to enable
+submission; missing values leave the build successful and the feedback dialog unconfigured.
+`resolve_feedback` base64 encodes the values for `-X main.feedbackURLBase64` and
+`-X main.feedbackKeyBase64`, avoiding shell-sensitive linker values. Base64 is transport encoding,
+not encryption: desktop credentials are extractable and must be scoped to intake. They never enter
+browser build flags. See [Feedback](../_docs/features/feedback.md) for the outbox and protocol.
+
 ## Pure-Go cross builds
 
 macOS and Windows need no cgo: ebiten uses purego on both, so `CGO_ENABLED=0` cross-compiles all

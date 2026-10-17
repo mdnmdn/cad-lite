@@ -25,6 +25,8 @@ unexported access.
 
 | Level | What | Where and how |
 |---|---|---|
+| Unit | Feedback protocol, private outbox, retry identity, redirect isolation and image annotations | `feedback/client_test.go`, `feedback/image_test.go`; local HTTP servers, no live credentials |
+| UI | Feedback capture, modal isolation, annotation Save/Cancel, submission and unchanged draft retry | `ui/feedback_test.go`; headless renders and input |
 | Unit | Geometry: transforms, arc bounds, closest points, bulges, chord tolerance, intersections | `geom/geom_test.go`, table-driven |
 | Unit | Areas, offsets, fillets and chamfers, trim spans, splitting, joining and extending | `geom/area_test.go`, `geom/offset_test.go`, `geom/fillet_test.go`, `geom/split_test.go` |
 | Unit | Transactions, abort, change listeners, undo and redo | `doc/doc_test.go`; a random-edit test undoes 200 transactions and compares with the original, then redoes them and compares with the result |

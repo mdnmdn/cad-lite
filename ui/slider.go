@@ -81,6 +81,10 @@ func SnapSlider(v, min, max, step float64) float64 {
 // and End jump to the ends. id must be unique and stable among elements. The
 // returned div has no width: give it one or Flex1.
 func NewSlider(id string, st *SliderState, o SliderOptions) *gpui.Div {
+	return newSliderWithTheme(id, st, o, CurrentTheme())
+}
+
+func newSliderWithTheme(id string, st *SliderState, o SliderOptions, theme Theme) *gpui.Div {
 	st.min, st.max, st.step, st.onChange, st.onCommit = o.Min, o.Max, o.Step, o.OnChange, o.OnCommit
 	st.value = SnapSlider(o.Value, o.Min, o.Max, o.Step)
 	frac := 0.0
@@ -99,14 +103,14 @@ func NewSlider(id string, st *SliderState, o SliderOptions) *gpui.Div {
 				CornerRadii: gpui.Corners{}.Uniform(r),
 			})
 		}
-		quad(x0, cy-sliderTrack/2, span, sliderTrack, sliderTrack/2, uiBorder)
-		quad(x0, cy-sliderTrack/2, span*float32(frac), sliderTrack, sliderTrack/2, uiAccent)
+		quad(x0, cy-sliderTrack/2, span, sliderTrack, sliderTrack/2, theme.Border)
+		quad(x0, cy-sliderTrack/2, span*float32(frac), sliderTrack, sliderTrack/2, theme.Accent)
 		tx := x0 + span*float32(frac) - sliderThumb/2
-		quad(tx-1, cy-sliderThumb/2-1, sliderThumb+2, sliderThumb+2, sliderThumb/2+1, uiBorder)
-		quad(tx, cy-sliderThumb/2, sliderThumb, sliderThumb, sliderThumb/2, uiText)
+		quad(tx-1, cy-sliderThumb/2-1, sliderThumb+2, sliderThumb+2, sliderThumb/2+1, theme.Border)
+		quad(tx, cy-sliderThumb/2, sliderThumb, sliderThumb, sliderThumb/2, theme.Text)
 	}
 	return gpui.NewDiv().ID(id).SizeH(sliderHeight).Rounded(4).TabIndex(0).
-		FocusVisible(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Border(1, uiAccent) }).
+		FocusVisible(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Border(1, theme.Accent) }).
 		OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
 			if e.Button != gpui.MouseLeft {
 				return

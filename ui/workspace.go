@@ -57,6 +57,7 @@ type Workspace struct {
 	// aidsSet is true once the settings' drawing aids were applied; a new tab takes them too.
 	aidsSet    bool
 	textEditor *textEditState
+	fb         *feedbackState
 }
 
 // NewWorkspace returns a workspace editing d in its one tab. files may be nil, which
@@ -171,6 +172,9 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	win := float32(w.Bounds().Size.W)
 	ws.winH = float32(w.Bounds().Size.H)
 	ws.winW = win
+	if ws.fb != nil && ws.fb.open {
+		return ws.renderFeedback(w, cx)
+	}
 	if p := ws.prefs(); p.open && p.snapshot != nil {
 		snapshot := p.snapshot
 		frozen := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) { w.PaintImage(b, snapshot) })

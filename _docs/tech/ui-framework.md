@@ -172,6 +172,13 @@ decision register.
 the application no cgo and no wasm exclusion. The review sheets are rendered by resvg instead, so
 the tool and the application differ slightly on edge pixels (decision register).
 
+The title bar also hosts the [Feedback](../features/feedback.md) speech-balloon button. Its modal
+uses a rendered image as the fixed background and a separate focus/action root; the screenshot
+editor annotates image pixels without routing input to the drawing. The dialog and editor share a
+local opposite light/dark palette, including text fields and the brush slider, while the application
+and screenshot keep their original colours. `NewSlider` follows the application theme; the internal `newSliderWithTheme`
+helper allows this editor to supply its own palette.
+
 ## Related docs
 
 - [Architecture](architecture.md) — which packages may import gpui

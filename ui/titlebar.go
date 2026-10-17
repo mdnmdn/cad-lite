@@ -10,7 +10,7 @@ import (
 
 // titleBar is the window's top row: the brand, the document chip, Open (with its recent menu) and
 // Save, Undo and Redo,
-// and at the right end the agent panel toggle and Settings. Every button is icon-only, so each
+// and at the right end the agent panel toggle, Settings and Feedback. Every button is icon-only, so each
 // carries its tooltip.
 func (ws *Workspace) titleBar() *gpui.Div {
 	left := gpui.NewDiv().FlexRow().ItemsCenter().Gap(10).MinW(0)
@@ -33,6 +33,7 @@ func (ws *Workspace) titleBar() *gpui.Div {
 	right := gpui.NewDiv().ID("tbgroup-window").FlexRow().ItemsCenter().Gap(2).FlexShrink(0).MlAuto().Child(
 		ws.ribbonToggle(),
 		ws.agentToggle(),
+		ws.feedbackButton(),
 		ws.settingsButton(),
 	)
 	return gpui.NewDiv().ID("titlebar").FlexRow().ItemsCenter().Gap(10).SizeH(titleBarHeight).FlexShrink(0).Px_(12).Bg(uiBg).Child(left, right)

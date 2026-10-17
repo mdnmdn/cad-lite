@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: How to build, run, test and render Cad-lite, build the browser binary, and run the documentation tooling.
 read_when: you need a build, run, test or docs command, or you are changing one
-updated: 2026-10-16
-verified: 2026-10-16
+updated: 2026-10-17
+verified: 2026-10-17
 code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/bundle.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -138,6 +138,12 @@ logged and the defaults apply) and saves it, with the window size, when the wind
 - `TestTextInputCaretUsesFullShapedLineAtBothScales` samples one caret pixel, which depends on the
   font's fractional advances; it runs on the bundled font (`GPUI_NO_SYSTEM_FONTS`) and so does not
   vary with the installed fonts.
+
+Desktop feedback configuration uses optional repository variable `FEEDBACK_URL` and secret
+`FEEDBACK_KEY` in CI and release builds. `packaging/lib.sh` supplies base64 linker values only
+when both exist; browser builds receive neither. Missing values disable submission without
+failing the build. Pending reports live in `feedback-outbox` beside the settings file. See
+[Feedback](../features/feedback.md) and [packaging](../../packaging/README.md).
 
 ## Releases
 

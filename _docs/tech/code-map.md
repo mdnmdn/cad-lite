@@ -30,6 +30,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `cad-lite/cmdsys` | Package cmdsys is the command framework: AutoCAD-style commands as prompt state machines, typed-input parsing, object snaps, ortho and selection. |
 | `cad-lite/cmdsys/commands` | Package commands holds the built-in AutoCAD-style commands. |
 | `cad-lite/doc` | Package doc is the document database. |
+| `cad-lite/feedback` | Package feedback sends application feedback to the intake service, keeps a private retry outbox, and edits screenshot annotations without depending on the UI framework. |
 | `cad-lite/filedialog` | Package filedialog shows the operating system's native open and save dialogs without cgo, by running the tool each platform ships: osascript on macOS, PowerShell with System.Windows.Forms on Windows, zenity or kdialog on Linux and the BSDs. |
 | `cad-lite/fileio` | Package fileio is the file I/O plugin layer: format readers and writers register here and are chosen by file extension. |
 | `cad-lite/fileio/dwg` | Package dwg reads Autodesk DWG drawings in pure Go: no cgo, no external library, so it builds for every platform the application does, the browser included. |

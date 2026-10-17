@@ -81,6 +81,9 @@ jobs:
       # Pure-Go darwin builds (ebiten uses purego there), so both arches cross-compile on one
       # runner and are merged into a universal binary with lipo.
       - name: Assemble Cad-lite.app
+        env:
+          FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
+          FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
         run: ARCHS="arm64 amd64" packaging/macos/bundle.sh
       - name: Sign, notarize when APPLE_* secrets exist, zip and dmg
         env:
@@ -118,6 +121,9 @@ jobs:
           go install github.com/tc-hib/go-winres@v0.3.3
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Build x64 exe and zip
+        env:
+          FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
+          FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
         run: ARCHS=amd64 packaging/windows/bundle.sh
       - name: Install Inno Setup
         shell: pwsh
@@ -155,6 +161,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends libc6-dev libgl1-mesa-dev libx11-dev \
             libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev pkg-config librsvg2-bin
       - name: Build x64 tar.gz
+        env:
+          FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
+          FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
         run: GOARCH=amd64 CGO_ENABLED=1 packaging/linux/bundle.sh
       - uses: actions/upload-artifact@v4
         with:

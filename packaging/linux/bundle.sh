@@ -6,12 +6,13 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$root/packaging/lib.sh"
 resolve_version
+resolve_feedback
 OUT="${OUT:-$root/_tmp/dist/linux}"
 arch="$(go env GOARCH)"
 name="cad-lite-$VERSION-linux-$arch"
 stage="$OUT/$name"
 rm -rf "$stage"; mkdir -p "$stage/bin" "$stage/share/applications" "$stage/share/icons/hicolor/256x256/apps"
-(cd "$root" && go build -trimpath -ldflags "-s -w $LDFLAGS_VERSION" -o "$stage/bin/cad-lite" ./cmd/cad)
+(cd "$root" && go build -trimpath -ldflags "-s -w $LDFLAGS_VERSION $LDFLAGS_FEEDBACK" -o "$stage/bin/cad-lite" ./cmd/cad)
 cp "$root/packaging/linux/cad-lite.desktop" "$stage/share/applications/"
 svg="$root/assets/appicon/appicon.svg"
 png="$stage/share/icons/hicolor/256x256/apps/cad-lite.png"
