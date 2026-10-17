@@ -144,6 +144,10 @@ func (p *AgentPanel) suggestion(t *agentTab, h agentmanager.Harness) string {
 	if t.mdl.picked || t.rec != nil || t.mdl.chosen != "" || p.defaultModel(h) != "" {
 		return ""
 	}
+	c := p.ws.prefs().cur
+	if h == agentmanager.OpenCode && c.AgentMode == settings.AgentBasic && c.OllamaKey != "" && c.OpenCodeKey == "" {
+		return p.ws.basicOllamaDefault()
+	}
 	return suggestedModel(h, &t.mdl)
 }
 
@@ -289,16 +293,32 @@ func (p *AgentPanel) SetDefaultModel(h agentmanager.Harness, model string, w *gp
 
 // modelChip is the header button that shows the active tab's model and opens the model menu.
 func (p *AgentPanel) modelChip() *gpui.Div {
-	chip := gpui.NewDiv().ID("agent-model").FlexRow().ItemsCenter().Gap(4).Px_(8).Py_(2).Rounded(10).Bg(uiPanelAlt).Border(1, uiBorder).FlexShrink(1).MinW(0).
+	chip := gpui.NewDiv().ID("agent-model").Relative().FlexRow().ItemsCenter().Gap(4).Px_(8).Py_(2).Rounded(10).Bg(uiPanelAlt).Border(1, uiBorder).FlexShrink(1).MinW(0).
 		Tooltip(i18n.T("ui.agent.model.tip")).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiBorder) }).
 		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 			p.ensureLoaded()
 			p.modelMenu = !p.modelMenu
+			if p.modelMenu {
+				if p.modelSearch != nil {
+					p.modelSearch.SetText("")
+				}
+				if p.modelScroll != nil {
+					p.modelScroll.ScrollToTop()
+				}
+			}
 			p.hist.menu = false
 			w.Refresh()
 		}).
 		Child(gpui.NewText(clip(p.modelLabel(p.cur), 22)).TextSize(fontSmall), gpui.NewText("v").TextSize(10).TextColor(uiMuted))
+	chip.Child(gpui.NewDiv().Absolute().Left(0).Top(0).SizeWH(0, 0).Child(gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
+		if p.modelAnchor != b.Origin {
+			p.modelAnchor = b.Origin
+			if p.modelMenu {
+				w.Refresh()
+			}
+		}
+	})))
 	if p.modelMenu {
 		chip.Bg(activeFill())
 	}
@@ -307,7 +327,7 @@ func (p *AgentPanel) modelChip() *gpui.Div {
 
 // modelRow is one choice of the model menu; on marks the active tab's choice and free adds a
 // "free" badge.
-func (p *AgentPanel) modelRow(id, label, detail string, on, free bool, f func(*gpui.Window)) *gpui.Div {
+func (p *AgentPanel) modelRow(id, label, detail, model string, on, free bool, f func(*gpui.Window)) *gpui.Div {
 	mark := gpui.NewText("").TextSize(12)
 	if on {
 		mark = gpui.NewText("*").TextSize(12).TextColor(uiOK)
@@ -324,68 +344,153 @@ func (p *AgentPanel) modelRow(id, label, detail string, on, free bool, f func(*g
 	if detail != "" {
 		row.Child(gpui.NewText(clip(detail, 24)).TextSize(10).TextColor(uiMuted).FlexShrink(0))
 	}
+	if model != "" {
+		favorite := p.isFavorite(p.harnessOf(p.cur), model)
+		glyph, tip, color := "☆", "ui.agent.model.favorite_add", uiMuted
+		if favorite {
+			glyph, tip, color = "★", "ui.agent.model.favorite_remove", uiWarn
+		}
+		row.Child(gpui.NewDiv().ID(id+"-star").SizeWH(22, 22).FlexShrink(0).FlexRow().ItemsCenter().JustifyCenter().Rounded(4).Tooltip(i18n.T(tip)).
+			Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiField) }).
+			OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
+				w.StopPropagation()
+				p.toggleFavorite(p.harnessOf(p.cur), model, w)
+			}).
+			Child(gpui.NewText(glyph).TextSize(16).TextColor(color)))
+	}
 	return row
 }
 
-// modelMenuView lists the default, the models the agent reported and a field for any other model
-// id, and offers to make the tab's model the default for its harness.
+func (p *AgentPanel) isFavorite(h agentmanager.Harness, id string) bool {
+	return slices.Contains(p.ws.prefs().cur.AgentFavorites[string(h)], id)
+}
+
+func (p *AgentPanel) toggleFavorite(h agentmanager.Harness, id string, w *gpui.Window) {
+	p.ws.change(w, func(s *settings.Settings) {
+		if s.AgentFavorites == nil {
+			s.AgentFavorites = map[string][]string{}
+		}
+		ids := s.AgentFavorites[string(h)]
+		if i := slices.Index(ids, id); i >= 0 {
+			ids = slices.Delete(ids, i, i+1)
+		} else {
+			ids = append(ids, id)
+		}
+		if len(ids) == 0 {
+			delete(s.AgentFavorites, string(h))
+		} else {
+			s.AgentFavorites[string(h)] = ids
+		}
+	})
+	p.ws.SaveSettings()
+}
+
+func modelMatches(m agentmanager.ModelInfo, query string) bool {
+	return strings.Contains(strings.ToLower(m.ID), query) || strings.Contains(strings.ToLower(m.Name), query)
+}
+
+func (p *AgentPanel) menuModels(h agentmanager.Harness) []agentmanager.ModelInfo {
+	offered := slices.Clone(orderModels(h, p.cur.mdl.offered))
+	if h == agentmanager.OpenCode && p.ws.prefs().cur.AgentMode == settings.AgentBasic && p.ws.prefs().cur.OllamaKey != "" {
+		for _, m := range p.ws.prefs().aiBasic.models {
+			if !slices.ContainsFunc(offered, func(o agentmanager.ModelInfo) bool { return o.ID == m.ID }) {
+				offered = append(offered, m)
+			}
+		}
+	}
+	if len(offered) == 0 && h == agentmanager.OpenCode {
+		offered = []agentmanager.ModelInfo{{ID: opencodeSuggested}}
+	}
+	return offered
+}
+
 func (p *AgentPanel) modelMenuView(w *gpui.Window, cx *gpui.App) *gpui.Div {
+	close := func(w *gpui.Window, _ *gpui.App) { p.modelMenu = false; p.returnFocus(w); w.Refresh() }
 	if p.modelInput == nil {
 		p.modelInput = themeBareField(gpui.NewTextInput(i18n.T("ui.agent.model.input_placeholder")), fontSmall, false)
 		p.modelInput.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { p.SetModel(text, w) })
-		p.modelInput.OnEscape(func(w *gpui.Window, _ *gpui.App) {
-			p.modelMenu = false
-			p.returnFocus(w)
-			w.Refresh()
-		})
+		p.modelInput.OnEscape(close)
 	}
-	t := p.cur
-	h := p.harnessOf(t)
-	menu := gpui.NewDiv().ID("agent-model-menu").FlexCol().Gap(2).P(4).Rounded(6).Bg(uiPanelAlt).Border(1, uiBorder).
-		Child(gpui.NewText(i18n.T("ui.agent.model.menu_title", string(h))).TextSize(11).FontWeight(700).TextColor(uiMuted).Px_(6))
-	def := i18n.T("ui.agent.model.default")
-	if d := p.defaultModel(h); d != "" {
-		def = i18n.T("ui.agent.model.default_named", t.mdl.name(d))
+	if p.modelSearch == nil {
+		p.modelSearch = themeBareField(gpui.NewTextInput(i18n.T("ui.agent.model.search")), fontSmall, false)
+		p.modelScroll = gpui.NewScrollHandle()
+		p.modelSearch.OnChange(func(_ string, w *gpui.Window, _ *gpui.App) { p.modelScroll.ScrollToTop(); w.Refresh() })
+		p.modelSearch.OnEscape(close)
 	}
-	menu.Child(p.modelRow("agent-model-default", upperFirst(def), "", t.mdl.chosen == "" && p.suggestion(t, h) == "", false,
-		func(w *gpui.Window) { p.SetModel("", w) }))
-	// eff is the model the tab runs on: its choice, or the free model it is offered.
+	p.modelSearch.SetPlaceholder(i18n.T("ui.agent.model.search"))
+	t, h := p.cur, p.harnessOf(p.cur)
+	query := strings.ToLower(strings.TrimSpace(p.modelSearch.Text()))
+	menu := gpui.NewDiv().ID("agent-model-menu").FlexCol().Gap(4).MinH(0).MaxH(320).OverflowHidden().P(4).Rounded(6).Bg(uiPanelAlt).Border(1, uiBorder)
+	menu.Child(gpui.NewDiv().ID("agent-model-search").SizeH(28).FlexShrink(0).Px_(6).Rounded(4).Bg(uiField).Border(1, uiBorder).Child(p.modelSearch.Render(w, cx)))
+	content := gpui.NewDiv().FlexCol().Gap(2).FlexShrink(0)
+	title := func(label string) *gpui.Text {
+		return gpui.NewText(label).TextSize(11).FontWeight(700).TextColor(uiMuted).Px_(6)
+	}
 	eff := t.mdl.chosen
 	if eff == "" {
 		eff = p.suggestion(t, h)
 	}
-	listed := eff == ""
-	offered := orderModels(h, t.mdl.offered)
-	if len(offered) == 0 && h == agentmanager.OpenCode {
-		offered = []agentmanager.ModelInfo{{ID: opencodeSuggested}}
-	}
-	for _, m := range offered {
-		m := m
-		detail := ""
-		if m.Name != "" && m.Name != m.ID {
+	offered := p.menuModels(h)
+	row := func(id string, m agentmanager.ModelInfo) *gpui.Div {
+		label, detail := m.Name, ""
+		if label == "" {
+			label = m.ID
+		} else if label != m.ID {
 			detail = m.ID
 		}
+		return p.modelRow(id, label, detail, m.ID, m.ID == eff, h == agentmanager.OpenCode && freeModel(m.ID), func(w *gpui.Window) { p.SetModel(m.ID, w) })
+	}
+	var favorites []agentmanager.ModelInfo
+	for _, id := range p.ws.prefs().cur.AgentFavorites[string(h)] {
+		m := agentmanager.ModelInfo{ID: id}
+		if i := slices.IndexFunc(offered, func(o agentmanager.ModelInfo) bool { return o.ID == id }); i >= 0 {
+			m = offered[i]
+		}
+		if modelMatches(m, query) {
+			favorites = append(favorites, m)
+		}
+	}
+	if len(favorites) > 0 {
+		content.Child(title(i18n.T("ui.agent.model.favorites")))
+		for _, m := range favorites {
+			content.Child(row("agent-model-favorite-"+m.ID, m))
+		}
+	}
+	content.Child(title(i18n.T("ui.agent.model.menu_title", string(h))))
+	def := i18n.T("ui.agent.model.default")
+	if d := p.defaultModel(h); d != "" {
+		def = i18n.T("ui.agent.model.default_named", t.mdl.name(d))
+	}
+	if query == "" || strings.Contains(strings.ToLower(def), query) {
+		content.Child(p.modelRow("agent-model-default", upperFirst(def), "", "", t.mdl.chosen == "" && p.suggestion(t, h) == "", false, func(w *gpui.Window) { p.SetModel("", w) }))
+	}
+	matches := 0
+	listed := eff == ""
+	for _, m := range offered {
 		listed = listed || m.ID == eff
-		menu.Child(p.modelRow("agent-model-"+m.ID, t.mdl.name(m.ID), detail, m.ID == eff, h == agentmanager.OpenCode && freeModel(m.ID),
-			func(w *gpui.Window) { p.SetModel(m.ID, w) }))
+		if !modelMatches(m, query) {
+			continue
+		}
+		matches++
+		content.Child(row("agent-model-"+m.ID, m))
 	}
 	if !listed {
-		menu.Child(p.modelRow("agent-model-chosen", eff, "", true, freeModel(eff), func(w *gpui.Window) { p.SetModel(eff, w) }))
+		m := agentmanager.ModelInfo{ID: eff}
+		if modelMatches(m, query) {
+			matches++
+			content.Child(row("agent-model-chosen", m))
+		}
 	}
-	if len(t.mdl.offered) == 0 {
-		menu.Child(gpui.NewText(i18n.T("ui.agent.model.none_listed")).TextSize(11).TextColor(uiMuted).Px_(6).Py_(2))
+	if query != "" && matches == 0 && len(favorites) == 0 {
+		content.Child(gpui.NewText(i18n.T("ui.agent.model.no_matches")).TextSize(11).TextColor(uiMuted).Px_(6).Py_(2))
 	}
-	menu.Child(gpui.NewDiv().ID("agent-model-field").FlexCol().SizeH(26).Mx(4).Px_(6).Rounded(4).Bg(uiField).Border(1, uiBorder).
-		Child(p.modelInput.Render(w, cx)))
+	if query == "" && len(offered) == 0 {
+		content.Child(gpui.NewText(i18n.T("ui.agent.model.none_listed")).TextSize(11).TextColor(uiMuted).Px_(6).Py_(2))
+	}
+	content.Child(gpui.NewDiv().ID("agent-model-field").FlexCol().SizeH(26).Mx(4).Px_(6).Rounded(4).Bg(uiField).Border(1, uiBorder).Child(p.modelInput.Render(w, cx)))
 	if h != "" && eff != p.defaultModel(h) {
 		chosen := eff
-		menu.Child(gpui.NewDiv().FlexRow().Px_(2).Pt(4).Child(
-			p.button("agent-model-make-default", i18n.T("ui.agent.model.make_default", string(h)),
-				i18n.T("ui.agent.model.make_default_tip", string(h)), false,
-				func(w *gpui.Window) {
-					p.SetDefaultModel(h, chosen, w)
-					p.modelMenu = false
-				})))
+		content.Child(gpui.NewDiv().FlexRow().Px_(2).Pt(4).Child(p.button("agent-model-make-default", i18n.T("ui.agent.model.make_default", string(h)), i18n.T("ui.agent.model.make_default_tip", string(h)), false, func(w *gpui.Window) { p.SetDefaultModel(h, chosen, w); p.modelMenu = false })))
 	}
-	return menu
+	return menu.Child(gpui.NewDiv().ID("agent-model-results").FlexCol().MinH(0).OverflowYScroll().ShowScrollbar().TrackScroll(p.modelScroll).Child(content))
 }

@@ -15,6 +15,7 @@ import (
 	"cad-lite/assets/icons"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // agentPanelWidth is the docked panel's default width for a window of the given width: a quarter of it,
@@ -115,8 +116,14 @@ func (p *AgentPanel) statusPill() *gpui.Div {
 // noCLICard is the amber card shown while no agent CLI is on PATH: what is missing, where it
 // was looked for, and a Start button that explains why nothing starts.
 func (p *AgentPanel) noCLICard() *gpui.Div {
+	title := i18n.T("ui.agent.no_cli_title")
+	choices := harnesses.All
+	if p.ws.prefs().cur.AgentMode == settings.AgentBasic && (!p.explicit || p.selected == agentmanager.OpenCode) {
+		choices = []agentmanager.Harness{agentmanager.OpenCode}
+		title = i18n.T("ui.agent.no_cli_basic_title")
+	}
 	var names []string
-	for _, h := range harnesses.All {
+	for _, h := range choices {
 		names = append(names, string(h))
 	}
 	start := gpui.NewDiv().ID("agent-start").Px_(14).Py_(6).Rounded(6).Bg(uiBg).Border(1, uiBorder).FlexShrink(0).
@@ -129,7 +136,7 @@ func (p *AgentPanel) noCLICard() *gpui.Div {
 		Child(
 			NewIcon(icons.AppWarning, 22, uiWarn),
 			gpui.NewDiv().FlexCol().Gap(2).Flex1().MinW(0).Child(
-				gpui.NewText(i18n.T("ui.agent.no_cli_title")).TextSize(fontUI+1).FontWeight(700),
+				gpui.NewText(title).TextSize(fontUI+1).FontWeight(700),
 				gpui.NewText(i18n.T("ui.agent.no_cli_hint", strings.Join(names, ", "))).TextSize(fontSmall).TextColor(uiMuted)),
 			start)
 }
@@ -177,6 +184,9 @@ func (p *AgentPanel) composer(input gpui.IntoElement) *gpui.Div {
 }
 
 func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.Div {
+	if p.ws.prefs().cur.AgentMode == settings.AgentBasic {
+		p.ws.refreshOllamaModels(w, false)
+	}
 	p.win = w
 	p.frames++
 	p.probe()
@@ -246,7 +256,7 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		picker = p.noCLICard()
 	} else {
 		row := gpui.NewDiv().FlexRow().ItemsCenter().Gap(4)
-		if !locked {
+		if !locked && p.ws.prefs().cur.AgentMode == settings.AgentAdvanced {
 			for _, h := range p.choices {
 				h := h
 				chip := gpui.NewDiv().ID("agent-pick-" + string(h)).Px_(8).Py_(2).Rounded(10).Bg(uiPanelAlt).Tooltip(i18n.T("ui.agent.pick_tip")).
@@ -278,9 +288,6 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 	if p.hist.menu {
 		top.Child(p.historyMenu())
 	}
-	if p.modelMenu {
-		top.Child(p.modelMenuView(w, cx))
-	}
 
 	p.checkLook(w)
 	p.reportClipboard()
@@ -290,19 +297,35 @@ func (p *AgentPanel) render(w *gpui.Window, cx *gpui.App, width float32) *gpui.D
 		t.scroll.ScrollToBottom()
 	}
 
-	return gpui.NewDiv().ID("agent-panel").FlexCol().FlexShrink(0).SizeW(width).MinW(0).Bg(uiPanel).
+	marker := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
+		if p.modelPanel != b {
+			p.modelPanel = b
+			if p.modelMenu {
+				w.Refresh()
+			}
+		}
+	})
+	marker.Absolute().Inset(0)
+	panel := gpui.NewDiv().ID("agent-panel").Relative().FlexCol().FlexShrink(0).SizeW(width).MinW(0).MinH(0).OverflowHidden().Bg(uiPanel).
 		OnFileDrop(p.onFileDrop).OnImagePaste(p.onImagePaste).Child(
 		top,
 		hDivider(),
 		list,
 		hDivider(),
 		p.composerArea(input),
+		marker,
 	)
+	if p.modelMenu {
+		below := float32(p.modelAnchor.Y-p.modelPanel.Origin.Y) + 28
+		available := max(0, float32(p.modelPanel.Size.H)-below-12)
+		panel.Child(p.modelMenuView(w, cx).Absolute().Left(16).Right(16).Top(below).MaxH(min(320, available)))
+	}
+	return panel
 }
 
 // composerArea is the bottom of the panel: the queued prompts, if any, above the composer.
 func (p *AgentPanel) composerArea(input gpui.IntoElement) *gpui.Div {
-	area := gpui.NewDiv().FlexCol().Gap(8).P(12)
+	area := gpui.NewDiv().FlexCol().FlexShrink(0).Gap(8).P(12)
 	if len(p.cur.queue) > 0 {
 		area.Child(p.queueChips())
 	}

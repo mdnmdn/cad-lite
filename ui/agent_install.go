@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"agentmanager"
-	"agentmanager/harnesses"
 	"agentmanager/shellenv"
 	"cad-lite/agentinstall"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // installTimeout bounds a whole OpenCode installation: the mise download, `mise install` and the
@@ -211,7 +211,7 @@ func (ws *Workspace) pollInstall(w *gpui.Window) {
 	default:
 		a.phase, a.result = instDone, res.r
 		ws.setAgentBinary(w, agentmanager.OpenCode, res.r.Binary)
-		if !res.r.Authenticated {
+		if !res.r.Authenticated && ws.prefs().cur.AgentMode == settings.AgentAdvanced {
 			ws.openLogin(w)
 		}
 	}
@@ -237,13 +237,13 @@ func (ws *Workspace) openLogin(w *gpui.Window) {
 // installWanted reports whether the install block belongs on screen: while the flow is under way,
 // or when OpenCode cannot be found and missing is true.
 func (ws *Workspace) installWanted(missing bool) bool {
-	if ws.inst().phase != instIdle {
+	if phase := ws.inst().phase; phase == instRunning || phase == instFailed {
 		return true
 	}
 	if !missing {
 		return false
 	}
-	_, ok := harnesses.Available(agentmanager.OpenCode)
+	_, ok := ws.openCodeAvailable()
 	return !ok
 }
 
@@ -265,6 +265,10 @@ func (ws *Workspace) agentInstallBlock(id string) *gpui.Div {
 		buttons.Child(actionButton(id+"-install-ask", i18n.T("ui.agent.install.offer"), i18n.T("ui.agent.install.offer_tip"), true, true,
 			func(w *gpui.Window, _ *gpui.App) { ws.askInstall(w) }))
 	case instConfirm:
+		loginHint := "ui.agent.install.confirm_login"
+		if ws.prefs().cur.AgentMode == settings.AgentBasic {
+			loginHint = "ui.agent.install.confirm_basic"
+		}
 		dir, err := agentinstall.Dir()
 		if err != nil {
 			dir = err.Error()
@@ -273,7 +277,7 @@ func (ws *Workspace) agentInstallBlock(id string) *gpui.Div {
 			line(i18n.T("ui.agent.install.confirm_what")),
 			line(i18n.T("ui.agent.install.confirm_fallback")),
 			line(i18n.T("ui.agent.install.confirm_where", dir)),
-			line(i18n.T("ui.agent.install.confirm_login")))
+			line(i18n.T(loginHint)))
 		buttons.Child(
 			actionButton(id+"-install-go", i18n.T("ui.agent.install.go"), i18n.T("ui.agent.install.go_tip"), true, true,
 				func(w *gpui.Window, _ *gpui.App) { ws.startInstall(w) }),

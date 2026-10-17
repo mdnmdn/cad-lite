@@ -31,7 +31,7 @@ func TestRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cad-lite", "settings.toml")
 	want := Settings{
 		Theme: "light", Language: LangItalian, UIScale: 1.25, Grid: false, OSnap: true, Ortho: true,
-		Wheel: WheelPan, DefaultAgent: "claude", Window: Window{Width: 1000, Height: 700},
+		Wheel: WheelPan, AgentMode: AgentAdvanced, DefaultAgent: "claude", Window: Window{Width: 1000, Height: 700},
 		AgentBinaries: map[string]string{"claude": `C:\Users\me\AppData\Roaming\npm\claude.cmd`, "codex": "/opt/codex/bin/codex"},
 	}
 	if err := Save(path, want); err != nil {

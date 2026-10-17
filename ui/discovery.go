@@ -207,6 +207,7 @@ func (ws *Workspace) pollDiscovery(w *gpui.Window) {
 	if res != nil {
 		d.running = false
 		d.last = res
+		ws.prefs().aiBasic.availableChecked = false
 		ws.agent.reprobe()
 	}
 	if d.running {

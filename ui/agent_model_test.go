@@ -103,18 +103,17 @@ func TestModelChosenBeforeStartAndSwitchedLive(t *testing.T) {
 	if m := p.Tabs()[0].Model; m != "Fake Deep" {
 		t.Fatalf("refused model kept: %q", m)
 	}
-	r.ws.CloseAgent()
-
-	r2 := newRig(t, dir, nil, true)
-	p2 := r2.ws.AgentPanel()
-	if m := p2.Tabs()[0].Model; m != "Fake Deep" {
-		t.Fatalf("restored label %q", m)
+	id := p.Tabs()[0].SessionID
+	p.CloseTab(0, w)
+	p.OpenSession(id, w)
+	if m := p.Tabs()[0].Model; m != "Fake Deep" {
+		t.Fatalf("reopened model %q", m)
 	}
-	if len(p2.Models()) != 2 {
-		t.Fatalf("restored models %v", p2.Models())
+	if len(p.Models()) != 2 {
+		t.Fatalf("reopened models %v", p.Models())
 	}
-	r2.say("again", 0)
-	if cfg := r2.nextCfg(); cfg.Model != "fake-deep" || cfg.ResumeID != "S1" {
+	p.Send("again", w)
+	if cfg := r.nextCfg(); cfg.Model != "fake-deep" || cfg.ResumeID != "S1" {
 		t.Fatalf("resumed with %q / %q", cfg.Model, cfg.ResumeID)
 	}
 }

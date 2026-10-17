@@ -307,6 +307,31 @@ func (r *Rasterizer) drawImage(g GlyphSprite) {
 	sx := float32(iw) / (maxX - minX)
 	sy := float32(ih) / (maxY - minY)
 	alpha := float32(g.Color.A) / 255
+	// Snapshots and unscaled images can copy opaque runs directly instead of
+	// sampling four neighbours and blending every pixel.
+	if !r.masked && g.Color.A == 255 && maxX-minX == float32(iw) && maxY-minY == float32(ih) && minX == float32(int(minX)) && minY == float32(int(minY)) {
+		x0, y0 = max(x0, int(minX)), max(y0, int(minY))
+		x1, y1 = min(x1, int(maxX)), min(y1, int(maxY))
+		for y := y0; y < y1; y++ {
+			src := img.PixOffset(img.Rect.Min.X+x0-int(minX), img.Rect.Min.Y+y-int(minY))
+			row := img.Pix[src : src+4*(x1-x0)]
+			run := 0
+			for x := 0; x < x1-x0; x++ {
+				i := 4 * x
+				if row[i+3] == 255 {
+					continue
+				}
+				copy(r.pix[4*(y*r.w+x0+run):4*(y*r.w+x0+x)], row[4*run:i])
+				a := float32(row[i+3]) / 255
+				if a > 0 {
+					r.blend(x0+x, y, float32(row[i])*a, float32(row[i+1])*a, float32(row[i+2])*a, float32(row[i+3]))
+				}
+				run = x + 1
+			}
+			copy(r.pix[4*(y*r.w+x0+run):4*(y*r.w+x1)], row[4*run:])
+		}
+		return
+	}
 	texel := func(x, y int) [4]float32 {
 		x = min(max(x, 0), iw-1)
 		y = min(max(y, 0), ih-1)
@@ -357,6 +382,18 @@ func (r *Rasterizer) fillRounded(b Bounds, radii Corners, clip Bounds, color Rgb
 	pm := color.Premultiply()
 	pr, pg, pb, pa := float32(pm.R), float32(pm.G), float32(pm.B), float32(pm.A)
 	rr := newRRect(b, radii)
+	// A constant translucent fill has only 256 possible results per channel.
+	// Keep the same floating-point rounding as blend, outside the pixel loop.
+	var lut [4][256]uint8
+	useLUT := pm.A != 255 && !r.masked && (x1-x0)*(y1-y0) >= 1024
+	if useLUT {
+		inv := 1 - pa/255
+		for channel, src := range [4]float32{pr, pg, pb, pa} {
+			for dst := range 256 {
+				lut[channel][dst] = uint8(clamp32(src+float32(dst)*inv, 0, 255) + 0.5)
+			}
+		}
+	}
 	for y := y0; y < y1; y++ {
 		py := float32(y) + 0.5
 		a, z := rr.solidRow(py, x0, x1)
@@ -378,6 +415,14 @@ func (r *Rasterizer) fillRounded(b Bounds, radii Corners, clip Bounds, color Rgb
 			r.fillSpan(y, sa, sz, pm)
 			for x := sz; x < z; x++ {
 				r.blend(x, y, pr, pg, pb, pa)
+			}
+		} else if useLUT {
+			row := r.pix[4*(y*r.w+a) : 4*(y*r.w+z)]
+			for i := 0; i < len(row); i += 4 {
+				row[i] = lut[0][row[i]]
+				row[i+1] = lut[1][row[i+1]]
+				row[i+2] = lut[2][row[i+2]]
+				row[i+3] = lut[3][row[i+3]]
 			}
 		} else {
 			for x := a; x < z; x++ {

@@ -54,11 +54,7 @@ func (ws *Workspace) settingsButton() *gpui.Div {
 // a dimmed backdrop over the whole window with the panel on it, centred
 // across and, vertically, where a settingsMinH card would be centred.
 //
-// The backdrop is four bands around the card rather than one layer under it,
-// and the card has no drop shadow: the CPU rasterizer blends every pixel of a
-// translucent layer and of a shadow's whole area, card included, and these
-// two made a frame with the panel open about ten times as slow as one
-// without it (see BenchmarkSettingsFrameOpen).
+// Keep the translucent backdrop outside the opaque card to avoid redundant blending.
 func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 	p := ws.prefs()
 	if !p.open {
@@ -84,7 +80,11 @@ func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 		TrackScroll(p.bodyScroll)
 	switch p.tab {
 	case settingsAI:
-		body.Child(ws.agentSection(), ws.discoverySection())
+		body.Child(ws.basicAISection(w, cx))
+		if p.cur.AgentMode == settings.AgentAdvanced {
+			body.Child(gpui.NewDiv().ID("settings-ai-advanced").FlexCol().Gap(14).P(12).Rounded(8).Border(1, uiBorder).Child(
+				sectionTitle(i18n.T("ui.settings.ai_advanced")), ws.agentSection(), ws.discoverySection()))
+		}
 	case settingsUpdates:
 		body.Child(ws.updateSection())
 	default:
@@ -401,7 +401,7 @@ func (ws *Workspace) agentSection() *gpui.Div {
 	return gpui.NewDiv().ID("settings-sec-agent").FlexCol().Gap(settingsRowGap).Child(
 		sectionTitle(i18n.T("ui.settings.section_agent")),
 		settingRow(i18n.T("ui.settings.default_harness"), harnessTip, segmented("agent-", opts, harnessTip, c.DefaultAgent, func(v string, w *gpui.Window) {
-			ws.change(w, func(s *settings.Settings) { s.DefaultAgent = v })
+			ws.change(w, func(s *settings.Settings) { s.DefaultAgent = v; s.AgentMode = settings.AgentAdvanced })
 		}).Flex1()),
 		gpui.NewText(i18n.T("ui.settings.agent_auto_hint")).TextSize(11).TextColor(uiMuted),
 		ws.agentBinaryRows(),

@@ -1833,6 +1833,9 @@ func (w *Window) SetElementState(id GlobalElementID, v any)
 func (w *Window) DispatchEvent(input PlatformInput, cx *App)
 func (w *Window) Draw(cx *App)            // full pipeline; returns nothing
 func (w *Window) Scene() *Scene
+// Snapshot copies the last presented frame in device pixels; nil before presentation.
+// The caller owns the image. It stays fixed across future frames and window resizes.
+func (w *Window) Snapshot() *image.NRGBA
 func (w *Window) SetBackground(c Rgba)   // clear color for rasterization; default opaque white
 // HitTest returns the GlobalElementID of the element owning the topmost
 // hitbox of the rendered frame at p. Unlike a hitbox index it is stable across

@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: The boundary between Cad-lite and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
-updated: 2026-10-15
-verified: 2026-10-16
+updated: 2026-10-17
+verified: 2026-10-17
 code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/agent_view.go, ui/icon.go, cmdsys/sysvars.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go, internal/gpui/list.go, ui/textedit_view.go, ui/hud.go, ui/hud_drag.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -20,6 +20,11 @@ The UI shell (`ui`) is built on `internal/gpui`, a Go port of Zed's GPUI: retain
 per-frame element trees, flexbox layout, a keymap with actions and key contexts, and a CPU
 rasterizer with no cgo. The same view renders to an ebiten window (`internal/gpui/ebitenplatform`)
 or headlessly to an image, which is how Cad-lite renders PNGs and runs UI tests.
+
+Settings captures `Window.Snapshot` on opening and paints the owned image with
+`Window.PaintImage` behind the modal. The workspace tree resumes when Settings closes;
+scrolling only rebuilds the modal over the fixed background. Unscaled opaque image runs
+copy directly in the CPU rasterizer.
 
 `internal/gpui` is a separate library with its own documentation and rules: its entry point is
 `internal/gpui/_docs/index.md`, its normative API is `internal/gpui/_docs/api-contract.md`, and its

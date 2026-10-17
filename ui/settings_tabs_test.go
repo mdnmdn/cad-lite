@@ -13,7 +13,7 @@ import (
 // other tabs must not.
 var settingsTabContent = [settingsTabCount][]string{
 	settingsGeneral: {"settings-sec-appearance", "theme-light", "ui-scale-up", "lang-it", "settings-sec-drawing", "set-grid", "wheel-pan"},
-	settingsAI:      {"settings-sec-agent", "agent-claude", "agent-bins", "agent-bin-browse-claude", "settings-sec-discovery", "agents-check", "agents-terminal"},
+	settingsAI:      {"ai-mode-basic", "ai-mode-advanced"},
 	settingsUpdates: {"settings-sec-updates"},
 }
 

@@ -563,7 +563,8 @@ func TestOpenCodePresetEnvFallbackWhenNoHTTP(t *testing.T) {
 
 	e := builtin(t, "tool-turn,nohttp")
 	e.opener = acp.OpenCode()
-	e.cfg.Env = append(e.cfg.Env, "FAKEAGENT_MCP_TOOL=add_line")
+	e.cfg.Env = append(e.cfg.Env, "FAKEAGENT_MCP_TOOL=add_line",
+		`OPENCODE_CONFIG_CONTENT={"provider":{"ollama":{"options":{"apiKey":"{env:OLLAMA_KEY}"}}},"model":"ollama/gpt-oss:120b","mcp":{"existing":{"type":"remote","url":"http://localhost/existing"}}}`)
 	e.cfg.MCPServers = []agentmanager.MCPServer{{Name: "cad", URL: ep.URL, Token: ep.Token}}
 	e.cfg.AutoApprove = agentmanager.AllowMCP("cad")
 	s := e.open()
@@ -584,7 +585,9 @@ func TestOpenCodePresetEnvFallbackWhenNoHTTP(t *testing.T) {
 		}
 	}
 	var got struct {
-		MCP map[string]struct {
+		Provider map[string]json.RawMessage `json:"provider"`
+		Model    string                     `json:"model"`
+		MCP      map[string]struct {
 			Type    string            `json:"type"`
 			URL     string            `json:"url"`
 			Headers map[string]string `json:"headers"`
@@ -593,6 +596,9 @@ func TestOpenCodePresetEnvFallbackWhenNoHTTP(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(cfgLine), &got); err != nil {
 		t.Fatalf("config env %q: %v", cfgLine, err)
+	}
+	if len(got.Provider["ollama"]) == 0 || got.Model != "ollama/gpt-oss:120b" || got.MCP["existing"].URL != "http://localhost/existing" {
+		t.Fatal("provider, model or existing MCP config lost on fallback")
 	}
 	c := got.MCP["cad"]
 	if c.Type != "remote" || c.URL != ep.URL || !c.Enabled || c.Headers["Authorization"] != "Bearer "+ep.Token {

@@ -42,8 +42,8 @@ func fakeCLI(t *testing.T, dir, name, body string) string {
 func TestDiscoverReportsPathsAndVersions(t *testing.T) {
 	dir := t.TempDir()
 	oc := fakeCLI(t, dir, "opencode", `echo; echo "opencode 1.2.3"; echo second`)
-	fakeCLI(t, dir, "codex", `sleep 30`)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	fakeCLI(t, dir, "codex", `exec /bin/sleep 30`)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	got := harnesses.Discover(ctx, dir)
 	if len(got) != 3 || got[0].Harness != agentmanager.OpenCode || got[1].Harness != agentmanager.Claude || got[2].Harness != agentmanager.Codex {

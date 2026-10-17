@@ -3,11 +3,11 @@ id: feat-settings
 title: Settings
 kind: feature
 status: current
-summary: The settings panel and its General, AI and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, default agent, updates) and the TOML file in the user config folder that keeps them.
+summary: The settings panel and its General, AI (Basic and Advanced) and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, provider keys, default agent, updates) and the TOML file in the user config folder that keeps them.
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
-updated: 2026-10-15
-verified: 2026-10-16
-code_anchors: [settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
+updated: 2026-10-17
+verified: 2026-10-17
+code_anchors: [ui/agent_basic_check.go, ui/agent_basic.go, settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
@@ -19,7 +19,7 @@ review_cycle: monthly
 The user picks how Cad-lite looks and what a new session starts with, and it is remembered. A panel
 over the window offers a light, dark, classic or high-contrast theme, a UI scale that enlarges or
 reduces the whole interface including text, the drawing aids that start on, the mouse wheel
-behaviour and the default agent and where agents are found. Changes show at once and are saved to a TOML file.
+behaviour and the default agent and where agents are found. Changes apply at once and are saved to a TOML file.
 
 ## Behaviour
 
@@ -29,8 +29,7 @@ behaviour and the default agent and where agents are found. Changes show at once
   belongs to it and nothing under the backdrop receives pointer input. While a release waits, the gear
   carries the update dot and opens the panel on the Updates tab.
 - **Tabs.** Under the title bar a strip styled like the document tabs offers **General** (appearance,
-  language, drawing aids, mouse wheel), **AI** (AI agent, executables, agent discovery, the *Install
-  OpenCode* card) and **Updates** (About and updates). A click on a tab, or **Ctrl+Tab** and
+  language, drawing aids, mouse wheel), **AI** (Basic OpenCode setup and provider keys; Advanced agent, executable and discovery controls) and **Updates** (About and updates). A click on a tab, or **Ctrl+Tab** and
   **Ctrl+Shift+Tab** while the panel is open (they switch tabs, not drawings, and wrap around),
   shows it with its body scrolled to the top; each tab's tooltip says what it holds and names the keys.
   The Updates tab carries the update dot while a release waits. The panel opens on General and then on
@@ -62,7 +61,27 @@ behaviour and the default agent and where agents are found. Changes show at once
   window's bottom edge (or its top, on a window under 648 pixels), so on a short window nothing falls below the screen edge.
   The wheel or trackpad over the panel or its backdrop scrolls the body and never reaches the canvas. The
   body returns to the top each time the panel opens.
-- **AI agent** (the AI tab, as is Agent discovery). The default harness (`auto`, `opencode`, `claude`, `codex`); `auto` takes the first one
+- **Basic AI.** The AI tab shows the selected mode's controls only. Basic is the default on a
+  fresh install and uses OpenCode for new conversations. The mode selector switches between
+  managed Basic setup and the CLI configuration in Advanced. Basic checks for OpenCode on the
+  effective PATH or at its saved executable path; when missing it offers the existing confirmed
+  installation flow. The key fields save independent OpenCode and Ollama Cloud credentials.
+  A blank or whitespace-only field retains the stored key, Remove clears only that provider,
+  and Save keys writes immediately and clears both textboxes. Saved keys are never filled back
+  into the textboxes. They are plaintext in the owner-only settings file, or memory-only when
+  there is no settings path. Changes apply when an agent session next starts; existing sessions
+  keep their configuration. The agent panel document owns the provider/model startup behaviour.
+  The installation offer disappears once OpenCode is found, including a saved managed mise path or the effective PATH. Installation progress remains visible until it finishes.
+  **Test connection** saves entered keys and asks each configured provider for a short reply through
+  OpenCode in a temporary directory, without drawing tools and with permission requests denied.
+  It is enabled only with OpenCode installed and a saved or entered key; a check may use API credits.
+  Provider failures are reported without credential values. Ollama configuration fetches the authenticated
+  `https://ollama.com/v1/models` catalogue in the background; **Refresh Ollama models** retries it.
+  A failed fetch keeps the last successful list and shows an error. Model changes reach new sessions.
+- **Advanced AI.** Existing settings files with an agent table but no mode retain Advanced setup.
+  Picking a non-OpenCode default agent also selects Advanced. Provider keys saved in Basic do
+  not alter Advanced launches. Advanced hides provider key fields and shows harness, custom executable paths and discovery controls.
+- **AI agent** (in the Advanced section, as is Agent discovery). The default harness (`auto`, `opencode`, `claude`, `codex`); `auto` takes the first one
   found, in that order. Below it, **Executables**: one row per agent with the program Cad-lite starts for
   it — the file the user chose (`chosen by you`, with the version it reported), else the one on the PATH
   (`found on the PATH`), else `not found` — a **Browse…** button and, for a chosen file, **Reset**.
@@ -91,6 +110,11 @@ behaviour and the default agent and where agents are found. Changes show at once
   [Agent integration](../tech/agent-integration.md).
 - **About and updates** (the Updates tab). The version, the time of the last check, the automatic-check switch, a status
   line, *Check for updates* and, when a release waits, *Update*. Everything about it is in [Updates](updates.md).
+- **Background.** Opening Settings captures the presented workspace and keeps it fixed behind
+  the dialog. Scrolling and tab changes repaint the dialog over that image. The frozen image
+  stretches with a resized window; theme and scale changes affect the dialog immediately,
+  and closing resumes the live workspace with those settings. Closing releases the snapshot;
+  reopening captures a fresh one.
 - **Saving.** Every change is written about half a second after the last one, and on close, with the
   window's size. The panel footer shows where the file is, or that settings are kept in memory.
   `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout, the recent lists and the last update check.
@@ -115,9 +139,12 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 | `appearance.ui_scale` | 0.75 to 2.0, step 0.05 | 1.0 |
 | `drawing.grid`, `drawing.osnap`, `drawing.ortho` | boolean | true, true, false |
 | `drawing.wheel` | `auto`, `zoom`, `pan` | `auto` |
-| `agent.default` | harness name, or empty | empty |
+| `agent.mode` | `basic` or `advanced` | `basic` for a fresh install; existing agent tables without a mode retain `advanced` |
+| `agent.opencode_key`, `agent.ollama_key` | provider API keys for Basic; empty means no saved key | empty |
+| `agent.default` | harness name in Advanced, or empty; Basic selects OpenCode | empty |
 | `agent.binaries` | inline table of harness name to executable path, e.g. `{ claude = "/opt/claude/bin/claude" }`; empty paths are dropped, unknown names kept | `{}` |
 | `agent.model_<harness>` (`model_opencode`, `model_claude`, `model_codex`) | model id new tabs on that harness start with; absent for the harness's own default | absent |
+| `agent.favorites_<harness>` (`favorites_opencode`, `favorites_claude`, `favorites_codex`) | favorite model ID array per harness, insertion order; blank and duplicate IDs are dropped | absent |
 | `update.auto_check` | boolean | true |
 | `update.last_check` | timestamp, written by the app | unset |
 | `window.width`, `window.height` | logical pixels, 0 for unset | 1280, 800 |
@@ -137,7 +164,19 @@ API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Par
 
 ## Implementation
 
-`settings/settings.go` defines the values and `Normalize`; `settings/file.go` holds `Path`, `Parse`
+`ui/agent_basic.go`, `Workspace.basicAISection`, renders mode selection and Basic provider setup; `basicKeyFields`
+keeps unsaved textbox values independently of persisted credentials. `Workspace.change` and
+`SaveSettings` apply and save the keys; `refreshAIMode` recomputes the harness choices after a
+mode switch. `ui/agent_basic_check.go` owns bounded asynchronous model discovery and connection
+checks, adopted on the UI goroutine by `pollBasicAI`. `Workspace.CloseAgent` cancels
+model discovery and waits for an active connection-check session to close. `openCodeAvailable` caches executable searches
+between discovery, executable and PATH changes so scrolling does not repeat filesystem lookups. `settings.Parse` migrates agent tables without a mode to Advanced.
+
+
+`settings/settings.go` defines the values and `Normalize`, including cleaned favorite ID lists
+and deep cloning of their slices. `ui/agent_model.go` saves per-harness favorites when the user
+toggles a model star; the agent panel feature owns the favorites and search presentation.
+`settings/file.go` reads and writes `agent.favorites_<harness>` arrays and holds `Path`, `Parse`
 (into `Settings`, unknown keys into `Extra`), `Marshal` and the atomic `Save`; `settings/recent.go` holds `Recent`
 and its list rules (temporary file in the
 same directory, mode 0600, directory 0700, then rename). `ui/settings.go` keeps the workspace's
@@ -145,13 +184,14 @@ settings state, `applySettings` (theme, scale, drawing defaults, agent and its e
 `Window.After` and the hook `withSettings`, which `Workspace.Render` calls to mount the panel and the
 action, and the tab state (`prefsState.tab`, `openSettingsAt`, `setSettingsTab`); `ui/settings_view.go` renders the gear button and
 the panel: header, tab strip (`settingsTabStrip`, labels `ui.settings.tab_*`), the body of the active tab
-only and the footer. The panel is drawn for the CPU rasterizer, which blends every pixel of a translucent
+only and the footer. `Workspace.OpenSettings` captures `Window.Snapshot`; while open, `Workspace.Render` paints
+that image through a canvas instead of rebuilding the workspace underneath. `CloseSettings`
+releases it. The panel is drawn for the CPU rasterizer, which blends every pixel of a translucent
 fill and of a shadow's whole area: the backdrop is four bands around the card (and four corner squares
 under its rounded corners) instead of one layer under it, and the card has a border but no drop shadow.
-On a 1280x800 window at device scale 2 a frame without the panel costs about 7 to 9 ms; with it, roughly 20 to
-35 ms depending on the tab and the machine's load (the AI tab is the slowest, measured up to about 34 ms), most
-of it the bands' blend, where one backdrop layer and the shadow would cost about 70 ms
-(`ui/settings_bench_test.go`, `go test ./ui -run X -bench Settings`); `ui/slider.go` is the reusable
+The CPU rasterizer uses per-channel lookup tables for large translucent solid fills, including the
+backdrop, preserving the same source-over pixels while avoiding per-pixel floating-point blends.
+Whole-frame and element-building benchmarks track each tab (`ui/settings_bench_test.go`, `go test ./ui -run X -bench Settings`); `ui/slider.go` is the reusable
 `Slider`. `ui/agent_binary.go` holds the executables rows: `applyAgentBinaries` hands `Settings.AgentBinaries` to `harnesses.SetBinary` (on load and on every change) and reprobes the agent panel; `browseAgentBinary` runs the workspace's `FileDialog.Open` and `harnesses.Check` on a goroutine, and `pollBinary` adopts the answer on the UI goroutine (tests install a fake dialog with `SetFileDialog`). `ui/discovery.go` holds the discovery state (a worker goroutine hands its result to the UI goroutine through a poll timer, as the update check does), `ui/discovery_view.go` the section and `ui/terminal.go` `OpenTerminal` (macOS `open -a Terminal`, Windows `cmd /c start powershell`, elsewhere `$TERMINAL`, x-terminal-emulator, gnome-terminal, konsole or xterm, the first installed) and `OpenTerminalCommand`, which runs a program in that terminal and keeps the window open afterwards (macOS `osascript` with Terminal's `do script`, Windows a new PowerShell `-NoProfile -NoExit` console or `cmd /k`, elsewhere `sh -c` waiting for Enter). `ui/terminal_windows.go`, `startTerminal`, creates the
 Windows console without inherited standard handles so the shell uses its own console rather than
 NUL streams; PowerShell receives an encoded script to preserve literal paths and arguments. Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -81,9 +80,7 @@ func (ws *Workspace) pathChanged(t *docTab, path string) {
 	}
 }
 
-// ensureLoaded opens the project's store once and restores the conversations that were open when
-// the project was last used, as tabs with their transcripts. No agent starts: a tab resumes its
-// agent session when the user sends to it.
+// ensureLoaded opens the current run's project store without restoring chats into a new drawing.
 func (p *AgentPanel) ensureLoaded() {
 	h := &p.hist
 	if h.loaded {
@@ -94,45 +91,56 @@ func (p *AgentPanel) ensureLoaded() {
 		return
 	}
 	h.dir, h.drawing = p.doc.projectDir(), p.doc.drawingKey()
-	migrateAgentStore(h.dir)
-	st, err := agentStore(h.dir)
+	st, err := p.prepareAgentStore(h.dir)
 	if err != nil {
 		p.warnOnce(p.cur, i18n.T("ui.agent.warn.history_unavailable", err))
 		return
 	}
 	h.st = st
 	p.syncSessions()
-	var ids []string
-	active := ""
-	set, err := st.LoadOpenFor(h.drawing)
-	adopt := false
-	if errors.Is(err, store.ErrNotFound) && h.drawing != "" {
-		// A store from before per-drawing tabs: the first drawing opened takes its open tabs.
-		if legacy, lerr := st.LoadOpen(); lerr == nil && legacy.Legacy {
-			set, err, adopt = legacy, nil, true
-		}
+}
+
+// Clear each project's previous-run records once, before any current-run records are created or copied.
+func (p *AgentPanel) prepareAgentStore(dir string) (*store.Store, error) {
+	key, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
 	}
-	if err == nil {
-		ids, active = set.IDs, set.Active
-	} else if h.drawing == "" {
-		// No open set yet: an untitled drawing shows the latest conversation of no drawing.
-		for _, m := range h.sessions {
-			if m.Drawing == "" {
-				ids = []string{m.ID}
-				break
-			}
+	if resolved, err := filepath.EvalSymlinks(key); err == nil {
+		key = resolved
+	}
+	if !p.clearedProjects[key] {
+		if err := errors.Join(os.RemoveAll(filepath.Join(key, filepath.FromSlash(agentStoreDir))), os.RemoveAll(filepath.Join(key, filepath.FromSlash(legacyAgentStoreDir)))); err != nil {
+			return nil, err
 		}
+		if p.clearedProjects == nil {
+			p.clearedProjects = map[string]bool{}
+		}
+		p.clearedProjects[key] = true
+	}
+	return agentStore(dir)
+}
+
+// restoreOpen retains the current drawing's conversations when Save As moves it to another project.
+func (p *AgentPanel) restoreOpen() {
+	h := &p.hist
+	if h.st == nil {
+		return
+	}
+	set, err := h.st.LoadOpenFor(h.drawing)
+	if err != nil {
+		return
 	}
 	var tabs []*agentTab
 	var cur *agentTab
-	for _, id := range ids {
-		rec, err := st.Load(id)
+	for _, id := range set.IDs {
+		rec, err := h.st.Load(id)
 		if err != nil {
 			continue
 		}
 		t := storedTab(rec)
 		tabs = append(tabs, t)
-		if id == active {
+		if id == set.Active {
 			cur = t
 		}
 	}
@@ -141,10 +149,6 @@ func (p *AgentPanel) ensureLoaded() {
 			cur = tabs[len(tabs)-1]
 		}
 		p.tabs, p.cur = tabs, cur
-	}
-	if adopt {
-		p.persistOpen()
-		p.check(st.DeleteOpenFor(""))
 	}
 }
 
@@ -373,8 +377,7 @@ func (p *AgentPanel) drawingChanged(saved bool) {
 		}
 	}
 	if saved && from != nil && len(carry.IDs) > 0 {
-		migrateAgentStore(dir)
-		if to, err := agentStore(dir); err == nil {
+		if to, err := p.prepareAgentStore(dir); err == nil {
 			var ids []string
 			for _, id := range carry.IDs {
 				if err := from.CopyTo(to, id); err == nil {
@@ -392,6 +395,7 @@ func (p *AgentPanel) drawingChanged(saved bool) {
 	*h = agentHistory{}
 	p.ensureLoaded()
 	if saved {
+		p.restoreOpen()
 		p.tagDrawing()
 	}
 	p.refresh()
@@ -512,41 +516,3 @@ func (ws *Workspace) HasAgentPanel() bool { return ws.agent != nil }
 
 // TabTranscript returns the transcript of tab i, for tests.
 func (p *AgentPanel) TabTranscript(i int) *transcript.T { return &p.tabs[i].tr }
-
-// migrateAgentStore copies the legacy store of the project directory dir into the current one
-// when only the legacy one exists. The legacy folder is left in place; failures are ignored and
-// the project then starts with an empty history.
-func migrateAgentStore(dir string) {
-	dst := filepath.Join(dir, filepath.FromSlash(agentStoreDir))
-	src := filepath.Join(dir, filepath.FromSlash(legacyAgentStoreDir))
-	if _, err := os.Stat(dst); err == nil {
-		return
-	}
-	if st, err := os.Stat(src); err != nil || !st.IsDir() {
-		return
-	}
-	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		to := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(to, 0o755)
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(to, data, 0o644)
-	})
-	if err != nil {
-		os.RemoveAll(dst)
-	}
-}

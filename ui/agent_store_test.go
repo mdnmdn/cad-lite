@@ -154,28 +154,18 @@ func TestAICommandAliasAndEmptyToggles(t *testing.T) {
 	}
 }
 
-func TestTranscriptPersistsAndResumesAfterRestart(t *testing.T) {
+func TestTranscriptClearsAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	r := newRig(t, dir, nil, true)
-	r.say("hello", 0)
-	r.nextCfg()
-	r.turn(r.fs, "claude-sid-1", "hi there")
-	r.until("reply", func() bool { return r.hasText(0, "hi there") && !r.ws.AgentPanel().Transcript().Running() })
+	r.chat(0, "hello", "claude-sid-1", "hi there")
 	r.ws.CloseAgent()
-	if _, err := os.Stat(filepath.Join(dir, ".cad-lite", "agent")); err != nil {
-		t.Fatal(err)
-	}
-
 	r2 := newRig(t, dir, nil, true)
-	if n := len(r2.ws.AgentPanel().Tabs()); n != 1 || !r2.hasText(0, "hi there") {
-		t.Fatalf("restored tabs = %+v", r2.ws.AgentPanel().Tabs())
-	}
-	if len(r2.cfg) != 0 || r2.ws.AgentPanel().Running() {
-		t.Fatal("restoring started a session")
+	if len(r2.ws.AgentPanel().Tabs()) != 1 || r2.hasText(0, "hi there") || len(r2.ws.AgentPanel().Sessions()) != 0 {
+		t.Fatal("restart kept history")
 	}
 	r2.say("again", 0)
-	if cfg := r2.nextCfg(); cfg.ResumeID != "claude-sid-1" {
-		t.Fatalf("ResumeID = %q", cfg.ResumeID)
+	if cfg := r2.nextCfg(); cfg.ResumeID != "" {
+		t.Fatal("restart resumed an old conversation")
 	}
 }
 
@@ -251,50 +241,24 @@ func TestTwoConcurrentSessionsShareOneServer(t *testing.T) {
 	})
 }
 
-func TestOpenTabsRestoreAndResumeLazily(t *testing.T) {
+func TestOpenTabsClearAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	r := newRig(t, dir, nil, true)
 	p, w := r.ws.AgentPanel(), r.hw.Window()
-	r.say("first", 0)
-	r.nextCfg()
+	r.chat(0, "first", "A", "reply one")
 	p.NewTab(w)
 	r.say("second", 1)
 	r.nextCfg()
-	r.turn(r.sess(0), "A", "reply one")
 	r.turn(r.sess(1), "B", "reply two")
-	r.until("replies", func() bool {
-		return r.hasText(0, "reply one") && r.hasText(1, "reply two") && !p.Transcript().Running()
-	})
-	p.SwitchTab(0, w)
+	r.until("second reply", func() bool { return r.hasText(1, "reply two") && !p.Transcript().Running() })
 	r.ws.CloseAgent()
-
 	r2 := newRig(t, dir, nil, true)
-	p2, w2 := r2.ws.AgentPanel(), r2.hw.Window()
-	tabs := p2.Tabs()
-	if len(tabs) != 2 || !tabs[0].Active || tabs[0].Live || tabs[1].Live {
-		t.Fatalf("restored tabs = %+v", tabs)
-	}
-	if !r2.hasText(0, "reply one") || !r2.hasText(1, "reply two") {
-		t.Fatal("transcripts not restored")
-	}
-	for range 10 {
-		r2.tick()
+	tabs := r2.ws.AgentPanel().Tabs()
+	if len(tabs) != 1 || tabs[0].Live || tabs[0].SessionID != "" || len(r2.ws.AgentPanel().Sessions()) != 0 {
+		t.Fatalf("restart tabs: %+v", tabs)
 	}
 	if len(r2.cfg) != 0 {
-		t.Fatal("restoring spawned agent processes")
-	}
-	p2.SwitchTab(1, w2)
-	r2.say("more", 0)
-	if cfg := r2.nextCfg(); cfg.ResumeID != "B" {
-		t.Fatalf("tab 2 ResumeID = %q", cfg.ResumeID)
-	}
-	if len(r2.cfg) != 0 || p2.Tabs()[0].Live {
-		t.Fatal("tab 1 was started too")
-	}
-	p2.SwitchTab(0, w2)
-	r2.say("more", 1)
-	if cfg := r2.nextCfg(); cfg.ResumeID != "A" {
-		t.Fatalf("tab 1 ResumeID = %q", cfg.ResumeID)
+		t.Fatal("restart spawned a process")
 	}
 }
 
@@ -328,11 +292,11 @@ func TestOpeningDrawingInAnotherProjectSwitchesStore(t *testing.T) {
 	r.ws.CloseDocument(0, r.hw.Window())
 	r.until("closed", r.fs.isClosed)
 	r.open(filepath.Join(a, "plate.dxf"))
-	if !r.hasText(0, "answer a") || p.Tabs()[0].Live {
-		t.Fatalf("project a not restored: %+v", p.Tabs())
+	if r.hasText(0, "answer a") || p.Tabs()[0].Live || p.Tabs()[0].SessionID != "" {
+		t.Fatalf("reopened drawing did not start fresh: %+v", p.Tabs())
 	}
 	r.say("back in a", 2)
-	if cfg := r.nextCfg(); cfg.ResumeID != "SA" {
+	if cfg := r.nextCfg(); cfg.ResumeID != "" {
 		t.Fatalf("ResumeID = %q", cfg.ResumeID)
 	}
 }

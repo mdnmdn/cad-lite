@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: Append-only register of structural choices — what was chosen, why, and what it costs.
 read_when: you are about to reverse a structural choice, or wonder why something is the way it is
-updated: 2026-10-16
-verified: 2026-10-15
+updated: 2026-10-17
+verified: 2026-10-17
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -61,3 +61,9 @@ that cites the old one.
 | D37 | 2026-10-15 | Canonical layer-list order also defines drawing stacking, with higher rows in front; INSERT stacks by its root layer as an atomic reference | One order keeps the UI, file and visible overlap consistent without changing entity handles or authoring order inside definitions | Layer reordering affects overlap and pick ties; imported definitions retain child visibility/colour while using their root layer for stacking |
 
 | D38 | 2026-10-16 | Keep the embedded Harness experiment behind `-harness-spike` in a root-module adapter implementing `agentmanager.Session`, with only cad MCP tools | Compare a direct cloud agent loop against CLI backends while keeping the reusable agentmanager module stdlib-only | Harness adds SDK dependencies to the application; provider profiles use a separate owner-only plaintext file; the spike supports text prompts and manual model IDs |
+
+| D39 | 2026-10-16 | Basic AI manages OpenCode provider setup from owner-only settings keys; Advanced retains custom CLI configuration. Provider JSON references environment keys, and MCP fallback merges the JSON | A new user can install OpenCode and configure cloud access in the app while existing CLI users retain their setup | Keys are plaintext in the private settings file; availability and key validity remain provider-dependent; key changes apply on a new session |
+
+| D40 | 2026-10-17 | Settings captures an owned image of the presented workspace on opening and paints it behind the modal until closing | Scrolling avoids rebuilding, laying out and rasterizing the workspace beneath the modal; unscaled opaque image runs copy directly | The snapshot consumes one frame of image memory and stretches on resize; appearance changes reach the workspace background when Settings closes |
+
+| D41 | 2026-10-17 | Agent history is scoped to the current app run: clear both current and legacy stores once per canonical project on first agent use, and start every new drawing tab with an empty chat | Restarts and newly opened drawings begin without previous agent context; switching open drawings and Save As retain current-run conversations | Previous transcripts are deleted when their project is first used after restart; History can reopen only current-run records; this replaces the automatic open-set restoration in D29 |

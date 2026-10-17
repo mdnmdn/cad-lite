@@ -8,6 +8,7 @@ import (
 	"agentmanager/shellenv"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // discoveryAgents are the agents the section lists, with their display names.
@@ -58,7 +59,7 @@ func (ws *Workspace) discoverySection() *gpui.Div {
 			func(w *gpui.Window, _ *gpui.App) { ws.openTerminal(w) }),
 	)
 	sec.Child(buttons)
-	if ws.installWanted(true) {
+	if ws.prefs().cur.AgentMode == settings.AgentAdvanced && ws.installWanted(true) {
 		sec.Child(ws.agentInstallBlock("settings"))
 	}
 	if d.term != "" {

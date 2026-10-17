@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: Several drawings open at once, one tab each above the canvas, each with its own session, undo history, view and agent conversations; how OPEN, NEW, CLOSE, QUIT and files from the OS choose a tab, and what follows the active tab.
 read_when: you are changing the document tab strip, which tab a file opens in, closing or quitting with several drawings, or what is per drawing and what the window shares
-updated: 2026-10-15
-verified: 2026-10-16
+updated: 2026-10-17
+verified: 2026-10-17
 code_anchors: [ui/doctabs.go, ui/workspace.go, ui/openpaths.go, ui/agent.go, ui/agent_store.go, cmdsys/dirty.go, cmdsys/commands/files.go, cmd/cad/main.go]
 depends_on: [feat-dxf-files, feat-canvas, feat-agent-panel, tech-command-system]
 review_cycle: monthly
@@ -60,8 +60,10 @@ command line field) is shared and shows the active tab.
 - **Agent panel.** The panel shows the active tab's conversations (per drawing, as in
   [Agent panel](agent-panel.md)). An agent session stays bound to the tab it was started in: its
   drawing tools act on that tab's drawing whichever tab is active, and its session keeps running while
-  another tab is shown. Closing a tab ends its agent sessions and stores which of its conversations
-  were open. The agent button's live and attention dot covers every tab.
+  another tab is shown. Every new drawing tab starts with a fresh empty chat; switching an
+  existing tab keeps its current conversations. Closing a tab ends its agent sessions;
+  reopening the drawing starts fresh, with the current run's conversations available explicitly
+  through History. Restart clears previous project history on first agent use. The agent button's live and attention dot covers every tab.
 - **Settings.** The drawing aid defaults (grid, object snap, ortho) apply to every open tab when the
   settings change and to each new tab; a theme change redraws every tab.
 

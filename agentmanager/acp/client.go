@@ -28,7 +28,7 @@ type opener struct {
 	authHint string
 	// envMCP, when set, builds extra env that injects MCP servers for agents that do not accept
 	// them over the wire; the process is restarted with it when http MCP is not advertised.
-	envMCP func([]agentmanager.MCPServer) ([]string, error)
+	envMCP func([]agentmanager.MCPServer, []string) ([]string, error)
 }
 
 // New returns an Opener that launches cmd and speaks ACP over its stdio.
@@ -116,7 +116,7 @@ func (o opener) Open(ctx context.Context, cfg agentmanager.Config) (agentmanager
 		case s.caps.mcpHTTP:
 			wire = httpMCPEntries(servers)
 		case o.envMCP != nil:
-			env, err := o.envMCP(servers)
+			env, err := o.envMCP(servers, cfg.Env)
 			if err != nil {
 				s.abort()
 				return nil, err

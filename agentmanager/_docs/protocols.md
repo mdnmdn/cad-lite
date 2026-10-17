@@ -180,7 +180,10 @@ resuming does not duplicate the transcript. (2) The opencode MCP env fallback re
 - **MCP injection.** With `mcpCapabilities.http`, each `Config.MCPServers` entry is sent in `session/new` as
   `{type:"http", name, url, headers:[{name:"Authorization", value:"Bearer TOKEN"}]}`. Without it, `OpenCode()`
   restarts the process once with `OPENCODE_CONFIG_CONTENT={"mcp":{name:{type:"remote",url,headers,enabled:true}}}` and
-  sends `mcpServers:[]`; a generic `New` agent gets a warn `Log` and no servers. Bearer tokens are redacted from
+  sends `mcpServers:[]`. Existing inline config is read from `Config.Env` (last override wins),
+  else the inherited `OPENCODE_CONFIG_CONTENT`; MCP entries are merged by server name and provider,
+  model and other top-level settings survive. Malformed inline JSON or a non-object MCP value
+  aborts with a generic error that contains no config values. A generic `New` agent gets a warn `Log` and no servers. Bearer tokens are redacted from
   `Logger` output.
 - **Preset.** `opencode acp`, extra env `OPENCODE_DISABLE_CLAUDE_CODE=1`. No permissive flags or modes: permissions
   are real round trips.

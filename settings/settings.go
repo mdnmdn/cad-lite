@@ -93,6 +93,14 @@ type Layout struct {
 	RibbonCollapsed bool
 }
 
+// Agent modes separate managed OpenCode setup from custom CLI configuration.
+const (
+	// AgentBasic uses OpenCode with the app's saved provider keys.
+	AgentBasic = "basic"
+	// AgentAdvanced leaves provider configuration to the selected CLI.
+	AgentAdvanced = "advanced"
+)
+
 // Settings are the user's persisted preferences.
 type Settings struct {
 	// Theme names a registered UI theme ("dark", "light", ...). Unknown names
@@ -106,8 +114,14 @@ type Settings struct {
 	Grid, OSnap, Ortho bool
 	// Wheel is the mouse wheel behaviour: WheelAuto, WheelZoom or WheelPan.
 	Wheel string
-	// DefaultAgent names the harness the agent panel selects; empty means the
-	// first one installed.
+	// AgentMode selects Basic or Advanced AI setup.
+	AgentMode string
+	// OpenCodeKey is the Basic mode OpenCode provider credential.
+	OpenCodeKey string
+	// OllamaKey is the Basic mode Ollama Cloud credential.
+	OllamaKey string
+	// DefaultAgent names the Advanced harness; empty means the first one
+	// installed. Basic mode uses OpenCode.
 	DefaultAgent string
 	// AgentBinaries maps a harness name ("opencode", "claude", "codex") to the
 	// executable the user chose for it, which wins over the PATH lookup. A
@@ -117,6 +131,8 @@ type Settings struct {
 	// a missing or empty entry means the harness's own default. Stored as
 	// agent.model_<harness>.
 	AgentModels map[string]string
+	// AgentFavorites stores favorite model IDs per harness, in the user’s chosen order.
+	AgentFavorites map[string][]string
 	// AutoUpdate turns the periodic background check for a new release on or off.
 	AutoUpdate bool
 	// LastUpdateCheck is when the last check for a release finished; zero means never.
@@ -137,6 +153,7 @@ type Settings struct {
 func Default() Settings {
 	return Settings{
 		Theme:      DefaultTheme,
+		AgentMode:  AgentBasic,
 		Language:   LangAuto,
 		UIScale:    1,
 		Grid:       true,
@@ -203,7 +220,17 @@ func (s *Settings) Normalize() []string {
 			*d.v = c
 		}
 	}
+	if s.AgentMode != AgentBasic && s.AgentMode != AgentAdvanced {
+		w = append(w, i18n.T("settings.warn.agent_mode"))
+		s.AgentMode = AgentBasic
+	}
+	if s.AgentMode == AgentBasic && s.DefaultAgent != "" && s.DefaultAgent != "opencode" {
+		s.AgentMode = AgentAdvanced
+	}
+	s.OpenCodeKey = strings.TrimSpace(s.OpenCodeKey)
+	s.OllamaKey = strings.TrimSpace(s.OllamaKey)
 	s.AgentBinaries = cleanBinaries(s.AgentBinaries)
+	s.AgentFavorites = cleanAgentFavorites(s.AgentFavorites)
 	s.Recent.normalize()
 	return w
 }
@@ -218,6 +245,26 @@ func cleanBinaries(m map[string]string) map[string]string {
 				out = map[string]string{}
 			}
 			out[h] = p
+		}
+	}
+	return out
+}
+
+func cleanAgentFavorites(m map[string][]string) map[string][]string {
+	var out map[string][]string
+	for h, models := range m {
+		if strings.TrimSpace(h) == "" {
+			continue
+		}
+		for _, id := range models {
+			id = strings.TrimSpace(id)
+			if id == "" || contains(out[h], id) {
+				continue
+			}
+			if out == nil {
+				out = map[string][]string{}
+			}
+			out[h] = append(out[h], id)
 		}
 	}
 	return out
@@ -248,6 +295,13 @@ func (s Settings) Clone() Settings {
 			m[k] = v
 		}
 		s.AgentModels = m
+	}
+	if s.AgentFavorites != nil {
+		m := make(map[string][]string, len(s.AgentFavorites))
+		for h, ids := range s.AgentFavorites {
+			m[h] = append([]string(nil), ids...)
+		}
+		s.AgentFavorites = m
 	}
 	if s.Extra != nil {
 		e := make(map[string]any, len(s.Extra))

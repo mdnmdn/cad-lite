@@ -20,6 +20,7 @@ import (
 	"cad-lite/harnessspike"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 	"cad-lite/updater"
 )
 
@@ -153,6 +154,7 @@ func (s *agentSet) live() bool {
 // cross-goroutine traffic is the cadmcp.Dispatcher mailbox, the sessions'
 // event channels (read without blocking) and the start results.
 type AgentPanel struct {
+	clearedProjects map[string]bool
 	// agentSet is the active document tab's agent state.
 	*agentSet
 	ws      *Workspace
@@ -172,8 +174,12 @@ type AgentPanel struct {
 
 	input *gpui.TextInput
 	// modelInput is the model menu's free-text field; modelMenu shows the menu.
-	modelInput *gpui.TextInput
-	modelMenu  bool
+	modelInput  *gpui.TextInput
+	modelSearch *gpui.TextInput
+	modelScroll *gpui.ScrollHandle
+	modelMenu   bool
+	modelAnchor gpui.Point
+	modelPanel  gpui.Bounds
 	// thumbs caches decoded transcript previews by their stored PNG bytes.
 	thumbs map[string]*image.NRGBA
 	// deferred is a prompt from the AI command that waits for the first frame.
@@ -247,6 +253,7 @@ func (ws *Workspace) AgentPanel() *AgentPanel {
 // OpenCode installation is cancelled and waited for. Call it when the
 // application quits.
 func (ws *Workspace) CloseAgent() {
+	ws.stopBasicAI()
 	ws.stopAgentInstall()
 	p := ws.agent
 	if p == nil {
@@ -421,6 +428,9 @@ func (p *AgentPanel) addFound() {
 		return
 	}
 	for _, h := range harnesses.All {
+		if p.ws.prefs().cur.AgentMode == settings.AgentBasic && (!p.explicit || p.selected == agentmanager.OpenCode) && h != agentmanager.OpenCode {
+			continue
+		}
 		if _, ok := harnesses.Available(h); ok && !slices.Contains(p.choices, h) {
 			p.choices = append(p.choices, h)
 		}
@@ -528,6 +538,9 @@ func (p *AgentPanel) startTab(t *agentTab, w *gpui.Window) {
 		SystemPrompt: cadmcp.Instructions(),
 		MCPServers:   []agentmanager.MCPServer{{Name: agentMCPName, URL: set.ep.URL, Token: set.ep.Token}},
 		AutoApprove:  agentmanager.AllowMCP(agentMCPName),
+	}
+	if h == agentmanager.OpenCode && p.ws.prefs().cur.AgentMode == settings.AgentBasic {
+		cfg.Env = basicOpenCodeEnv(p.ws.prefs().cur, p.ws.prefs().aiBasic.models...)
 	}
 	if p.binary != "" && p.binFor == h {
 		cfg.Binary = p.binary

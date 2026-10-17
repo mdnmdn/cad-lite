@@ -55,6 +55,10 @@ Protocol authors use `NewRunner(in, out)`: `ReadFrame`, `WriteFrame` (with `$var
 
 ## Other helpers
 
+- Harness discovery allows two seconds for child startup and bounds a genuinely hanging
+  version probe with the same deadline; the fake uses `/bin/sleep` because discovery gives
+  it a deliberately isolated PATH.
+
 - `jsonrpc` tests use `io.Pipe` pairs in memory.
 - `internal/proc` tests re-exec the test binary as the child (`TestMain` keyed on `PROC_HELPER`).
 - The race detector makes a child test binary take about a second to exit; that is not a bug.
@@ -83,3 +87,8 @@ and preservation of existing process settings. `internal/proc/console_windows_te
 `GetConsoleWindow` returns zero for agent launches and version probes. The existing proc
 round-trip test checks that piped input/output still works. Native console tests require Windows;
 compiling them on another host does not verify desktop behaviour.
+
+OpenCode configuration regression: `TestOpenCodePresetEnvFallbackWhenNoHTTP` runs the fake
+without HTTP MCP support and verifies that the restart keeps provider, model and existing MCP
+settings while adding the injected server. `opencode_config_test.go` covers inherited inline
+configuration and errors that do not echo private configuration values.

@@ -35,6 +35,10 @@ bindings and call `app.OpenWindow(opts, build)`. `OpenWindow` calls
 `FrameRequester.OnRequestFrame` (if implemented) to `Window.Draw`, and draws the
 first frame.
 
+`Window.Snapshot` returns an owned image of the last presented frame for a frozen modal
+background; it returns nil before the first presentation. A later draw or resize does not
+modify that copy. `Window.PaintImage` can paint it behind the modal.
+
 The pixel buffer given to `Present` is owned by the rasterizer and rewritten on
 the next draw. Copy it if you keep it past the call (the ebiten backend does
 not copy, because it only reads it on the same goroutine before the next draw).

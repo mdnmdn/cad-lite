@@ -629,6 +629,15 @@ func (w *Window) TextMeasurer() TextMeasurer { return w.text }
 // Scene returns the last drawn frame's scene.
 func (w *Window) Scene() *Scene { return &w.renderedFrame.scene }
 
+// Snapshot returns an owned copy of the last presented frame in device pixels,
+// or nil before presentation. Future draws and resizes do not modify the copy.
+func (w *Window) Snapshot() *image.NRGBA {
+	if w.raster == nil {
+		return nil
+	}
+	return w.raster.Image()
+}
+
 // registerLayoutNode stores a node for the frame being built and returns its
 // id.
 func (w *Window) registerLayoutNode(n *LayoutNode) LayoutID {

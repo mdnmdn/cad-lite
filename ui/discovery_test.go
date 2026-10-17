@@ -14,6 +14,7 @@ import (
 	"cad-lite/doc"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
+	"cad-lite/settings"
 )
 
 // fakeProbe is a discovery probe that returns r after release is closed.
@@ -106,6 +107,9 @@ func TestSettingsPanelClampsToWindowHeight(t *testing.T) {
 
 func TestSettingsHasTwoAgentSections(t *testing.T) {
 	h := openSettingsWS(t, NewWorkspace(doc.New(), nil), 900, 2400, 1)
+	c := h.ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	h.ws.SetSettings(c, h.hw.Window())
 	h.openPanel()
 	for _, id := range []string{"settings-sec-agent", "agent-claude", "settings-sec-discovery", "agents-check", "agents-terminal"} {
 		if !h.has(id) {
@@ -128,6 +132,9 @@ func TestCheckButtonShowsFoundAndNotFoundRows(t *testing.T) {
 	release := make(chan struct{})
 	ws.SetAgentDiscoveryProbe(fakeProbe(sampleDiscovery(), release))
 	h := openSettingsWS(t, ws, 900, 2400, 1)
+	c := h.ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	h.ws.SetSettings(c, h.hw.Window())
 	h.openPanel()
 	h.clickID("agents-check")
 	h.hw.Pixels()
@@ -175,6 +182,9 @@ func TestCheckFailureShowsAppOnlyPath(t *testing.T) {
 		Agents: []harnesses.Found{{Harness: agentmanager.OpenCode}, {Harness: agentmanager.Claude}, {Harness: agentmanager.Codex}},
 	}, nil))
 	h := openSettingsWS(t, ws, 900, 2400, 1)
+	c := h.ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	h.ws.SetSettings(c, h.hw.Window())
 	h.openPanel()
 	h.clickID("agents-check")
 	h.settle(func() bool { _, ok := ws.AgentDiscovery(); return ok })
@@ -188,29 +198,40 @@ func TestCheckFailureShowsAppOnlyPath(t *testing.T) {
 }
 
 func TestDiscoveryResultReachesAgentPanelChoices(t *testing.T) {
-	ws := NewWorkspace(doc.New(), nil)
-	t.Setenv("PATH", "/usr/bin:/bin")
-	t.Cleanup(func() { shellenv.Set("") })
-	shellenv.Set("")
-	p := ws.AgentPanel()
-	p.probe()
-	if len(p.choices) != 0 {
-		t.Skip("real agents installed here")
-	}
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "codex"), []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	ws.SetAgentDiscoveryProbe(func(context.Context) AgentDiscovery {
-		shellenv.Set(dir)
-		return sampleDiscovery()
-	})
-	h := openSettingsWS(t, ws, 900, 1000, 1)
-	h.openPanel()
-	ws.EnableAgentDiscovery() // the background probe at start
-	h.settle(func() bool { _, ok := ws.AgentDiscovery(); return ok })
-	if len(p.choices) != 1 || p.choices[0] != agentmanager.Codex || p.selected != agentmanager.Codex {
-		t.Fatalf("choices %v selected %q: Auto should pick up an agent the background probe found", p.choices, p.selected)
+	for _, mode := range []string{settings.AgentBasic, settings.AgentAdvanced} {
+		t.Run(mode, func(t *testing.T) {
+			ws := NewWorkspace(doc.New(), nil)
+			c := ws.Settings()
+			c.AgentMode = mode
+			ws.SetSettings(c, nil)
+			t.Setenv("PATH", "/usr/bin:/bin")
+			t.Cleanup(func() { shellenv.Set("") })
+			shellenv.Set("")
+			p := ws.AgentPanel()
+			p.probe()
+			if len(p.choices) != 0 {
+				t.Skip("real agents installed here")
+			}
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "codex"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			ws.SetAgentDiscoveryProbe(func(context.Context) AgentDiscovery {
+				shellenv.Set(dir)
+				return sampleDiscovery()
+			})
+			h := openSettingsWS(t, ws, 900, 1000, 1)
+			h.openPanel()
+			ws.EnableAgentDiscovery() // the background probe at start
+			h.settle(func() bool { _, ok := ws.AgentDiscovery(); return ok })
+			if mode == settings.AgentBasic {
+				if len(p.choices) != 0 || p.selected != "" {
+					t.Fatal("Basic mode selected an agent other than OpenCode")
+				}
+			} else if len(p.choices) != 1 || p.choices[0] != agentmanager.Codex || p.selected != agentmanager.Codex {
+				t.Fatalf("choices %v selected %q: Advanced Auto should pick up an agent the background probe found", p.choices, p.selected)
+			}
+		})
 	}
 }
 
@@ -219,6 +240,9 @@ func TestOpenTerminalButtonReportsOutcome(t *testing.T) {
 	var gotDir string
 	ws.SetTerminalOpener(func(dir string, _ []string) (string, error) { gotDir = dir; return "xterm", nil })
 	h := openSettingsWS(t, ws, 900, 2400, 1)
+	c := h.ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	h.ws.SetSettings(c, h.hw.Window())
 	h.openPanel()
 	h.clickID("agents-terminal")
 	h.hw.Pixels()

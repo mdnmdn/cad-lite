@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-process MCP server `cad`, the rule that only the UI goroutine touches the drawing, and the permission policy.
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
-updated: 2026-10-16
-verified: 2026-10-16
-code_anchors: [agentmanager/internal/proc/proc.go, agentmanager/internal/proc/hide_windows.go, harnessspike/config.go, harnessspike/session.go, ui/harness_spike.go, ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/terminal_windows_test.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
+updated: 2026-10-17
+verified: 2026-10-17
+code_anchors: [ui/agent_basic_check.go, ui/agent_basic.go, agentmanager/acp/opencode.go, agentmanager/acp/client.go, agentmanager/internal/proc/proc.go, agentmanager/internal/proc/hide_windows.go, harnessspike/config.go, harnessspike/session.go, ui/harness_spike.go, ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/terminal_windows_test.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
 review_cycle: monthly
 ---
@@ -71,6 +71,25 @@ continue through the host's separate visible-terminal launcher.
 The Windows regression tests check the process flags and launch helpers that report their
 console window handle. Cross-compilation verifies their build; native Windows execution is
 required to verify the actual absence of a console.
+
+## Basic OpenCode configuration
+
+The root UI owns provider configuration; the reusable agentmanager module still accepts only
+its neutral `Config.Env`. `ui/agent_basic.go`, `basicOpenCodeEnv`, builds
+`OPENCODE_CONFIG_CONTENT` with `provider.opencode.options.apiKey` referencing
+`{env:OPENCODE_KEY}` when that key is saved. With an Ollama key it adds the `ollama` provider
+using `@ai-sdk/openai-compatible`, `https://ollama.com/v1`, `{env:OLLAMA_KEY}`, and the cloud
+catalogue fetched by `ui/agent_basic_check.go`, `fetchOllamaModels`, from the authenticated
+`https://ollama.com/v1/models` endpoint (`gpt-oss:120b` until discovery succeeds). Keys themselves travel only in those separate environment entries.
+The host does not write global OpenCode config or put credentials in argv. Advanced launches
+receive no managed provider environment. The settings feature owns persistence and mode selection.
+
+`acp.opencodeConfigEnv` merges fallback MCP entries into the existing inline config from
+`Config.Env`, or the inherited process environment when no override is present. Provider,
+model and unrelated MCP entries survive the restart. The injected cad server wins for its own
+name. Invalid inline JSON or an invalid MCP object aborts with a generic error that does not
+repeat configuration values. Fake-agent tests cover this restart path and the four key combinations;
+no live provider calls are part of these checks.
 
 ## PATH discovery
 
@@ -137,7 +156,7 @@ The tools folder is `cad-lite/tools` under `%LocalAppData%`, `~/Library/Applicat
 runs `Install` on a goroutine and adopts the result through a poll timer, like the discovery probe; the
 installed executable is stored as `agent.binaries.opencode`, which `applyAgentBinaries` hands to
 `harnesses.SetBinary`. `Workspace.CloseAgent` (quit) cancels a running installation and waits up to 10 s for
-it to kill its processes and remove what it half-wrote. When there is no credential, `OpenTerminalCommand`
+it to kill its processes and remove what it half-wrote. In Advanced, when there is no credential, `OpenTerminalCommand`
 opens a terminal running `opencode auth login` (`agentinstall.LoginArgs`). On Windows,
 `ui/terminal_windows.go`, `startTerminal`, uses `CreateProcess` with `CREATE_NEW_CONSOLE` and
 without `STARTF_USESTDHANDLES`: the new shell gets console input and output instead of the NUL
@@ -367,7 +386,11 @@ Starting a tab whose record has an id for the same harness sets `Config.ResumeID
 Codex `thread/resume`, ACP `session/load`. ACP suppresses the history the agent replays on load, which
 is why Cad-lite shows its own stored transcript. The open tabs and the active one are saved for the
 current drawing (its file name, "" when untitled) on every change and at quit (`Store.SaveOpenFor`);
-restoring them reads records only, so no agent starts until the user sends. Each record also keeps the
+these manifests support Save As within the current run. A fresh drawing starts with an empty
+chat rather than restoring the manifest. `AgentPanel.prepareAgentStore` clears current and legacy
+history folders once per canonical project path on its first agent use after restart, before
+record creation or copying. Explicitly reopening History within the current run reads records
+only, so no agent starts until the user sends. Each record also keeps the
 drawing (`Record.SetDrawing`) and the user's model choice (`Record.SetModel`), and stores the
 `ModelsChanged` events, so a restored tab shows its model and the list the agent offered. Drawing and
 project switches and the `.cad-lite/` layout are in the [agent panel](../features/agent-panel.md).

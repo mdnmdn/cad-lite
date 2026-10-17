@@ -102,7 +102,7 @@ func LoadWarn(path string) (Settings, []string, error) {
 var tables = map[string]map[string]bool{
 	"appearance": {"theme": true, "ui_scale": true, "language": true},
 	"drawing":    {"grid": true, "osnap": true, "ortho": true, "wheel": true},
-	"agent":      {"default": true, "binaries": true},
+	"agent":      {"default": true, "binaries": true, "mode": true, "opencode_key": true, "ollama_key": true},
 	"update":     {"auto_check": true, "last_check": true},
 	"window":     {"width": true, "height": true},
 	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
@@ -113,6 +113,8 @@ var tables = map[string]map[string]bool{
 // agentModelKey prefixes the agent table's per-harness model keys (model_claude, ...).
 const agentModelKey = "model_"
 
+const agentFavoritesKey = "favorites_"
+
 // Parse decodes TOML text into Settings: absent keys keep their defaults,
 // values of the wrong type or range are replaced (one warning each) and
 // unknown keys go to Extra.
@@ -122,6 +124,7 @@ func Parse(data []byte) (Settings, []string, error) {
 		return Settings{}, nil, err
 	}
 	s := Default()
+	modeSeen := false
 	var warn []string
 	extra := map[string]any{}
 	bad := func(key, want string, v any) {
@@ -139,6 +142,25 @@ func Parse(data []byte) (Settings, []string, error) {
 			continue
 		}
 		for k, v := range tbl {
+			if h, ok := strings.CutPrefix(k, agentFavoritesKey); ok && name == "agent" && h != "" {
+				values, ok := v.([]any)
+				if !ok {
+					bad(name+"."+k, "an array of strings", v)
+					continue
+				}
+				for _, value := range values {
+					id, ok := value.(string)
+					if !ok {
+						bad(name+"."+k, "a string", value)
+						continue
+					}
+					if s.AgentFavorites == nil {
+						s.AgentFavorites = map[string][]string{}
+					}
+					s.AgentFavorites[h] = append(s.AgentFavorites[h], id)
+				}
+				continue
+			}
 			if h, ok := strings.CutPrefix(k, agentModelKey); ok && name == "agent" && h != "" {
 				if x, ok := v.(string); ok {
 					if s.AgentModels == nil {
@@ -196,6 +218,22 @@ func Parse(data []byte) (Settings, []string, error) {
 					s.Wheel = x
 				} else {
 					bad(full, "a string", v)
+				}
+			case "agent.mode", "agent.opencode_key", "agent.ollama_key":
+				if full == "agent.mode" {
+					modeSeen = true
+				}
+				if x, ok := v.(string); ok {
+					switch full {
+					case "agent.mode":
+						s.AgentMode = x
+					case "agent.opencode_key":
+						s.OpenCodeKey = x
+					case "agent.ollama_key":
+						s.OllamaKey = x
+					}
+				} else {
+					warn = append(warn, i18n.T("settings.warn.ai_setting"))
 				}
 			case "agent.default":
 				if x, ok := v.(string); ok {
@@ -298,6 +336,9 @@ func Parse(data []byte) (Settings, []string, error) {
 	if len(extra) > 0 {
 		s.Extra = extra
 	}
+	if _, exists := raw["agent"].(map[string]any); exists && !modeSeen {
+		s.AgentMode = AgentAdvanced
+	}
 	return s, append(warn, s.Normalize()...), nil
 }
 
@@ -352,13 +393,22 @@ func Marshal(s Settings) []byte {
 	if len(bins) > 0 {
 		binLine = "binaries = " + formatValue(bins)
 	}
-	agent := []string{"default = " + quote(s.DefaultAgent), binLine}
+	agent := []string{"mode = " + quote(s.AgentMode), "opencode_key = " + quote(s.OpenCodeKey), "ollama_key = " + quote(s.OllamaKey), "default = " + quote(s.DefaultAgent), binLine}
 	for _, h := range sortedKeys(s.AgentModels) {
 		if m := s.AgentModels[h]; m != "" && bareKey(h) {
 			agent = append(agent, agentModelKey+h+" = "+quote(m))
 		}
 	}
-	section("agent", "default: the harness the agent panel selects (empty: first installed). binaries: an executable per harness that wins over the PATH, e.g. { claude = \"/opt/claude/bin/claude\" }. model_<harness>: the model new tabs on it use (absent: the harness default).",
+	for _, h := range sortedKeys(s.AgentFavorites) {
+		if ids := s.AgentFavorites[h]; len(ids) > 0 && bareKey(h) {
+			values := make([]any, len(ids))
+			for i, id := range ids {
+				values[i] = id
+			}
+			agent = append(agent, agentFavoritesKey+h+" = "+formatValue(values))
+		}
+	}
+	section("agent", "mode: basic (managed OpenCode) or advanced (custom agents). opencode_key and ollama_key: Basic provider credentials. default: the harness the agent panel selects in Advanced (empty: first installed). binaries: an executable per harness that wins over the PATH, e.g. { claude = \"/opt/claude/bin/claude\" }. model_<harness>: the model new tabs on it use (absent: the harness default). favorites_<harness>: favorite model IDs.",
 		agent...)
 	update := []string{"auto_check = " + strconv.FormatBool(s.AutoUpdate)}
 	if !s.LastUpdateCheck.IsZero() {

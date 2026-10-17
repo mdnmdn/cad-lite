@@ -93,6 +93,9 @@ func TestSaveAsInProjectKeepsSessionAndMovesTabs(t *testing.T) {
 	if m := p.Tabs()[0]; m.SessionID == "" {
 		t.Fatal("tab lost its record")
 	}
+	if m := p.Sessions()[0]; m.Drawing != "plate-v2.dxf" {
+		t.Fatalf("record drawing %q", m.Drawing)
+	}
 	r.ws.CloseAgent()
 
 	r2 := newRig(t, dir, memFiles{}, true)
@@ -100,11 +103,8 @@ func TestSaveAsInProjectKeepsSessionAndMovesTabs(t *testing.T) {
 		t.Fatalf("plate.dxf still has the moved tabs: %+v", r2.ws.AgentPanel().Tabs())
 	}
 	r2.open(filepath.Join(dir, "plate-v2.dxf"))
-	if !r2.hasText(0, "plate drawn") {
-		t.Fatalf("plate-v2.dxf did not get the tabs: %+v", r2.ws.AgentPanel().Tabs())
-	}
-	if m := r2.ws.AgentPanel().Sessions()[0]; m.Drawing != "plate-v2.dxf" {
-		t.Fatalf("record drawing %q", m.Drawing)
+	if r2.hasText(0, "plate drawn") || len(r2.ws.AgentPanel().Sessions()) != 0 {
+		t.Fatal("renamed drawing restored previous-run history")
 	}
 }
 
@@ -168,7 +168,7 @@ func TestUntitledDrawingTabsFollowFirstSave(t *testing.T) {
 	}
 }
 
-func TestLegacyOpenSetGoesToFirstDrawing(t *testing.T) {
+func TestLegacyOpenSetClearsOnRestart(t *testing.T) {
 	dir := t.TempDir()
 	st, _ := store.Open(filepath.Join(dir, ".cad-lite", "agent"))
 	rec, err := st.Create(agentmanager.Claude)
@@ -183,14 +183,14 @@ func TestLegacyOpenSetGoesToFirstDrawing(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := newRig(t, dir, memFiles{}, true)
-	if tabs := r.ws.AgentPanel().Tabs(); len(tabs) != 1 || tabs[0].SessionID != id {
-		t.Fatalf("legacy tabs not restored: %+v", tabs)
+	if tabs := r.ws.AgentPanel().Tabs(); len(tabs) != 1 || tabs[0].SessionID != "" || len(r.ws.AgentPanel().Sessions()) != 0 {
+		t.Fatalf("legacy history restored: %+v", tabs)
 	}
 	if _, err := os.Stat(filepath.Join(st.Dir(), "open.json")); !os.IsNotExist(err) {
-		t.Fatalf("legacy open set left behind: %v", err)
+		t.Fatal("legacy open set remains")
 	}
-	if set, err := st.LoadOpenFor("plate.dxf"); err != nil || len(set.IDs) != 1 || set.IDs[0] != id {
-		t.Fatalf("plate.dxf set %+v %v", set, err)
+	if _, err := os.Stat(filepath.Join(st.Dir(), id+".jsonl")); !os.IsNotExist(err) {
+		t.Fatal("legacy transcript remains")
 	}
 	r.open(filepath.Join(dir, "other.dxf"))
 	if tabs := r.ws.AgentPanel().Tabs(); len(tabs) != 1 || tabs[0].SessionID != "" {

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image"
 	"maps"
 	"runtime"
 	"sync"
@@ -33,8 +34,9 @@ func settingsBindings() []gpui.KeyBinding {
 // are saved and the panel's own state. It lives beside the Workspace (see
 // prefs) and never references it, so the Workspace stays collectable.
 type prefsState struct {
-	cur  settings.Settings
-	path string
+	snapshot *image.NRGBA
+	cur      settings.Settings
+	path     string
 	// warnings are what Load clamped; err is the last load or save failure.
 	warnings []string
 	err      error
@@ -47,6 +49,8 @@ type prefsState struct {
 	// onLanguage is the host's language hook; see SetLanguageHandler.
 	onLanguage func(lang string)
 
+	aiBasic     basicAIState
+	aiKeys      *basicKeyFields
 	open        bool
 	focus       *gpui.FocusHandle
 	focusWanted bool
@@ -151,7 +155,11 @@ func (ws *Workspace) SetSettings(s settings.Settings, w *gpui.Window) { ws.apply
 func (ws *Workspace) applySettings(s settings.Settings, w *gpui.Window) {
 	p := ws.prefs()
 	s.Normalize()
+	oldMode := p.cur.AgentMode
 	p.cur = s.Clone()
+	if oldMode != s.AgentMode {
+		ws.refreshAIMode()
+	}
 	ws.applyAppearance(w)
 	ws.applyDrawingDefaults()
 	p.fireLanguage()
@@ -244,6 +252,9 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 	f(&next)
 	next.Normalize()
 	p.cur = next
+	if next.OpenCodeKey != old.OpenCodeKey || next.OllamaKey != old.OllamaKey {
+		p.aiBasic.checkMessage = ""
+	}
 	if next.Theme != old.Theme || next.UIScale != old.UIScale {
 		ws.applyAppearance(w)
 	}
@@ -260,6 +271,9 @@ func (ws *Workspace) change(w *gpui.Window, f func(*settings.Settings)) {
 	}
 	if !maps.Equal(next.AgentBinaries, old.AgentBinaries) {
 		ws.applyAgentBinaries(next.AgentBinaries)
+	}
+	if next.AgentMode != old.AgentMode {
+		ws.refreshAIMode()
 	}
 	if next.DefaultAgent != old.DefaultAgent && next.DefaultAgent != "" {
 		ws.AgentPanel().Configure(agentmanager.Harness(next.DefaultAgent), "")
@@ -310,6 +324,9 @@ func (ws *Workspace) SettingsOpen() bool { return ws.prefs().open }
 func (ws *Workspace) OpenSettings(w *gpui.Window) {
 	ws.closeLayerPopover(w)
 	p := ws.prefs()
+	if !p.open {
+		p.snapshot = w.Snapshot()
+	}
 	p.open, p.focusWanted = true, true
 	p.bodyScroll.ScrollToTop()
 	w.Refresh()
@@ -345,6 +362,7 @@ func (ws *Workspace) CloseSettings(w *gpui.Window) {
 		return
 	}
 	p.open = false
+	p.snapshot = nil
 	p.scale.End(w)
 	ws.SaveSettings()
 	if fh := ws.input.FocusHandle(); fh != nil {

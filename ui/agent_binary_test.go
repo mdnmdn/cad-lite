@@ -35,6 +35,9 @@ func binRigSized(t *testing.T, fd *fakeDialog, width, height float32) (*sHarness
 		}
 	})
 	ws := NewWorkspace(doc.New(), nil)
+	c := ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	ws.SetSettings(c, nil)
 	if fd != nil {
 		ws.SetFileDialog(fd)
 	}

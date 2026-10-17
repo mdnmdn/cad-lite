@@ -154,6 +154,7 @@ mostly meet it as the `*Window` argument of `Render` and event handlers.
 | `UIScale() float32` | The current UI zoom. |
 | `SetBackground(c Rgba)` | Colour the frame is cleared to (default opaque white). |
 | `Scene() *Scene` | The last drawn frame's scene, for inspection. |
+| `Snapshot() *image.NRGBA` | Owned copy of the last presented frame in device pixels; `nil` before presentation. Later draws and resizes do not change it. |
 | `HitTest(p Point) (GlobalElementID, bool)` | Id of the element owning the topmost hitbox at `p` in the last frame; compare with `Equal`. |
 | `StopPropagation()` | Halt the current dispatch: remaining listeners and keymap dispatch are skipped. |
 

@@ -1,6 +1,8 @@
 package ui_test
 
 import (
+	"agentmanager"
+	"cad-lite/settings"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,6 +27,12 @@ func (r *agentRig) snap(name string) {
 
 func TestAgentHarnessChipsUntilStarted(t *testing.T) {
 	r := openAgent(t)
+	c := r.ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	c.DefaultAgent = "claude"
+	r.ws.SetSettings(c, r.hw.Window())
+	r.ws.AgentPanel().Configure(agentmanager.Claude, "/nonexistent/claude")
+	r.hw.Pixels()
 	if !r.onScreen("agent-pick-claude") || r.onScreen("agent-harness") {
 		t.Fatal("a fresh tab shows the harness chips and no harness in the header")
 	}
@@ -45,26 +53,19 @@ func TestAgentHarnessChipsUntilStarted(t *testing.T) {
 	r.snap("live.png")
 }
 
-func TestAgentRestoredTabHidesHarnessChips(t *testing.T) {
-	dir := t.TempDir()
-	r := newRig(t, dir, nil, true)
-	r.say("hello", 0)
-	r.nextCfg()
-	r.turn(r.fs, "claude-sid-1", "hi there")
-	r.until("reply", func() bool { return r.hasText(0, "hi there") && !r.ws.AgentPanel().Transcript().Running() })
-	r.ws.CloseAgent()
-
-	r2 := newRig(t, dir, nil, true)
-	r2.hw.Window().Refresh()
-	r2.hw.Pixels()
-	if r2.ws.AgentPanel().Running() {
-		t.Fatal("restoring started a session")
+func TestAgentHistoryTabHidesHarnessChips(t *testing.T) {
+	r := openAgent(t)
+	r.chat(0, "hello", "claude-sid-1", "hi there")
+	p, w := r.ws.AgentPanel(), r.hw.Window()
+	id := p.Tabs()[0].SessionID
+	p.CloseTab(0, w)
+	p.OpenSession(id, w)
+	r.hw.Pixels()
+	if p.Running() || r.onScreen("agent-pick-claude") {
+		t.Fatal("opening history started a process or showed harness chips")
 	}
-	if r2.onScreen("agent-pick-claude") {
-		t.Fatal("a restored tab shows the harness chips")
+	if !r.onScreen("agent-harness") || !r.onScreen("agent-start") {
+		t.Fatal("history tab lacks harness or Start")
 	}
-	if !r2.onScreen("agent-harness") || !r2.onScreen("agent-start") {
-		t.Fatal("a restored tab lacks the harness in the header or the Start button")
-	}
-	r2.snap("restored.png")
+	r.snap("reopened-history.png")
 }

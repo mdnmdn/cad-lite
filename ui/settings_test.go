@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"agentmanager"
+	"context"
 	"image/color"
 	"os"
 	"path/filepath"
@@ -36,7 +38,13 @@ type sHarness struct {
 
 func openSettingsWS(t *testing.T, ws *Workspace, width, height, device float32) *sHarness {
 	t.Helper()
+	if ws.docTab.projectPath == "" {
+		ws.docTab.projectPath = filepath.Join(t.TempDir(), "drawing.dxf")
+	}
 	t.Cleanup(func() { ApplyTheme(themeDark) })
+	ws.prefs().aiBasic.fetch = func(context.Context, string) ([]agentmanager.ModelInfo, error) {
+		return []agentmanager.ModelInfo{{ID: basicOllamaModel, Name: "gpt-oss 120b (Ollama Cloud)"}}, nil
+	}
 	p := gpui.NewHeadlessPlatform()
 	p.SetScaleFactor(device)
 	var hw *gpui.HeadlessWindow
@@ -96,8 +104,8 @@ func (h *sHarness) locate(id string) (gpui.Point, bool) {
 
 // reveal reports whether id is in the frame. When it is not and the settings
 // panel is open, it tries the panel's other tabs and stays on the one that
-// shows id; when none does, it goes back to the tab (and scroll position) it
-// started from. Tests address a control by id whatever tab it lives on.
+// shows id, scrolling each body as needed; when none does, it goes back to the
+// tab and scroll position it started from. Tests address a control by id whatever tab it lives on.
 func (h *sHarness) reveal(id string) bool {
 	if _, ok := h.locate(id); ok {
 		return true
@@ -109,13 +117,23 @@ func (h *sHarness) reveal(id string) bool {
 	w := h.hw.Window()
 	start, off := p.tab, p.bodyScroll.Offset()
 	for t := range settingsTabCount {
-		if t == start {
-			continue
-		}
 		h.ws.setSettingsTab(w, t)
+		p.bodyScroll.ScrollToTop()
+		w.Refresh()
 		h.hw.Pixels()
-		if _, ok := h.locate(id); ok {
-			return true
+		for {
+			if _, ok := h.locate(id); ok {
+				return true
+			}
+			current := p.bodyScroll.Offset()
+			maximum := p.bodyScroll.MaxOffset().H
+			if current.Y >= maximum {
+				break
+			}
+			current.Y = min(maximum, current.Y+gpui.Pixels(max(100, float32(w.Bounds().Size.H)/2)))
+			p.bodyScroll.SetOffset(current)
+			w.Refresh()
+			h.hw.Pixels()
 		}
 	}
 	h.ws.setSettingsTab(w, start)
@@ -571,6 +589,9 @@ func (h *sHarness) hoverTip(p gpui.Point) bool {
 
 func TestSettingsControlsHaveTooltips(t *testing.T) {
 	h := openSettingsWS(t, NewWorkspace(doc.New(), nil), 900, 1000, 1) // tall: the footer sits below the updates section
+	c := h.ws.Settings()
+	c.AgentMode = settings.AgentAdvanced
+	h.ws.SetSettings(c, h.hw.Window())
 	h.openPanel()
 	for _, id := range []string{"settings-close", "theme-light", "ui-scale-down", "ui-scale-up", "ui-scale-reset",
 		"lang-it", "set-grid", "set-osnap", "set-ortho", "wheel-pan", "agent-claude", "settings-reset",

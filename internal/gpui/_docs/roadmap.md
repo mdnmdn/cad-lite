@@ -5,7 +5,7 @@ It replaces the former first-wave plan and work-in-progress notes
 (activity registry). Contract: [api-contract.md](api-contract.md) (change
 signatures there first). Layout of the repo: [project-structure.md](project-structure.md).
 
-Last updated: 2026-10-14.
+Last updated: 2026-10-17.
 
 Current wave: **E1 — in progress**, owned by `l1`, coordinated by Jake.
 Scope: animation frames, UI-thread timers, easing and deterministic headless
@@ -35,6 +35,10 @@ What works today:
   fallback, HarfBuzz shaping and wrapping.
 - Retained entities with observe/emit/release, keymap + actions + key contexts,
   tab order, focus handles, mouse/keyboard events, clipboard (OS tools).
+- `Window.Snapshot` supplies owned presented-frame images for frozen modal backgrounds;
+  unscaled opaque image runs copy directly (`window_snapshot_test.go`, `image_test.go`).
+- Large translucent solid fills use channel lookup tables for identical source-over pixels
+  with less backdrop blending work (`raster_translucent_test.go` covers rounding).
 - CPU rasterizer (Scene to premultiplied RGBA), PNG output, headless platform
   with synthetic input injection.
 - Ebiten backend (`ebitenplatform`): window, input mapping, present loop,

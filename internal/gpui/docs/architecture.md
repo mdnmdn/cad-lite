@@ -274,10 +274,16 @@ frames. The headless window does not implement `FrameRequester`: a
 - **Bounds-limited rasterization.** Each primitive's pixel loops are limited
   to its own bounds (plus a one-pixel anti-aliasing margin) intersected with
   its content mask; fully-covered interior spans of rounded rects skip the
-  SDF. The buffer itself is reset and every primitive redrawn on every frame -
+  SDF. Large unmasked translucent solid fills precompute four 256-entry channel
+  lookup tables with the same source-over rounding as the per-pixel blender,
+  so modal backdrops avoid repeated floating-point blends. Rounded edges and
+  rounded content masks retain coverage-aware blending. The buffer itself is reset and every primitive redrawn on every frame -
   there is no damage tracking. The known gap: the 1:1 sprite blit loops over
   the clip window intersected with the sprite rather than only the sprite's
   bounds (noted in `_docs/roadmap.md`).
+- **Frozen images.** `Window.Snapshot` copies the last presented pixels without rebuilding
+  or rasterizing the scene. Unscaled images copy opaque runs directly; scaled images
+  and rounded masks retain bilinear sampling and coverage-aware blending.
 - **Buffer reuse.** The `Rasterizer` and the device-scale scratch `Scene` are
   reused while the window size is unchanged; at scale 1 `scaleScene` returns
   the scene without copying.

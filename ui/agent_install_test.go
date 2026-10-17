@@ -17,6 +17,7 @@ import (
 	"cad-lite/agentinstall"
 	"cad-lite/doc"
 	"cad-lite/i18n"
+	"cad-lite/settings"
 )
 
 // fakeInstaller is an AgentInstaller that reports progress, then waits for release (or for its
@@ -85,6 +86,9 @@ func installRig(t *testing.T, f *fakeInstaller) (*sHarness, *terminalLog) {
 		}
 	})
 	ws := NewWorkspace(doc.New(), nil)
+	s := ws.Settings()
+	s.AgentMode = settings.AgentAdvanced
+	ws.SetSettings(s, nil)
 	ws.SetAgentInstaller(f.run)
 	term := &terminalLog{}
 	ws.SetTerminalOpener(term.open)
@@ -141,11 +145,14 @@ func TestInstallStoresTheBinaryAndOpensTheSignIn(t *testing.T) {
 		t.Errorf("result not shown: %+v", a.phase)
 	}
 	h.png("install-done.png")
-	h.clickID("settings-install-login")
+	if h.has("settings-install-ask") || h.has("settings-install-login") {
+		t.Fatal("installer remains visible after OpenCode is found")
+	}
+	h.ws.openLogin(h.hw.Window())
 	if len(term.runs()) != 2 {
 		t.Error("Sign in did not open the terminal again")
 	}
-	h.clickID("settings-install-ok")
+	h.ws.dismissInstall(h.hw.Window())
 	h.hw.Pixels()
 	if h.has("settings-install") {
 		t.Error("the card stayed after OK although OpenCode is now found")
@@ -304,5 +311,26 @@ func TestTerminalCommandRunsAProgram(t *testing.T) {
 	cmd, _, err = terminalCommandArgs("linux", dir, "alacritty -e", argv, only("alacritty"))
 	if err != nil || strings.Join(cmd.Args[1:], " ") != "-e "+tail {
 		t.Errorf("linux $TERMINAL with -e: %q %v", cmd.Args, err)
+	}
+}
+
+func TestBasicInstallKeepsSignInInSettings(t *testing.T) {
+	bin := writeExe(t, t.TempDir(), "opencode", `echo "opencode 1.2.3"`)
+	f := &fakeInstaller{release: make(chan struct{}), r: agentinstall.Result{Binary: bin}}
+	h, term := installRig(t, f)
+	h.clickID("ai-mode-basic")
+	h.clickID("settings-basic-install-ask")
+	if f.count() != 0 {
+		t.Fatal("installation started before confirmation")
+	}
+	h.hw.Pixels()
+	h.clickID("settings-basic-install-go")
+	close(f.release)
+	h.settle(func() bool { return !h.ws.AgentInstalling() })
+	if h.ws.Settings().AgentBinaries["opencode"] != bin {
+		t.Fatal("installed executable was not saved")
+	}
+	if len(term.runs()) != 0 {
+		t.Fatal("Basic mode opened an interactive sign-in terminal")
 	}
 }

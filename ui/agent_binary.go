@@ -48,6 +48,7 @@ type binaryPick struct {
 // over the PATH lookup for discovery and for every session start, and lets the agent panel offer a
 // harness found only that way.
 func (ws *Workspace) applyAgentBinaries(m map[string]string) {
+	ws.prefs().aiBasic.availableChecked = false
 	for _, h := range harnesses.All {
 		harnesses.SetBinary(h, m[string(h)])
 	}
