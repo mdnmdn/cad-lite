@@ -24,6 +24,17 @@ submission; missing values leave the build successful and the feedback dialog un
 not encryption: desktop credentials are extractable and must be scoped to intake. They never enter
 browser build flags. See [Feedback](../_docs/features/feedback.md) for the outbox and protocol.
 
+## Analytics configuration
+
+Desktop builds accept optional `POSTHOG_URL` and `POSTHOG_KEY` (the PostHog project capture token).
+CI/release steps read repository variable `POSTHOG_URL` and secret `POSTHOG_KEY`; `resolve_analytics`
+encodes them for `main.posthogURLBase64` and `main.posthogKeyBase64`. Use the regional ingestion host
+(`https://us.i.posthog.com`, `https://eu.i.posthog.com`) or your self-hosted ingestion URL.
+Missing/invalid values select the stdout dummy; `CADLITE_ANALYTICS=stdout` forces it and
+`CADLITE_ANALYTICS=off` disables recording. The browser receives no key and sends no events.
+Compiled tokens are extractable; use a project capture token, never a personal administration key.
+See [Analytics](../_docs/features/analytics.md).
+
 ## Pure-Go cross builds
 
 macOS and Windows need no cgo: ebiten uses purego on both, so `CGO_ENABLED=0` cross-compiles all

@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: The command model, the session state machine, typed-input parsing, the input pipeline from pointer to point, object snaps, ortho and selection.
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
-updated: 2026-10-16
-verified: 2026-10-16
+updated: 2026-10-17
+verified: 2026-10-17
 code_anchors: [i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
@@ -36,6 +36,12 @@ handler through `cmdsys.Context`. `Context.Tx` opens the command's transaction o
 draft for an existing text handle. TEXTEDIT ends after the callback accepts it; no transaction is
 opened by the command. The host's Apply validates that the same drawing and target are editable and
 the session is idle, then commits one transaction named TEXTEDIT. Cancel has no document effect.
+
+`Session.SetAnalytics` installs an optional nonblocking recorder. Command starts, stable error
+codes and successful file open/save messages register metadata events through `cmdsys/analytics.go`;
+`Context.Say` delegates to the session without changing translation or command-history output.
+Recorder failures cannot interrupt a command. Details and payload boundaries are in
+[Analytics](../features/analytics.md).
 
 **Work in progress** (`inflight.go`). What a command adds, changes or erases before it ends is real
 document state at once, as in AutoCAD (each LINE segment is an entity the moment it is placed). The

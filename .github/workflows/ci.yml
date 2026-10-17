@@ -45,10 +45,13 @@ jobs:
         env:
           FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
           FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
+          POSTHOG_URL: ${{ vars.POSTHOG_URL }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
         run: |
           source packaging/lib.sh
           resolve_feedback
-          go build -ldflags "$LDFLAGS_FEEDBACK -X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
+          resolve_analytics
+          go build -ldflags "$LDFLAGS_FEEDBACK $LDFLAGS_ANALYTICS -X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
           test "$("$RUNNER_TEMP/cad-lite" -version)" = "cad-lite 0.0.0-ci+${GITHUB_SHA::7}"
       - name: Build for the browser
         run: GOOS=js GOARCH=wasm go build -o "$RUNNER_TEMP/cad.wasm" ./cmd/cad
@@ -94,10 +97,13 @@ jobs:
         env:
           FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
           FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
+          POSTHOG_URL: ${{ vars.POSTHOG_URL }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
         run: |
           source packaging/lib.sh
           resolve_feedback
-          go build -ldflags "$LDFLAGS_FEEDBACK -X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
+          resolve_analytics
+          go build -ldflags "$LDFLAGS_FEEDBACK $LDFLAGS_ANALYTICS -X main.version=0.0.0-ci+${GITHUB_SHA::7}" -o "$RUNNER_TEMP/cad-lite" ./cmd/cad
       # Only packages that need no window; the UI tests render with the real gpui stack.
       - name: Test pure packages
         run: go test ./geom/... ./doc/... ./spatial/... ./fileio/... ./cmdsys/... ./render

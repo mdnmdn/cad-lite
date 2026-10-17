@@ -92,9 +92,10 @@ type agentTab struct {
 	// attention is set when a background tab got a permission ask or finished a turn.
 	attention bool
 
-	state agentState
-	gen   int
-	sess  agentmanager.Session
+	analyticsMessages map[string]bool
+	state             agentState
+	gen               int
+	sess              agentmanager.Session
 	// harness is the harness the live session was started with.
 	harness agentmanager.Harness
 	// cancelOpen aborts a start in flight.

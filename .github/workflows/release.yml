@@ -84,6 +84,8 @@ jobs:
         env:
           FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
           FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
+          POSTHOG_URL: ${{ vars.POSTHOG_URL }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
         run: ARCHS="arm64 amd64" packaging/macos/bundle.sh
       - name: Sign, notarize when APPLE_* secrets exist, zip and dmg
         env:
@@ -124,6 +126,8 @@ jobs:
         env:
           FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
           FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
+          POSTHOG_URL: ${{ vars.POSTHOG_URL }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
         run: ARCHS=amd64 packaging/windows/bundle.sh
       - name: Install Inno Setup
         shell: pwsh
@@ -164,6 +168,8 @@ jobs:
         env:
           FEEDBACK_URL: ${{ vars.FEEDBACK_URL }}
           FEEDBACK_KEY: ${{ secrets.FEEDBACK_KEY }}
+          POSTHOG_URL: ${{ vars.POSTHOG_URL }}
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
         run: GOARCH=amd64 CGO_ENABLED=1 packaging/linux/bundle.sh
       - uses: actions/upload-artifact@v4
         with:

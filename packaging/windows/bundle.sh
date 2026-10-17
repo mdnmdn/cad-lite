@@ -9,6 +9,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$root/packaging/lib.sh"
 resolve_version
 resolve_feedback
+resolve_analytics
 ARCHS="${ARCHS:-amd64}"
 OUT="${OUT:-$root/_tmp/dist/windows}"
 mkdir -p "$OUT"
@@ -33,7 +34,7 @@ for arch in $ARCHS; do
     syso+=("$root/cmd/cad/rsrc_windows_$arch.syso")
   fi
   (cd "$root" && GOOS=windows GOARCH="$arch" CGO_ENABLED=0 \
-    go build -trimpath -ldflags "-H=windowsgui -s -w $LDFLAGS_VERSION $LDFLAGS_FEEDBACK" -o "$dir/cad-lite.exe" ./cmd/cad)
+    go build -trimpath -ldflags "-H=windowsgui -s -w $LDFLAGS_VERSION $LDFLAGS_FEEDBACK $LDFLAGS_ANALYTICS" -o "$dir/cad-lite.exe" ./cmd/cad)
   rm -f "$root/cmd/cad/rsrc_windows_$arch.syso"
   # Compress-Archive (Windows PowerShell 5) writes backslashes into entry names, so it is the last
   # resort; the GitHub Windows runner has 7-Zip but no zip.

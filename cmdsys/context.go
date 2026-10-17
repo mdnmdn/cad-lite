@@ -25,6 +25,7 @@ type Context struct {
 	// commit commits txn the way the session does (Session.commitOpen).
 	commit  func() doc.ChangeSet
 	out     func(string)
+	say     func(string, ...any)
 	tr      func() i18n.Translator
 	replace func(*doc.Drawing)
 	setPath func(string)
@@ -85,7 +86,13 @@ func (c *Context) Plural(key string, n int, args ...any) string {
 }
 
 // Say writes the translated message key to the command history.
-func (c *Context) Say(key string, args ...any) { c.out(c.T(key, args...)) }
+func (c *Context) Say(key string, args ...any) {
+	if c.say != nil {
+		c.say(key, args...)
+		return
+	}
+	c.out(c.T(key, args...))
+}
 
 // SayPlural writes the translated counted message key to the command history.
 func (c *Context) SayPlural(key string, n int, args ...any) { c.out(c.Plural(key, n, args...)) }

@@ -8,14 +8,15 @@ import (
 	"time"
 	"weak"
 
+	"cad-lite/analytics"
 	"cad-lite/internal/gpui"
 	"cad-lite/updater"
 )
 
 // Timing of the update checks.
 const (
-	// updateFirstDelay is how long after start the first automatic check runs.
-	updateFirstDelay = 10 * time.Second
+	// updateFirstDelay schedules the first automatic check on the first window tick.
+	updateFirstDelay = 0
 	// updateInterval separates automatic checks.
 	updateInterval = 6 * time.Hour
 	// updatePoll is how often the UI looks at the worker while it runs.
@@ -185,7 +186,7 @@ func (ws *Workspace) armAutoCheck(w *gpui.Window, d time.Duration) {
 	u := ws.upd()
 	u.auto.Cancel()
 	u.auto = nil
-	if !u.enabled || !ws.prefs().cur.AutoUpdate || !updater.Updatable(u.version) {
+	if !u.enabled || !ws.prefs().cur.AutoUpdate {
 		return
 	}
 	u.auto = w.After(d, func(w *gpui.Window, _ *gpui.App) {
@@ -272,6 +273,13 @@ func (ws *Workspace) pollUpdate(w *gpui.Window, cx *gpui.App) {
 }
 
 func (ws *Workspace) adoptUpdate(w *gpui.Window, cx *gpui.App, r *updResult) {
+	if r.err != nil {
+		code := "check_failed"
+		if r.install {
+			code = "install_failed"
+		}
+		ws.track("error", analytics.Properties{"source": "updater", "code": code})
+	}
 	u := ws.upd()
 	if r.install {
 		if r.err != nil {

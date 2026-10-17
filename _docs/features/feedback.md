@@ -7,7 +7,7 @@ summary: An application feedback dialog with rendered screenshots, reversible an
 read_when: you are changing feedback capture, screenshot annotation, intake delivery or build credentials
 updated: 2026-10-17
 verified: 2026-10-17
-code_anchors: [feedback/client.go, feedback/outbox.go, feedback/image.go, feedback/metadata.go, feedback/client_test.go, feedback/image_test.go, ui/feedback.go, ui/feedback_view.go, ui/slider.go, ui/feedback_test.go, ui/titlebar.go, ui/workspace.go, cmd/cad/main.go, packaging/lib.sh, packaging/linux/bundle.sh, packaging/macos/bundle.sh, packaging/windows/bundle.sh, .github/workflows/ci.yml, .github/workflows/release.yml]
+code_anchors: [feedback/client.go, feedback/outbox.go, feedback/image.go, feedback/metadata.go, appenv/system.go, feedback/client_test.go, feedback/image_test.go, ui/feedback.go, ui/feedback_view.go, ui/slider.go, ui/feedback_test.go, ui/titlebar.go, ui/workspace.go, cmd/cad/main.go, packaging/lib.sh, packaging/linux/bundle.sh, packaging/macos/bundle.sh, packaging/windows/bundle.sh, .github/workflows/ci.yml, .github/workflows/release.yml]
 depends_on: [tech-ui-framework, tech-architecture, tech-operations]
 review_cycle: quarterly
 ---
@@ -92,7 +92,7 @@ from the executable and must be scoped to feedback intake.
 Invalid fields and unsupported images leave the draft intact. Cancelling the native image picker
 keeps the previous attachment without reporting an error. Missing storage prevents submission.
 A failed delivery retains its copy and the draft for retry; permanent service rejections need
-configuration or draft correction. Outbox reads skip corrupt and non-regular entries. OS version
+configuration or draft correction. Outbox reads skip corrupt and non-regular entries. Shared `appenv.SystemMetadata` OS version
 queries time out after two seconds and use `unknown` if unavailable. Shutdown cancellation leaves
 unacknowledged outbox entries for the next start.
 

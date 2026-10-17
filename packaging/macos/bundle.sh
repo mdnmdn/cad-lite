@@ -9,6 +9,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$root/packaging/lib.sh"
 resolve_version
 resolve_feedback
+resolve_analytics
 ARCHS="${ARCHS:-arm64 amd64}"
 OUT="${OUT:-$root/_tmp/dist/macos}"
 app="$OUT/Cad-lite.app"
@@ -19,7 +20,7 @@ bins=()
 for arch in $ARCHS; do
   bin="$OUT/build/cad-lite-$arch"
   (cd "$root" && GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 \
-    go build -trimpath -ldflags "-s -w $LDFLAGS_VERSION $LDFLAGS_FEEDBACK" -o "$bin" ./cmd/cad)
+    go build -trimpath -ldflags "-s -w $LDFLAGS_VERSION $LDFLAGS_FEEDBACK $LDFLAGS_ANALYTICS" -o "$bin" ./cmd/cad)
   bins+=("$bin")
 done
 if [ "${#bins[@]}" -gt 1 ]; then

@@ -25,6 +25,8 @@ unexported access.
 
 | Level | What | Where and how |
 |---|---|---|
+| Unit | Analytics JSON capture, runtime metadata, snapshot ownership, full queue, deadlines and provider failure isolation | `analytics/analytics_test.go`, local HTTP servers and controlled sinks |
+| Integration | Command/agent event wiring, data minimization and startup update checks | `cmdsys/commands/analytics_test.go`, `ui/analytics_test.go`, `cmd/cad/analytics_test.go`, `ui/update_test.go` |
 | Unit | Feedback protocol, private outbox, retry identity, redirect isolation and image annotations | `feedback/client_test.go`, `feedback/image_test.go`; local HTTP servers, no live credentials |
 | UI | Feedback capture, modal isolation, annotation Save/Cancel, submission and unchanged draft retry | `ui/feedback_test.go`; headless renders and input |
 | Unit | Geometry: transforms, arc bounds, closest points, bulges, chord tolerance, intersections | `geom/geom_test.go`, table-driven |

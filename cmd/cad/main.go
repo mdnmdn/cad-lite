@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"agentmanager"
+	"cad-lite/analytics"
 	"cad-lite/appenv"
 	"cad-lite/assets/appicon"
 	"cad-lite/doc"
@@ -86,6 +87,11 @@ func main() {
 	// The system language until the settings file is read (-png renders keep it: LANG=it_IT.UTF-8).
 	i18n.Set(i18n.Detect())
 
+	var metrics *analytics.Client
+	if *png == "" && runtime.GOOS != "js" {
+		metrics = startAnalytics()
+	}
+
 	files := &fileio.Registry{}
 	files.AddReader(dxf.Codec{})
 	files.AddReader(dwg.Codec{})
@@ -97,13 +103,17 @@ func main() {
 		var err error
 		d, warns, err = files.Open(*open)
 		if err != nil {
+			analytics.Record(metrics, "error", analytics.Properties{"source": "startup", "code": "drawing_open_failed"})
+			stopAnalytics(metrics)
 			log.Fatal(err)
 		}
+		analytics.Record(metrics, "drawing_opened", analytics.Properties{"format": startupDrawingFormat(*open)})
 		for _, w := range warns {
 			log.Printf("%s: %s", *open, w)
 		}
 	}
 	ws := ui.NewWorkspace(d, files)
+	ws.SetAnalytics(metrics)
 	ws.SetVersion(version)
 	// Deferred first, so it runs last: after the settings are saved and the agent is closed,
 	// start the version an in-app update installed.
@@ -112,10 +122,17 @@ func main() {
 			log.Printf("update: restart: %v", err)
 		}
 	}()
+	defer stopAnalytics(metrics)
 	defer ws.CloseAgent()
 	defer ws.ShutdownFeedback()
 	// fatal stops the agent subprocess first: log.Fatal and os.Exit skip deferred calls.
-	fatal := func(v ...any) { ws.CloseAgent(); ws.ShutdownFeedback(); log.Fatal(v...) }
+	fatal := func(v ...any) {
+		analytics.Record(metrics, "error", analytics.Properties{"source": "application", "code": "fatal"})
+		ws.CloseAgent()
+		ws.ShutdownFeedback()
+		stopAnalytics(metrics)
+		log.Fatal(v...)
+	}
 	if *open != "" {
 		ws.SetProjectPath(*open)
 	}
@@ -124,6 +141,7 @@ func main() {
 		ws.EnableAgentDiscovery()
 		ws.SetFileDialog(filedialog.System{})
 		if err := ws.LoadSettings(); err != nil {
+			analytics.Record(metrics, "error", analytics.Properties{"source": "settings", "code": "load_failed"})
 			log.Printf("settings: %v", err)
 		}
 		i18n.Set(i18n.FromSetting(ws.Settings().Language))
@@ -213,9 +231,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		ws.CloseAgent()
 		ws.ShutdownFeedback()
+		analytics.Record(metrics, "error", analytics.Properties{"source": "application", "code": "platform_failed"})
+		stopAnalytics(metrics)
 		os.Exit(1)
 	}
 	if err := ws.SaveSettings(); err != nil {
+		analytics.Record(metrics, "error", analytics.Properties{"source": "settings", "code": "save_failed"})
 		log.Printf("settings: %v", err)
 	}
 	if *saveOnExit != "" {

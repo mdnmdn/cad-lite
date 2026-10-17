@@ -1,4 +1,5 @@
-// Package appenv reads Cad-lite's environment variables. Every variable is named
+// Package appenv reads Cad-lite's environment variables and non-identifying system metadata.
+// Every variable is named
 // CADLITE_<NAME>; the name it had while the project was called go-draw,
 // GODRAW_<NAME>, is still read when the new one is not set. It is a leaf
 // package: pure Go, no imports from the rest of Cad-lite.

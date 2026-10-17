@@ -9,6 +9,7 @@ import (
 	"agentmanager"
 	"agentmanager/store"
 	"agentmanager/transcript"
+	"cad-lite/analytics"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 )
@@ -450,6 +451,7 @@ func (p *AgentPanel) resumeID(t *agentTab, h agentmanager.Harness) string {
 // apply folds ev into tab t's transcript and stores it. Debug log lines are neither shown nor
 // stored. A background tab is flagged when it needs the user.
 func (p *AgentPanel) apply(t *agentTab, ev agentmanager.Event) {
+	p.trackEvent(t, ev)
 	t.tr.Apply(ev)
 	t.mdl.observe(ev)
 	if t != p.cur {
@@ -468,6 +470,7 @@ func (p *AgentPanel) apply(t *agentTab, ev agentmanager.Event) {
 
 // userMessage adds and stores a message the user sent to tab t.
 func (p *AgentPanel) userMessage(t *agentTab, text string, imgs []*agentImage) {
+	p.ws.track("agent_message", analytics.Properties{"role": "user", "harness": string(p.harnessOf(t)), "attachment_count": len(imgs)})
 	p.prepareRecord(t)
 	var att []transcript.Attachment
 	for _, im := range imgs {

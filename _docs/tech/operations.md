@@ -145,6 +145,12 @@ when both exist; browser builds receive neither. Missing values disable submissi
 failing the build. Pending reports live in `feedback-outbox` beside the settings file. See
 [Feedback](../features/feedback.md) and [packaging](../../packaging/README.md).
 
+Desktop analytics uses optional repository variable `POSTHOG_URL` and secret `POSTHOG_KEY`
+(a project capture token). CI and release desktop steps pass these through `resolve_analytics`;
+missing values select the stdout dummy and never fail a build. Browser and `-png` runs emit no
+analytics. `CADLITE_ANALYTICS=off` disables recording; `CADLITE_ANALYTICS=stdout` forces local JSON
+events. See [Analytics](../features/analytics.md) for event payloads and delivery limits.
+
 ## Releases
 
 `.github/workflows/release.yml` runs on a pushed `v*` tag and on manual dispatch. It builds the

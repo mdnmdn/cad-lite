@@ -35,3 +35,14 @@ resolve_feedback() {
     LDFLAGS_FEEDBACK="-X main.feedbackURLBase64=$feedback_url_encoded -X main.feedbackKeyBase64=$feedback_key_encoded"
   fi
 }
+
+# resolve_analytics supplies optional PostHog ingestion settings for desktop builds.
+resolve_analytics() {
+  LDFLAGS_ANALYTICS=""
+  if [ -n "${POSTHOG_URL:-}" ] && [ -n "${POSTHOG_KEY:-}" ]; then
+    local posthog_url_encoded posthog_key_encoded
+    posthog_url_encoded="$(printf '%s' "$POSTHOG_URL" | base64 | tr -d '\r\n')"
+    posthog_key_encoded="$(printf '%s' "$POSTHOG_KEY" | base64 | tr -d '\r\n')"
+    LDFLAGS_ANALYTICS="-X main.posthogURLBase64=$posthog_url_encoded -X main.posthogKeyBase64=$posthog_key_encoded"
+  fi
+}

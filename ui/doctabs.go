@@ -51,6 +51,7 @@ func (ws *Workspace) newDocTab(d *doc.Drawing) *docTab {
 	s := cmdsys.NewSession(d, t.view, commands.NewRegistry())
 	t.session = s
 	s.SetFiles(ws.files)
+	s.SetAnalytics(ws.analytics)
 	t.attach(d)
 	s.OnDrawing(t.attach)
 	s.OnFilePath(func(path string) { ws.pathChanged(t, path) })

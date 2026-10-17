@@ -3,6 +3,7 @@ package cmdsys
 import (
 	"strings"
 
+	"cad-lite/analytics"
 	"cad-lite/doc"
 	"cad-lite/geom"
 	"cad-lite/i18n"
@@ -15,8 +16,9 @@ import (
 // The UI feeds it raw input (typed text, clicks, cursor moves, box drags)
 // and reads back the prompt, the history and the overlay.
 type Session struct {
-	ctx      Context
-	registry *Registry
+	ctx       Context
+	registry  *Registry
+	analytics analytics.Recorder
 
 	// Snaps are the enabled object snap modes; SnapOn toggles them all (F3).
 	Snaps  SnapMode
@@ -78,7 +80,7 @@ func NewSession(d *doc.Drawing, view *render.View, reg *Registry) *Session {
 		vars: NewVars(), mem: &lastState{}, prev: &selMemory{}}
 	s.files = newFileState(func() string { return s.filePath })
 	s.ctx = Context{commit: s.commitOpen, files: s.files, View: view, Selection: &Selection{}, out: s.print, tr: s.Translator, replace: s.SetDrawing, setPath: s.SetFilePath,
-		agentCaller: func() bool { return s.agentCaller }, vars: s.vars, last: s.mem, prev: s.prev, script: s.queueScript}
+		say: s.Say, agentCaller: func() bool { return s.agentCaller }, vars: s.vars, last: s.mem, prev: s.prev, script: s.queueScript}
 	installCommandLine(s)
 	s.SetDrawing(d)
 	for _, g := range varGroups {
@@ -128,6 +130,7 @@ func (s *Session) guard(f func()) (ok bool) {
 			if s.active != nil {
 				name = s.active.Name()
 			}
+			s.track("error", analytics.Properties{"source": "command", "code": "panic", "command": name})
 			s.abortOpen()
 			if s.ctx.Doc != nil {
 				s.ctx.Doc.AbortOpen()
@@ -261,12 +264,16 @@ func (s *Session) print(line string) {
 
 // Say writes the translated message key to the command history, as a command's Context.Say does.
 // The UI uses it for messages no command prints, such as a dropped file it cannot open.
-func (s *Session) Say(key string, args ...any) { s.print(s.Translator().T(key, args...)) }
+func (s *Session) Say(key string, args ...any) {
+	s.trackMessage(key, args)
+	s.print(s.Translator().T(key, args...))
+}
 
 // Run starts the named command, cancelling any running one.
 func (s *Session) Run(name string) bool {
 	cmd, ok := s.lookupCommand(name)
 	if !ok {
+		s.track("error", analytics.Properties{"source": "command", "code": "unknown_command"})
 		s.print(s.Translator().T("session.unknown_command", strings.ToUpper(strings.TrimSpace(name))))
 		return false
 	}
@@ -281,6 +288,7 @@ func (s *Session) Run(name string) bool {
 	s.print(t.T("session.command_echo", strings.ToUpper(t.CommandName(cmd.Name()))))
 	s.last = cmd.Name()
 	s.runs++
+	s.trackCommand(cmd.Name())
 	s.active = cmd
 	var p *Prompt
 	s.dispatching = true
@@ -400,5 +408,6 @@ func (s *Session) base() *geom.Vec2 {
 
 // inputError maps a ParseInput error to its localized command-line sentence.
 func (s *Session) inputError(err error) string {
+	s.track("error", analytics.Properties{"source": "input", "code": InputErrorKey(err, s.prompt)})
 	return s.Translator().T(InputErrorKey(err, s.prompt))
 }

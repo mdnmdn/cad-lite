@@ -163,10 +163,7 @@ func TestUpdateChecksumMismatchKeepsInstall(t *testing.T) {
 func TestAutoCheckTimerAndToggle(t *testing.T) {
 	h, rig := updHarness(t, "1.0.0", false)
 	h.hw.Pixels()
-	h.hp.Advance(5 * time.Second)
-	if rig.hits.Load() != 0 {
-		t.Fatal("checked before the start delay")
-	}
+	h.hp.Advance(time.Millisecond)
 	h.settle(func() bool { return rig.hits.Load() >= 1 })
 	h.settle(func() bool { return h.ws.upd().phase == updAvailable })
 	// Turning the setting off cancels the timer.
@@ -179,16 +176,14 @@ func TestAutoCheckTimerAndToggle(t *testing.T) {
 	}
 }
 
-func TestDevBuildNeverAutoChecksButCanReportLatest(t *testing.T) {
+func TestDevBuildAutomaticallyReportsLatestWithoutOfferingInstall(t *testing.T) {
 	h, rig := updHarness(t, "dev", false)
 	h.hw.Pixels()
-	h.hp.Advance(7 * time.Hour)
-	time.Sleep(50 * time.Millisecond)
-	if rig.hits.Load() != 0 {
-		t.Error("dev build checked automatically")
-	}
-	h.ws.checkForUpdate(h.hw.Window(), true)
+	h.hp.Advance(time.Millisecond)
 	h.settle(func() bool { return h.ws.upd().phase == updUpToDate })
+	if rig.hits.Load() != 1 {
+		t.Fatal("dev build did not check at startup")
+	}
 	if _, ok := h.ws.UpdateAvailable(); ok {
 		t.Error("dev build offered an update")
 	}
@@ -233,5 +228,20 @@ func TestRestartDialogWarnsOnlyWhenDirty(t *testing.T) {
 	}
 	if got := i18n.T(restartBodyKey(false), "2.0.0"); strings.Contains(got, "unsaved") {
 		t.Errorf("clean body %q", got)
+	}
+}
+
+func TestUpdateChecksImmediatelyOnEveryLaunch(t *testing.T) {
+	for launch := 0; launch < 2; launch++ {
+		h, rig := updHarness(t, "1.0.0", false)
+		h.ws.prefs().cur.LastUpdateCheck = time.Now()
+		h.hp.Advance(time.Millisecond)
+		for i := 0; i < 100 && rig.hits.Load() == 0; i++ {
+			time.Sleep(2 * time.Millisecond)
+		}
+		if rig.hits.Load() != 1 {
+			t.Fatalf("launch %d did not check at startup: %d requests", launch, rig.hits.Load())
+		}
+		h.settle(func() bool { return h.ws.upd().phase == updAvailable })
 	}
 }

@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: How Cad-lite finds a newer GitHub release, shows it in the settings panel, and on one press downloads, verifies, installs and restarts into it.
 read_when: you are changing the update check, the Update button, the release asset names or checksums, or how the installation is replaced
-updated: 2026-10-15
-verified: 2026-10-16
+updated: 2026-10-17
+verified: 2026-10-17
 code_anchors: [updater/check.go, updater/assets.go, updater/download.go, updater/install.go, updater/extract.go, updater/version.go, ui/update.go, ui/update_view.go, ui/settings_view.go, cmd/cad/main.go, .github/workflows/release.yml, packaging/lib.sh]
 depends_on: [feat-settings, tech-operations, tech-architecture]
 review_cycle: monthly
@@ -28,8 +28,9 @@ and the installation follow without further action; a dialog then asks before th
   settings panel shows it on its *Updates* tab, under *About and updates*, `cad-lite -version` prints it, and the macOS
   `Info.plist` and the Windows version resource carry it. An unstamped build is `dev`; CI builds
   are `0.0.0-ci+<shortsha>`. A version with build metadata or that is not semver never updates itself
-  (no automatic check, no Update button) but the *Check for updates* button still reports the latest release.
-- **Checking.** One check runs about 10 seconds after start and then every 6 hours while
+  (no Update button); automatic and manual checks still report the latest release.
+- **Checking.** One check runs immediately on the first window tick of every application launch, regardless
+  of the saved last-check timestamp, and then every 6 hours while
   `update.auto_check` is on. The *Check for updates* button runs one at once, ignoring the cached
   answer. Requests are conditional (`ETag` / `If-None-Match`), so an unchanged release costs a 304.
   Drafts and pre-releases are skipped. Nothing runs in `-png` renders, in tests, in the browser
@@ -75,6 +76,10 @@ Package `updater`: `Client` (`NewClient`, `Check`, `CheckForce`, `Download`, `Up
 `.github/workflows/release.yml` selects release platforms on manual runs and includes every
 platform on tag pushes; the asset names and publication steps are in
 [Operations](../tech/operations.md).
+
+`Workspace.startUpdates` arms an immediate first check for each workspace, including dev and CI
+builds; the automatic-check setting and environment disable switch still apply. The last-check
+timestamp is informational and does not suppress a launch check.
 
 `updater` is stdlib only and never imports the UI. `Client.Check` reads
 `/repos/mdnmdn/cad-lite/releases/latest` (base URL, repository, platform and install path are fields,

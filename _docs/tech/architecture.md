@@ -41,6 +41,10 @@ UI shell and one rendering adapter touch the graphics stack.
 plurals, localized command keywords and command aliases. It imports nothing of the project, and
 `cmdsys`, `fileio`, `settings`, `cadmcp` and `ui` may import it.
 
+`analytics` is a UI-independent event recorder and background delivery client. The host injects it
+into workspaces and command sessions; stdout and PostHog sinks cannot change command results.
+It imports only `appenv` from the project. See [Analytics](../features/analytics.md).
+
 `feedback` is a UI-independent leaf for intake HTTP, a private delivery outbox, runtime metadata
 and screenshot annotations. Only the UI and desktop host configure it; it never imports gpui or
 changes CAD documents. See [Feedback](../features/feedback.md).

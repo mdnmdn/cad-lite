@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	"cad-lite/analytics"
 	"cad-lite/cmdsys"
 	"cad-lite/doc"
 	"cad-lite/i18n"
@@ -58,6 +59,7 @@ type Workspace struct {
 	aidsSet    bool
 	textEditor *textEditState
 	fb         *feedbackState
+	analytics  analytics.Recorder
 }
 
 // NewWorkspace returns a workspace editing d in its one tab. files may be nil, which
