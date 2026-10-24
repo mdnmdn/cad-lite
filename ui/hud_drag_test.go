@@ -225,7 +225,7 @@ func TestPropertiesHUDOverflowScrollDoesNotZoomCanvas(t *testing.T) {
 }
 
 func TestPropertiesHUDHidesWithoutUsableCanvas(t *testing.T) {
-	for _, size := range [][2]float32{{640, 400}, {800, 400}, {1280, 400}, {640, 500}, {320, 800}} {
+	for _, size := range [][2]float32{{640, 400}, {800, 400}, {1280, 376}, {640, 500}, {320, 776}} {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			h := openSettingsWS(t, NewWorkspace(doc.New(), nil), size[0], size[1], 1)
 			h.ws.togglePropsHUD()
@@ -252,7 +252,7 @@ func TestPropertiesHUDHidesWithoutUsableCanvas(t *testing.T) {
 func TestPropertiesHUDSpaceRecoveryCancelsDragAndReappears(t *testing.T) {
 	ws := NewWorkspace(doc.New(), nil)
 	ws.lay.ribbonOff = true
-	h := openSettingsWS(t, ws, 1280, 400, 1)
+	h := openSettingsWS(t, ws, 1280, 376, 1)
 	ws.togglePropsHUD()
 	h.hw.Window().Refresh()
 	h.hw.Pixels()

@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: The settings panel and its General, AI (Basic and Advanced) and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, provider keys, default agent, updates) and the TOML file in the user config folder that keeps them.
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
-updated: 2026-10-17
+updated: 2026-10-24
 verified: 2026-10-17
 code_anchors: [ui/agent_basic_check.go, ui/agent_basic.go, settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
@@ -26,8 +26,8 @@ behaviour and the default agent and where agents are found. Changes apply at onc
 - **Opening.** The gear `Settings` button at the right end of the title bar, **Ctrl+,** (**Cmd+,** on
   macOS) and the `OPTIONS` command (alias `OP`) open and close it. The panel is a card centred over a dimmed backdrop;
   **Escape**, the `Close` button and a click on the backdrop close it. While it is open the keyboard
-  belongs to it and nothing under the backdrop receives pointer input. While a release waits, the gear
-  carries the update dot and opens the panel on the Updates tab.
+  belongs to it and nothing under the backdrop receives pointer input. A waiting release has its own
+  title bar button ([Updates](updates.md)); the gear carries no badge.
 - **Tabs.** Under the title bar a strip styled like the document tabs offers **General** (appearance,
   language, drawing aids, mouse wheel), **AI** (Basic OpenCode setup and provider keys; Advanced agent, executable and discovery controls) and **Updates** (About and updates). A click on a tab, or **Ctrl+Tab** and
   **Ctrl+Shift+Tab** while the panel is open (they switch tabs, not drawings, and wrap around),

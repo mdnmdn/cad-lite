@@ -185,6 +185,19 @@ func (ws *Workspace) widths(window float32) (side, agent float32) {
 	return columnWidths(window, ws.lay.sideW, ws.lay.agentW, ws.lay.sideOff, ws.agentShown())
 }
 
+// mainWidth is the width of the left column (tabs, canvas, command area) in a window win wide
+// whose side and agent columns are sideW and agentW wide.
+func (ws *Workspace) mainWidth(win, sideW, agentW float32) float32 {
+	gaps := float32(1)
+	if !ws.lay.sideOff {
+		gaps = splitterSize
+	}
+	if ws.agentShown() {
+		gaps += splitterSize
+	}
+	return max(0, win-sideW-agentW-gaps)
+}
+
 // columnHeight is the Layers and Properties column's height: the last frame's, or an estimate
 // from the window before there is one.
 func (ws *Workspace) columnHeight() float32 {

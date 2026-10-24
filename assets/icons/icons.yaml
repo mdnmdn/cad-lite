@@ -257,3 +257,7 @@ categories:
       goal: end the agent session, a square stop control distinct from cancelling a turn
       source: adopted:square
       keywords: [stop, end session, terminate, square]
+    app-update:
+      goal: a newer version is ready to install, an arrow pointing down into a circle
+      source: adopted:circle-arrow-down
+      keywords: [update, upgrade, new version, install, download, release]

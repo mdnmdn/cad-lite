@@ -512,6 +512,14 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 			exploded++
 			continue
 		}
+		if dm, ok := ctx.Doc.Entity(h).(*doc.Dimension); ok {
+			for _, e := range explodeDimension(dm) {
+				ctx.Tx().Add(e)
+			}
+			ctx.Tx().Erase(h)
+			exploded++
+			continue
+		}
 		pl, ok := ctx.Doc.Entity(h).(*doc.LWPolyline)
 		if !ok {
 			refused++
@@ -538,6 +546,46 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 		ctx.SayPlural("cmd.explode.msg.refused", refused)
 	}
 	ctx.SayPlural("cmd.explode.msg.exploded", exploded)
+}
+
+// explodeDimension returns the parts a dimension explodes into, on its layer and colour, as
+// AutoCAD explodes its block: the extension lines and dimension line (or stubs) as LINEs, the
+// dimension arc and the arc symbol as ARCs, each arrowhead as a closed three-point LWPOLYLINE
+// (AutoCAD makes a SOLID; there are no fills) and the text as a middle-centred TEXT. The
+// definition points (POINTs on layer DEFPOINTS in AutoCAD) are not kept.
+func explodeDimension(dm *doc.Dimension) []doc.Entity {
+	lay := dm.Layout()
+	var out []doc.Entity
+	add := func(c geom.Curve) {
+		if e := newEntity(c, dm); e != nil {
+			out = append(out, e)
+		}
+	}
+	for _, l := range lay.ExtLines {
+		if l.A != l.B {
+			add(l)
+		}
+	}
+	if dm.Kind == doc.DimArcLength && lay.DimArc.R > 0 && lay.DimArc.Start != lay.DimArc.End {
+		add(lay.DimArc)
+	}
+	for _, l := range lay.DimLine {
+		if l.A != l.B {
+			add(l)
+		}
+	}
+	for _, a := range lay.Arrows {
+		add(geom.Polyline{Pts: []geom.Vec2{a[0], a[1], a[2]}, Bulges: make([]float64, 3), Closed: true})
+	}
+	if lay.Symbol.R > 0 {
+		add(lay.Symbol)
+	}
+	if lay.Text != nil && lay.Text.Value != "" {
+		t := lay.Text.Clone().(*doc.Text)
+		t.EntityCommon = doc.EntityCommon{Layer: dm.Layer, Color: dm.Color}
+		out = append(out, t)
+	}
+	return out
 }
 
 func isArc(c geom.Curve) bool { _, ok := c.(geom.Arc); return ok }

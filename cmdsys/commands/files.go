@@ -2,9 +2,11 @@ package commands
 
 import (
 	"path/filepath"
+	"strings"
 
 	"cad-lite/cmdsys"
 	"cad-lite/doc"
+	"cad-lite/i18n"
 )
 
 // --- NEW, OPEN, SAVE, QSAVE, SAVEAS, CLOSE, QUIT, EXIT ----------------------
@@ -12,7 +14,8 @@ import (
 // fileCmd is every file command. The ones that discard the drawing (NEW, OPEN, CLOSE, QUIT, EXIT)
 // ask "Save changes to NAME? [Yes/No/Cancel]" first when the drawing is dirty; the ones that save
 // ask for a path when the drawing has none. With a document host (one tab per drawing) OPEN and NEW
-// open another tab instead and discard nothing, and CLOSE closes the tab.
+// open another tab instead and discard nothing, and CLOSE closes the tab. A host that implements
+// cmdsys.DiscardConfirmer asks CLOSE's and QUIT's question with a dialog instead, outside scripts.
 type fileCmd struct {
 	base
 	name  string
@@ -22,6 +25,10 @@ type fileCmd struct {
 	// opened is the drawing OPEN has read, installed by then.
 	opened *doc.Drawing
 	warns  []string
+	// version is the file format SAVEAS's format prompt chose; pinned says one was chosen (a path
+	// typed at that prompt keeps the drawing's own).
+	version string
+	pinned  bool
 }
 
 const (
@@ -29,7 +36,19 @@ const (
 	fileSavePath        // SAVE, SAVEAS, QSAVE: the path to write
 	fileAsk             // Save changes to NAME?
 	fileAskPath         // the path to save to before discarding the drawing
+	fileFormat          // SAVEAS: the file format, or a path saved in the drawing's own format
 )
+
+// fileFormats is what a file handler offers when its writers write several versions
+// (fileio.Registry does); SAVEAS asks for the format only through it.
+type fileFormats interface {
+	SaveVersions(path string) []string
+	SaveVersion(path string, d *doc.Drawing, version string) string
+}
+
+// formatKeywords are the SAVEAS format prompt's keywords by version, as AutoCAD's -SAVEAS names
+// its formats.
+var formatKeywords = map[string]string{"AC1009": "R12", "AC1015": "2000"}
 
 func (c *fileCmd) Name() string { return c.name }
 
@@ -54,6 +73,11 @@ func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 			saveTo(ctx, ctx.FilePath())
 			return nil
 		}
+		if c.name == "SAVEAS" {
+			if p := c.formatPrompt(ctx); p != nil {
+				return p
+			}
+		}
 		return c.savePathPrompt(ctx, fileSavePath)
 	case "NEW", "CLOSE":
 		if h := ctx.Documents(); h != nil && c.name == "NEW" && h.New() {
@@ -66,7 +90,13 @@ func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 			ctx.ReplaceDrawing(doc.New())
 			ctx.SetFilePath("")
 		}
+		if h := confirmer(ctx); h != nil && c.name == "CLOSE" && ctx.Dirty() && h.ConfirmClose(func() { c.then(ctx) }) {
+			return nil
+		}
 	default: // QUIT, EXIT
+		if h := confirmer(ctx); h != nil && h.ConfirmQuit() {
+			return nil
+		}
 		c.then = func(ctx *cmdsys.Context) {
 			if !ctx.Quit() {
 				ctx.Say("cmd.file.msg.quit_unavailable")
@@ -74,6 +104,17 @@ func (c *fileCmd) Start(ctx *cmdsys.Context) *cmdsys.Prompt {
 		}
 	}
 	return c.discard(ctx)
+}
+
+// confirmer returns the document host when it asks about unsaved changes with a dialog of its own,
+// and nil when the command line asks: no such host, or a script feeds the session (its next lines
+// answer the question).
+func confirmer(ctx *cmdsys.Context) cmdsys.DiscardConfirmer {
+	h, ok := ctx.Documents().(cmdsys.DiscardConfirmer)
+	if !ok || ctx.Scripted() {
+		return nil
+	}
+	return h
 }
 
 // savePathPrompt asks where to save; the current path, when there is one, is the default.
@@ -84,6 +125,66 @@ func (c *fileCmd) savePathPrompt(ctx *cmdsys.Context, stage int) *cmdsys.Prompt 
 		p.Default = &cmdsys.Input{Kind: cmdsys.InputText, Text: writablePath(ctx, path)}
 	}
 	return p
+}
+
+// formatPrompt prints the drawing's file format and asks for the one to save in, as AutoCAD's
+// -SAVEAS does: "Enter file format [R12/2000] <2000>:", the default being the format a save writes
+// now. It returns nil when the handler offers no choice of format.
+func (c *fileCmd) formatPrompt(ctx *cmdsys.Context) *cmdsys.Prompt {
+	ff, ok := ctx.Files.(fileFormats)
+	if !ok {
+		return nil
+	}
+	path := ""
+	if p := ctx.FilePath(); p != "" {
+		path = writablePath(ctx, p)
+	}
+	var kws []string
+	for _, v := range ff.SaveVersions(path) {
+		if kw := formatKeywords[v]; kw != "" {
+			kws = append(kws, kw)
+		}
+	}
+	current := ff.SaveVersion(path, ctx.Doc, ctx.Doc.Header.Version)
+	if len(kws) < 2 || formatKeywords[current] == "" {
+		return nil
+	}
+	if ctx.Doc.Header.Version == "" {
+		ctx.Say("cmd.file.msg.format_auto", FormatName(ctx.Translator(), current))
+	} else {
+		ctx.Say("cmd.file.msg.format", FormatName(ctx.Translator(), current))
+	}
+	c.stage = fileFormat
+	return &cmdsys.Prompt{Message: ctx.T("cmd.file.prompt.format"), Accepts: cmdsys.InputKeyword | cmdsys.InputText, NoOr: true,
+		Keywords: kws, Default: &cmdsys.Input{Kind: cmdsys.InputKeyword, Keyword: formatKeywords[current]}}
+}
+
+// FormatName is the name of a file format version in the language of t ("AutoCAD 2000/LT2000
+// DXF" for AC1015), or the version itself when it has none.
+func FormatName(t i18n.Translator, version string) string {
+	key := "dxf.version." + strings.ToLower(version)
+	if n := t.T(key); n != key {
+		return n
+	}
+	return version
+}
+
+// FormatKeyword is the SAVEAS format prompt's keyword for version ("2000" for AC1015), or "".
+func FormatKeyword(version string) string { return formatKeywords[version] }
+
+// save writes the drawing to path, in the format the format prompt chose when it chose one; the
+// drawing keeps that format for later saves (QSAVE), and keeps its old one when the save fails.
+func (c *fileCmd) save(ctx *cmdsys.Context, path string) bool {
+	if !c.pinned {
+		return saveTo(ctx, path)
+	}
+	prev := ctx.Doc.Header.Version
+	ctx.Doc.Header.Version = c.version
+	if !saveTo(ctx, path) {
+		ctx.Doc.Header.Version = prev
+		return false
+	}
+	return true
 }
 
 // writablePath is path, or, when the file handler cannot write its format (a DWG the drawing was
@@ -137,8 +238,20 @@ func (c *fileCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			ctx.Say("cmd.file.msg.opened", path, c.opened.Len())
 		}
 		return c.discard(ctx)
+	case fileFormat:
+		if in.Kind == cmdsys.InputKeyword {
+			for v, kw := range formatKeywords {
+				if kw == in.Keyword {
+					c.version, c.pinned = v, true
+				}
+			}
+			return c.savePathPrompt(ctx, fileSavePath)
+		}
+		// A path at the format prompt (a script's "SAVEAS plan.dxf") saves in the drawing's format.
+		c.save(ctx, in.Text)
+		return nil
 	case fileSavePath:
-		saveTo(ctx, in.Text)
+		c.save(ctx, in.Text)
 		return nil
 	case fileAsk:
 		switch in.Keyword {

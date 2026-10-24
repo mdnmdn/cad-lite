@@ -131,9 +131,17 @@ func PathsCrossPolygon(paths [][]geom.Vec2, poly []geom.Vec2) bool {
 	return false
 }
 
-// inTextBox reports whether e is a text and a vertex of pts lies in its text box: a polygon or
-// fence inside the box meets the text without crossing the box's outline.
+// inTextBox reports whether e is a text (or a dimension) and a vertex of pts lies in its text
+// box: a polygon or fence inside the box meets the text without crossing the box's outline.
 func inTextBox(e doc.Entity, pts []geom.Vec2) bool {
+	if dm, ok := e.(*doc.Dimension); ok {
+		for _, p := range pts {
+			if dimHitText(dm, p) {
+				return true
+			}
+		}
+		return false
+	}
 	t, ok := e.(doc.Annotation)
 	if !ok {
 		return false
@@ -156,9 +164,29 @@ func PathsCrossFence(paths [][]geom.Vec2, fence []geom.Vec2) bool {
 	return false
 }
 
-// entityPaths tessellates e's geometry into polylines within tol; an entity without curves is
-// its bounds corner as a single-point path, and a text is the outline of its text box.
+// EntityPaths is what the selection shapes test e by: its geometry tessellated into polylines
+// within tol; an entity without curves is its bounds corner as a single-point path, a text is the
+// outline of its text box, and a dimension is its lines (Dimension.Lines), the outline of its
+// text box and its definition points as single-point paths.
+func EntityPaths(e doc.Entity, tol float64) [][]geom.Vec2 { return entityPaths(e, tol) }
+
 func entityPaths(e doc.Entity, tol float64) [][]geom.Vec2 {
+	if dm, ok := e.(*doc.Dimension); ok {
+		var out [][]geom.Vec2
+		for _, c := range dm.Lines() {
+			if pts := c.Tessellate(tol, nil); len(pts) > 0 {
+				out = append(out, pts)
+			}
+		}
+		if lay := dm.Layout(); lay.Text != nil && lay.Text.Value != "" {
+			q := lay.TextBox
+			out = append(out, []geom.Vec2{q[0], q[1], q[2], q[3], q[0]})
+		}
+		for _, p := range dm.DefPoints() {
+			out = append(out, []geom.Vec2{p})
+		}
+		return out
+	}
 	if t, ok := e.(doc.Annotation); ok {
 		q := t.Box()
 		return [][]geom.Vec2{{q[0], q[1], q[2], q[3], q[0]}}

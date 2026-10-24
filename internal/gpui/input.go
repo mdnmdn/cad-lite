@@ -43,6 +43,7 @@ type TextInput struct {
 	onSubmit []func(string, *Window, *App)
 	onChange []func(string, *Window, *App)
 	onEscape []func(*Window, *App)
+	onKey    func(*KeyDownEvent, *Window, *App) bool
 
 	// Multi-line state: the row cap, the laid-out text area, the vertical
 	// scroll, whether the next prepaint scrolls the caret into view, and
@@ -126,6 +127,15 @@ func (t *TextInput) OnSubmit(f func(string, *Window, *App)) *TextInput {
 // of blurring the field (a command line stays focused, for instance).
 func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput {
 	t.onEscape = append(t.onEscape, f)
+	return t
+}
+
+// OnKeyDown sets a listener that sees each non-character key press before
+// the field's own editing keys (Enter, Escape, Backspace, Delete, arrows).
+// Returning true consumes the press: the field does nothing with it and
+// propagation stops. A later call replaces the earlier listener; nil removes it.
+func (t *TextInput) OnKeyDown(f func(*KeyDownEvent, *Window, *App) bool) *TextInput {
+	t.onKey = f
 	return t
 }
 
@@ -567,6 +577,10 @@ func (w *Window) moveInputSelection(p Point) {
 // the window routes them to ReplaceTextInRange before the key path runs.
 func (t *TextInput) onKeyDown(e *KeyDownEvent, w *Window, cx *App) {
 	if t.focus == nil || !t.focus.IsFocused(w) {
+		return
+	}
+	if t.onKey != nil && t.onKey(e, w, cx) {
+		w.StopPropagation()
 		return
 	}
 	caret := tiCaret(t)

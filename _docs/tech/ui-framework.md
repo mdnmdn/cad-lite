@@ -5,7 +5,7 @@ kind: tech
 status: current
 summary: The boundary between Cad-lite and the internal/gpui library, what the application uses from it, the conventions of the shell, the theme registry and tokens, and the UI scale.
 read_when: you are changing the UI shell, need something new from gpui, or are touching a theme colour
-updated: 2026-10-17
+updated: 2026-10-24
 verified: 2026-10-17
 code_anchors: [ui/theme.go, ui/themes.go, ui/settings.go, ui/slider.go, ui/workspace.go, ui/agent_view.go, ui/icon.go, cmdsys/sysvars.go, assets/icons/icons.yaml, render/gpuirender/paint.go, internal/gpui/stroke.go, internal/gpui/canvas.go, internal/gpui/list.go, ui/textedit_view.go, ui/hud.go, ui/hud_drag.go]
 depends_on: [tech-architecture]
@@ -38,6 +38,8 @@ What Cad-lite uses from the library:
 |---|---|
 | `Div`, `Text`, flexbox builders, `Hover` styles | Every panel, button and label |
 | `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line (single-line) and the agent prompt (`Multiline`) |
+| `TextInput.OnKeyDown` | The command line's Delete and Backspace on an empty field, which erase the selection instead of editing |
+| `Window.OnShouldClose` | The window's close button (and macOS Cmd+Q), which asks about unsaved drawings before quitting |
 | `TextInput.Multiline`, `FocusHandle`, `Div.OnAction` | TEXTEDIT's plain multiline field, trapped field/button navigation and drawing-action suppression while its modal is open |
 | `List`, `ListState`, `ScrollHandle` | The agent transcript: a virtualized list of variable-height blocks; only those near the viewport are built |
 | `Canvas` | The drawing area: a leaf that paints through a callback with its bounds |
@@ -50,7 +52,7 @@ What Cad-lite uses from the library:
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
 | `Div.OnFileDrop`, `App.OnOpenPaths` | Files dropped on the window and files the OS asks the app to open (macOS Finder and Dock), both into `Workspace.OpenPaths` |
 
-`Stroke`, `Canvas`, `TextInput.OnEscape`, `TextInput.Multiline` and `List` exist in the library for Cad-lite. A new need follows the
+`Stroke`, `Canvas`, `TextInput.OnEscape`, `TextInput.OnKeyDown`, `TextInput.Multiline`, `Window.OnShouldClose` and `List` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions

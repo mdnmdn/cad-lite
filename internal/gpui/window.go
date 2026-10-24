@@ -35,6 +35,8 @@ type Window struct {
 	mousePosition  Point
 	hasMouse       bool
 	propagateEvent bool
+	// shouldClose is the OnShouldClose handler.
+	shouldClose func(*Window, *App) bool
 	// hovered maps the global-id key of each currently hovered element to its
 	// hitbox depth; callbacks are looked up in the rendered frame when fired.
 	hovered map[string]int
@@ -873,6 +875,26 @@ func (w *Window) present() {
 	w.raster.Reset(w.background)
 	w.raster.Render(scaleScene(&w.renderedFrame.scene, w.scale, &w.deviceScene))
 	w.platformWindow.Present(w.raster.Pixels(), pw, ph)
+}
+
+// OnShouldClose sets the handler the platform consults when the user asks to
+// close the window (its close button; on macOS also the app menu's Quit). It
+// returns true to let the window close, false to keep it open (for example to
+// ask about unsaved work first). A later call replaces it; nil removes it.
+func (w *Window) OnShouldClose(f func(*Window, *App) bool) { w.shouldClose = f }
+
+// RequestClose is what platforms call, on the UI goroutine inside App.Update,
+// when the user asks to close the window; tests call it to inject the request.
+// With no handler, or when the handler returns true, the App quits (the
+// platforms have one window). It reports whether the window closes.
+func (w *Window) RequestClose(cx *App) bool {
+	if w.shouldClose != nil && !w.shouldClose(w, cx) {
+		return false
+	}
+	if cx != nil {
+		cx.Quit()
+	}
+	return true
 }
 
 // Close removes the window from its App, releases the entity reference held

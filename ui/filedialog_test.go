@@ -233,6 +233,8 @@ func TestSaveRightClickAsksForAName(t *testing.T) {
 	path := savedDrawing(t)
 	h.ws.Session().SetFilePath(path)
 	h.rightClick("tool-save")
+	h.frame()
+	h.clickID("save-format-ac1015") // the format menu comes first (saveformat_test.go)
 	h.answered(fd)
 	if fd.saves != 1 || fd.defaultName != "plan.dxf" {
 		t.Fatalf("saves %d default name %q", fd.saves, fd.defaultName)

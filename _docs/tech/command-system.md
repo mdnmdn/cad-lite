@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The command model, the session state machine, typed-input parsing, the input pipeline from pointer to point, object snaps, ortho and selection.
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
-updated: 2026-10-17
-verified: 2026-10-17
-code_anchors: [i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
+updated: 2026-10-24
+verified: 2026-10-24
+code_anchors: [cmdsys/commands/dim.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -86,7 +86,10 @@ EXIT. A host that keeps several drawings, one session each, installs a `Document
 (`SetDocumentHost`, read by commands through `Context.Documents`): OPEN asks it to show a tab that has the
 file (`ShowOpen`) before reading and to open the drawing it read in a new one (`OpenNew`, which returns
 that tab's session, or nil to replace this drawing), NEW asks `New`, and CLOSE asks `Close` once the
-unsaved changes are dealt with. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
+unsaved changes are dealt with. A host that implements `DiscardConfirmer` takes the unsaved-changes
+question over with a dialog of its own: CLOSE of a dirty drawing hands it `ConfirmClose(close)` and
+ends, and QUIT and EXIT hand it `ConfirmQuit`; `Context.Scripted` (a script is feeding the session)
+keeps the command-line question, which the script's next lines answer. `Context.History()` holds what UNDO sets (Control, Auto) and the sizes of the latest undo operations, so
 REDO reverses a whole `UNDO n`. When a command ends the session names the undo step after it
 (`Drawing.NameLastStep`), so `U` can print the command it undid.
 
@@ -161,9 +164,9 @@ default that changes nothing.
   name. A package registers its variables from an `init` in its own file with `RegisterVarGroup`;
   `NewSession` runs the groups. `sysvars.go` registers the live ones (`ORTHOMODE`, `APERTURE`,
   `LASTPOINT`, `CLAYER`, which read and write session state) and `LUPREC`, `AUPREC`; `commands/units.go` registers `LUNITS`, `AUNITS`, `ANGBASE`, `ANGDIR`, `UNITMODE` and `INSUNITS` (live on the drawing header); `commands/construct.go`
-  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, `CHAMFERD`, `OFFSETERASE`, `OFFSETLAYER`, so the construct defaults are per session (`TRIMMODE`, `CHAMFERC`, `CHAMMODE` are the stored placeholders the session registers).
+  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, `CHAMFERD`, `OFFSETERASE`, `OFFSETLAYER`, so the construct defaults are per session (`TRIMMODE`, `CHAMFERC`, `CHAMMODE` are the stored placeholders the session registers). `commands/dim.go` registers the dimension variables the dimension commands build a new DIMENSION's style from (`DIMSCALE`, `DIMASZ`, `DIMTXT`, `DIMEXO`, `DIMEXE`, `DIMGAP`, `DIMDEC`, `DIMDSEP`, `DIMZIN`, `DIMTAD`, `DIMARCSYM`, read-only `DIMSTYLE`).
   After every group ran, `registerStoredVars` adds what section 1.11 of the AutoCAD specification lists and
-  nobody registered: **stored placeholders** that read back what was set (`MIRRTEXT`, `FILEDIA`, `DIMSCALE`
+  nobody registered: **stored placeholders** that read back what was set (`MIRRTEXT`, `FILEDIA`
   and also names a package will own, such as `OSMODE`, `CIRCLERAD`, `CECOLOR`), and live read-only state
   (`VIEWCTR`, `VIEWSIZE`, `SCREENSIZE`, `LASTPROMPT`, `CMDNAMES`, `CMDACTIVE`, `DWGNAME`, `DWGPREFIX`). A package that
   owns a variable just registers it: the placeholder steps aside whatever the init order. Angle variables
@@ -276,14 +279,20 @@ and considers:
 | Endpoint | Line and arc ends, polyline vertices |
 | Midpoint | Line, arc and polyline-segment middles |
 | Center | Circle and arc centres |
+| Node | The definition points of a DIMENSION (`Ext1`, `Ext2`, `DimLine`, and `Center` of an arc length dimension), the only point objects there are |
 | Quadrant | The 0°, 90°, 180° and 270° points of circles, and of arcs where they lie on the arc |
 | Intersection | Every pairwise crossing of the candidate curves |
 | Insertion | The insertion point (`Anchor`) of TEXT and MTEXT (`doc.Annotation`) and the base point of INSERT; text offers no other snap point, because its strokes are glyphs |
 | Perpendicular, Tangent | Feet and tangent points from the prompt's `Base` (`FindSnapFrom`); nothing without a base |
 | Nearest | The closest point on any candidate, only when nothing else is in range |
 
+A DIMENSION contributes only its extension lines and dimension line or arc (`dimSnapCurves`, from
+`Dimension.Layout`) and its Node points: its text strokes and arrowheads offer nothing. `Pick` picks it by
+`Dimension.Lines` or a point in its text box; the selection shapes test it by `EntityPaths` (its lines, the
+outline of its text box and its definition points as single-point paths).
+
 The closest point within the aperture wins; on a tie the mode listed first wins. Entities on layers
-that are off or frozen are ignored. `cmdsys.DefaultSnaps` enables every mode except Nearest; F3 toggles them
+that are off or frozen are ignored. `cmdsys.DefaultSnaps` enables Endpoint, Midpoint, Center, Quadrant and Intersection; F3 toggles them
 all (`Session.SnapOn`). `SnapMode` bits are AutoCAD's `OSMODE` values; the `OSMODE` variable (aids.go) is
 `Snaps` plus 16384 when `SnapOn` is off, and `GRIDMODE`, `SNAPMODE`, `GRIDUNIT`, `SNAPUNIT` read and write
 the grid state (`Session.Grid`, `SnapGrid`, `GridSpacing`, `SnapSpacing`).

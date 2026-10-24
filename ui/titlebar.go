@@ -10,7 +10,8 @@ import (
 
 // titleBar is the window's top row: the brand, the document chip, Open (with its recent menu) and
 // Save, Undo and Redo,
-// and at the right end the agent panel toggle, Settings and Feedback. Every button is icon-only, so each
+// and at the right end the update button while a release waits, the ribbon toggle, the agent panel
+// toggle, Feedback and Settings. Every button is icon-only, so each
 // carries its tooltip.
 func (ws *Workspace) titleBar() *gpui.Div {
 	left := gpui.NewDiv().FlexRow().ItemsCenter().Gap(10).MinW(0)
@@ -22,7 +23,7 @@ func (ws *Workspace) titleBar() *gpui.Div {
 		vDivider(20),
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(
 			ws.openButtons(),
-			ws.fileButton("save", ws.saveTip(), icons.FileSave, ws.saveFile, ws.saveFileAs),
+			ws.saveButton(),
 		),
 		vDivider(20),
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(
@@ -30,7 +31,11 @@ func (ws *Workspace) titleBar() *gpui.Div {
 			ws.commandIcon("redo", "REDO", icons.EditRedo),
 		),
 	)
-	right := gpui.NewDiv().ID("tbgroup-window").FlexRow().ItemsCenter().Gap(2).FlexShrink(0).MlAuto().Child(
+	right := gpui.NewDiv().ID("tbgroup-window").FlexRow().ItemsCenter().Gap(2).FlexShrink(0).MlAuto()
+	if b := ws.updateButton(); b != nil {
+		right.Child(b)
+	}
+	right.Child(
 		ws.ribbonToggle(),
 		ws.agentToggle(),
 		ws.feedbackButton(),

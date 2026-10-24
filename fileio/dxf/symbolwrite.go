@@ -3,11 +3,13 @@ package dxf
 import (
 	"bufio"
 	"bytes"
+	"io"
+	"math"
+	"strings"
+
 	"cad-lite/doc"
 	"cad-lite/geom"
 	"cad-lite/i18n"
-	"io"
-	"math"
 )
 
 func hasAttdef(d *doc.Drawing) bool {
@@ -18,8 +20,10 @@ func hasAttdef(d *doc.Drawing) bool {
 	}
 	return false
 }
-func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
-	modern := len(d.Groups()) > 0 || len(d.Preserved.Objects) > 0
+
+// writeSymbols writes AutoCAD 2000 (AC1015) when modern is set, else R12 (AC1009), which has no
+// groups, object records or MTEXT: those are dropped or degraded with a warning each.
+func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) {
 	var payload bytes.Buffer
 	w := &writer{w: bufio.NewWriter(&payload), modern: modern, d: d, reactors: map[doc.Handle][]doc.Handle{}}
 	sub := d.Header.HandSeed
@@ -46,6 +50,7 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 	for _, t := range []string{"VPORT", "LTYPE", "LAYER", "STYLE", "VIEW", "UCS", "APPID", "DIMSTYLE", "BLOCK_RECORD"} {
 		tables[t] = next()
 	}
+	w.planDimensions(d, next)
 	section := func(s string) { w.pair(0, "SECTION"); w.pair(2, s) }
 	end := func() { w.pair(0, "ENDSEC") }
 	section("HEADER")
@@ -71,6 +76,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 			w.pair(100, "AcDbSymbolTable")
 		}
 		w.int(70, count)
+		if modern && t == "DIMSTYLE" {
+			w.pair(100, "AcDbDimStyleTable")
+		}
 	}
 	record := func(t, name, subclass string) {
 		w.pair(0, t)
@@ -96,8 +104,13 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 		w.tableRecord(r, tables["LTYPE"], next)
 	}
 	w.pair(0, "ENDTAB")
-	tableStart("LAYER", len(d.Layers()))
-	for _, l := range d.Layers() {
+	layers := d.Layers()
+	if len(w.dims) > 0 && !hasLayer(d, defpointsLayer) {
+		// AutoCAD's layer for definition points, which does not plot.
+		layers = append(layers[:len(layers):len(layers)], &doc.Layer{Name: defpointsLayer, Color: 7, NoPlot: true})
+	}
+	tableStart("LAYER", len(layers))
+	for _, l := range layers {
 		record("LAYER", l.Name, "AcDbLayerTableRecord")
 		flags := 0
 		if l.Frozen {
@@ -172,23 +185,40 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 		w.pair(4, "")
 	}
 	w.pair(0, "ENDTAB")
+	apps := []string{layerApp}
+	for _, app := range w.dimApps() {
+		if !hasRecord(d, "APPID", app) {
+			apps = append(apps, app)
+		}
+	}
+	dimStyleRecords := w.dimStyleTable(d)
 	for _, t := range []string{"VPORT", "VIEW", "UCS", "APPID", "DIMSTYLE"} {
 		rs := d.Preserved.Tables[t]
 		count := len(rs)
-		if t == "APPID" {
-			count++
+		switch t {
+		case "APPID":
+			count += len(apps)
+		case "DIMSTYLE":
+			count += len(dimStyleRecords)
 		}
 		tableStart(t, count)
 		for _, r := range rs {
 			w.tableRecord(r, tables[t], next)
 		}
-		if t == "APPID" {
-			record(t, layerApp, "AcDbRegAppTableRecord")
+		switch t {
+		case "APPID":
+			for _, app := range apps {
+				record(t, app, "AcDbRegAppTableRecord")
+			}
+		case "DIMSTYLE":
+			for _, ps := range dimStyleRecords {
+				w.tableRecord(doc.RawRecord{Pairs: ps}, tables[t], next)
+			}
 		}
 		w.pair(0, "ENDTAB")
 	}
 	if modern {
-		tableStart("BLOCK_RECORD", 2+len(d.Blocks())+len(d.Preserved.Blocks))
+		tableStart("BLOCK_RECORD", 2+len(d.Blocks())+len(d.Preserved.Blocks)+len(w.dims))
 		blockRecord := func(h, name string) {
 			w.pair(0, "BLOCK_RECORD")
 			w.pair(5, h)
@@ -204,6 +234,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 		}
 		for i, b := range d.Preserved.Blocks {
 			blockRecord(preservedOwners[i], b.Name())
+		}
+		for _, o := range w.dims {
+			blockRecord(o.rec, o.block)
 		}
 		w.pair(0, "ENDTAB")
 	}
@@ -227,6 +260,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 		}
 		w.pair(2, name)
 		flags := 0
+		if u := strings.ToUpper(name); strings.HasPrefix(u, "*") && u != "*MODEL_SPACE" && u != "*PAPER_SPACE" {
+			flags |= 1 // anonymous
+		}
 		for _, e := range es {
 			if a, ok := e.(*doc.AttributeDefinition); ok && !a.Constant {
 				flags |= 2
@@ -263,6 +299,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 		} else {
 			warns = w.block(warns, b)
 		}
+	}
+	for _, o := range w.dims {
+		block(o.block, o.rec, geom.V(0, 0), dimBlockEntities(o.e, o.rec, next))
 	}
 	end()
 	section("ENTITIES")
@@ -326,8 +365,8 @@ func writeSymbols(out io.Writer, d *doc.Drawing) ([]string, error) {
 			w.raw(w.remapObjects(r.Pairs, root, model, paper, d))
 		}
 		end()
-	} else if len(d.Preserved.Objects) > 0 {
-		warns = append(warns, "R12 output does not include non-graphical object records")
+	} else {
+		warns = append(warns, r12Losses(d, w.mtexts)...)
 	}
 	w.pair(0, "EOF")
 	if w.err == nil {
@@ -393,13 +432,15 @@ func (w *writer) symbolEntity(e doc.Entity, next func() string, warns *[]string)
 			w.nativeMText(e)
 		} else {
 			w.mtextAsText(e, next)
-			*warns = append(*warns, i18n.T("dxf.warn.mtext_as_text", 1))
+			w.mtexts++
 		}
 	case *doc.AttributeDefinition:
 		w.typeOverride = "ATTDEF"
 		w.attdef(e)
 	case *doc.Insert:
 		w.insert(e, next)
+	case *doc.Dimension:
+		w.dimension(e)
 	case *doc.LWPolyline:
 		if w.modern {
 			w.head("LWPOLYLINE", e)
@@ -475,7 +516,11 @@ func (w *writer) tableRecord(r doc.RawRecord, owner string, next func() string) 
 	}
 	var h string
 	hasSubclass := false
+	dimstyle := r.Type() == "DIMSTYLE"
 	for _, p := range r.Pairs {
+		if dimstyle && p.Code == 5 {
+			continue // R12's DIMBLK name, not a handle
+		}
 		if p.Code == 5 || p.Code == 105 {
 			h = p.Value
 		}
@@ -487,7 +532,8 @@ func (w *writer) tableRecord(r doc.RawRecord, owner string, next func() string) 
 		h = next()
 	}
 	for i, p := range r.Pairs {
-		if p.Code == 5 || p.Code == 105 || p.Code == 330 {
+		if p.Code == 5 || p.Code == 105 || p.Code == 330 || dimstyle && (p.Code == 6 || p.Code == 7) {
+			// R12's DIMBLK, DIMBLK1 and DIMBLK2 names are handles (342 to 344) from R13 on.
 			continue
 		}
 		w.pair(p.Code, p.Value)
@@ -500,7 +546,8 @@ func (w *writer) tableRecord(r doc.RawRecord, owner string, next func() string) 
 			w.pair(330, owner)
 			if !hasSubclass {
 				w.pair(100, "AcDbSymbolTableRecord")
-				sub := map[string]string{"STYLE": "AcDbTextStyleTableRecord", "LTYPE": "AcDbLinetypeTableRecord", "APPID": "AcDbRegAppTableRecord"}[r.Type()]
+				sub := map[string]string{"STYLE": "AcDbTextStyleTableRecord", "LTYPE": "AcDbLinetypeTableRecord", "APPID": "AcDbRegAppTableRecord", "DIMSTYLE": "AcDbDimStyleTableRecord",
+					"VPORT": "AcDbViewportTableRecord", "VIEW": "AcDbViewTableRecord", "UCS": "AcDbUCSTableRecord"}[r.Type()]
 				if sub != "" {
 					w.pair(100, sub)
 				}

@@ -27,6 +27,10 @@ func readModeledBlocks(d *doc.Drawing, objs []object, st *state) {
 		if strings.HasPrefix(strings.ToUpper(name), "*MODEL_SPACE") || strings.HasPrefix(strings.ToUpper(name), "*PAPER_SPACE") {
 			continue
 		}
+		if st.dimBlocks[strings.ToUpper(name)] {
+			// Regenerated from the dimension on writing.
+			continue
+		}
 		if o.int(70)&(4|8|16) != 0 {
 			var raw []doc.Pair
 			for _, r := range objs[start : i+1] {

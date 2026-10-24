@@ -105,3 +105,72 @@ func TestNewAndCloseWithAHost(t *testing.T) {
 		t.Fatal("CLOSE of the last tab should empty the drawing")
 	}
 }
+
+// confirmHost is a document host with dialogs of its own for unsaved changes.
+type confirmHost struct {
+	fakeHost
+	closeAsks, quitAsks int
+	pending             func()
+}
+
+func (h *confirmHost) ConfirmClose(close func()) bool {
+	h.closeAsks++
+	h.pending = close
+	return true
+}
+
+func (h *confirmHost) ConfirmQuit() bool { h.quitAsks++; return true }
+
+func TestCloseAndQuitHandTheQuestionToAConfirmingHost(t *testing.T) {
+	s, _ := fileSession(t)
+	h := &confirmHost{}
+	s.SetDocumentHost(h)
+	dirtyIt(s)
+	s.Run("CLOSE")
+	if h.closeAsks != 1 || s.Active() != "" || h.closes != 0 {
+		t.Fatalf("CLOSE should ask the host and end: asks %d, active %q, closes %d", h.closeAsks, s.Active(), h.closes)
+	}
+	h.pending()
+	if h.closes != 1 {
+		t.Fatal("the host's agreement should close the tab")
+	}
+	s.Run("QUIT")
+	if h.quitAsks != 1 || s.Active() != "" {
+		t.Fatalf("QUIT should hand over to the host: asks %d, active %q", h.quitAsks, s.Active())
+	}
+}
+
+func TestCleanCloseDoesNotAskAConfirmingHost(t *testing.T) {
+	s, _ := fileSession(t)
+	h := &confirmHost{}
+	s.SetDocumentHost(h)
+	s.Run("CLOSE")
+	if h.closeAsks != 0 || h.closes != 1 {
+		t.Fatalf("a clean CLOSE closes at once: asks %d closes %d", h.closeAsks, h.closes)
+	}
+}
+
+func TestScriptsKeepTheCommandLineQuestion(t *testing.T) {
+	s, _ := fileSession(t)
+	h := &confirmHost{}
+	s.SetDocumentHost(h)
+	dirtyIt(s)
+	xfeed(s, "CLOSE")
+	if h.closeAsks != 0 || s.Active() != "CLOSE" {
+		t.Fatalf("a scripted CLOSE should ask on the command line: asks %d active %q", h.closeAsks, s.Active())
+	}
+	xfeed(s, "N")
+	if h.closes != 1 {
+		t.Fatal("the scripted answer should close")
+	}
+	quit := 0
+	s.SetQuitHandler(func() { quit++ })
+	xfeed(s, "QUIT")
+	if s.Active() != "QUIT" {
+		t.Fatalf("a scripted QUIT of a dirty drawing should ask on the command line, active %q", s.Active())
+	}
+	xfeed(s, "N")
+	if h.quitAsks != 0 || quit != 1 {
+		t.Fatalf("a scripted QUIT should not show the dialog: asks %d quit %d", h.quitAsks, quit)
+	}
+}

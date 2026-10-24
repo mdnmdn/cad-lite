@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
+	"cad-lite/assets/icons"
 	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/settings"
@@ -164,18 +166,73 @@ func (ws *Workspace) updateSection() *gpui.Div {
 	return sec
 }
 
-// updateBadge is the dot on the toolbar's gear button while a release waits.
-func (ws *Workspace) updateBadge() gpui.IntoElement {
-	return gpui.NewDiv().ID("update-badge").Absolute().Top(2).Right(4).SizeWH(9, 9).Rounded(5).Bg(uiWarn).Border(1, uiPanel)
+// settingsTip is the gear button's tooltip.
+func (ws *Workspace) settingsTip() string {
+	return toolTip(i18n.CommandName("OPTIONS"), ws.keyHint(actionSettings, "OPTIONS"), tb("settings_tip"))
 }
 
-// settingsTip is the gear button's tooltip, with the update notice appended.
-func (ws *Workspace) settingsTip() string {
-	tip := toolTip(i18n.CommandName("OPTIONS"), ws.keyHint(actionSettings, "OPTIONS"), tb("settings_tip"))
-	if rel, ok := ws.UpdateAvailable(); ok {
-		tip += "\n" + i18n.T("ui.update.badge_tip", rel.Version)
+// updateButton is the title bar's update button, nil unless this build can update itself and a
+// release is waiting, downloading, installing or installed. A click on a waiting release starts
+// the update at once (the settings panel's Update button does the same); while the download and
+// the installation run the button is inert and shows the progress; once installed a click asks
+// for the restart again. A failed attempt tints it with the error colour and a click retries.
+func (ws *Workspace) updateButton() *gpui.Div {
+	u := ws.upd()
+	tip, ok := ws.updateButtonTip()
+	if !ok {
+		return nil
 	}
-	return tip
+	switch u.phase {
+	case updAvailable:
+		col := uiOn
+		if u.err != nil {
+			col = uiErr
+		}
+		return tintedIconButton("tool-update", tip, icons.AppUpdate, col, func(w *gpui.Window) { ws.startUpdate(w) })
+	case updReady:
+		return tintedIconButton("tool-update", tip, icons.AppUpdate, uiOK, func(w *gpui.Window) {
+			u.confirm = true
+			w.Refresh()
+		})
+	}
+	label := "…"
+	if t := u.size.Load(); t > 0 && u.done.Load() < t && u.phase == updDownloading {
+		label = fmt.Sprintf("%d%%", int(u.done.Load()*100/t))
+	}
+	return gpui.NewDiv().ID("tool-update").FlexRow().ItemsCenter().Gap(4).SizeH(iconButtonSize).Px_(6).Rounded(6).FlexShrink(0).
+		Tooltip(tip).Bg(uiPanelAlt).
+		Child(NewIcon(icons.AppUpdate, chromeIconSize, uiMuted), gpui.NewText(label).TextSize(fontSmall).TextColor(uiMuted))
+}
+
+// updateButtonTip is the update button's tooltip, and whether the button shows: the version a
+// click installs, the progress, the error and the retry, or the restart.
+func (ws *Workspace) updateButtonTip() (string, bool) {
+	u := ws.upd()
+	if !u.enabled || !updater.Updatable(u.version) || u.latest.Version == "" {
+		return "", false
+	}
+	status, _ := ws.updateStatus()
+	switch u.phase {
+	case updAvailable:
+		if u.err != nil {
+			return status + "\n" + i18n.T("ui.update.button_retry_tip", u.latest.Version), true
+		}
+		return i18n.T("ui.update.button_tip", u.latest.Version), true
+	case updDownloading, updInstalling:
+		return status, true
+	case updReady:
+		return status + "\n" + i18n.T("ui.update.button_ready_tip"), true
+	}
+	return "", false
+}
+
+// tintedIconButton is iconButton with the icon in col.
+func tintedIconButton(id, tip string, icon icons.Name, col gpui.Rgba, act func(*gpui.Window)) *gpui.Div {
+	return gpui.NewDiv().ID(id).FlexRow().ItemsCenter().JustifyCenter().SizeWH(iconButtonSize, iconButtonSize).Rounded(6).FlexShrink(0).
+		Tooltip(tip).
+		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
+		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { act(w) }).
+		Child(NewIcon(icon, chromeIconSize, col))
 }
 
 // updateOverlay is the restart confirmation shown once an install finishes.

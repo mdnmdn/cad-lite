@@ -117,10 +117,11 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	}
 	d := doc.New()
 	d.Header.Extra = map[string][]string{}
-	st := &state{kept: map[string]int{}}
+	st := &state{kept: map[string]int{}, main: d}
 	if n := zeroNonFinite(ps); n > 0 {
 		st.warns = append(st.warns, i18n.T("dxf.warn.non_finite", n))
 	}
+	st.dimBlocks = dimensionBlocks(ps)
 	var section string
 	var open, sawEOF bool
 	var objs []object
@@ -201,6 +202,13 @@ type state struct {
 	warns []string
 	// mtextIgnored counts the MTEXT whose extrusion or top-to-bottom direction is not modelled.
 	mtextIgnored int
+	// main is the drawing being read (block contents are read into scratch drawings first).
+	main *doc.Drawing
+	// dimStyles are main's DIMSTYLE records, parsed when the first dimension is read.
+	dimStyles map[string]dimStyleRec
+	// dimBlocks are the upper-cased names of the blocks of converted dimensions, not loaded
+	// (dimensionBlocks).
+	dimBlocks map[string]bool
 }
 
 // preservedTables are the tables whose records the document does not model
@@ -342,6 +350,13 @@ func readHeader(d *doc.Drawing, objs []object) {
 			d.Header.InsUnits, _ = strconv.Atoi(strings.TrimSpace(p.val))
 		case "$CLAYER":
 			d.CurrentLayer = strings.TrimSpace(p.val)
+		case "$ACADVER":
+			// The drawing saves in the version it was read in, except R12 and older: R12 is what
+			// Cad-lite writes by default, and such a file saves as the codec chooses (R12 unless
+			// the drawing gains groups), so a group added to it is not lost.
+			if v := strings.ToUpper(strings.TrimSpace(p.val)); v > VersionR12 {
+				d.Header.Version = v
+			}
 		default:
 			d.Header.Extra[name] = append(d.Header.Extra[name], strconv.Itoa(p.code)+" "+p.val)
 		}
@@ -456,7 +471,15 @@ func readEntities(d *doc.Drawing, objs []object, st *state) {
 			e = readLWPolyline(o, c)
 		case "ATTDEF":
 			e = readAttdef(o, c)
+		case "DIMENSION", "ARC_DIMENSION":
+			if e = readDimension(o, c, st); e == nil {
+				e = unknown(o, nil, c)
+			}
 		case "INSERT":
+			if dim := readDimInsert(o, c); dim != nil {
+				e = dim
+				break
+			}
 			if o.int(66) == 1 {
 				for i+1 < len(objs) {
 					i++

@@ -453,8 +453,8 @@ func square(c geom.Vec2, r float64) []geom.Vec2 {
 }
 
 // snapMarker draws AutoCAD's marker shapes: square endpoint, triangle
-// midpoint, circle center, diamond quadrant, X intersection, hourglass
-// nearest.
+// midpoint, circle center, circle with an X node, diamond quadrant, X
+// intersection, hourglass nearest.
 func snapMarker(dl *render.DisplayList, hit cmdsys.SnapHit, r float64) {
 	p := hit.Point
 	switch hit.Mode {
@@ -464,6 +464,11 @@ func snapMarker(dl *render.DisplayList, hit cmdsys.SnapHit, r float64) {
 		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y - r}, {X: p.X + r, Y: p.Y - r}, {X: p.X, Y: p.Y + r}}, colSnap, 2, true)
 	case cmdsys.SnapCenter:
 		dl.Curve(geom.Circle{C: p, R: r}, r/20, colSnap, 2)
+	case cmdsys.SnapNode:
+		dl.Curve(geom.Circle{C: p, R: r}, r/20, colSnap, 2)
+		k := r * math.Sqrt2 / 2
+		dl.Polyline([]geom.Vec2{{X: p.X - k, Y: p.Y - k}, {X: p.X + k, Y: p.Y + k}}, colSnap, 2, false)
+		dl.Polyline([]geom.Vec2{{X: p.X - k, Y: p.Y + k}, {X: p.X + k, Y: p.Y - k}}, colSnap, 2, false)
 	case cmdsys.SnapQuadrant:
 		dl.Polyline([]geom.Vec2{{X: p.X - r, Y: p.Y}, {X: p.X, Y: p.Y - r}, {X: p.X + r, Y: p.Y}, {X: p.X, Y: p.Y + r}}, colSnap, 2, true)
 	case cmdsys.SnapIntersection:

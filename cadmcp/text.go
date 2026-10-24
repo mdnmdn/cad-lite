@@ -297,7 +297,7 @@ func updateTextEdit(a updateTextArgs) (editOp, error) {
 	return editOp{text: u}, nil
 }
 
-// apply changes e, which must be a TEXT or an MTEXT, and reports a field that does not apply to
+// apply changes e, which must be a TEXT, an MTEXT or a DIMENSION, and reports a field that does not apply to
 // it. It changes nothing when it reports an error.
 func (u *textUpdate) apply(e doc.Entity) error {
 	a := u.a
@@ -394,8 +394,27 @@ func (u *textUpdate) apply(e doc.Entity) error {
 		if a.Point != nil {
 			t.Insert = a.Point.vec()
 		}
+	case *doc.Dimension:
+		// AutoCAD's TEXTEDIT edits a dimension's text too: value is the override ("" draws the
+		// measurement, "<>" inside stands for it) and point places the text.
+		if a.SecondPoint != nil || a.Height != nil || a.Rotation != nil || a.Justify != nil || a.Style != nil ||
+			a.WidthFactor != nil || a.Width != nil || a.Attachment != nil || a.Raw {
+			return errors.New("a DIMENSION takes only value (the text override) and point (the text position)")
+		}
+		if a.Value != nil {
+			if err := checkTextValue(*a.Value, false); err != nil {
+				return err
+			}
+			if len(*a.Value) > MaxTextLen {
+				return fmt.Errorf("value too long (max %d bytes)", MaxTextLen)
+			}
+			t.Text = *a.Value
+		}
+		if a.Point != nil {
+			t.TextPos, t.TextMoved = a.Point.vec(), true
+		}
 	default:
-		return fmt.Errorf("entity %s is a %s; update_text needs TEXT or MTEXT", e.Handle(), e.Class())
+		return fmt.Errorf("entity %s is a %s; update_text needs TEXT, MTEXT or DIMENSION", e.Handle(), e.Class())
 	}
 	return nil
 }
@@ -506,9 +525,12 @@ func corners(c [4]geom.Vec2) [][2]float64 {
 	return out
 }
 
-// plainText is the text a TEXT or MTEXT shows, for searching; ok is false for other entities.
+// plainText is the text a TEXT, MTEXT or DIMENSION shows, for searching; ok is false for other
+// entities.
 func plainText(e doc.Entity) (string, bool) {
 	switch t := e.(type) {
+	case *doc.Dimension:
+		return t.MeasurementText(), true
 	case *doc.Text:
 		return t.Value, true
 	case *doc.MText:

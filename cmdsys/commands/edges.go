@@ -427,20 +427,29 @@ func (c *edgeCmd) edgeCurves(ctx *cmdsys.Context, skip doc.Handle, near geom.Box
 		if h == skip || e == nil || !visibleLayer(ctx.Doc, e) {
 			continue
 		}
-		if t, ok := e.(doc.Annotation); ok {
+		var gs []geom.Curve
+		switch t := e.(type) {
+		case doc.Annotation:
 			// A text cuts and bounds by its box, as in AutoCAD, not by its glyph strokes.
-			b := t.Box()
-			for i := range 4 {
-				g := geom.Line{A: b[i], B: b[(i+1)%4]}
-				if implied {
-					out = append(out, geom.ImpliedEdge(g, reach)...)
-				} else {
-					out = append(out, g)
-				}
+			gs = boxEdges(t.Box())
+		case *doc.Dimension:
+			// A dimension cuts and bounds by its extension and dimension lines and its text box,
+			// as AutoCAD uses the parts of its block; arrowheads and glyphs are left out.
+			lay := t.Layout()
+			gs = []geom.Curve{lay.ExtLines[0], lay.ExtLines[1]}
+			if t.Kind == doc.DimArcLength && lay.DimArc.R > 0 {
+				gs = append(gs, lay.DimArc)
 			}
-			continue
+			for _, l := range lay.DimLine {
+				gs = append(gs, l)
+			}
+			if lay.Text != nil && lay.Text.Value != "" {
+				gs = append(gs, boxEdges(lay.TextBox)...)
+			}
+		default:
+			gs = e.Geometry()
 		}
-		for _, g := range e.Geometry() {
+		for _, g := range gs {
 			if implied {
 				out = append(out, geom.ImpliedEdge(g, reach)...)
 			} else {
@@ -570,7 +579,8 @@ func (c *edgeCmd) run(ctx *cmdsys.Context, sel selector) {
 		if e == nil || !editable(ctx, e) {
 			continue
 		}
-		if _, text := e.(doc.Annotation); text {
+		switch e.(type) {
+		case doc.Annotation, *doc.Dimension:
 			continue // never trimmed or extended; its glyphs are many curves
 		}
 		for _, g := range e.Geometry() {
@@ -630,4 +640,13 @@ func (c *edgeCmd) trimTouched(ctx *cmdsys.Context, op *edgeOp, h doc.Handle, e d
 	}
 	op.replace(ctx, h, curvesOf(curve, keep))
 	return true
+}
+
+// boxEdges returns the four sides of a text box.
+func boxEdges(b [4]geom.Vec2) []geom.Curve {
+	out := make([]geom.Curve, 4)
+	for i := range 4 {
+		out[i] = geom.Line{A: b[i], B: b[(i+1)%4]}
+	}
+	return out
 }

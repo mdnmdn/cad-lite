@@ -240,4 +240,9 @@ var KeywordGroups = map[string][]string{
 	"UNDO back":             {"Yes", "No"},
 	"MREDO count":           {"All", "Last"},
 	"Save changes":          {"Yes", "No", "Cancel"},
+	"SAVEAS file format":    {"R12", "2000"},
+	"DIMLINEAR location":    {"Mtext", "Text", "Angle", "Horizontal", "Vertical", "Rotated"},
+	"DIMALIGNED location":   {"Mtext", "Text", "Angle"},
+	"DIMARC location":       {"Mtext", "Text", "Angle", "Partial", "Leader"},
+	"DIMCONTINUE next":      {"Select", "Undo"},
 }

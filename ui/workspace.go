@@ -58,8 +58,12 @@ type Workspace struct {
 	// aidsSet is true once the settings' drawing aids were applied; a new tab takes them too.
 	aidsSet    bool
 	textEditor *textEditState
-	fb         *feedbackState
-	analytics  analytics.Recorder
+	// discard is the unsaved-changes dialog while it is open (discard.go).
+	discard *discardDialog
+	// closeHooked is set once the window's close button asks windowClosing.
+	closeHooked bool
+	fb          *feedbackState
+	analytics   analytics.Recorder
 }
 
 // NewWorkspace returns a workspace editing d in its one tab. files may be nil, which
@@ -164,9 +168,19 @@ func Bindings() []gpui.KeyBinding {
 	}, settingsBindings()...)
 }
 
-// Render builds the window for the current state.
+// Render builds the window for the current state, with the unsaved-changes dialog over it while
+// it is open.
 func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	ws.win = w
+	if !ws.closeHooked {
+		ws.closeHooked = true
+		w.OnShouldClose(ws.windowClosing)
+	}
+	return ws.withDiscard(w, cx, ws.render(w, cx))
+}
+
+// render is Render without the unsaved-changes dialog.
+func (ws *Workspace) render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	if t := CurrentTheme(); ws.tipTheme != t.Name {
 		ws.tipTheme = t.Name
 		cx.SetTooltipStyle(tooltipStyle(t))
@@ -227,6 +241,12 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 			ws.endDrag(w)
 		}).
 		OnFileDrop(ws.onFileDrop).
+		// Delete with the focus outside any text field (a text field keeps its editing keys).
+		OnKeyDown(func(e *gpui.KeyDownEvent, w *gpui.Window, cx *gpui.App) {
+			if ws.eraseKey(e, w, cx) {
+				w.StopPropagation()
+			}
+		}).
 		Child(ws.chrome(win, sideW, agentW, cmdline, w, cx)...).
 		Child(ws.statusBar(), ws.openMenuOverlay())))
 }
@@ -244,7 +264,7 @@ func (ws *Workspace) chrome(win, sideW, agentW float32, cmdline gpui.IntoElement
 			ws.tabStrip(),
 			ws.canvasElement(),
 			hDivider(),
-			ws.commandArea(cmdline, w),
+			ws.commandArea(cmdline, ws.mainWidth(win, sideW, agentW), w),
 		))
 	l := &ws.lay
 	if l.sideOff {

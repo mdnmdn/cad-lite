@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How a drawing is stored — handles, entities, layers, the header — and the transaction, change-set and undo contract every edit follows.
 read_when: you are adding an entity type, changing how edits are recorded, or reading or writing the document from a command or a codec
-updated: 2026-10-15
+updated: 2026-10-24
 verified: 2026-10-15
-code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/textfont.go, doc/drawing.go, doc/layerorder.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go, ui/textedit.go]
+code_anchors: [doc/textlimits.go, doc/object.go, doc/entities.go, doc/text.go, doc/mtext.go, doc/dimension.go, doc/textfont.go, doc/drawing.go, doc/layerorder.go, doc/txn.go, doc/journal.go, doc/group.go, doc/block.go, doc/insert.go, doc/attribute.go, doc/unknown.go, doc/aci.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-geometry]
 review_cycle: quarterly
 ---
@@ -31,7 +31,7 @@ Zero means "no object". The model-space block record is `doc.ModelSpace`, the ow
 **Objects and entities.** `doc.Object` is anything stored: handle, owner, DXF class name and a deep
 `Clone`. `doc.Entity` adds the graphical part: `Common()` (handle, owner, layer, colour), `Bounds`,
 `Geometry` (the curves used for snapping, picking and display) and `Transform`. The entity types are
-`Line`, `Circle`, `Arc`, `LWPolyline`, `Text`, `MText`, `Insert` and `AttributeDefinition`. An `LWPolyline` also carries `Widths`, the start and end width per
+`Line`, `Circle`, `Arc`, `LWPolyline`, `Text`, `MText`, `Dimension`, `Insert` and `AttributeDefinition`. An `LWPolyline` also carries `Widths`, the start and end width per
 segment; only the DWG reader fills it, and the DXF codec and the renderer ignore it until polyline widths land. Arc angles are radians; the DXF codec converts degrees.
 
 **Text.** `Text` is a single-line TEXT with DXF's fields, all exported: `Insert` and `Align` (the first and
@@ -70,6 +70,25 @@ the fields it depends on, so editing a field directly (inside `Txn.Modify`) is e
 real (it toggles `TextUpsideDown`); `MirrorReadable` is MIRROR with `MIRRTEXT` 0. MTEXT has no mirrored form: a
 reflection keeps it readable and swaps its attachment.
 
+**Dimensions.** `Dimension` (`doc/dimension.go`) is a DIMENSION of kind `DimRotated` (DIMLINEAR: horizontal,
+vertical or rotated by `Rotation`), `DimAligned` (parallel to its origins) or `DimArcLength` (an arc length
+dimension: `Center`, `Radius`, `StartAngle`, `EndAngle`, `Partial`, `ArcSymbol`). It is non-associative: it keeps
+its definition points (`Ext1`, `Ext2`, `DimLine`, `TextPos`; `DefPoints` lists them, with `Center` for an arc
+length one) and a `DimStyle` captured when it is made (`DefaultDimStyle` is AutoCAD's ISO-25), and measures them
+(`Measurement`, `MeasurementText`: DIMDEC, DIMDSEP, DIMZIN bits 4 and 8, and the `Text` override where `<>` stands
+for the value and a single space suppresses it). `Layout` derives the drawing from the fields and caches it as
+`Text` does: extension lines offset by DIMEXO and extended by DIMEXE, the dimension line (or arc), closed arrowheads
+DIMASZ long and a third as wide (flipped outside with stubs when the line is shorter than 2.5 arrows; the line
+between stays, as ISO-25's DIMTOFL), and the text as an internal middle-centre `Text`, aligned with the line and
+kept readable (angle in (-90°, 90°]). An arc length dimension's extension lines are parallel to the arc's bisector
+under 90° and radial from 90°, and its arc symbol is an arc stroke before or above the text (the font has no ⌒).
+`Recompute` moves `DimLine` to the Ext2 end of a linear dimension line, puts a whole-arc dimension's origins on the
+arc's ends and, unless `TextMoved`, places `TextPos` Gap plus half the text height above the middle of the line in
+the reading sense (on the line when DIMTAD is 0). `Transform` maps the points (and the arc), so a scale changes the
+measurement and not the style sizes, then calls `Recompute`; a reflection leaves the text readable. `Lines` is the
+geometry without the text, for snaps; `Geometry` adds the text strokes and, since the renderer has no fills, five
+strokes per arrowhead that make it read solid.
+
 **Colour.** An entity's `Color` is an AutoCAD Color Index from 1 to 255, or `doc.ByLayer` (256),
 which a transaction assigns when the colour is unset: `Drawing.CurrentColor` (`CECOLOR`) when it is
 set to 1–255, otherwise `ByLayer`. `doc.ACIRGB` gives an index's RGB and `doc.NearestACI` the index nearest an RGB (a
@@ -90,8 +109,10 @@ that `New`, `AddLayer` and `RemoveLayer` keep in step with the table, so render,
 can look a layer up per entity per frame. A layer's `Name` must not change while it is in the table;
 a lookup that finds a renamed record rebuilds the index rather than return it under its old name.
 
-**Header.** `doc.Header` holds `HandSeed`, `InsUnits` and, in `Extra`, every header variable the
-reader does not model, kept as read.
+**Header.** `doc.Header` holds `HandSeed`, `InsUnits`, `Version` (the file format version the
+drawing saves as: the one a reader found or SAVEAS chose, "" to let the writer choose; see
+[File I/O](file-io.md)) and, in `Extra`, every header variable the reader does not model, kept as
+read. `Version` is not journalled: changing it is not an undo step.
 
 **Unknown entities and preserved records.** `doc.Unknown` keeps an entity of a class the document
 does not model. `Type` is the class name and `Raw` the groups after its `0 CLASS` line in file order,

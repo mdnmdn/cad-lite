@@ -5,7 +5,7 @@ kind: tech
 status: current
 summary: Append-only register of structural choices — what was chosen, why, and what it costs.
 read_when: you are about to reverse a structural choice, or wonder why something is the way it is
-updated: 2026-10-17
+updated: 2026-10-24
 verified: 2026-10-17
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -71,3 +71,7 @@ that cites the old one.
 | D42 | 2026-10-17 | Desktop feedback uses build-injected intake credentials and a separate private persistent outbox, with rendered screenshots edited outside the CAD document | Reports survive network failures and app restarts with a stable ULID; annotating a report never changes drawing geometry or undo | Compiled credentials are extractable and must be scoped to intake; queued reports retain user-provided text and images until acknowledged or explicitly discarded; browser builds receive no key |
 
 | D43 | 2026-10-17 | Analytics uses an injected recorder and one bounded background worker with stdout or PostHog sinks; identity is random per run and properties exclude content | Observe application and agent activity without coupling delivery failures to commands or collecting drawing/prompt data | Events can be lost on overflow or shutdown; session identifiers do not measure returning users; desktop capture tokens are extractable |
+
+| D44 | 2026-10-24 | The drawing remembers its save format in `doc.Header.Version`: the version an AutoCAD 2000 or newer file (or any DWG) was read in, or the one SAVEAS chose; new drawings and files read as R12 or older keep the automatic choice (R12 unless groups or object records need AutoCAD 2000) | QSAVE keeps a chosen or opened format as AutoCAD does, while the R12 files Cad-lite itself writes by default do not lock a drawing into R12 and lose groups added later | An explicit R12 choice lasts while the drawing is open, not across a reopen; a reopened R12 file gaining groups is saved as AutoCAD 2000 |
+
+| D45 | 2026-10-24 | Closing a drawing or quitting with unsaved changes asks in a modal dialog with two buttons, Close anyway and Cancel (one dialog listing every dirty drawing when quitting, also from the window close button), instead of AutoCAD's per-drawing Yes/No/Cancel save question; scripts and window-less hosts keep the command-line question | Two unambiguous outcomes, one confirmation for the whole window, and a close button that never loses work silently | No Save from the dialog: keeping the changes takes Cancel, SAVE and a second close; the UI and scripts answer the same command differently |

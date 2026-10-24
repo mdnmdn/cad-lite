@@ -37,6 +37,10 @@ type Header struct {
 	HandSeed Handle
 	// InsUnits is the drawing unit code ($INSUNITS; 4 = millimetres).
 	InsUnits int
+	// Version is the file format version the drawing saves as ($ACADVER: "AC1009", "AC1015", ...):
+	// the version a reader found, or the one SAVEAS chose. "" lets the writer choose by content. A
+	// save maps a version its writer cannot write to the nearest one it can (fileio.NearestVersion).
+	Version string
 	// Extra keeps header variables the app does not model, verbatim.
 	Extra map[string][]string
 }

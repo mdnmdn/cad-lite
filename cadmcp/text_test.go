@@ -90,7 +90,7 @@ func TestUpdateText(t *testing.T) {
 	before := snapshot(r)
 	r.fails("update_text", `{"handle":"`+h+`","width":3}`, "apply to MTEXT")
 	r.fails("update_text", `{"handle":"`+mh+`","justify":"Left"}`, "apply to TEXT")
-	r.fails("update_text", `{"handle":"`+line+`","value":"x"}`, "needs TEXT or MTEXT")
+	r.fails("update_text", `{"handle":"`+line+`","value":"x"}`, "needs TEXT, MTEXT or DIMENSION")
 	r.fails("update_text", `{"handle":"FFFF","value":"x"}`, "no entity")
 	r.fails("update_text", `{"handle":"`+h+`"}`, "at least one field")
 	r.fails("update_text", `{"handle":"`+h+`","value":"two\nlines"}`, "single line")

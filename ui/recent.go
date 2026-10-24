@@ -135,6 +135,7 @@ func (ws *Workspace) openRecentFolder(dir string, w *gpui.Window) {
 // opens.
 func (ws *Workspace) toggleOpenMenu(w *gpui.Window) {
 	ws.recent.menu = !ws.recent.menu
+	ws.dlg.formatMenu = false
 	if ws.recent.menu {
 		ws.refreshMissing()
 	}
@@ -168,8 +169,13 @@ func (ws *Workspace) openButtons() *gpui.Div {
 
 // openMenuOverlay is the Open menu over the whole window: a transparent backdrop that closes the
 // menu on any press outside it, and the menu itself under the Open button. Closed, it is an empty
-// absolute box. It is mounted after the chrome, so it paints above the ribbon and the canvas.
+// absolute box. It is mounted after the chrome, so it paints above the ribbon and the canvas. It
+// also carries the title bar's other menu, Save as's format menu (saveFormatOverlay), which never
+// shows together with it.
 func (ws *Workspace) openMenuOverlay() *gpui.Div {
+	if ws.dlg.formatMenu {
+		return ws.saveFormatOverlay()
+	}
 	if !ws.recent.menu {
 		return gpui.NewDiv().Absolute().SizeWH(0, 0)
 	}

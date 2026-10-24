@@ -80,6 +80,8 @@ func (p *Platform) OpenWindow(o gpui.WindowOptions) (gpui.PlatformWindow, error)
 // requests reach App.OpenPaths.
 func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	ebiten.SetScreenClearedEveryFrame(false)
+	// The app decides whether the close button quits (Window.RequestClose).
+	ebiten.SetWindowClosingHandled(true)
 	app := gpui.NewAppWithPlatform(p)
 	if onLaunch != nil {
 		onLaunch(app)
@@ -212,6 +214,9 @@ func (g *game) Update() error {
 			applyClipboard(r, w.handler, func(ev gpui.PlatformInput) { win.DispatchEvent(ev, app) })
 		})
 		g.pollInput(win, app, w)
+		if ebiten.IsWindowBeingClosed() {
+			win.RequestClose(app)
+		}
 		for _, paths := range g.opens.drain() {
 			app.OpenPaths(paths)
 		}

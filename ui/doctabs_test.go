@@ -78,24 +78,21 @@ func TestTabsKeepTheirOwnUndoAndView(t *testing.T) {
 	}
 }
 
-func TestClosingADirtyTabAsks(t *testing.T) {
+func TestScriptedCloseOfADirtyTabAsksOnTheCommandLine(t *testing.T) {
 	h, a, _ := tabsRig(t)
-	h.ws.DocumentSession(1).Script("LINE 0,0 1,1  ")
-	h.ws.SwitchDocument(0)
+	dirtyTab(h.ws.DocumentSession(1), "1,1")
 	h.frame()
-	h.clickID("doc-tab-close-1")
+	h.ws.Session().Script("CLOSE")
 	s := h.ws.Session()
 	p := s.CurrentPrompt()
-	if !h.ws.Documents()[1].Active || s.Active() != "CLOSE" || p == nil || !slices.Contains(p.Keywords, "Yes") {
-		t.Fatalf("closing a dirty tab should show it and ask Save changes, active %q prompt %+v", s.Active(), p)
+	if open, _, _ := h.ws.DiscardDialog(); open || s.Active() != "CLOSE" || p == nil || !slices.Contains(p.Keywords, "Yes") {
+		t.Fatalf("a scripted CLOSE should ask Save changes on the command line, active %q prompt %+v", s.Active(), p)
 	}
 	h.ws.submit("Cancel", h.hw.Window())
 	if len(h.ws.Documents()) != 2 {
 		t.Fatal("Cancel closed the tab")
 	}
-	h.frame()
-	h.clickID("doc-tab-close-1")
-	h.ws.submit("No", h.hw.Window())
+	h.ws.Session().Script("CLOSE\nNo\n")
 	docs := h.ws.Documents()
 	if len(docs) != 1 || docs[0].Path != a || !docs[0].Active {
 		t.Fatalf("after No: %+v", docs)
@@ -123,7 +120,7 @@ func TestCleanTabClosesAtOnceAndByMiddleClick(t *testing.T) {
 		t.Fatalf("middle click should close the tab: %+v", docs)
 	}
 	// The last tab is emptied, not removed.
-	h.ws.Session().Script("LINE 0,0 1,1  ")
+	dirtyTab(h.ws.Session(), "1,1")
 	h.ws.Session().MarkSaved()
 	h.ws.run("CLOSE", h.hw.Window())
 	if docs := h.ws.Documents(); len(docs) != 1 || h.ws.Session().Drawing().Len() != 0 {
@@ -145,29 +142,32 @@ func TestCtrlTabSwitchesTabs(t *testing.T) {
 	}
 }
 
-func TestQuitAsksEachDirtyTab(t *testing.T) {
+func TestScriptedQuitAsksEachDirtyTab(t *testing.T) {
 	h, _, _ := tabsRig(t)
 	quit := 0
 	h.ws.SetQuitHandler(func() { quit++ })
 	h.ws.run("NEW", h.hw.Window()) // a clean third tab is not asked about
-	h.ws.DocumentSession(0).Script("LINE 0,0 1,1  ")
-	h.ws.DocumentSession(1).Script("LINE 0,0 2,2  ")
+	dirtyTab(h.ws.DocumentSession(0), "1,1")
+	dirtyTab(h.ws.DocumentSession(1), "2,2")
 	h.ws.SwitchDocument(1)
 	w := h.hw.Window()
-	h.ws.run("QUIT", w)
+	h.ws.Session().Script("QUIT")
 	if h.ws.Session().Active() != "QUIT" {
-		t.Fatal("QUIT on a dirty tab should ask")
+		t.Fatal("a scripted QUIT on a dirty tab should ask on the command line")
 	}
 	h.ws.submit("No", w)
 	if quit != 0 || !h.ws.Documents()[0].Active || h.ws.Session().Active() != "QUIT" {
 		t.Fatalf("the other dirty tab should be shown and asked: quit %d, %+v", quit, h.ws.Documents())
+	}
+	if open, _, _ := h.ws.DiscardDialog(); open {
+		t.Fatal("the chain a script started should not open the dialog")
 	}
 	h.ws.submit("Cancel", w)
 	if quit != 0 {
 		t.Fatal("Cancel did not stop the quit")
 	}
 	// A new QUIT starts over and asks every dirty tab again.
-	h.ws.run("QUIT", w)
+	h.ws.Session().Script("QUIT")
 	h.ws.submit("No", w)
 	if !h.ws.Documents()[1].Active || h.ws.Session().Active() != "QUIT" {
 		t.Fatalf("a new quit should ask the other tab again: %+v", h.ws.Documents())
@@ -190,5 +190,24 @@ func TestOpenPathsOpensEveryDrawingBeforeTheWindow(t *testing.T) {
 		if !ws.tabs[i].fitPending {
 			t.Fatalf("tab %d is not fitted on its first frame", i)
 		}
+	}
+}
+
+func TestDirtyTabsShowAMarker(t *testing.T) {
+	h, _, _ := tabsRig(t)
+	h.ws.run("NEW", h.hw.Window())
+	dirtyTab(h.ws.DocumentSession(0), "1,1") // inactive and dirty
+	dirtyTab(h.ws.DocumentSession(2), "1,1") // active and dirty
+	for _, theme := range []Theme{themeDark, themeLight} {
+		ApplyTheme(theme)
+		h.frame()
+		h.savePNG("discard", "tabs-"+theme.Name+".png")
+	}
+	var got []string
+	for _, tab := range h.ws.tabs {
+		got = append(got, tab.caption())
+	}
+	if !slices.Equal(got, []string{"a.dxf*", "b.dxf", "Untitled*"}) {
+		t.Fatalf("captions %q", got)
 	}
 }

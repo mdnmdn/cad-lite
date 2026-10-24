@@ -97,7 +97,7 @@ func classifyOverride(t string) (w ovWord, mode SnapMode, canon string) {
 		switch {
 		case n.name == "NONE":
 			return wordNon, 0, canon
-		case n.mode&(SnapQuick|SnapApparent|SnapExtension|SnapParallel|SnapNode) != 0:
+		case n.mode&(SnapQuick|SnapApparent|SnapExtension|SnapParallel) != 0:
 			return wordUnsupported, n.mode, canon
 		}
 		return wordSnap, n.mode, canon

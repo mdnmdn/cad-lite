@@ -34,11 +34,13 @@ type HistoryState struct {
 
 // fileState is the per-session state of this file.
 type fileState struct {
-	mods    int
-	quit    func()
-	host    DocumentHost
-	path    func() string
-	history HistoryState
+	mods int
+	quit func()
+	host DocumentHost
+	path func() string
+	// scripting reports whether a script is feeding the session.
+	scripting func() bool
+	history   HistoryState
 }
 
 func newFileState(path func() string) *fileState {
@@ -103,11 +105,29 @@ type DocumentHost interface {
 	Close() bool
 }
 
+// DiscardConfirmer is a DocumentHost that asks about unsaved changes with a dialog of its own
+// instead of the command line's "Save changes" question. CLOSE and QUIT hand the decision to it,
+// except while a script runs, which keeps the command-line question its next lines answer.
+type DiscardConfirmer interface {
+	// ConfirmClose asks whether to close this session's drawing, which has unsaved changes,
+	// without saving, and reports whether it asks; it calls close once the user agrees. false
+	// keeps the command-line question.
+	ConfirmClose(close func()) bool
+	// ConfirmQuit asks whether to quit without saving, naming every drawing with unsaved changes,
+	// and reports whether it took the quit over: it quits once the user agrees, or at once when
+	// nothing is unsaved. false keeps the command-line question for each dirty drawing.
+	ConfirmQuit() bool
+}
+
 // SetDocumentHost installs the host that gives each drawing a tab of its own (see DocumentHost).
 func (s *Session) SetDocumentHost(h DocumentHost) { s.files.host = h }
 
 // Documents returns the session's document host, or nil when the host keeps one drawing.
 func (c *Context) Documents() DocumentHost { return c.files.host }
+
+// Scripted reports whether a script (Session.Script, SCRIPT) is feeding the session, so the next
+// responses come from its lines rather than from a person.
+func (c *Context) Scripted() bool { return c.files.scripting != nil && c.files.scripting() }
 
 // Modified returns the session's modified counter (see Session.Modified).
 func (c *Context) Modified() int { return c.files.mods }

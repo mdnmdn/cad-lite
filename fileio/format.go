@@ -29,8 +29,43 @@ type Writer interface {
 	Extensions() []string
 	// Versions returns the format versions it writes, e.g. "AC1009".
 	Versions() []string
-	// Write serializes d to w.
+	// Write serializes d to w, in the version the writer chooses for it.
 	Write(w io.Writer, d *doc.Drawing) ([]string, error)
+}
+
+// VersionWriter is a Writer that writes a version the caller chooses (SAVEAS's file format).
+type VersionWriter interface {
+	Writer
+	// WriteVersion serializes d to w in version, one of Versions(); "" is Write's own choice.
+	// Content the version cannot hold is degraded or left out, each loss reported as a warning.
+	WriteVersion(w io.Writer, d *doc.Drawing, version string) ([]string, error)
+	// AutoVersion returns the version Write chooses for d.
+	AutoVersion(d *doc.Drawing) string
+}
+
+// SaveOptions are a save's choices beyond the path.
+type SaveOptions struct {
+	// Version is the format version to write ("AC1009", "AC1015"); a version the writer does not
+	// write is mapped to the nearest one it does (NearestVersion), and "" lets the writer choose.
+	Version string
+}
+
+// NearestVersion maps version to one of writable (versions named "AC1009", "AC1015", ..., which
+// sort in release order): version itself when it is writable, else the oldest writable version
+// newer than it, which can hold everything it could, else the newest writable one. "" stays "",
+// and so does any version when writable is empty.
+func NearestVersion(version string, writable []string) string {
+	if version == "" || len(writable) == 0 {
+		return ""
+	}
+	vs := slices.Clone(writable)
+	slices.Sort(vs)
+	for _, v := range vs {
+		if v >= version {
+			return v
+		}
+	}
+	return vs[len(vs)-1]
 }
 
 // Registry holds the available formats.
@@ -86,14 +121,26 @@ func (r *Registry) Open(path string) (*doc.Drawing, []string, error) {
 	return nil, nil, errors.New(i18n.T("fileio.err.no_reader", ext(path)))
 }
 
-// Save writes d to path with the writer registered for its extension. The file is written to a
-// temporary file in the same directory, synced and renamed over path, so a failed write leaves
+// Save writes d to path with the writer registered for its extension, in the drawing's own
+// version (Header.Version, mapped by NearestVersion; "" lets the writer choose). The file is written
+// to a temporary file in the same directory, synced and renamed over path, so a failed write leaves
 // any existing file untouched.
 func (r *Registry) Save(path string, d *doc.Drawing) ([]string, error) {
-	for _, w := range r.writers {
-		if slices.Contains(w.Extensions(), ext(path)) {
-			return atomicWrite(path, func(f io.Writer) ([]string, error) { return w.Write(f, d) })
-		}
+	return r.SaveWith(path, d, SaveOptions{Version: d.Header.Version})
+}
+
+// SaveWith is Save with explicit options: opt.Version replaces the drawing's own version. A writer
+// that is not a VersionWriter writes its one version whatever opt says.
+func (r *Registry) SaveWith(path string, d *doc.Drawing, opt SaveOptions) ([]string, error) {
+	if w := r.writer(path); w != nil {
+		v := NearestVersion(opt.Version, w.Versions())
+		vw, ok := w.(VersionWriter)
+		return atomicWrite(path, func(f io.Writer) ([]string, error) {
+			if ok {
+				return vw.WriteVersion(f, d, v)
+			}
+			return w.Write(f, d)
+		})
 	}
 	if r.CanRead(path) {
 		alt := ".dxf"
@@ -103,6 +150,55 @@ func (r *Registry) Save(path string, d *doc.Drawing) ([]string, error) {
 		return nil, errors.New(i18n.T("fileio.err.read_only", strings.ToUpper(strings.TrimPrefix(ext(path), ".")), alt))
 	}
 	return nil, errors.New(i18n.T("fileio.err.no_writer", ext(path)))
+}
+
+// writer returns the writer registered for the extension of path, or nil.
+func (r *Registry) writer(path string) Writer {
+	for _, w := range r.writers {
+		if slices.Contains(w.Extensions(), ext(path)) {
+			return w
+		}
+	}
+	return nil
+}
+
+// SaveVersions returns the versions the writer for path writes, oldest first; for a path no writer
+// handles (an untitled drawing's "", a .dwg), those of the first registered writer, which
+// WritablePath would save it with.
+func (r *Registry) SaveVersions(path string) []string {
+	w := r.writer(path)
+	if w == nil && len(r.writers) > 0 {
+		w = r.writers[0]
+	}
+	if w == nil {
+		return nil
+	}
+	vs := slices.Clone(w.Versions())
+	slices.Sort(vs)
+	return vs
+}
+
+// SaveVersion returns the version saving d to path with version would write: version mapped by
+// NearestVersion, or, for "", the writer's own choice for d. Like SaveVersions it falls back to the
+// first writer, and it is "" when the writer cannot say.
+func (r *Registry) SaveVersion(path string, d *doc.Drawing, version string) string {
+	w := r.writer(path)
+	if w == nil && len(r.writers) > 0 {
+		w = r.writers[0]
+	}
+	if w == nil {
+		return ""
+	}
+	if v := NearestVersion(version, w.Versions()); v != "" {
+		return v
+	}
+	if vw, ok := w.(VersionWriter); ok {
+		return vw.AutoVersion(d)
+	}
+	if vs := w.Versions(); len(vs) == 1 {
+		return vs[0]
+	}
+	return ""
 }
 
 // CanRead reports whether a reader is registered for the extension of path.

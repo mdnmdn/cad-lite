@@ -5,9 +5,9 @@ kind: feature
 status: current
 summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line, the -open flag and files the OS hands over (dropped, opened from Finder or the Dock, file arguments), how warnings and errors are reported, and where the lossy edges are.
 read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
-updated: 2026-10-15
-verified: 2026-10-16
-code_anchors: [ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+updated: 2026-10-24
+verified: 2026-10-24
+code_anchors: [fileio/dxf/dimension.go, ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/saveformat.go, ui/titlebar.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -28,16 +28,37 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   reads `Saved <path> (<n> entities).`
 - **QSAVE** (Ctrl+S) saves silently under the current path and asks for one only when the drawing
   has none. **SAVEAS** (Ctrl+Shift+S) and **SAVE** ask for the path, offering the current one as the default.
+- **File format.** Typed SAVEAS first prints `Current file format: AutoCAD 2000/LT2000 DXF` and asks
+  `Enter file format [R12/2000] <2000>:`, as AutoCAD's -SAVEAS does; the default is the format a save
+  would write. `R12` writes AutoCAD R12/LT2 DXF (AC1009), `2000` AutoCAD 2000/LT2000 DXF (AC1015); the
+  keywords are the same in Italian (`Formato file corrente: ...`, `Immettere il formato del file`).
+  The drawing keeps the chosen format: QSAVE, SAVE, the `Save changes` question and the next SAVEAS
+  save in it. A path typed at the format prompt is the file name, saved in the drawing's format
+  without choosing one, so scripts that answer `SAVEAS plan.dxf` work as before (a file literally
+  named `r`, `r12` or `2000` is taken as the keyword). SAVE and QSAVE never ask for a format.
+- **Which format a drawing has.** A drawing read from an AutoCAD 2000 or newer DXF (`$ACADVER`
+  AC1015 and up, and AC1012 and AC1014, R13 and R14) or from any DWG saves as AutoCAD 2000 DXF, the
+  nearest version written. A new drawing, and one read from R12 or an older DXF, has no format of its
+  own: it saves as R12 unless it has groups or object records, which need AutoCAD 2000 (the message
+  then reads `Current file format: AutoCAD R12/LT2 DXF (automatic)`). Saving to R12 a drawing that
+  needs AutoCAD 2000 leaves out its groups and object records and writes its MTEXT as TEXT, with one
+  warning each, such as `groups not written (R12 has no groups; save as AutoCAD 2000 DXF to keep them): 1 groups`;
+  the drawing itself keeps them.
 - **A drawing opened from a DWG** has the `.dwg` path, which cannot be written (see below), so QSAVE
   asks for a path instead of failing, the Save button shows the save dialog, and SAVE, SAVEAS, the
   dialog and the `Save changes` question offer the same name with `.dxf` as the default.
 - **Open and Save buttons.** The title bar has icon-only Open (Ctrl+O) and Save (Ctrl+S) buttons after the document chip; Save as
   is a right click on Save and Ctrl+Shift+S. Open shows the system open dialog and, when a file is
   chosen, runs OPEN with that path, so the tab choice, the project path and the agent history switch
-  happen as for a typed OPEN. Save with a file runs QSAVE; Save without one, and
-  Save as, show the system save dialog (the current name, or `drawing`, pre-filled) and run SAVEAS with
-  the chosen path. Cancelling the dialog does nothing. One dialog is open at a time; the window stays
-  usable behind it.
+  happen as for a typed OPEN. Save with a file runs QSAVE; Save without one shows the system save
+  dialog (the current name, or `drawing`, pre-filled) and runs SAVEAS with the chosen path, in the
+  drawing's format. Save as first shows a `Save as type` menu under the Save button listing
+  `AutoCAD 2000/LT2000 DXF (*.dxf)` and `AutoCAD R12/LT2 DXF (*.dxf)`, the drawing's current format
+  ticked; choosing one shows the save dialog listing that format alone and runs SAVEAS with the format
+  and the path (AutoCAD picks the type inside its own save dialog; the system dialogs Cad-lite shows
+  cannot report a chosen type, hence the menu, and Save of an untitled drawing offers no choice). A
+  press outside the menu, or Save as again, closes it. Cancelling the dialog does
+  nothing. One dialog is open at a time; the window stays usable behind it.
 - **Recent files and folders.** Every drawing a successful OPEN or SAVE, SAVEAS or QSAVE names (typed, from the
   buttons, the dialogs, the recent menu or `-open`) moves to the front of the recent files, and its folder to the
   front of the recent folders; choosing a folder in the menu moves it to the front too. Paths are absolute and
@@ -64,13 +85,16 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   tab, or empties the last one to an untitled drawing (see [Document tabs](document-tabs.md)).
 - **Unsaved changes.** The session keeps a modified counter: every committed command, undo and redo adds
   one, and creating, opening or saving a drawing resets it (`Session.Dirty`, `Session.Modified`; the read-only
-  variable `DBMOD` is 1 while it is not zero). The counter is per tab. CLOSE, QUIT and EXIT on a dirty drawing
+  variable `DBMOD` is 1 while it is not zero). The counter is per tab. In the desktop window, CLOSE of a
+  dirty drawing, QUIT and EXIT with any dirty tab, and the window's close button show the unsaved-changes
+  dialog, with **Close anyway** and **Cancel** and, when quitting, the list of every dirty drawing (see
+  Document tabs); unlike AutoCAD it offers no Save: Cancel, then SAVE, keeps the
+  changes. In a script, or a session without a window, CLOSE, QUIT and EXIT on a dirty drawing
   (QUIT and EXIT on every dirty tab in turn), and NEW and OPEN where no document host opens another tab, ask
   `Save changes to NAME? [Yes/No/Cancel] <Yes>` (`NAME` is the file name, or `Untitled`): Yes saves
   (asking for a path when there is none) and goes on, No goes on, Cancel stops. OPEN reads the file first, so
   a bad path fails before the question. A failed save keeps the drawing. The title bar's document chip shows a dot before the name while the
-  drawing is dirty, as each document tab does. Layer table edits do not count, because they are not journalled. The window's own close
-  button does not ask yet: the gpui platform has no close hook.
+  drawing is dirty, as each document tab does (with a `*` after the name there). Layer table edits do not count, because they are not journalled.
 - **QUIT** and **EXIT** end the application through the host (`Session.SetQuitHandler`); without a host they
   print `Quitting is not available on this platform.`
 - The file commands are human-only: an AI agent that tries them is refused with
@@ -100,7 +124,12 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   Text sizes outside the ranges AutoCAD allows (a width factor past 100, a slant past 85°, a height past
   1e15) are clamped on reading, so a damaged file cannot make a text infinitely large.
   `MTEXT` opens as multiline text; saved to R12, which has no MTEXT, it becomes one TEXT per line,
-  with a warning, and loses its box and wrapping. What else is read, what is kept and which DXF version is written are owned by
+  with a warning, and loses its box and wrapping. Linear, aligned and arc length dimensions open as
+  dimensions with their style (the DIMSTYLE table and AutoCAD's per-dimension overrides), text
+  override, moved text and text angle, and save in both formats with a regenerated drawing block, so
+  other programs draw them; an arc length dimension, which R12 and AutoCAD 2000 lack, saves as a block
+  reference that only Cad-lite reads back as a dimension. Other dimension types (angular, radial,
+  ordinate) stay unknown objects and save unchanged with their blocks. What else is read, what is kept and which DXF version is written are owned by
   [File I/O](../tech/file-io.md).
 - **DWG** (R14, R2000, R2004, R2007, R2010, R2013 and R2018) opens with its layers, units and the
   `LINE`, `CIRCLE`, `ARC`, `LWPOLYLINE`, 2D polyline and `TEXT` entities of model space. Every other entity
@@ -177,7 +206,10 @@ path preserve it; loading restores it without an edit-history entry.
 - Entry point: `Workspace.OpenPaths(paths)` is the one function for files the OS hands over; it runs
   OPEN once per supported path, and OPEN puts each in a tab of its own.
 
-- Commands: OPEN, SAVE, NEW, registered in `cmdsys/commands`; prompt kind `InputText`.
+- Commands: OPEN, SAVE, NEW, registered in `cmdsys/commands`; prompt kind `InputText`. SAVEAS's
+  format prompt takes `InputKeyword | InputText` (keywords `R12`, `2000`; text is the path).
+- Document: `doc.Header.Version` is the drawing's file format; SAVEAS sets it after a successful
+  save with a chosen format.
 - Interface: `cmdsys.FileHandler` (`Open`, `Save`), implemented by `fileio.Registry`; the session
   receives it through `Session.SetFiles`. A handler that also has `WritablePath(path) string`
   (`Registry` does) tells the file commands which name a read-only format can be saved under.
@@ -211,10 +243,20 @@ the active tab (`openPath`); the document host (`ui/doctabs.go`) then makes the 
 `gpui.FileDropEvent`. How the platform produces the drop and the open-documents event, and their
 limits, is in the gpui contract (`internal/gpui/_docs/api-contract.md`, the ebiten platform section).
 
+SAVEAS's format prompt is `fileCmd.formatPrompt`: it runs only when the handler has `SaveVersions`
+and `SaveVersion` (`fileio.Registry` does; test doubles and the browser do not, and go straight to
+the path), offers the versions that have a keyword in `formatKeywords`, and `fileCmd.save` sets
+`Header.Version` around the save, restoring it when the save fails. `commands.FormatName` and
+`FormatKeyword` name a version for the prompt and the UI (`dxf.version.*` in the catalogs).
+
 `ui/filedialog.go` holds the button wiring: `Workspace.openFile`, `saveFile` and `saveFileAs` call
 `startDialog`, which runs the `ui.FileDialog` on a goroutine and polls its answer with a `gpui.Window.After`
 timer, so no gpui state is touched off the UI goroutine (the pattern of the agent discovery probe).
-`pollDialog` then opens the chosen file through `Workspace.openFilePath`, the one function every "open this
+`ui/saveformat.go` holds the Save as format menu: `Workspace.saveFileAs` toggles it when the handler
+offers formats (`saveFormats`), `saveButton` records the Save button's bounds to hang it under,
+`saveFormatOverlay` draws it (mounted through `openMenuOverlay`), and `chooseSaveFormat` starts the
+save dialog with `formatFilters` through `startSaveDialog`; `runSaveAs` answers SAVEAS's format
+prompt with `_R12` or `_2000` and then the path. `pollDialog` then opens the chosen file through `Workspace.openFilePath`, the one function every "open this
 path" in the UI goes through (it runs OPEN and submits the path, and OPEN picks the tab), or runs SAVEAS and submits the path, or falls back to the command on any error
 other than `filedialog.ErrCancelled`. `openFilters` and `saveFilters` build the type lists from the
 registry. `ui/recent.go` holds the recent lists' UI: `Workspace.noteRecentFile` is a `Session.OnFilePath`
@@ -250,6 +292,7 @@ macOS, `powershell.exe -STA` with `System.Windows.Forms` open and save dialogs o
 ## Next steps
 
 - Write newer DXF versions so unknown entities of classes R12 lacks survive a save.
+- Keyboard navigation (arrows, Enter, Escape) in the Save as format menu, which takes clicks only.
 - Write DWG, and read more DWG entities (MTEXT, INSERT and blocks first).
 - Browser file access through the browser's own APIs.
 - Pin a recent drawing so it stays at the top of the list.

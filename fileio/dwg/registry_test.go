@@ -84,3 +84,15 @@ func TestRegistryReportsAnUnsupportedVersion(t *testing.T) {
 		}
 	}
 }
+
+// A drawing read from DWG keeps its release's version, which a save maps to AutoCAD 2000 DXF.
+func TestDWGKeepsItsVersion(t *testing.T) {
+	r := registry()
+	d, _, err := r.Open(filepath.Join("testdata", "sample_AC1018.dwg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Header.Version != "AC1018" || r.SaveVersion("plan.dxf", d, d.Header.Version) != "AC1015" {
+		t.Fatalf("version %q saves as %q", d.Header.Version, r.SaveVersion("plan.dxf", d, d.Header.Version))
+	}
+}

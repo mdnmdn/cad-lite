@@ -21,6 +21,14 @@ type writer struct {
 	modelOwner   string
 	typeOverride string
 	reactors     map[doc.Handle][]doc.Handle
+	// mtexts counts the MTEXT written as TEXT by the R12 symbol path (r12Losses reports them).
+	mtexts int
+	// dims are the dimensions being written with their generated blocks, and dimNames those
+	// blocks' names by dimension handle (planDimensions).
+	dims     []dimOut
+	dimNames map[doc.Handle]string
+	// dimStyles are the written DIMSTYLE records as a reader sees them (dimStyleTable).
+	dimStyles map[string]dimStyleRec
 }
 
 func (w *writer) pair(code int, val string) {
@@ -40,7 +48,8 @@ func (w *writer) point(code int, p geom.Vec2) {
 	w.num(code+20, 0)
 }
 
-// Write implements fileio.Writer. It writes R12 (AC1009): LWPOLYLINE becomes
+// Write implements fileio.Writer: WriteVersion with no version, which picks R12 (AC1009) unless
+// the drawing needs AutoCAD 2000 (AC1015). writeR12 writes R12: LWPOLYLINE becomes
 // POLYLINE/VERTEX/SEQEND and entity handles are kept. VERTEX and SEQEND get
 // handles above the drawing's seed, which are not part of the document.
 // Header variables the document does not model are not written.
@@ -51,10 +60,11 @@ func (w *writer) point(code int, p geom.Vec2) {
 // written and a warning names it; the other classes are written as read,
 // without the groups R12 lacks (see pairs). Only the CONTINUOUS linetype, the
 // layers and the entities are generated.
-func (Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
-	if len(d.Blocks()) > 0 || len(d.Groups()) > 0 || len(d.Preserved.Objects) > 0 || hasAttdef(d) {
-		return writeSymbols(out, d)
-	}
+func (c Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
+	return c.WriteVersion(out, d, "")
+}
+
+func writeR12(out io.Writer, d *doc.Drawing) ([]string, error) {
 	w := &writer{w: bufio.NewWriter(out)}
 	var warns []string
 	sub := d.Header.HandSeed
@@ -396,7 +406,7 @@ func (w *writer) headAs(typ, h string, c *doc.EntityCommon) {
 		w.int(62, c.Color)
 	}
 	if w.modern {
-		sub := map[string]string{"LINE": "AcDbLine", "CIRCLE": "AcDbCircle", "ARC": "AcDbCircle", "TEXT": "AcDbText", "MTEXT": "AcDbMText", "ATTDEF": "AcDbText", "ATTRIB": "AcDbText", "LWPOLYLINE": "AcDbPolyline", "INSERT": "AcDbBlockReference"}[typ]
+		sub := map[string]string{"LINE": "AcDbLine", "CIRCLE": "AcDbCircle", "ARC": "AcDbCircle", "TEXT": "AcDbText", "MTEXT": "AcDbMText", "ATTDEF": "AcDbText", "ATTRIB": "AcDbText", "LWPOLYLINE": "AcDbPolyline", "INSERT": "AcDbBlockReference", "DIMENSION": "AcDbDimension"}[typ]
 		if sub != "" {
 			w.pair(100, sub)
 		}

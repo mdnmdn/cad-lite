@@ -121,6 +121,11 @@ func stretchable(d *doc.Drawing, e doc.Entity) bool {
 }
 
 func crossesPolygon(e doc.Entity, poly []geom.Vec2, tol float64) bool {
+	if _, ok := e.(*doc.Dimension); ok {
+		// Its lines, text box and definition points: a shape around a definition point alone
+		// selects it, which is how a dimension is stretched.
+		return cmdsys.PathsCrossPolygon(cmdsys.EntityPaths(e, tol), poly)
+	}
 	var paths [][]geom.Vec2
 	for _, cv := range e.Geometry() {
 		paths = append(paths, cv.Tessellate(tol, nil))
@@ -229,6 +234,8 @@ func (c *stretchCmd) stretch(e doc.Entity, v geom.Vec2) {
 		}
 	case *doc.Arc:
 		c.stretchArc(e, v)
+	case *doc.Dimension:
+		c.stretchDim(e, v)
 	case doc.Annotation:
 		// Text moves whole when its insertion point is inside, as in AutoCAD.
 		if c.inside(e.Anchor()) {
@@ -241,6 +248,42 @@ func (c *stretchCmd) stretch(e doc.Entity, v geom.Vec2) {
 			e.Transform(geom.Translate(v))
 		}
 	}
+}
+
+// stretchDim moves the definition points of a dimension that lie inside the windows, as AutoCAD
+// stretches a non-associative dimension, and derives the rest again (Dimension.Recompute): a
+// dimension with all of them inside moves whole. A linear dimension's extension line origins and
+// dimension line point move on their own; an arc length dimension keeps its arc and moves only
+// its dimension arc point. Text inside moves too and, unless the dimension line moves with it,
+// becomes user-positioned; text not inside follows the dimension line unless it was positioned.
+func (c *stretchCmd) stretchDim(d *doc.Dimension, v geom.Vec2) {
+	all := true
+	for _, p := range d.DefPoints() {
+		all = all && c.inside(p)
+	}
+	if all {
+		d.Transform(geom.Translate(v))
+		return
+	}
+	lineIn, textIn := c.inside(d.DimLine), c.inside(d.TextPos)
+	if d.Kind != doc.DimArcLength {
+		if c.inside(d.Ext1) {
+			d.Ext1 = d.Ext1.Add(v)
+		}
+		if c.inside(d.Ext2) {
+			d.Ext2 = d.Ext2.Add(v)
+		}
+	}
+	if lineIn {
+		d.DimLine = d.DimLine.Add(v)
+	}
+	switch {
+	case textIn && (d.TextMoved || !lineIn):
+		d.TextPos, d.TextMoved = d.TextPos.Add(v), true
+	case textIn:
+		d.TextPos = d.TextPos.Add(v)
+	}
+	d.Recompute()
 }
 
 func (c *stretchCmd) stretchArc(a *doc.Arc, v geom.Vec2) {

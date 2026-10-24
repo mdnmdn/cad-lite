@@ -51,6 +51,9 @@ const (
 	// AppStop: end the agent session, a square stop control distinct from cancelling a turn
 	AppStop Name = "app-stop"
 
+	// AppUpdate: a newer version is ready to install, an arrow pointing down into a circle
+	AppUpdate Name = "app-update"
+
 	// AppWarning: something needs attention, a triangle with an exclamation mark
 	AppWarning Name = "app-warning"
 
@@ -226,6 +229,7 @@ var All = []Name{
 	AppSend,
 	AppSettings,
 	AppStop,
+	AppUpdate,
 	AppWarning,
 	DrawArc,
 	DrawCircle,

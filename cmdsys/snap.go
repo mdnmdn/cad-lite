@@ -20,7 +20,7 @@ const (
 	SnapMidpoint
 	// SnapCenter snaps to the centre of circles and arcs.
 	SnapCenter
-	// SnapNode snaps to point objects. No object Cad-lite draws is a node yet.
+	// SnapNode snaps to point objects: the definition points of a dimension.
 	SnapNode
 	// SnapQuadrant snaps to the 0/90/180/270 degree points of circles and arcs.
 	SnapQuadrant
@@ -127,7 +127,7 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 		return SnapHit{}, false
 	}
 	var curves []geom.Curve
-	var inserts []geom.Vec2
+	var inserts, nodes []geom.Vec2
 	n := 0
 	for _, h := range q.ix.Near(p, aperture) {
 		e := q.d.Entity(h)
@@ -140,6 +140,16 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 		n++
 		if in, ok := e.(*doc.Insert); ok {
 			inserts = append(inserts, in.Position)
+		}
+		if dm, ok := e.(*doc.Dimension); ok {
+			// A dimension snaps like the parts of its block in AutoCAD: nodes at its definition
+			// points and the lines, not the text strokes or the arrowheads.
+			lines := dimSnapCurves(dm)
+			if !q.typed || dimTouched(dm, lines, p, aperture) {
+				nodes = append(nodes, dimNodes(dm)...)
+				curves = append(curves, lines...)
+			}
+			continue
 		}
 		if t, ok := e.(doc.Annotation); ok {
 			// Text offers only its insertion point, as in AutoCAD: its strokes are glyphs, not
@@ -173,6 +183,9 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 	}
 	for _, pt := range inserts {
 		consider(pt, SnapInsertion)
+	}
+	for _, pt := range nodes {
+		consider(pt, SnapNode)
 	}
 	for _, c := range curves {
 		if a, ok := c.(interface {
@@ -238,6 +251,59 @@ func findSnap(q snapQuery) (SnapHit, bool) {
 		}
 	}
 	return best, found
+}
+
+// dimSnapCurves returns the lines of a dimension that snaps use: the extension lines and the
+// dimension line, or arc and stubs, without the arrowheads and the text.
+func dimSnapCurves(dm *doc.Dimension) []geom.Curve {
+	lay := dm.Layout()
+	out := []geom.Curve{lay.ExtLines[0], lay.ExtLines[1]}
+	if dm.Kind == doc.DimArcLength && lay.DimArc.R > 0 {
+		out = append(out, lay.DimArc)
+	}
+	for _, l := range lay.DimLine {
+		out = append(out, l)
+	}
+	return out
+}
+
+// dimNodes returns the points of a dimension the Node snap finds: the definition points of its
+// block in AutoCAD (the extension line origins, the dimension line point and, for an arc length
+// dimension, the arc's centre); the text position is not one.
+func dimNodes(dm *doc.Dimension) []geom.Vec2 {
+	p := []geom.Vec2{dm.Ext1, dm.Ext2, dm.DimLine}
+	if dm.Kind == doc.DimArcLength {
+		p = append(p, dm.Center)
+	}
+	return p
+}
+
+// dimTouched reports whether a typed snap's pick p touches the dimension: one of its lines or
+// definition points within aperture, or a point in its text box.
+func dimTouched(dm *doc.Dimension, lines []geom.Curve, p geom.Vec2, aperture float64) bool {
+	if dimHitText(dm, p) {
+		return true
+	}
+	for _, c := range lines {
+		if geom.Closest(c, p).Dist(p) <= aperture {
+			return true
+		}
+	}
+	for _, n := range dimNodes(dm) {
+		if n.Dist(p) <= aperture {
+			return true
+		}
+	}
+	return false
+}
+
+// dimHitText reports whether p lies in the dimension's text box (never for suppressed text).
+func dimHitText(dm *doc.Dimension, p geom.Vec2) bool {
+	lay := dm.Layout()
+	if lay.Text == nil || lay.Text.Value == "" {
+		return false
+	}
+	return PointInPolygon(p, lay.TextBox[:])
 }
 
 // perpendicularFeet returns the points of c where the line from b meets c at a right angle: the
@@ -345,6 +411,19 @@ func Pick(d *doc.Drawing, ix *spatial.Index, p geom.Vec2, aperture float64) (doc
 		if e == nil || isUnknown(e) || layerLocked(d, e) {
 			continue
 		}
+		if dm, ok := e.(*doc.Dimension); ok {
+			// A dimension picks by its lines, arrowheads and text box, as AutoCAD picks the
+			// parts of its block; the text strokes add nothing to the box.
+			if dimHitText(dm, p) && better(h, aperture) {
+				best, bestD = h, aperture
+			}
+			for _, c := range dm.Lines() {
+				if dd := geom.Closest(c, p).Dist(p); dd <= aperture && better(h, dd) {
+					best, bestD = h, dd
+				}
+			}
+			continue
+		}
 		if t, ok := e.(doc.Annotation); ok && t.HitBox(p) {
 			// A point inside a text's box picks it, as AutoCAD does, ranked as a stroke at the
 			// edge of the aperture so that a stroke nearer the cursor wins.
@@ -401,7 +480,21 @@ func selectBounds(e doc.Entity) geom.Box2 {
 
 // touchesBox reports whether e meets box: a curve of it crosses or lies in box, or, for a text,
 // its text box overlaps box (a crossing window between two letters or inside an O selects it).
+// A dimension meets it by its lines, its text box or a definition point inside it.
 func touchesBox(e doc.Entity, box geom.Box2, tol float64) bool {
+	if dm, ok := e.(*doc.Dimension); ok {
+		for _, path := range entityPaths(dm, tol) {
+			if len(path) == 1 && box.Contains(path[0]) {
+				return true
+			}
+			for i := 1; i < len(path); i++ {
+				if geom.SegmentIntersectsBox(path[i-1], path[i], box) {
+					return true
+				}
+			}
+		}
+		return dimHitText(dm, box.Min)
+	}
 	if t, ok := e.(doc.Annotation); ok {
 		q := t.Box()
 		for i := range 4 {

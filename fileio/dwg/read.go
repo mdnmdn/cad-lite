@@ -77,6 +77,8 @@ func importFile(f *file) (*doc.Drawing, []string, error) {
 	imp.run()
 	hv, _ := f.readHeader()
 	d, warns := imp.build(hv)
+	// The drawing saves in its DWG release's version, mapped to a writable one (AutoCAD 2000 DXF).
+	d.Header.Version = f.magic
 	return d, append(f.warns, warns...), nil
 }
 

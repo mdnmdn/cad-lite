@@ -1505,6 +1505,11 @@ func (t *TextInput) OnChange(f func(string, *Window, *App)) *TextInput
 // OnEscape replaces Escape's default (blur) while any callback is registered:
 // the callbacks run and the field keeps focus.
 func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput
+// OnKeyDown sets a listener that sees each non-character key press before
+// the field's own editing keys (Enter, Escape, Backspace, Delete, arrows).
+// Returning true consumes the press: the field does nothing with it and
+// propagation stops. A later call replaces the earlier listener; nil removes it.
+func (t *TextInput) OnKeyDown(f func(*KeyDownEvent, *Window, *App) bool) *TextInput
 // Style applies f to the field's box div after the defaults (white Bg, 1px
 // Gray300 border, Rounded 6, P 8), so f may override background, border,
 // padding, text colour/size and a focused border via Div.Focus. The text
@@ -1845,6 +1850,16 @@ func (w *Window) HitTest(p Point) (id GlobalElementID, ok bool)
 // Close removes the window from App.Windows, releases the entities it
 // retains (an EntityView root) and calls PlatformWindow.Quit. Idempotent.
 func (w *Window) Close()
+// OnShouldClose sets the handler the platform consults when the user asks to
+// close the window (its close button; on macOS also the app menu's Quit). It
+// returns true to let the window close, false to keep it open (for example to
+// ask about unsaved work first). A later call replaces it; nil removes it.
+func (w *Window) OnShouldClose(f func(*Window, *App) bool)
+// RequestClose is what platforms call, on the UI goroutine inside App.Update,
+// when the user asks to close the window; tests call it to inject the request.
+// With no handler, or when the handler returns true, the App quits (the
+// platforms have one window). It reports whether the window closes.
+func (w *Window) RequestClose(cx *App) bool
 ```
 
 Clipping in the pipeline: an `OverflowHidden`/`OverflowScroll` element's
@@ -2299,6 +2314,11 @@ Implements `gpui.Platform`:
 - `RequestFrame` sets a dirty flag that `Update`/`Draw` observe; the Window
   calls it from `flushEffects`.
 - Clean quit: return `ebiten.Termination` from `Update` when `app.IsQuitting()`.
+- Close button: `Run` calls `ebiten.SetWindowClosingHandled(true)`, so the
+  window never closes by itself; `Update` turns `ebiten.IsWindowBeingClosed()`
+  into `Window.RequestClose` inside `app.Update`, and the app quits only when
+  that allows it (on macOS GLFW routes the app menu's Quit, Cmd+Q, through the
+  same close request).
 - Window title/size: `ebiten.SetWindowTitle`, `ebiten.SetWindowSize` (DIP).
 - `ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)`.
 

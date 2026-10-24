@@ -186,6 +186,14 @@ Finder or dropped on the Dock icon) goes to the app instead: register
 delivered when it is, so a launch-by-document is not lost. Tests inject both
 directly: `HeadlessWindow.Dispatch(FileDropEvent{...})` and `App.OpenPaths`.
 
+### Closing the window
+
+The window's close button (and, on macOS, the app menu's Quit) does not close
+the window by itself: the platform calls `Window.RequestClose`, which asks the
+`Window.OnShouldClose` handler. Returning `false` keeps the window open, so an
+app can ask about unsaved work first and quit later with `App.Quit`; with no
+handler, or `true`, the app quits. Tests call `RequestClose` directly.
+
 ### Pasted images
 
 `ImagePasteEvent{Data, MIME}` is an image pasted with the paste shortcut while

@@ -54,10 +54,12 @@ type completeState struct {
 }
 
 // wireCommandLine connects the command line field: Enter and Space submit or accept the
-// highlighted suggestion, Escape closes the list or cancels, and any other edit refreshes the list.
+// highlighted suggestion, Escape closes the list or cancels, Delete and Backspace on an empty field
+// erase the selection, and any other edit refreshes the list.
 func (ws *Workspace) wireCommandLine() {
 	ws.cmd.ac.recall = -1
 	ws.input.OnSubmit(func(text string, w *gpui.Window, _ *gpui.App) { ws.enterLine(text, w) })
+	ws.input.OnKeyDown(ws.eraseKey)
 	ws.input.OnEscape(func(w *gpui.Window, _ *gpui.App) {
 		if ws.suggesting() {
 			ws.cmd.ac.open = false
@@ -78,6 +80,23 @@ func (ws *Workspace) wireCommandLine() {
 		}
 		ws.updateSuggestions(text)
 	})
+}
+
+// eraseKey is Delete ("Canc" on Italian keyboards) in the command line field, and Backspace, which
+// the key labelled delete on a Mac sends: with nothing typed, no command running and a selection
+// it runs ERASE on that selection, as AutoCAD's Delete does with the pickfirst set. Otherwise the
+// key edits the field's text as usual.
+func (ws *Workspace) eraseKey(e *gpui.KeyDownEvent, w *gpui.Window, _ *gpui.App) bool {
+	k := e.Keystroke
+	if k.Key != "delete" && k.Key != "backspace" || k.Modifiers != 0 {
+		return false
+	}
+	s := ws.session
+	if ws.input.Text() != "" || s.Active() != "" || s.CurrentPrompt() != nil || s.Selection().Len() == 0 {
+		return false
+	}
+	ws.run("ERASE", w)
+	return true
 }
 
 // enterLine is Enter (or Space) in the field: it runs the highlighted suggestion while the list
@@ -294,7 +313,7 @@ func (ws *Workspace) commandKeyDown(e *gpui.KeyDownEvent, w *gpui.Window, _ *gpu
 func (ws *Workspace) suggestList() *gpui.Div {
 	ac := &ws.cmd.ac
 	t := i18n.For(i18n.Current())
-	menu := gpui.NewDiv().ID("cmd-suggest").Absolute().Left(10).Bottom(58).MinW(240).FlexCol().Gap(1).P(4).Rounded(8).
+	menu := gpui.NewDiv().ID("cmd-suggest").Absolute().Left(cmdPadX).Bottom(cmdMenuBottom).MinW(240).FlexCol().Gap(1).P(4).Rounded(8).
 		Bg(uiPanelAlt).Border(1, uiBorder)
 	for i, s := range ac.items {
 		col, sub := uiText, uiMuted

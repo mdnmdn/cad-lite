@@ -148,6 +148,8 @@ mostly meet it as the `*Window` argument of `Render` and event handlers.
 | `Draw(cx *App)` | Run the full pipeline (render, layout, prepaint, paint, swap, raster, present). Called by the platform. |
 | `DispatchEvent(input PlatformInput, cx *App)` | Route one input event through the rendered frame, inside `App.Update`. |
 | `Close()` | Remove the window from the app, release an `EntityView` root's reference and quit the platform window. Idempotent. |
+| `OnShouldClose(f func(*Window, *App) bool)` | Handler asked when the user wants to close the window (close button; macOS app-menu Quit): `true` lets it close, `false` keeps it open. Replaces the previous handler; `nil` removes it. |
+| `RequestClose(cx *App) bool` | What the platform calls on a close request (tests call it to inject one): with no handler, or when it returns `true`, the app quits. Reports whether the window closes. |
 | `Bounds() Bounds` | Window size in logical pixels: the platform size divided by `UIScale` (falls back to the options, then 800x600). |
 | `ScaleFactor() float32` | Effective raster scale: the platform's device pixel ratio times `UIScale`. |
 | `SetUIScale(f float32)` | Zoom the whole UI by `f` (clamped to 0.25..4, default 1): layout sees the platform size divided by `f`, the scene rasterizes at the device scale times `f` (text stays sharp), and `DispatchEvent` divides pointer positions by `f`. Wheel deltas are not divided. Invalidates the window. |

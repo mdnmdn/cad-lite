@@ -56,8 +56,10 @@ func (k dialogKind) command(fallback bool) string {
 
 type dialogResult struct {
 	kind dialogKind
-	path string
-	err  error
+	// version is the file format chosen in the Save as format menu, "" for none.
+	version string
+	path    string
+	err     error
 }
 
 // dialogState is the workspace's file dialog state. dialog, busy and poll belong to the UI
@@ -66,6 +68,10 @@ type dialogState struct {
 	dialog FileDialog
 	busy   bool
 	poll   *gpui.Timer
+	// formatMenu shows the Save as format menu; saveAnchor is the Save button's bounds in the last
+	// frame, which places the menu under it (saveformat.go).
+	formatMenu bool
+	saveAnchor gpui.Bounds
 
 	mu  sync.Mutex
 	res *dialogResult
@@ -88,8 +94,20 @@ func (ws *Workspace) saveFile(w *gpui.Window) {
 	ws.startDialog(w, dialogSave)
 }
 
-// saveFileAs is Save as (right-click on Save) and Ctrl+Shift+S.
-func (ws *Workspace) saveFileAs(w *gpui.Window) { ws.startDialog(w, dialogSaveAs) }
+// saveFileAs is Save as (right-click on Save) and Ctrl+Shift+S. When the file handler writes several
+// formats it shows the format menu first (a second press closes it); without a dialog it runs SAVEAS
+// on the command line, which asks for the format there.
+func (ws *Workspace) saveFileAs(w *gpui.Window) {
+	if ws.dlg.dialog != nil && ws.files != nil && !ws.dlg.busy {
+		if vs, _ := ws.saveFormats(); vs != nil {
+			ws.dlg.formatMenu = !ws.dlg.formatMenu
+			ws.recent.menu = false
+			w.Refresh()
+			return
+		}
+	}
+	ws.startDialog(w, dialogSaveAs)
+}
 
 // startDialog shows the dialog for kind on a goroutine, or runs the command line fallback at once
 // when there is no dialog or no file handler.
@@ -108,6 +126,12 @@ func (ws *Workspace) dialogDir() string {
 
 // startDialogIn is startDialog with the folder the dialog starts in; "" means dialogDir.
 func (ws *Workspace) startDialogIn(w *gpui.Window, kind dialogKind, dir string) {
+	ws.startSaveDialog(w, kind, dir, "")
+}
+
+// startSaveDialog is startDialogIn with the file format chosen in the Save as format menu: the save
+// dialog lists that format alone, and SAVEAS is answered with it.
+func (ws *Workspace) startSaveDialog(w *gpui.Window, kind dialogKind, dir, version string) {
 	d := &ws.dlg
 	if d.dialog == nil || ws.files == nil {
 		ws.run(kind.command(true), w)
@@ -129,13 +153,16 @@ func (ws *Workspace) startDialogIn(w *gpui.Window, kind dialogKind, dir string) 
 	if p := ws.session.FilePath(); p != "" {
 		name = filepath.Base(ws.writablePath(p))
 	}
+	filters := saveFilters(write)
+	if version != "" {
+		filters = ws.formatFilters(version)
+	}
 	go func() {
-		var res dialogResult
-		res.kind = kind
+		res := dialogResult{kind: kind, version: version}
 		if kind == dialogOpen {
 			res.path, res.err = dialog.Open(context.Background(), i18n.T("ui.file.open_title"), dir, openFilters(read))
 		} else {
-			res.path, res.err = dialog.Save(context.Background(), i18n.T("ui.file.save_title"), dir, name, saveFilters(write))
+			res.path, res.err = dialog.Save(context.Background(), i18n.T("ui.file.save_title"), dir, name, filters)
 		}
 		d.mu.Lock()
 		d.res = &res
@@ -167,10 +194,10 @@ func (ws *Workspace) pollDialog(w *gpui.Window) {
 	case res.err == nil && res.kind == dialogOpen:
 		ws.openFilePath(res.path, w)
 	case res.err == nil:
-		// The same command a typed SAVEAS is: the unsaved-changes question and the project switch
-		// happen in it.
-		ws.run(res.kind.command(false), w)
-		ws.submit(res.path, w)
+		// The same command a typed SAVEAS is: the format, the unsaved-changes question and the
+		// project switch happen in it. Without a chosen format the path answers the format prompt,
+		// which saves in the drawing's own format.
+		ws.runSaveAs(res.version, res.path, w)
 	case errors.Is(res.err, filedialog.ErrCancelled):
 	default:
 		// No backend or a failing one: the user types the path as without a dialog.

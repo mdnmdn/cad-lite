@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: The canvas and the chrome around it — pan and zoom, grid, rulers, crosshair and pickbox, highlights, selection boxes, snap markers, the viewport label and zoom buttons, the title bar, the ribbon, the layers and properties panels, the layer popover and properties HUD, resizing and collapsing the panels, and the status bar.
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
-updated: 2026-10-15
+updated: 2026-10-24
 verified: 2026-10-15
 code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/layerorder.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
@@ -69,7 +69,7 @@ Later items draw over earlier ones.
 | Selection box | A **window** (left to right) is blue; a **crossing** (right to left) is green. It appears after the pointer moves 4 px from the press |
 | UCS icon | Red X axis pointing right and green Y axis pointing up, each with an arrowhead and a `X` or `Y` letter at its tip, in the bottom-left corner, a fixed 40 px long |
 | Crosshair and pickbox | Full-height and full-width hairlines through the cursor, with a small square pickbox at the cursor when no point is being asked for, and at the prompts that pick an object by a click (`Prompt.Pick`: AREA `Object`, MEASUREGEOM Radius and Angle), which do not snap. While a point is asked for, the crosshair sits on the snapped point and there is no pickbox |
-| Snap marker | While a point is asked for and a snap applies: a square for endpoint, a triangle for midpoint, a circle for centre, a diamond for quadrant, an X for intersection, an hourglass for nearest, a right angle for perpendicular, a circle on a line for tangent |
+| Snap marker | While a point is asked for and a snap applies: a square for endpoint, a triangle for midpoint, a circle for centre, a circle with an X for node (a dimension's definition points), a diamond for quadrant, an X for intersection, an hourglass for nearest, a right angle for perpendicular, a circle on a line for tangent |
 | Rulers | On by default. A 20 px ruler along the top edge (X) and one along the left edge (Y, as wide as the labels at the ends of the visible range need, rounded up to three characters, so it keeps its width while panning until the labels gain or lose digits), in model units, on the panel colour with a border-coloured edge toward the drawing. Labelled ticks every 1, 2 or 5 times a power of ten, the smallest at least 80 px apart (X) or 48 px (Y); unlabelled minor ticks split that step into fifths (quarters for a 2) when they are at least 6 px apart. A line in the accent colour marks the cursor's position (the snapped one while a point is asked for) on each ruler. Labels are muted text, 11 px, with the decimals their step needs (five at the deepest zoom, where the Y step is 5e-5), so no two read the same |
 
 The rulers lie over the drawing: the view still spans the whole canvas, so a ruler changes no model
@@ -103,7 +103,7 @@ file opened. A press on the card never reaches the canvas. The lists and what cl
 ### Pointer
 
 - **Left click** answers the point prompt when one is open; otherwise it picks, and a drag starts a
-  box. Shift-click removes from the selection. What the click does inside a command belongs to
+  box. Clicking a selected entity deselects it; Shift-click only removes. What the click does inside a command belongs to
   [Drawing and editing commands](drawing-and-editing.md).
 - **Right click** is Enter.
 - **Double left click** on editable TEXT or MTEXT while idle opens the basic TEXTEDIT modal. During
@@ -114,6 +114,8 @@ file opened. A press on the card never reaches the canvas. The lists and what cl
   stay visible. Escape cancels. The text-editing contract is in
   [Drawing and editing commands](drawing-and-editing.md).
 - A press on the canvas moves keyboard focus to the command line.
+- **Delete** (or **Backspace**, the Mac's delete key) with something selected, no command running and
+  nothing typed erases the selection through `ERASE` ([Command line](command-line.md)).
 
 ### Layers panel
 
@@ -151,7 +153,9 @@ with the current layer highlighted.
 ### Properties panel
 
 Below a splitter, under a `Properties` heading with its own disclosure chevron, the panel is read-only. With nothing selected it reads `No selection`. Otherwise it shows the count and a line per entity
-class (`LINE × 3`); a single selected entity also shows its layer and handle.
+class (`LINE × 3`); a single selected entity also shows its layer, its colour (`Color: BYLAYER` or the index) and
+handle, and a single DIMENSION its kind and measurement (`Linear dimension: 120`, `Aligned dimension: ...`,
+`Arc length dimension: ...`, the measurement formatted by its style without the text override).
 
 ### Properties HUD
 
@@ -196,7 +200,7 @@ automatic. Every tooltip names the drag and the reset.
 | Layers and Properties column | its left edge (`split-side`) | 180 to 640 px | the chevron at the right of the Layers header folds the column to a 30 px strip with an expand button |
 | Agent column | its left edge (`split-agent`) | 280 to 800 px | its `>` button hides the panel; the title bar button, F2 and `AI` bring it back |
 | Layers and Properties sections | the line between them (`split-layers`) | from one row to all the rows | the chevron before each title folds that section to its header; the other takes the freed space |
-| Command history | the bar on its top edge | one line to 480 px, and the canvas keeps at least 420 px of the window | the chevron at the right of the bar leaves only the input row |
+| Command history | the bar on its top edge | one line to 480 px, and the canvas keeps at least 420 px of the window | the chevron in its top right corner leaves its last line, on one row, over the input row |
 | Ribbon | none | none | the chevron button in the title bar hides the button groups |
 
 The canvas column never gets narrower than 240 px: when the columns want more (a saved width, a small window,
@@ -216,7 +220,9 @@ shortly after each change and when the app closes, and applied at startup.
 ### Title bar
 
 A 44 px row on the background colour. From the left: the brand, a divider, the document chip, a
-divider, Open with a small chevron beside it and Save, a divider, Undo and Redo; at the right end the ribbon toggle (a chevron that hides and shows the ribbon's button groups), the agent panel toggle and the gear
+divider, Open with a small chevron beside it and Save, a divider, Undo and Redo; at the right end the
+update button while a release this build can install waits (a click starts the update, see
+[Updates](updates.md)), the ribbon toggle (a chevron that hides and shows the ribbon's button groups), the agent panel toggle, Feedback and the gear
 `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or `OPTIONS`). Every
 button is icon-only (28 px, an 18 px icon) with its tooltip. The document chip is a rounded box with
 the file name, or `Untitled` while the drawing has no file, and a dot before the name while the drawing has unsaved

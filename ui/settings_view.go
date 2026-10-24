@@ -33,21 +33,10 @@ var settingsTabs = [settingsTabCount]struct{ id, label, tip string }{
 	settingsUpdates: {"updates", "ui.settings.tab_updates", "ui.settings.tab_updates_tip"},
 }
 
-// settingsButton is the title bar's gear button that opens the panel. While
-// a release waits it carries the update badge and opens the Updates tab.
+// settingsButton is the title bar's gear button that opens the panel. A waiting release has a
+// button of its own (updateButton) and a dot on the panel's Updates tab, not a badge here.
 func (ws *Workspace) settingsButton() *gpui.Div {
-	_, waiting := ws.UpdateAvailable()
-	b := iconButton("tool-settings", ws.settingsTip(), icons.AppSettings, ws.prefs().open, func(w *gpui.Window) {
-		if !ws.prefs().open && waiting {
-			ws.openSettingsAt(w, settingsUpdates)
-			return
-		}
-		ws.ToggleSettings(w)
-	})
-	if waiting {
-		b.Relative().Child(ws.updateBadge())
-	}
-	return b
+	return iconButton("tool-settings", ws.settingsTip(), icons.AppSettings, ws.prefs().open, func(w *gpui.Window) { ws.ToggleSettings(w) })
 }
 
 // settingsOverlay is the modal layer: nothing when the panel is closed, else

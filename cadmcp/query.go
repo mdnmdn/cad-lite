@@ -63,8 +63,44 @@ func entityInfo(e doc.Entity) map[string]any {
 		}
 	case *doc.Text, *doc.MText:
 		textInfo(m, e)
+	case *doc.Dimension:
+		dimensionInfo(m, e)
 	}
 	return m
+}
+
+// dimKindNames are the dimension kinds as agents see them.
+var dimKindNames = map[doc.DimKind]string{doc.DimRotated: "rotated", doc.DimAligned: "aligned", doc.DimArcLength: "arc_length"}
+
+// dimensionInfo adds a DIMENSION's kind, definition points, measurement, shown text, text
+// override and style to m.
+func dimensionInfo(m map[string]any, e *doc.Dimension) {
+	m["kind"] = dimKindNames[e.Kind]
+	m["ext1"], m["ext2"], m["dim_line"], m["text_position"] = xy(e.Ext1), xy(e.Ext2), xy(e.DimLine), xy(e.TextPos)
+	m["measurement"], m["text"] = e.Measurement(), e.MeasurementText()
+	if e.Text != "" {
+		m["text_override"] = e.Text
+	}
+	if e.TextMoved {
+		m["text_moved"] = true
+	}
+	switch e.Kind {
+	case doc.DimRotated:
+		m["rotation"] = degrees(e.Rotation)
+	case doc.DimArcLength:
+		m["center"], m["radius"] = xy(e.Center), e.Radius
+		m["start_angle"], m["end_angle"] = degrees(e.StartAngle), degrees(e.EndAngle)
+		if e.Partial {
+			m["partial"] = true
+		}
+	}
+	if e.TextAngle != 0 {
+		m["text_angle"] = degrees(e.TextAngle)
+	}
+	st := e.Style
+	m["style"] = map[string]any{"name": st.Name, "dimscale": st.Scale, "dimasz": st.ArrowSize, "dimtxt": st.TextHeight,
+		"dimexo": st.ExtOffset, "dimexe": st.ExtExtend, "dimgap": st.Gap, "dimdec": st.Decimals, "dimdsep": st.DecSep,
+		"dimzin": st.ZeroSupp, "dimtad": st.TextAbove}
 }
 
 func hasBulge(bs []float64) bool {

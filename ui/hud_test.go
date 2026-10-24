@@ -226,3 +226,21 @@ func BenchmarkSelectionSummary(b *testing.B) {
 		h.ws.selectionSummary()
 	}
 }
+
+// A single selected dimension adds its kind and measurement to the Properties lines, with the
+// colour every single object shows.
+func TestSelectionSummaryDimension(t *testing.T) {
+	h := hudRig(t)
+	d := h.ws.session.Drawing()
+	dm := &doc.Dimension{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(30, 40), DimLine: geom.V(30, 40), Style: doc.DefaultDimStyle()}
+	dm.Color = 3
+	dm.Recompute()
+	tx, _ := d.Begin()
+	hd := tx.Add(dm)
+	tx.Commit()
+	h.ws.session.Selection().Add(hd)
+	c := h.ws.selectionSummary()
+	if c.dimKind != "ui.props.dim_aligned" || c.dimValue != "50" || c.color != "3" {
+		t.Fatalf("summary %+v", *c)
+	}
+}

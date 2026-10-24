@@ -5,9 +5,9 @@ kind: feature
 status: current
 summary: The command line under the canvas — typing commands and answers, the prompt, AutoComplete suggestions, Up/Down recall, the resizable history and recent commands, Enter, Space, Escape and right-click, and the keyboard shortcuts.
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
-updated: 2026-10-16
-verified: 2026-10-16
-code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, ui/textedit_view.go]
+updated: 2026-10-24
+verified: 2026-10-24
+code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, ui/layout.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, ui/textedit_view.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
 ---
@@ -23,16 +23,19 @@ history. It sits under the canvas only: the layers and agent columns run down be
 
 ## Behaviour
 
-- The command box is a rounded, bordered row: the prompt in monospace, the input field
+- The command box is a rounded, bordered row 32 px high: the prompt in monospace, the input field
   (monospace, placeholder `Type a command`) and a clock button at the right. The box's border turns to the accent
   colour while the field has focus. The prompt shows `Command:` when no command runs, otherwise the
   active prompt in AutoCAD's form, e.g. `Specify next point or [Close/Undo]:`.
-- The most recent history lines show above the box, bottom-aligned, in muted monospace. Each response is echoed after its
+- The most recent history lines show above the box, bottom-aligned, in muted monospace, starting at the prompt's left edge. Each response is echoed after its
   prompt; errors, warnings and command output (`LIST`, `DIST`) are printed there. The history keeps
   the last 200 lines. The region is 96 px high (less in a window shorter than 860 px, down to 54 px) until the user
-  drags the small bar centred on its top edge: moving the pointer up grows it, down shrinks it, between one line and 480 px, and the
-  height is saved with the settings. A double click on the bar resets it, and the chevron at the right end of the bar's row folds the
-  history so only the input row remains (the height comes back when it is unfolded; the bar does not drag while it is folded).
+  drags the small bar centred on the thin strip along its top edge: moving the pointer up grows it, down shrinks it, between one line and 480 px, and the
+  height is saved with the settings. A double click on the bar resets it. The chevron in the history's top right corner folds the
+  history to one row that shows only its last line, on one line, cut with an ellipsis when it does not fit; the chevron stays at the
+  right of that row, which keeps its height (empty) while the history is empty, so the chevron always has a place and the box does
+  not move when the first line arrives. Unfolding brings the saved height back; the folded row does not drag. Whether the history
+  is folded is saved with the settings.
 - **Recent commands.** The clock button opens a menu above the box of the last 8 distinct commands the user started, newest first
   (typed or from a button), under their display names; clicking one runs it again (cancelling a running command, as the buttons do) and
   closes the menu. Escape closes it too. The list is not saved between sessions.
@@ -67,6 +70,13 @@ history. It sits under the canvas only: the layers and agent columns run down be
 - **Escape** cancels the running command and prints `*Cancel*`; with no command running it clears
   the selection. What a command committed before Escape stays in the drawing. It also closes the Open menu and
   the start panel (see [Drawing canvas](canvas.md)).
+- **Delete** (`Canc` on Italian keyboards), and **Backspace**, which the key labelled delete on a Mac
+  sends, erase the selection when the field is empty, no command is running and something is
+  selected: they run `ERASE` on that selection (AutoCAD's Delete with the pickfirst set), so the history
+  echoes `Command: ERASE`, the erase is one undo step, and entities on locked layers, which cannot be
+  selected, are never touched. With text in the field they edit it as usual; during a command they do
+  nothing. The same holds with the focus outside any text field; a text field elsewhere (a layer name, a
+  property) keeps both keys for its own text.
 - **Language.** Prompts, history lines, errors and keywords follow the interface language
   ([Settings](settings.md)); in Italian the idle prompt is `Comando:`, a running command echoes as
   `Comando: LINEA` and `LINE` asks `Specificare punto successivo o [Chiudi/Annulla]:`.
@@ -127,7 +137,7 @@ Shortcuts, active anywhere in the window:
 | Ctrl+Y, Cmd+Shift+Z | REDO |
 | Ctrl+O, Cmd+O | OPEN, through the system file dialog when there is one |
 | Ctrl+S, Cmd+S | QSAVE; the save dialog first when the drawing has no file |
-| Ctrl+Shift+S, Cmd+Shift+S | SAVEAS, through the system file dialog when there is one |
+| Ctrl+Shift+S, Cmd+Shift+S | SAVEAS, through the file format menu and the system file dialog when there is one |
 | Ctrl+Tab, Ctrl+Shift+Tab | Next or previous [document tab](document-tabs.md) |
 | F2 | Agent panel on or off |
 | F3 | Object snap on or off |
@@ -137,6 +147,7 @@ Shortcuts, active anywhere in the window:
 | F10 | Polar tracking on or off (turns ortho off) |
 | Ctrl+E | Zoom to extents |
 | Ctrl+, , Cmd+, | Settings panel on or off (the `OPTIONS` command opens it too) |
+| Delete, Backspace | ERASE the selection, with the command line empty and no command running (see Behaviour) |
 
 ## Contract
 
@@ -160,14 +171,19 @@ belong to [Drawing and editing](drawing-and-editing.md).
 
 `ui.NewWorkspace` creates the `gpui.TextInput` and wires its callbacks: `OnSubmit` →
 `Workspace.submit` → `Session.Submit`; `OnEscape` → `Workspace.escape` → `Session.Escape`;
-`OnChange` turns a trailing space into a submission unless `Workspace.acceptsText`.
+`OnChange` turns a trailing space into a submission unless `Workspace.acceptsText`; `OnKeyDown`
+(`gpui.TextInput.OnKeyDown`, which sees the editing keys before the field) → `Workspace.eraseKey`, which
+runs `ERASE` for Delete and Backspace on an empty field at `Command:` with a selection; the root
+element's `OnKeyDown` calls it too, for when no text field has the focus.
 `Workspace.wireCommandLine` (`ui/cmdcomplete.go`) installs those callbacks: `OnSubmit` → `Workspace.enterLine`, which
 runs the highlighted suggestion (`acceptSuggestion` → `Workspace.run`) while `Workspace.suggesting`, else records the
 line (`rememberLine`) and calls `Workspace.submit`; `OnEscape` closes the list or calls `Workspace.escape`; `OnChange`
 recomputes the list with `Workspace.matchCommands`, which reads `Registry.Names`, `Registry.AliasesOf`, `Vars.Has` and the
 recent list. `Workspace.commandKeyDown`, on the element around the field, takes Up, Down and Tab, which the field leaves
 to its ancestors, for the highlight (`moveSuggestion`) or recall (`recallLine`); `Workspace.suggestList` draws the list.
-`Workspace.commandArea` (`ui/cmdarea.go`) renders the handle, the history and the box; the field is
+`Workspace.commandArea` (`ui/cmdarea.go`) renders the drag strip and the history, or folded the row of the last line
+(`Workspace.foldedLine`, cut to the width `Workspace.mainWidth` gives by `fitLine`, which measures with the window's
+`TextMeasurer`), the fold button over the history's corner, and the box; the metrics are the `cmd*` constants there. The field is
 styled by `themeBareField`, so the box carries the border. `cmdAreaState` holds the dragged height
 (`Workspace.dragMove` in `ui/layout.go`, fed by the root element's mouse move and up; the folded flag is in `layoutState`) and the recent list (`noteCommand`, called
 by `Workspace.submit` and `Workspace.run` when `Session.RunCount` rose). `Workspace.Render` focuses the field on

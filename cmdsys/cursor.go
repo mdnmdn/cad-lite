@@ -79,10 +79,12 @@ func (s *Session) constrain(p geom.Vec2) geom.Vec2 {
 
 // Click handles a primary click at raw model point p. At a point, distance or angle prompt it
 // answers with the snapped cursor (a point answer carries Input.Shift when remove, the Shift key,
-// is set); at a selection prompt or when idle it picks the entity under the cursor, toggling it
-// off when remove is set. In Remove mode of "Select objects:" a plain click removes and Shift
-// adds, the reverse of the other modes.
+// is set); at a selection prompt or when idle it picks the entity under the cursor: a plain
+// click toggles it (an entity already selected is deselected, unlike AutoCAD where only Shift
+// deselects) and remove, the Shift key, only deselects. In Remove mode of "Select objects:" a
+// plain click removes and Shift only adds, the reverse of the other modes.
 func (s *Session) Click(p geom.Vec2, remove bool) {
+	add := false
 	s.Hover(p)
 	if s.prompt != nil {
 		pr := s.prompt
@@ -111,7 +113,7 @@ func (s *Session) Click(p geom.Vec2, remove bool) {
 		}
 		if s.inRemoveMode() {
 			if remove {
-				remove = false
+				remove, add = false, true
 			} else {
 				s.Submit(FormatPoint(p))
 				return
@@ -119,12 +121,14 @@ func (s *Session) Click(p geom.Vec2, remove bool) {
 		}
 	}
 	h, ok := Pick(s.ctx.Doc, s.ctx.Index, p, s.aperture())
-	switch {
-	case !ok:
-	case remove:
-		s.ctx.Selection.Remove(s.expandGroupSelection([]doc.Handle{h})...)
-	default:
-		s.ctx.Selection.Add(s.expandGroupSelection([]doc.Handle{h})...)
+	if !ok {
+		return
+	}
+	hs := s.expandGroupSelection([]doc.Handle{h})
+	if remove || !add && s.ctx.Selection.Has(h) {
+		s.ctx.Selection.Remove(hs...)
+	} else {
+		s.ctx.Selection.Add(hs...)
 	}
 }
 

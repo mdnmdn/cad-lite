@@ -159,6 +159,18 @@ func TestItalianPluralsAndWholeSentences(t *testing.T) {
 	}
 }
 
+func TestItalianTextAliases(t *testing.T) {
+	italian(t)
+	s := newSession(t)
+	for _, n := range []string{"TESTO", "TESTODIN", "TESTOM"} {
+		s.Run(n)
+		if got := s.Prompt(); got == "Comando:" {
+			t.Errorf("%s did not start a command", n)
+		}
+		s.Escape()
+	}
+}
+
 func TestAgentCallerAlwaysSeesEnglish(t *testing.T) {
 	italian(t)
 	s := newSession(t)

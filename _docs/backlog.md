@@ -26,7 +26,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | M3 | Editing core | LINE, PLINE, CIRCLE, ARC, RECTANG, MOVE, COPY, ERASE, ROTATE, SCALE, snaps, selection, undo and redo, DXF save (R12) | Lossless round trip for newer classes (G2) |
 | M4 | DWG | DWG reader, pure Go, R14 to R2018: layers, units, LINE, CIRCLE, ARC and polylines | A writer (G60) and the rest of the entities (G61) |
 | M5 | Full v1 command set | The commands in the drawing and editing document | G8, G9 |
-| M6 | Annotation and output | None | Dimensions, MTEXT, layouts, SVG and PDF export (G7, G17) |
+| M6 | Annotation and output | Linear, aligned, continued and arc length dimensions (non-associative) | Other dimension types, associativity, layouts, SVG and PDF export (G7, G17) |
 | M7 | Browser build | The binary builds for `js/wasm` and renders headlessly | G12 |
 
 ## Known gaps
@@ -38,7 +38,7 @@ From the specification ([`inbox/completed/draft-specs-v0.1.md`](inbox/completed/
 | G4 | Pointer move re-rasterises the whole window; no base-layer cache | [Rendering](tech/rendering.md), [Drawing canvas](features/canvas.md) |
 | G5 | No large-drawing benchmark and no DXF corpus test | [Testing](tech/testing.md) |
 | G6 | HiDPI, clipboard, IME and window resize are not exercised in the real-window harness | [Operations](tech/operations.md) |
-| G7 | Unsupported content beyond native text and basic blocks: full linetypes/lineweights, rich text formatting, HATCH, external-reference and array INSERT editing, dimensions, ELLIPSE, SPLINE; the extrusion direction (code 210) is ignored | [Document model](tech/document-model.md), [File I/O](tech/file-io.md) |
+| G7 | Unsupported content beyond native text and basic blocks: full linetypes/lineweights, rich text formatting, HATCH, external-reference and array INSERT editing, dimensions other than linear, aligned and arc length (DIMLINEAR, DIMALIGNED, DIMCONTINUE, DIMARC exist, non-associative), ELLIPSE, SPLINE; the extrusion direction (code 210) is ignored | [Document model](tech/document-model.md), [File I/O](tech/file-io.md) |
 | G8 | Missing commands and options: STRETCH, ARRAY, MATCHPROP; FILLET and CHAMFER on arcs, circles and polylines; polyline vertex fillet; chamfer by angle; the NO-TRIM and Multiple modes; the Undo, Multiple and layer options of OFFSET | [Drawing and editing commands](features/drawing-and-editing.md) |
 | G9 | Grips and a properties palette; the properties panel is read-only | [Drawing canvas](features/canvas.md) |
 | G10 | Polar tracking, object snap tracking, and the Perpendicular, Tangent and Extension snaps | [Command system](tech/command-system.md) |
@@ -110,6 +110,7 @@ New lines are appended below this heading.
 | G79 | TEXTSIZE and TEXTSTYLE are session variables, not saved in the drawing header as AutoCAD does; needs a session-to-drawing sync and header variables in the DXF writer | [Drawing and editing commands](features/drawing-and-editing.md), [File I/O](tech/file-io.md) |
 | G80 | The Hershey font notice (`doc/fonts/NOTICE`) is not shipped with the release archives and installers, and there is no About or licences view | [Operations](tech/operations.md) |
 | G82 | Headless `-png` in the light theme draws colour 7 near-white, as if the render cache were built before the theme is applied | [Operations](tech/operations.md), [Rendering](tech/rendering.md) |
+| G83 | DXF dimensions: an arc length dimension is written as an INSERT with CADLITE_DIM extended data, not ARC_DIMENSION, until an AC1018 writer exists (G2); group 51 (text horizontal direction) is ignored and a DIMENSION group 53 of 0 reads as the default orientation, which ezdxf draws horizontal; DIMSTYLE variables beyond the ten the document models (DIMBLK, DIMCLRD, DIMTIH...) do not affect the regenerated block | [File I/O](tech/file-io.md) |
 
 ## Next features
 
@@ -123,7 +124,7 @@ Requested next, in no fixed order.
 | N12 | Entity tags (key/value metadata) journalled with the entity, a tag filter in `list_entities`, export through XDATA | [Document model](tech/document-model.md), [Agent integration](tech/agent-integration.md) |
 | N13 | Structured edits by handle: `update_entity` for geometry, layer and colour, polyline vertex insert, remove and move; per-entity lineweight and linetype (G64) | [Agent integration](tech/agent-integration.md), [Document model](tech/document-model.md) |
 | N14 | Handle-based TRIM, EXTEND, OFFSET, FILLET and CHAMFER tools returning created, replaced and deleted handles; needs the commands factored into functions | [Agent integration](tech/agent-integration.md), [Drawing and editing commands](features/drawing-and-editing.md) |
-| N15 | Dimensions (associative) and boundary-area annotations; HATCH as a separate object filling a bounded area with a pattern. Include diagonal wall hatching such as ANSI31, adjustable pattern angle and scale (line spacing for user-defined patterns), and custom `.pat` definitions. Hatches are associative by default: changing boundary geometry updates the fill (G7, G2) | [Document model](tech/document-model.md), [Drawing and editing commands](features/drawing-and-editing.md), [Rendering](tech/rendering.md) |
+| N15 | Associative dimensions (linear, aligned and arc length dimensions exist, non-associative), the other dimension types, and boundary-area annotations; HATCH as a separate object filling a bounded area with a pattern. Include diagonal wall hatching such as ANSI31, adjustable pattern angle and scale (line spacing for user-defined patterns), and custom `.pat` definitions. Hatches are associative by default: changing boundary geometry updates the fill (G7, G2) | [Document model](tech/document-model.md), [Drawing and editing commands](features/drawing-and-editing.md), [Rendering](tech/rendering.md) |
 | N16 | Clearance and collision checks: region overlap, minimum distance, door swings and clearance envelopes; depends on N11 and N12 (R2) | [Geometry kernel](tech/geometry-kernel.md), [Agent integration](tech/agent-integration.md) |
 | N17 | MCP geometry: arcs by centre, radius and angles, polyline bulges, width/height and rounded rectangles, polygons; ellipse and spline need new entities | [Agent integration](tech/agent-integration.md) |
 | N18 | Measurements and validation with units: minimum separation, angle, point in region, intersections; open boundaries, duplicates, tiny segments, self-intersections | [Agent integration](tech/agent-integration.md), [Geometry kernel](tech/geometry-kernel.md) |

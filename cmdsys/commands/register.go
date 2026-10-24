@@ -34,6 +34,7 @@ func Register(r *cmdsys.Registry) {
 	registerText(r)      // text.go: N9
 	registerMText(r)     // mtext.go: N9
 	registerTextEdit(r)  // textedit.go: N26
+	registerDim(r)       // dim.go, dimarc.go: dimensions
 	registerStretch(r)   // stretch.go: WP4
 	registerAgent(r)     // agent.go: host
 	registerSettings(r)  // settings.go: host

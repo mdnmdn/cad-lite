@@ -102,6 +102,37 @@ func TestPreviousSelection(t *testing.T) {
 	}
 }
 
+func TestClickTogglesSelection(t *testing.T) {
+	s := newSession()
+	s.Script("LINE 0,0 10,0 ")
+	sel := s.Selection().Len
+	s.Click(geom.V(5, 0), false)
+	if n := sel(); n != 1 {
+		t.Fatalf("first click selects, got %d", n)
+	}
+	s.Click(geom.V(5, 0), false)
+	if n := sel(); n != 0 {
+		t.Fatalf("second click deselects, got %d", n)
+	}
+	s.Click(geom.V(5, 0), true)
+	if n := sel(); n != 0 {
+		t.Fatalf("Shift-click on an unselected entity must not select, got %d", n)
+	}
+
+	s.Run("ERASE")
+	s.Click(geom.V(5, 0), false)
+	s.Click(geom.V(5, 0), false)
+	if n := sel(); n != 0 {
+		t.Fatalf("click toggles at Select objects too, got %d", n)
+	}
+	s.Submit("R")
+	s.Click(geom.V(5, 0), true)
+	s.Click(geom.V(5, 0), true)
+	if n := sel(); n != 1 {
+		t.Fatalf("Shift-click in Remove mode only adds, got %d", n)
+	}
+}
+
 func TestTransparentMarker(t *testing.T) {
 	if cmdsys.IsTransparent(&probe{}) || !cmdsys.IsTransparent(&probe{transparent: true}) {
 		t.Fatal("IsTransparent must follow the marker")

@@ -151,8 +151,51 @@ func (c *listCmd) list(ctx *cmdsys.Context) {
 			listText(ctx, e)
 		case *doc.MText:
 			listMText(ctx, e)
+		case *doc.Dimension:
+			listDimension(ctx, e)
 		}
 	}
+}
+
+// listDimension prints a DIMENSION as AutoCAD's LIST does: its type, definition points, text
+// position, the measurement and text, and the dimension style; an arc length dimension adds its
+// arc's centre, radius and angles.
+func listDimension(ctx *cmdsys.Context, e *doc.Dimension) {
+	kind := "cmd.list.msg.dim_rotated"
+	switch {
+	case e.Kind == doc.DimAligned:
+		kind = "cmd.list.msg.dim_aligned"
+	case e.Kind == doc.DimArcLength:
+		kind = "cmd.list.msg.dim_arc"
+	case math.Abs(math.Sin(e.Rotation)) < 1e-12:
+		kind = "cmd.list.msg.dim_horizontal"
+	case math.Abs(math.Cos(e.Rotation)) < 1e-12:
+		kind = "cmd.list.msg.dim_vertical"
+	}
+	ctx.Say("cmd.list.msg.dim_type", ctx.T(kind))
+	listPoint(ctx, "cmd.list.msg.dim_ext1", e.Ext1)
+	listPoint(ctx, "cmd.list.msg.dim_ext2", e.Ext2)
+	listPoint(ctx, "cmd.list.msg.dim_line", e.DimLine)
+	if e.Kind == doc.DimArcLength {
+		listPoint(ctx, "cmd.list.msg.center", e.Center)
+		ctx.Say("cmd.list.msg.radius", ctx.Fmt(e.Radius))
+		ctx.Say("cmd.list.msg.start_angle", ctx.FmtAngle(e.StartAngle))
+		ctx.Say("cmd.list.msg.end_angle", ctx.FmtAngle(e.EndAngle))
+	} else if e.Kind == doc.DimRotated && kind == "cmd.list.msg.dim_rotated" {
+		ctx.Say("cmd.list.msg.rotation", ctx.FmtAngle(e.Rotation))
+	}
+	if e.TextMoved {
+		listPoint(ctx, "cmd.list.msg.dim_text_user", e.TextPos)
+	} else {
+		listPoint(ctx, "cmd.list.msg.dim_text_default", e.TextPos)
+	}
+	ctx.Say("cmd.list.msg.dim_measurement", ctx.Fmt(e.Measurement()))
+	if e.Text == "" {
+		ctx.Say("cmd.list.msg.dim_default_text")
+	} else {
+		ctx.Say("cmd.list.msg.dim_text", e.Text)
+	}
+	ctx.Say("cmd.list.msg.dim_style", e.Style.Name)
 }
 
 // listText prints a TEXT the way LIST does: style, points, height, value and the layout values.

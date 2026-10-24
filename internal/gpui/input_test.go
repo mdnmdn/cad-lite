@@ -1,6 +1,7 @@
 package gpui_test
 
 import (
+	"slices"
 	"testing"
 
 	"cad-lite/internal/gpui"
@@ -234,5 +235,31 @@ func TestTextInputSetPlaceholderRerenders(t *testing.T) {
 	p.Windows()[0].Pixels()
 	if got := len(w.Scene().Sprites); got <= n {
 		t.Fatalf("placeholder not re-rendered: %d sprites before, %d after", n, got)
+	}
+}
+
+func TestTextInputOnKeyDownSeesKeysFirst(t *testing.T) {
+	ti := gpui.NewTextInput("")
+	ti.SetText("abc")
+	var seen []string
+	ti.OnKeyDown(func(e *gpui.KeyDownEvent, _ *gpui.Window, _ *gpui.App) bool {
+		seen = append(seen, e.Keystroke.Key)
+		return e.Keystroke.Key == "delete"
+	})
+	app, win := openInputApp(t, ti)
+	focusInput(t, app, win, ti)
+	inputSelectionKey(win, app, "home", 0)
+
+	win.DispatchEvent(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "delete"}}, app)
+	if got := ti.Text(); got != "abc" {
+		t.Errorf("a consumed delete edited the text: %q", got)
+	}
+	inputSelectionKey(win, app, "end", 0)
+	win.DispatchEvent(gpui.KeyDownEvent{Keystroke: gpui.Keystroke{Key: "backspace"}}, app)
+	if got := ti.Text(); got != "ab" {
+		t.Errorf("an unconsumed backspace should edit: %q", got)
+	}
+	if !slices.Equal(seen, []string{"home", "delete", "end", "backspace"}) {
+		t.Errorf("listener saw %v", seen)
 	}
 }

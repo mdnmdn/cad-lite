@@ -150,7 +150,7 @@ as stated, assuming the gpui pieces in section 5 exist. WP = the package in sect
 | History | Last `CLIPROMPTLINES` (3) lines above the prompt; F2 shows the full scrollback | 4 lines above; 200 kept (`HistoryLimit`) | F2 overlay, larger cap (e.g. 2000), copy | P1 | M | 1 |
 | Repeat | Enter/Space/right-click at `Command:` repeats the last command; `MULTIPLE cmd` repeats until Esc; Recent Input list in the right-click menu | Enter/Space/right-click repeat (met) | `MULTIPLE`; recent-commands menu | P3 | S | 5, 6 |
 | Dynamic input | Prompts, distance, angle and coordinate fields in tooltips at the cursor; Tab moves between fields; typing there replaces the command-line entry | None | 4.6 | P2 | L | 6 |
-| Aliases | `acad.pgp` (about 150 defaults), user-editable | 27 entries incl. `AGENT` (section 7 has the diff) | Missing: `P`, `LS`, `S`, `AR`, `POL`, `EL`, `PO`, `H`, `DO`, `XL`, `T`/`DT`, `B`, `I`, `PE`, `MA`, `PR`/`CH`, `LEN`, `AL`, `DIV`, `ME`, `RE`, `OP`, `UN`, `OS`, `SN`, `GR`, `DS` and the dimension aliases (the last group blocked by G7) | P1 for those whose command exists or lands in WP5 | S | 5 |
+| Aliases | `acad.pgp` (about 150 defaults), user-editable | 27 entries incl. `AGENT` (section 7 has the diff) | Missing: `P`, `LS`, `S`, `AR`, `POL`, `EL`, `PO`, `H`, `DO`, `XL`, `T`/`DT`, `B`, `I`, `PE`, `MA`, `PR`/`CH`, `LEN`, `AL`, `DIV`, `ME`, `RE`, `OP`, `UN`, `OS`, `SN`, `GR`, `DS` and the dimension aliases other than `DLI`, `DAL`, `DCO`, `DAR` (the last group blocked by G7) | P1 for those whose command exists or lands in WP5 | S | 5 |
 | `PAN` / realtime zoom | `P`; `Z` Enter = realtime; `Z` options `All`, `Center`, `Dynamic`, `Extents`, `Previous`, `Scale` (`2X`, `0.5XP`), `Window`, `Object`; `ZOOM P` view stack | ZOOM: window by two corners or `Extents/Window`; Enter = Extents (AutoCAD: realtime) | PAN; Zoom Previous (needs a view stack), All, Center, Scale, Object; Enter semantic note (D-H) | P1 | M | 5 |
 | `STRETCH` | `S`: crossing selection, base point, second point | Missing (G8 lists it; not yet built) | Needed by grips | P1 | M | 4 |
 | `ARRAY` | `AR`: rectangular, polar, path (associative by default) | Missing | Non-associative ARRAYRECT/ARRAYPOLAR first | P1 | M | 5 |
@@ -689,7 +689,8 @@ RO SC U Z LA DI LI AA MEA` plus `MI O F CHA TR EX BR J X` and `AGENT`.
 | T, MT | MTEXT | blocked (G7) |
 | DT | TEXT | blocked (G7) |
 | B, I, W | BLOCK, INSERT, WBLOCK | blocked (G7) |
-| D, DLI, DAL, DRA, DDI, DAN, DCO | dimension commands | blocked (G7) |
+| DLI, DAL, DCO, DAR | DIMLINEAR, DIMALIGNED, DIMCONTINUE, DIMARC | present (non-associative) |
+| D, DRA, DDI, DAN | DIMSTYLE, DIMRADIUS, DIMDIAMETER, DIMANGULAR | blocked (G7) |
 | MA | MATCHPROP | missing (WP5) |
 | PR, CH, MO | PROPERTIES | missing (WP1 toggles, WP4 edits) |
 | PE | PEDIT | missing (WP5) |

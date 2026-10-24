@@ -157,6 +157,8 @@ inscribed_in_circle = "Inscritto nel cerchio|Inscritto"
 circumscribed_about_circle = "Circoscritto intorno al cerchio|Circoscritto"
 3p = "3P"
 2p = "2P"
+r12 = "R12"
+2000 = "2000"
 ttr = "Ttr (tangente tangente raggio)|Ttr"
 close = "Chiudi"
 undo = "Annulla"
@@ -224,6 +226,14 @@ current = "Corrente"
 source = "Origine"
 method = "mEtodo"
 chamfer_angle = "ANgolo"
+mtext = "Mtesto"
+text = "Testo"
+horizontal = "Orizzontale"
+vertical = "Verticale"
+rotated = "Ruotato"
+partial = "Parziale"
+leader = "Direttrice"
+select = "Seleziona"
 
 [cmd.select.prompt]
 first_corner = "Specificare primo angolo"
@@ -555,6 +565,21 @@ insertion_point = "punto di inserimento, X=%s  Y=%s  Z=%s"
 attachment = "attacco %s"
 width = "larghezza %s"
 contents = "contenuto %s"
+dim_type = "tipo: %s"
+dim_horizontal = "orizzontale"
+dim_vertical = "verticale"
+dim_rotated = "ruotata"
+dim_aligned = "allineata"
+dim_arc = "lunghezza arco"
+dim_ext1 = "punto di definizione 1a linea di estensione: X=%s  Y=%s  Z=%s"
+dim_ext2 = "punto di definizione 2a linea di estensione: X=%s  Y=%s  Z=%s"
+dim_line = "punto di definizione linea di quota: X=%s  Y=%s  Z=%s"
+dim_text_default = "posizione di default del testo: X=%s  Y=%s  Z=%s"
+dim_text_user = "posizione utente del testo: X=%s  Y=%s  Z=%s"
+dim_measurement = "misura %s"
+dim_default_text = "testo di default"
+dim_text = "testo di quota %q"
+dim_style = "stile di quota: %q"
 
 [cmd.area.prompt]
 first_corner = "Specificare primo angolo"
@@ -777,11 +802,14 @@ more_warnings = "... e altri %d avvisi."
 warning = "Avviso: %s"
 quit_unavailable = "Uscire non è disponibile su questa piattaforma."
 untitled = "Senza titolo"
+format = "Formato file corrente: %s"
+format_auto = "Formato file corrente: %s (automatico)"
 
 [cmd.file.prompt]
 open_path = "Immettere il percorso del disegno da aprire (.dxf o .dwg)"
 save_path = "Immettere il percorso in cui salvare il disegno"
 save_changes = "Salvare le modifiche a %s?"
+format = "Immettere il formato del file"
 
 [cmd.ai.msg]
 unavailable = "L'agente IA non è disponibile su questa piattaforma."
@@ -800,11 +828,18 @@ not_written_unsupported = "%s %s non scritto (non supportato dal writer R12)"
 block_not_written = "%s nel blocco %s non scritto (la classe non esiste in R12; serve il writer più recente, backlog G2)"
 non_finite = "%d numeri non finiti (nan/inf) sono stati letti come 0"
 no_eof = "il file non ha il marcatore EOF (potrebbe essere troncato)"
+groups_r12 = "gruppi non scritti (R12 non ha gruppi; salvare come AutoCAD 2000 DXF per conservarli): %d gruppi"
+objects_r12 = "oggetti non grafici non scritti (R12 non li ha; salvare come AutoCAD 2000 DXF per conservarli): %d oggetti"
 
 [dxf.err]
 no_value = "dxf: riga %d: il codice di gruppo %q non ha valore"
 bad_group_code = "dxf: riga %d: codice di gruppo %q non valido (il DXF binario non è supportato)"
 no_endsec = "dxf: la sezione %q non ha ENDSEC (file troncato?)"
+version = "La versione DXF %s non può essere scritta (Cad-lite scrive %s)"
+
+[dxf.version]
+ac1009 = "AutoCAD R12/LT2 DXF"
+ac1015 = "AutoCAD 2000/LT2000 DXF"
 
 [dwg.warn]
 skipped = "ignorate %s (non lette dai file DWG; il lettore DXF le mantiene)"
@@ -863,7 +898,7 @@ doc_tip = "Disegno: %s"
 [ui.tabs]
 untitled_tip = "Disegno senza titolo — non ancora salvato in un file"
 switch_tip = "Clic per mostrarlo, clic centrale o x per chiuderlo; Ctrl+Tab e Ctrl+Maiusc+Tab passano da un disegno all'altro"
-close_tip = "Chiudi questo disegno (CLOSE) — chiede prima di salvare le modifiche"
+close_tip = "Chiudi questo disegno (CLOSE) — chiede conferma prima di perdere le modifiche non salvate"
 
 [ui.canvas]
 viewport_label = "[-][Alto][Wireframe 2D]"
@@ -880,6 +915,9 @@ filter_all_supported = "Tutti i file supportati"
 filter_all = "Tutti i file"
 filter_ext = "Disegno %s"
 unsupported = "Impossibile aprire %s: Cad-lite apre file %s."
+format_title = "Salva come tipo"
+format_row = "%s (*%s)"
+format_tip = "Salva il disegno come %s; poi si sceglie il nome del file"
 
 [ui.recent]
 menu_tip = "Recenti — i disegni e le cartelle usati di recente; scegli un file per aprirlo o una cartella per sfogliarla"
@@ -938,6 +976,10 @@ selected_one = "%d selezionato"
 selected_other = "%d selezionati"
 layer = "Layer: %s"
 handle = "Handle: %s"
+color = "Colore: %s"
+dim_linear = "Quota lineare: %s"
+dim_aligned = "Quota allineata: %s"
+dim_arc = "Quota lunghezza arco: %s"
 
 [ui.status]
 modified_tip = "Modifiche non salvate — il disegno differisce dal file salvato"
@@ -1296,6 +1338,9 @@ restart_now = "Riavvia ora"
 restart_now_tip = "Riavvia ora — chiude Cad-lite e apre la nuova versione"
 restart_later = "Più tardi"
 restart_later_tip = "Più tardi — continua a lavorare; la nuova versione parte alla prossima apertura di Cad-lite"
+button_tip = "Aggiornamento disponibile — versione %s. Clic per scaricarla, verificarla e installarla subito; Cad-lite chiede prima di riavviarsi"
+button_retry_tip = "Clic per riprovare a installare la versione %s"
+button_ready_tip = "Clic per riavviare con la nuova versione"
 
 [cmd.line]
 name = "Linea"
@@ -1337,6 +1382,49 @@ aliases = ["TESTO", "TESTODIN"]
 name = "Testo multilinea"
 desc = "Crea paragrafi di testo a capo in un riquadro, posizionati da uno dei nove punti di attacco"
 aliases = ["TESTOM"]
+
+[cmd.dimlinear]
+name = "Dimlineare"
+desc = "Crea una quota lineare orizzontale, verticale o ruotata tra due punti o di un oggetto selezionato"
+aliases = ["DIMLINEARE"]
+
+[cmd.dimaligned]
+name = "Dimallineata"
+desc = "Crea una quota lineare parallela ai due punti che misura"
+aliases = ["DIMALLINEATA"]
+
+[cmd.dimcontinue]
+name = "Dimcontinua"
+desc = "Crea una catena di quote lineari, ciascuna dalla seconda linea di estensione della precedente"
+aliases = ["DIMCONTINUA"]
+
+[cmd.dimarc]
+name = "Arcoquota"
+desc = "Crea una quota della lunghezza di un arco o di un segmento di arco di polilinea, intero o parziale"
+aliases = ["ARCOQUOTA"]
+
+[cmd.dim.prompt]
+first_origin = "Specificare origine prima linea di estensione o <seleziona oggetto>"
+second_origin = "Specificare origine seconda linea di estensione"
+select_object = "Selezionare l'oggetto da quotare"
+location = "Specificare posizione della linea di quota"
+text = "Immettere testo di quota"
+text_angle = "Specificare angolo del testo di quota"
+line_angle = "Specificare angolo della linea di quota"
+continue_origin = "Specificare origine seconda linea di estensione"
+continued = "Selezionare quota continua"
+select_arc = "Selezionare arco o segmento di arco di polilinea"
+arc_location = "Specificare posizione della quota lunghezza arco"
+partial_first = "Specificare primo punto per la quota lunghezza arco"
+partial_second = "Specificare secondo punto per la quota lunghezza arco"
+
+[cmd.dim.msg]
+text = "Testo di quota = %s"
+not_measurable = "L'oggetto selezionato non è una linea, un arco, un cerchio o un segmento di polilinea."
+not_linear = "L'oggetto selezionato non è una quota lineare o allineata."
+not_arc = "L'oggetto selezionato non è un arco o un segmento di arco di polilinea."
+no_leader = "Direttrice non supportata; specificare la posizione della quota."
+nothing_to_undo = "Nessuna operazione da annullare."
 
 [cmd.erase]
 name = "Cancella"
@@ -1731,6 +1819,17 @@ pick = "Selezionare TESTO o TESTOM da modificare:"
 [cmd.textedit.msg]
 target = "Selezionare un TESTO o TESTOM modificabile nello spazio modello."
 unavailable = "L'editor di testo non è disponibile."
+
+[ui.discard]
+title = "Modifiche non salvate"
+close_body = "%s ha modifiche non salvate. Chiuderlo comunque?"
+quit_body = "Questi disegni hanno modifiche non salvate:"
+quit_question = "Chiudere comunque Cad-lite? Le modifiche andranno perse."
+save_hint = "Per conservare le modifiche scegli Annulla e salva prima (%s)."
+close_anyway = "Chiudi comunque"
+close_anyway_tip = "Chiude senza salvare — le modifiche non salvate vanno perse"
+cancel = "Annulla"
+cancel_tip = "Lascia aperto il disegno, con le sue modifiche (Esc)"
 
 [ui.textedit]
 title = "Modifica %s · %s"

@@ -170,26 +170,19 @@ func fakeUpdate(ws *Workspace, version string) {
 	u.phase, u.latest = updAvailable, updater.Release{Version: version, Notes: "## What's new\n- **Faster** zoom\n- Fixed `LINE`\n"}
 }
 
-func TestGearWithUpdateBadgeOpensUpdatesTab(t *testing.T) {
-	h := openSettingsWS(t, NewWorkspace(doc.New(), nil), 900, 2000, 1)
-	h.clickID("tool-settings")
-	h.hw.Pixels()
-	h.checkTab(settingsGeneral)
-	h.clickID("settings-close")
-	h.hw.Pixels()
-
+func TestGearHasNoUpdateBadgeAndTheUpdatesTabKeepsItsDot(t *testing.T) {
+	h, _ := updHarness(t, "1.0.0", false)
 	fakeUpdate(h.ws, "9.9.9")
-	h.hw.Window().Refresh()
-	h.hw.Pixels()
-	if !h.inFrame("update-badge") {
-		t.Fatal("no badge on the gear while a release waits")
+	h.frame()
+	if !h.inFrame("tool-update") {
+		t.Fatal("no update button in the title bar while a release waits")
 	}
 	h.clickID("tool-settings")
 	h.hw.Pixels()
 	if !h.ws.SettingsOpen() {
 		t.Fatal("the gear did not open the panel")
 	}
-	h.checkTab(settingsUpdates)
+	h.checkTab(settingsGeneral)
 	if !h.inFrame("settings-tab-updates") {
 		t.Fatal("no Updates tab")
 	}

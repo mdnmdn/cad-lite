@@ -345,18 +345,21 @@ func TestHistoryFoldsToTheInputRowAndRestoresItsHeight(t *testing.T) {
 	}
 	h.clickID("cmd-collapse")
 	h.frame()
-	if !ws.lay.histOff || h.has("cmd-history") || !h.has("cmd-box") {
-		t.Fatal("history did not fold away leaving the input row")
+	if !ws.lay.histOff || h.has("cmd-history") || !h.has("cmd-box") || !h.has("cmd-last") {
+		t.Fatal("history did not fold to its last line over the input row")
 	}
-	// Dragging the folded handle does nothing.
-	p := h.find("cmd-handle")
+	// The folded history has no handle, and dragging its row does nothing.
+	if h.has("cmd-handle") {
+		t.Fatal("the folded history still has its drag handle")
+	}
+	p := h.find("cmd-last")
 	h.drag(p, gpui.Point{X: p.X, Y: p.Y - 100})
-	if ws.cmd.histH != 150 {
-		t.Fatalf("a drag on the folded handle changed the height to %v", ws.cmd.histH)
+	if ws.cmd.histH != 150 || !ws.lay.histOff {
+		t.Fatalf("a drag on the folded row changed the height to %v", ws.cmd.histH)
 	}
 	h.clickID("cmd-collapse")
 	h.frame()
-	if ws.lay.histOff || !h.has("cmd-history") || ws.historyHeight() != 150 {
+	if ws.lay.histOff || !h.has("cmd-history") || h.has("cmd-last") || ws.historyHeight() != 150 {
 		t.Fatalf("history height %v after expanding, want 150", ws.historyHeight())
 	}
 }

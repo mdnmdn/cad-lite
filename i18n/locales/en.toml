@@ -162,6 +162,8 @@ inscribed_in_circle = "Inscribed in circle|Inscribed"
 circumscribed_about_circle = "Circumscribed about circle|Circumscribed"
 3p = "3P"
 2p = "2P"
+r12 = "R12"
+2000 = "2000"
 ttr = "Ttr (tan tan radius)|Ttr"
 close = "Close"
 undo = "Undo"
@@ -225,6 +227,14 @@ current = "Current"
 source = "Source"
 method = "mEthod"
 chamfer_angle = "Angle"
+mtext = "Mtext"
+text = "Text"
+horizontal = "Horizontal"
+vertical = "Vertical"
+rotated = "Rotated"
+partial = "Partial"
+leader = "Leader"
+select = "Select"
 
 [cmd.select.prompt]
 first_corner = "Specify first corner"
@@ -556,6 +566,21 @@ insertion_point = "insertion point, X=%s  Y=%s  Z=%s"
 attachment = "attachment %s"
 width = "width %s"
 contents = "contents %s"
+dim_type = "type: %s"
+dim_horizontal = "horizontal"
+dim_vertical = "vertical"
+dim_rotated = "rotated"
+dim_aligned = "aligned"
+dim_arc = "arc length"
+dim_ext1 = "1st extension defpoint: X=%s  Y=%s  Z=%s"
+dim_ext2 = "2nd extension defpoint: X=%s  Y=%s  Z=%s"
+dim_line = "dimension line defpoint: X=%s  Y=%s  Z=%s"
+dim_text_default = "default text position: X=%s  Y=%s  Z=%s"
+dim_text_user = "user text position: X=%s  Y=%s  Z=%s"
+dim_measurement = "measurement %s"
+dim_default_text = "default text"
+dim_text = "dimension text %q"
+dim_style = "dimension style: %q"
 
 [cmd.area.prompt]
 first_corner = "Specify first corner point"
@@ -776,11 +801,14 @@ more_warnings = "... and %d more warnings."
 warning = "Warning: %s"
 quit_unavailable = "Quitting is not available on this platform."
 untitled = "Untitled"
+format = "Current file format: %s"
+format_auto = "Current file format: %s (automatic)"
 
 [cmd.file.prompt]
 open_path = "Enter path of drawing to open (.dxf or .dwg)"
 save_path = "Enter path of drawing to save"
 save_changes = "Save changes to %s?"
+format = "Enter file format"
 
 [cmd.ai.msg]
 unavailable = "The AI agent is not available on this platform."
@@ -799,11 +827,18 @@ not_written_unsupported = "%s %s not written (not supported by the R12 writer)"
 block_not_written = "%s in block %s not written (the class does not exist in R12; it needs the newer writer, backlog G2)"
 non_finite = "%d non-finite numbers (nan/inf) were read as 0"
 no_eof = "file has no EOF marker (it may be truncated)"
+groups_r12 = "groups not written (R12 has no groups; save as AutoCAD 2000 DXF to keep them): %d groups"
+objects_r12 = "non-graphical object records not written (R12 has none; save as AutoCAD 2000 DXF to keep them): %d records"
 
 [dxf.err]
 no_value = "dxf: line %d: group code %q has no value"
 bad_group_code = "dxf: line %d: bad group code %q (binary DXF is not supported)"
 no_endsec = "dxf: section %q has no ENDSEC (truncated file?)"
+version = "DXF version %s cannot be written (Cad-lite writes %s)"
+
+[dxf.version]
+ac1009 = "AutoCAD R12/LT2 DXF"
+ac1015 = "AutoCAD 2000/LT2000 DXF"
 
 [dwg.warn]
 skipped = "skipped %s (not read from DWG files; the DXF reader keeps them)"
@@ -862,7 +897,7 @@ doc_tip = "Drawing: %s"
 [ui.tabs]
 untitled_tip = "Untitled drawing — not saved to a file yet"
 switch_tip = "Click to show it, middle-click or x to close it; Ctrl+Tab and Ctrl+Shift+Tab switch drawings"
-close_tip = "Close this drawing (CLOSE) — asks to save unsaved changes first"
+close_tip = "Close this drawing (CLOSE) — asks before unsaved changes are lost"
 
 [ui.canvas]
 viewport_label = "[-][Top][2D Wireframe]"
@@ -879,6 +914,9 @@ filter_all_supported = "All supported files"
 filter_all = "All files"
 filter_ext = "%s drawing"
 unsupported = "Cannot open %s: Cad-lite opens %s files."
+format_title = "Save as type"
+format_row = "%s (*%s)"
+format_tip = "Saves the drawing as %s; the file name comes next"
 
 [ui.recent]
 menu_tip = "Recent — the drawings and folders you used lately; pick a file to open it or a folder to browse it"
@@ -935,6 +973,10 @@ selected_one = "%d selected"
 selected_other = "%d selected"
 layer = "Layer: %s"
 handle = "Handle: %s"
+color = "Color: %s"
+dim_linear = "Linear dimension: %s"
+dim_aligned = "Aligned dimension: %s"
+dim_arc = "Arc length dimension: %s"
 
 [ui.status]
 modified_tip = "Unsaved changes — the drawing differs from its saved file"
@@ -1291,6 +1333,9 @@ restart_now = "Restart and update"
 restart_now_tip = "Restart now — closes Cad-lite and opens the new version"
 restart_later = "Later"
 restart_later_tip = "Later — keeps working; the new version starts the next time you open Cad-lite"
+button_tip = "Update available — version %s. Click to download, verify and install it now; Cad-lite asks before it restarts"
+button_retry_tip = "Click to try installing version %s again"
+button_ready_tip = "Click to restart into the new version"
 
 [cmd.line]
 name = "Line"
@@ -1331,6 +1376,49 @@ aliases = ["DT", "DTEXT"]
 name = "Multiline Text"
 desc = "Creates paragraphs of text wrapped in a box, placed by one of nine attachment points"
 aliases = ["T", "MT"]
+
+[cmd.dimlinear]
+name = "Dimlinear"
+desc = "Creates a horizontal, vertical or rotated linear dimension between two points or of a picked object"
+aliases = ["DLI"]
+
+[cmd.dimaligned]
+name = "Dimaligned"
+desc = "Creates a linear dimension parallel to the two points it measures"
+aliases = ["DAL"]
+
+[cmd.dimcontinue]
+name = "Dimcontinue"
+desc = "Creates a chain of linear dimensions, each from the second extension line of the one before"
+aliases = ["DCO"]
+
+[cmd.dimarc]
+name = "Dimarc"
+desc = "Creates a dimension of the length of an arc or polyline arc segment, whole or partial"
+aliases = ["DAR"]
+
+[cmd.dim.prompt]
+first_origin = "Specify first extension line origin or <select object>"
+second_origin = "Specify second extension line origin"
+select_object = "Select object to dimension"
+location = "Specify dimension line location"
+text = "Enter dimension text"
+text_angle = "Specify angle of dimension text"
+line_angle = "Specify angle of dimension line"
+continue_origin = "Specify a second extension line origin"
+continued = "Select continued dimension"
+select_arc = "Select arc or polyline arc segment"
+arc_location = "Specify arc length dimension location"
+partial_first = "Specify first point for arc length dimension"
+partial_second = "Specify second point for arc length dimension"
+
+[cmd.dim.msg]
+text = "Dimension text = %s"
+not_measurable = "Object selected is not a line, arc, circle or polyline segment."
+not_linear = "Object selected is not a linear or aligned dimension."
+not_arc = "Object selected is not an arc or polyline arc segment."
+no_leader = "Leader is not supported; specify the dimension location."
+nothing_to_undo = "Nothing to undo."
 
 [cmd.erase]
 name = "Erase"
@@ -1702,6 +1790,17 @@ pick = "Select TEXT or MTEXT to edit:"
 [cmd.textedit.msg]
 target = "Select editable model-space TEXT or MTEXT."
 unavailable = "The text editor is not available."
+
+[ui.discard]
+title = "Unsaved changes"
+close_body = "%s has unsaved changes. Close it anyway?"
+quit_body = "These drawings have unsaved changes:"
+quit_question = "Close Cad-lite anyway? The changes are lost."
+save_hint = "To keep the changes, choose Cancel and save first (%s)."
+close_anyway = "Close anyway"
+close_anyway_tip = "Close without saving — the unsaved changes are lost"
+cancel = "Cancel"
+cancel_tip = "Keep the drawing open, with its changes (Esc)"
 
 [ui.textedit]
 title = "Edit %s · %s"

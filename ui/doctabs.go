@@ -94,6 +94,15 @@ func (t *docTab) name() string {
 	return i18n.T("ui.title.untitled")
 }
 
+// caption is the tab's label: the name, with AutoCAD's "*" after it while the drawing has
+// unsaved changes.
+func (t *docTab) caption() string {
+	if t.session.Dirty() {
+		return t.name() + "*"
+	}
+	return t.name()
+}
+
 // tabHost is the cmdsys.DocumentHost of one tab's session: OPEN, NEW and CLOSE reach the tab strip
 // through it.
 type tabHost struct {
@@ -227,8 +236,8 @@ func (ws *Workspace) tabIndex(t *docTab) int {
 }
 
 // closeTab is the tab strip's close: a tab with unsaved changes, and the last tab, close through
-// CLOSE in their own session, so the "Save changes" question is asked on the command line; any
-// other tab closes at once.
+// CLOSE in their own session, made active, so the unsaved-changes dialog asks first (the command
+// line's "Save changes" question without a window); any other tab closes at once.
 func (ws *Workspace) closeTab(t *docTab, w *gpui.Window) {
 	if t.session.Dirty() || len(ws.tabs) < 2 {
 		ws.activate(t)
@@ -292,11 +301,16 @@ type quitState struct {
 	next  *docTab
 	runs  int
 	asked map[*docTab]bool
+	// chaining is set while quitFrom runs QUIT in the next tab, which then asks on the command
+	// line like the script or answer that started the chain.
+	chaining bool
 }
 
 // SetQuitHandler installs the host's way of ending the application. QUIT and EXIT, in any tab,
-// ask "Save changes" for that tab's drawing and then for every other dirty tab in turn, each
-// shown while it asks; Cancel at any of them stops the quit.
+// show one dialog listing every drawing with unsaved changes (none: they quit at once); Close
+// anyway quits without saving, Cancel keeps everything. Without a window, or from a script, they
+// ask "Save changes" on the command line for that tab's drawing and then for every other dirty
+// tab in turn, each shown while it asks; Cancel at any of them stops the quit.
 func (ws *Workspace) SetQuitHandler(f func()) {
 	ws.quit.f = f
 	for _, t := range ws.tabs {
@@ -315,7 +329,9 @@ func (ws *Workspace) quitFrom(t *docTab) {
 	for _, o := range ws.tabs {
 		if !q.asked[o] && o.session.Dirty() {
 			ws.activate(o)
+			q.chaining = true
 			o.session.Run("QUIT")
+			q.chaining = false
 			q.next, q.runs = o, o.session.RunCount()
 			return
 		}
@@ -325,7 +341,7 @@ func (ws *Workspace) quitFrom(t *docTab) {
 }
 
 // tabStrip is the row of document tabs between the ribbon and the canvas: one tab per drawing
-// with its name, a dot while it has unsaved changes and a close button, then "+" for a new drawing.
+// with its name, a dot and a "*" after the name while it has unsaved changes and a close button, then "+" for a new drawing.
 // A middle click closes a tab; the tooltip has the file's path.
 func (ws *Workspace) tabStrip() *gpui.Div {
 	row := gpui.NewDiv().ID("doc-tabs").FlexRow().ItemsEnd().Gap(2).SizeH(docTabHeight).FlexShrink(0).Px_(8).Bg(uiBg).OverflowHidden()
@@ -351,9 +367,10 @@ func (ws *Workspace) docTabElement(i int, t *docTab) *gpui.Div {
 	tip += "\n" + i18n.T("ui.tabs.switch_tip")
 	label := gpui.NewDiv().ID(fmt.Sprintf("doc-tab-%d", i)).FlexRow().ItemsCenter().Gap(6).MinW(0).Tooltip(tip)
 	if dirty {
-		label.Child(dot(6, uiOn))
+		// The accent dot, as on the title bar's document chip; caption adds AutoCAD's "*".
+		label.Child(dot(8, uiOn))
 	}
-	text := gpui.NewText(t.name()).TextSize(fontUI)
+	text := gpui.NewText(t.caption()).TextSize(fontUI)
 	if !active {
 		text.TextColor(uiMuted)
 	}

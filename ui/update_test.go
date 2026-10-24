@@ -245,3 +245,81 @@ func TestUpdateChecksImmediatelyOnEveryLaunch(t *testing.T) {
 		h.settle(func() bool { return h.ws.upd().phase == updAvailable })
 	}
 }
+
+func TestTitleBarUpdateButtonStartsTheUpdate(t *testing.T) {
+	h, rig := updHarness(t, "1.0.0", false)
+	h.frame()
+	if h.inFrame("tool-update") {
+		t.Fatal("the update button shows before a release was found")
+	}
+	h.ws.checkForUpdate(h.hw.Window(), true)
+	h.settle(func() bool { return h.ws.upd().phase == updAvailable })
+	if tip, ok := h.ws.updateButtonTip(); !ok || !strings.Contains(tip, "2.0.0") {
+		t.Fatalf("tooltip %q shown %v", tip, ok)
+	}
+	if !h.hoverTip(h.find("tool-update")) {
+		t.Fatal("the update button has no tooltip")
+	}
+	h.png("titlebar-update-available.png")
+	h.clickID("tool-update")
+	if p := h.ws.upd().phase; p != updDownloading && p != updReady {
+		t.Fatalf("a click should start the update at once, phase %d", p)
+	}
+	h.settle(func() bool { return h.ws.upd().phase == updReady })
+	u := h.ws.upd()
+	if !u.confirm {
+		t.Fatal("the restart dialog should follow the install")
+	}
+	if b, _ := os.ReadFile(rig.exe); string(b) != "NEW" {
+		t.Errorf("exe %q", b)
+	}
+	h.clickID("update-restart-later")
+	h.frame()
+	if !h.inFrame("tool-update") {
+		t.Fatal("an installed update should keep the button, to restart later")
+	}
+	h.png("titlebar-update-ready.png")
+	h.clickID("tool-update")
+	if !u.confirm {
+		t.Fatal("the ready button should ask for the restart again")
+	}
+}
+
+func TestTitleBarUpdateButtonShowsProgressAndErrors(t *testing.T) {
+	h, rig := updHarness(t, "1.0.0", false)
+	h.ws.checkForUpdate(h.hw.Window(), true)
+	h.settle(func() bool { return h.ws.upd().phase == updAvailable })
+	u := h.ws.upd()
+	// The progress state, set by hand: the worker is too fast to catch.
+	u.phase = updDownloading
+	u.size.Store(200)
+	u.done.Store(84)
+	h.frame()
+	if tip, _ := h.ws.updateButtonTip(); !strings.Contains(tip, "42%") {
+		t.Fatalf("progress tooltip %q", tip)
+	}
+	h.png("titlebar-update-downloading.png")
+	h.clickID("tool-update") // inert
+	if u.phase != updDownloading {
+		t.Fatal("the progress button must not react to clicks")
+	}
+	u.phase = updAvailable
+	rig.sums = strings.Repeat("0", 64) + "  cad-lite-2.0.0-linux-amd64.tar.gz\n"
+	h.frame()
+	h.clickID("tool-update")
+	h.settle(func() bool { return u.err != nil })
+	tip, ok := h.ws.updateButtonTip()
+	if !ok || !strings.Contains(tip, "Update failed") || !strings.Contains(tip, "again") {
+		t.Fatalf("error tooltip %q", tip)
+	}
+	h.png("titlebar-update-error.png")
+}
+
+func TestDevBuildHasNoUpdateButton(t *testing.T) {
+	h, _ := updHarness(t, "dev", false)
+	fakeUpdate(h.ws, "9.9.9")
+	h.frame()
+	if h.inFrame("tool-update") {
+		t.Fatal("a build that cannot update itself must not offer the button")
+	}
+}

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"weak"
 
 	"cad-lite/assets/icons"
@@ -157,6 +158,9 @@ type propsSummary struct {
 	classes       []string
 	counts        []int
 	layer, handle string
+	// color is a single object's colour as CECOLOR reads it (BYLAYER or the index); dimKind
+	// and dimValue are a single dimension's kind (its catalogue key) and measurement.
+	color, dimKind, dimValue string
 }
 
 // selectionSummary returns the summary of the current selection, worked out again only when the
@@ -183,14 +187,26 @@ func (ws *Workspace) selectionSummary() *propsSummary {
 	if sel.Len() == 1 {
 		if e := d.Entity(sel.Handles()[0]); e != nil {
 			c.layer, c.handle = e.Common().Layer, e.Handle().String()
+			c.color = "BYLAYER"
+			if col := e.Common().Color; col >= 1 && col <= 255 {
+				c.color = strconv.Itoa(col)
+			}
+			if dm, ok := e.(*doc.Dimension); ok {
+				c.dimKind = map[doc.DimKind]string{doc.DimRotated: "ui.props.dim_linear", doc.DimAligned: "ui.props.dim_aligned",
+					doc.DimArcLength: "ui.props.dim_arc"}[dm.Kind]
+				m := dm.Clone().(*doc.Dimension)
+				m.Text = ""
+				c.dimValue = m.MeasurementText()
+			}
 		}
 	}
 	return c
 }
 
 // propsBody is what the Properties section shows for the selection: "No selection", or the count,
-// the count per object type and, for a single object, its layer and handle. The side panel and the
-// properties HUD both show it.
+// the count per object type and, for a single object, its layer, colour and handle, and for a
+// dimension its kind and measurement (read-only). The side panel and the properties HUD both show
+// it.
 func (ws *Workspace) propsBody() *gpui.Div {
 	props := gpui.NewDiv().FlexCol().Gap(4)
 	c := ws.selectionSummary()
@@ -203,7 +219,11 @@ func (ws *Workspace) propsBody() *gpui.Div {
 	}
 	if c.handle != "" {
 		props.Child(gpui.NewText(i18n.T("ui.props.layer", c.layer)).TextColor(uiMuted),
+			gpui.NewText(i18n.T("ui.props.color", c.color)).TextColor(uiMuted),
 			gpui.NewText(i18n.T("ui.props.handle", c.handle)).TextColor(uiMuted))
+		if c.dimKind != "" {
+			props.Child(gpui.NewText(i18n.T(c.dimKind, c.dimValue)).TextColor(uiMuted))
+		}
 	}
 	return props
 }
