@@ -59,6 +59,24 @@ const (
 // WheelModes lists the valid Settings.Wheel values.
 var WheelModes = []string{WheelAuto, WheelZoom, WheelPan}
 
+// Renderers for Settings.Renderer: how the window presents its frames. Frames
+// are always rasterized on the CPU; the renderer only decides which graphics
+// device shows them.
+const (
+	// RendererAuto uses the graphics card and falls back to software when it
+	// fails to start.
+	RendererAuto = "auto"
+	// RendererGPU always uses the graphics card.
+	RendererGPU = "gpu"
+	// RendererSoftware presents through a CPU implementation of the graphics
+	// API (Direct3D WARP on Windows, Mesa llvmpipe on Linux), for machines
+	// whose graphics driver cannot start the window.
+	RendererSoftware = "software"
+)
+
+// Renderers lists the valid Settings.Renderer values.
+var Renderers = []string{RendererAuto, RendererGPU, RendererSoftware}
+
 // Window is the last window size, in logical pixels. Zero means unset.
 type Window struct {
 	// Width is the window width.
@@ -114,6 +132,9 @@ type Settings struct {
 	Grid, OSnap, Ortho bool
 	// Wheel is the mouse wheel behaviour: WheelAuto, WheelZoom or WheelPan.
 	Wheel string
+	// Renderer is RendererAuto, RendererGPU or RendererSoftware; it takes
+	// effect at the next start.
+	Renderer string
 	// AgentMode selects Basic or Advanced AI setup.
 	AgentMode string
 	// OpenCodeKey is the Basic mode OpenCode provider credential.
@@ -159,6 +180,7 @@ func Default() Settings {
 		Grid:       true,
 		OSnap:      true,
 		Wheel:      WheelAuto,
+		Renderer:   RendererAuto,
 		AutoUpdate: true,
 		Window:     Window{Width: 1280, Height: 800},
 	}
@@ -197,6 +219,10 @@ func (s *Settings) Normalize() []string {
 	if !ok {
 		w = append(w, i18n.T("settings.warn.wheel", s.Wheel, WheelModes, WheelAuto))
 		s.Wheel = WheelAuto
+	}
+	if !contains(Renderers, s.Renderer) {
+		w = append(w, i18n.T("settings.warn.renderer", s.Renderer, Renderers, RendererAuto))
+		s.Renderer = RendererAuto
 	}
 	for _, d := range []struct {
 		name string

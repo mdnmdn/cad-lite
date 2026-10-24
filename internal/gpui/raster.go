@@ -1,10 +1,9 @@
 package gpui
 
 import (
-	"cmp"
+	"hash/maphash"
 	"image"
 	"math"
-	"slices"
 )
 
 // Rasterizer paints a Scene into a premultiplied RGBA byte buffer.
@@ -12,12 +11,17 @@ type Rasterizer struct {
 	pix  []byte // premultiplied RGBA, 4*w*h
 	w, h int
 
-	// scratch slices reused across Render calls for the sorted primitives.
-	quads      []Quad
-	shadows    []Shadow
-	underlines []Underline
-	sprites    []GlyphSprite
-	strokes    []Stroke
+	// lx0, ly0, lx1, ly1 limit every pixel loop (clipWindow clamps to them):
+	// the whole buffer, or the tile being repainted.
+	lx0, ly0, lx1, ly1 int
+
+	// ops lists the scene's primitives in paint order; perms is the per-kind
+	// scratch for kinds whose Order is not ascending.
+	ops   []drawOp
+	perms [kindStroke + 1][]int32
+
+	// tiles is the damage-tracking state of RenderDamage.
+	tiles tileState
 
 	// stroke accumulates the coverage of the stroke being drawn.
 	stroke strokeBuf
@@ -49,7 +53,10 @@ func NewRasterizer(w, h int) *Rasterizer {
 	if h < 0 {
 		h = 0
 	}
-	return &Rasterizer{pix: make([]byte, 4*w*h), w: w, h: h}
+	r := &Rasterizer{pix: make([]byte, 4*w*h), w: w, h: h, lx1: w, ly1: h}
+	r.tiles.seed = maphash.MakeSeed()
+	r.tiles.mh.SetSeed(r.tiles.seed)
+	return r
 }
 
 // Size returns the buffer dimensions in pixels.
@@ -58,8 +65,10 @@ func (r *Rasterizer) Size() (int, int) { return r.w, r.h }
 // Pixels returns the premultiplied RGBA buffer, tightly packed (4*w*h bytes).
 func (r *Rasterizer) Pixels() []byte { return r.pix }
 
-// Reset fills the buffer with the premultiplied form of clear.
+// Reset fills the buffer with the premultiplied form of clear. The next
+// RenderDamage repaints the whole buffer.
 func (r *Rasterizer) Reset(clear Rgba) {
+	r.tiles.valid = false
 	if len(r.pix) < 4 {
 		return
 	}
@@ -74,62 +83,19 @@ func (r *Rasterizer) Reset(clear Rgba) {
 // Order and the five lists are merged, so a later background covers earlier
 // text (GPUI paints by draw order, not by primitive kind). On equal Order a
 // shadow paints before a quad, a quad before a stroke, a stroke before an
-// underline, an underline before a sprite.
+// underline, an underline before a sprite. The next RenderDamage repaints the
+// whole buffer.
 func (r *Rasterizer) Render(s *Scene) {
+	r.tiles.valid = false
 	if s == nil {
 		return
 	}
-	r.quads = sortByOrder(append(r.quads[:0], s.Quads...), func(q Quad) uint32 { return q.Order })
-	r.shadows = sortByOrder(append(r.shadows[:0], s.Shadows...), func(sh Shadow) uint32 { return sh.Order })
-	r.underlines = sortByOrder(append(r.underlines[:0], s.Underlines...), func(u Underline) uint32 { return u.Order })
-	r.sprites = sortByOrder(append(r.sprites[:0], s.Sprites...), func(g GlyphSprite) uint32 { return g.Order })
-	r.strokes = sortByOrder(append(r.strokes[:0], s.Strokes...), func(st Stroke) uint32 { return st.Order })
-	qs, shs, us, gs, sts := r.quads, r.shadows, r.underlines, r.sprites, r.strokes
-	var qi, si, ui, gi, ti int
-	for {
-		const none = math.MaxUint32 + 1
-		next, kind := uint64(none), -1
-		if si < len(shs) {
-			next, kind = uint64(shs[si].Order), 0
-		}
-		if qi < len(qs) && uint64(qs[qi].Order) < next {
-			next, kind = uint64(qs[qi].Order), 1
-		}
-		if ti < len(sts) && uint64(sts[ti].Order) < next {
-			next, kind = uint64(sts[ti].Order), 4
-		}
-		if ui < len(us) && uint64(us[ui].Order) < next {
-			next, kind = uint64(us[ui].Order), 2
-		}
-		if gi < len(gs) && uint64(gs[gi].Order) < next {
-			kind = 3
-		}
-		switch kind {
-		case 0:
-			r.setMask(shs[si].ContentMask)
-			r.drawShadow(shs[si])
-			si++
-		case 1:
-			r.setMask(qs[qi].ContentMask)
-			r.drawQuad(qs[qi])
-			qi++
-		case 2:
-			r.setMask(us[ui].ContentMask)
-			r.drawUnderline(us[ui])
-			ui++
-		case 3:
-			r.setMask(gs[gi].ContentMask)
-			r.drawSprite(gs[gi])
-			gi++
-		case 4:
-			r.setMask(sts[ti].ContentMask)
-			r.drawStroke(sts[ti])
-			ti++
-		default:
-			r.masked = false
-			return
-		}
+	r.setLimit(0, 0, r.w, r.h)
+	r.buildOps(s)
+	for i := range r.ops {
+		r.drawOp(s, 1, &r.ops[i])
 	}
+	r.masked = false
 }
 
 // setMask prepares the rounded content mask for the next primitive; a mask
@@ -159,16 +125,6 @@ func (r *Rasterizer) maskCoverage(x, y int) float32 {
 		return 1
 	}
 	return r.mask.coverage(px, py)
-}
-
-// sortByOrder stably sorts v by order, skipping the sort when v is already
-// in order (the common case: primitives are inserted in paint order).
-func sortByOrder[T any](v []T, order func(T) uint32) []T {
-	byOrder := func(a, b T) int { return cmp.Compare(order(a), order(b)) }
-	if !slices.IsSortedFunc(v, byOrder) {
-		slices.SortStableFunc(v, byOrder)
-	}
-	return v
 }
 
 // Image returns a copy of the current frame as a non-premultiplied
@@ -216,18 +172,25 @@ func (r *Rasterizer) drawUnderline(u Underline) {
 	if u.Color.IsTransparent() {
 		return
 	}
+	if rect, ok := underlineRect(u); ok {
+		r.fillRounded(rect, Corners{}, u.ContentMask.Bounds, u.Color)
+	}
+}
+
+// underlineRect is the rule an underline fills: Thickness tall (at most the
+// bounds' height) along the bottom of its bounds; ok is false when empty.
+func underlineRect(u Underline) (Bounds, bool) {
 	th := u.Thickness
 	if th > u.Bounds.Size.H {
 		th = u.Bounds.Size.H
 	}
 	if th <= 0 {
-		return
+		return Bounds{}, false
 	}
-	rect := Bounds{
+	return Bounds{
 		Origin: Point{X: u.Bounds.Origin.X, Y: u.Bounds.Max().Y - th},
 		Size:   Size{W: u.Bounds.Size.W, H: th},
-	}
-	r.fillRounded(rect, Corners{}, u.ContentMask.Bounds, u.Color)
+	}, true
 }
 
 func (r *Rasterizer) drawSprite(g GlyphSprite) {
@@ -574,24 +537,14 @@ func satInt(f float64) int {
 }
 
 // clipWindow maps a clip rect to the inclusive-exclusive integer pixel range
-// [x0,x1)×[y0,y1) clamped to the buffer, keeping only pixels fully inside.
+// [x0,x1)×[y0,y1) clamped to the limit (the buffer, or the tile being
+// repainted), keeping only pixels fully inside. Every draw path takes its
+// pixel window from here, directly or through coverWindow.
 func (r *Rasterizer) clipWindow(clip Bounds) (x0, y0, x1, y1 int, ok bool) {
-	x0 = int(math.Ceil(float64(clip.Origin.X)))
-	y0 = int(math.Ceil(float64(clip.Origin.Y)))
-	x1 = int(math.Ceil(float64(clip.Max().X)))
-	y1 = int(math.Ceil(float64(clip.Max().Y)))
-	if x0 < 0 {
-		x0 = 0
-	}
-	if y0 < 0 {
-		y0 = 0
-	}
-	if x1 > r.w {
-		x1 = r.w
-	}
-	if y1 > r.h {
-		y1 = r.h
-	}
+	x0 = max(ceilInt(clip.Origin.X), r.lx0)
+	y0 = max(ceilInt(clip.Origin.Y), r.ly0)
+	x1 = min(ceilInt(clip.Max().X), r.lx1)
+	y1 = min(ceilInt(clip.Max().Y), r.ly1)
 	return x0, y0, x1, y1, x0 < x1 && y0 < y1
 }
 
@@ -705,70 +658,6 @@ func abs32(v float32) float32 {
 	return v
 }
 
-// scaleScene returns s with every primitive scaled from logical to device
-// pixels, written into out (reusing its slices); at scale 1 it returns s.
-func scaleScene(s *Scene, scale float32, out *Scene) *Scene {
-	k := Pixels(scale)
-	if scale == 1 {
-		return s
-	}
-	sb := func(b Bounds) Bounds {
-		return Bounds{
-			Origin: Point{X: b.Origin.X * k, Y: b.Origin.Y * k},
-			Size:   Size{W: b.Size.W * k, H: b.Size.H * k},
-		}
-	}
-	sm := func(m ContentMask) ContentMask {
-		if m.Bounds.Size.W >= 1e6 {
-			return m
-		}
-		return ContentMask{Bounds: sb(m.Bounds), CornerRadii: scaleCorners(m.CornerRadii, k)}
-	}
-	out.Clear()
-	for _, q := range s.Quads {
-		q.Bounds = sb(q.Bounds)
-		q.ContentMask = sm(q.ContentMask)
-		q.BorderWidths = Edges{Top: q.BorderWidths.Top * k, Right: q.BorderWidths.Right * k, Bottom: q.BorderWidths.Bottom * k, Left: q.BorderWidths.Left * k}
-		q.CornerRadii = Corners{TopLeft: q.CornerRadii.TopLeft * k, TopRight: q.CornerRadii.TopRight * k, BottomLeft: q.CornerRadii.BottomLeft * k, BottomRight: q.CornerRadii.BottomRight * k}
-		out.Quads = append(out.Quads, q)
-	}
-	for _, sh := range s.Shadows {
-		sh.Bounds = sb(sh.Bounds)
-		sh.Clip = sb(sh.Clip)
-		sh.ContentMask = sm(sh.ContentMask)
-		sh.BlurRadius *= k
-		sh.CornerRadii = scaleCorners(sh.CornerRadii, k)
-		sh.ClipRadii = scaleCorners(sh.ClipRadii, k)
-		out.Shadows = append(out.Shadows, sh)
-	}
-	for _, u := range s.Underlines {
-		u.Bounds = sb(u.Bounds)
-		u.ContentMask = sm(u.ContentMask)
-		u.Thickness *= k
-		out.Underlines = append(out.Underlines, u)
-	}
-	for _, g := range s.Sprites {
-		g.Bounds = sb(g.Bounds)
-		g.ContentMask = sm(g.ContentMask)
-		out.Sprites = append(out.Sprites, g)
-	}
-	for _, st := range s.Strokes {
-		start := len(out.points)
-		for _, p := range st.Points {
-			out.points = append(out.points, Point{X: p.X * k, Y: p.Y * k})
-		}
-		st.Points = out.points[start:len(out.points):len(out.points)]
-		st.ContentMask = sm(st.ContentMask)
-		st.Width *= k
-		out.Strokes = append(out.Strokes, st)
-	}
-	return out
-}
-
-func scaleCorners(c Corners, k Pixels) Corners {
-	return Corners{TopLeft: c.TopLeft * k, TopRight: c.TopRight * k, BottomLeft: c.BottomLeft * k, BottomRight: c.BottomRight * k}
-}
-
 // fillGradient fills the rounded rect b with the linear gradient g,
 // anti-aliased like fillRounded; colors come from a per-call lookup table.
 func (r *Rasterizer) fillGradient(b Bounds, radii Corners, clip Bounds, g Gradient) {
@@ -827,6 +716,10 @@ func phi(z float32) float32 {
 	}
 	f := (z + phiRange) * (phiN / (2 * phiRange))
 	i := int(f)
+	if i >= phiN {
+		// z just below phiRange can round up to the last table entry.
+		return phiTable[phiN]
+	}
 	t := f - float32(i)
 	return phiTable[i] + (phiTable[i+1]-phiTable[i])*t
 }

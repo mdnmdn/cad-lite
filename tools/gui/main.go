@@ -1,7 +1,7 @@
 // Command gui runs Cad-lite's real interactive window under Xvfb with software
 // GL, drives it with xdotool from a scenario file, and captures screenshots.
 //
-//	go run ./tools/gui [-out DIR] [-video] [-bin PATH] scenario.gui...
+//	go run ./tools/gui [-out DIR] [-video] [-bin PATH] [-render MODE] scenario.gui...
 //
 // It needs Xvfb, xdotool, ImageMagick's import and (for -video) ffmpeg. The
 // scenario language is described in README.md. The exit status is non-zero if
@@ -20,9 +20,10 @@ func main() {
 	out := flag.String("out", "_tmp/gui/out", "output directory; one subdirectory per scenario")
 	video := flag.Bool("video", false, "also record the whole session to session.mp4")
 	bin := flag.String("bin", "", "prebuilt cmd/cad binary (default: build it into _tmp/gui/cad)")
+	flag.StringVar(&renderMode, "render", renderMode, "CADLITE_RENDER for the app: software, gpu or auto; empty leaves it unset")
 	flag.Parse()
 	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: gui [-out DIR] [-video] [-bin PATH] scenario.gui...")
+		fmt.Fprintln(os.Stderr, "usage: gui [-out DIR] [-video] [-bin PATH] [-render MODE] scenario.gui...")
 		os.Exit(2)
 	}
 	root, err := repoRoot()

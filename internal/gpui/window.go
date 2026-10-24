@@ -81,8 +81,6 @@ type Window struct {
 
 	background Rgba
 	raster     *Rasterizer
-	// deviceScene is scratch space for the scene scaled to device pixels.
-	deviceScene Scene
 
 	// currentElementID is the global id of the element currently being
 	// prepainted; the walker sets it before each Prepaint call.
@@ -476,7 +474,19 @@ func (w *Window) PaintImage(b Bounds, img *image.NRGBA) {
 	if img == nil || img.Rect.Empty() {
 		return
 	}
-	w.PaintGlyph(GlyphSprite{Bounds: b, Image: img, Color: Rgba{R: 255, G: 255, B: 255, A: 255}})
+	w.PaintImageVersion(b, img, 0)
+}
+
+// PaintImageVersion is PaintImage with GlyphSprite.ImageVersion set: a
+// non-zero version promises img's pixels are unchanged while (img, version)
+// is, so damage tracking hashes the pointer and version instead of every
+// pixel each frame. Use it for large images that do not change (a frozen
+// window snapshot); version 0 is PaintImage.
+func (w *Window) PaintImageVersion(b Bounds, img *image.NRGBA, version uint64) {
+	if img == nil || img.Rect.Empty() {
+		return
+	}
+	w.PaintGlyph(GlyphSprite{Bounds: b, Image: img, ImageVersion: version, Color: Rgba{R: 255, G: 255, B: 255, A: 255}})
 }
 
 // PushLayer records a z-order boundary in the scene being built.
@@ -859,8 +869,9 @@ func (w *Window) Draw(cx *App) {
 	}
 }
 
-// present rasterizes the rendered frame at device scale and hands it to the
-// platform window.
+// present rasterizes the rendered frame at device scale, repainting only the
+// tiles that changed, and hands it (with the damage when the platform takes
+// it) to the platform window.
 func (w *Window) present() {
 	if s := w.platformWindow.ScaleFactor(); s > 0 {
 		w.deviceScale = s
@@ -872,8 +883,11 @@ func (w *Window) present() {
 	if w.raster == nil || w.raster.w != pw || w.raster.h != ph {
 		w.raster = NewRasterizer(pw, ph)
 	}
-	w.raster.Reset(w.background)
-	w.raster.Render(scaleScene(&w.renderedFrame.scene, w.scale, &w.deviceScene))
+	damage := w.raster.renderDamage(&w.renderedFrame.scene, w.scale, w.background)
+	if dp, ok := w.platformWindow.(DamagePresenter); ok {
+		dp.PresentDamage(w.raster.Pixels(), pw, ph, damage)
+		return
+	}
 	w.platformWindow.Present(w.raster.Pixels(), pw, ph)
 }
 

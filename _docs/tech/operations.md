@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: How to build, run, test and render Cad-lite, build the browser binary, and run the documentation tooling.
 read_when: you need a build, run, test or docs command, or you are changing one
-updated: 2026-10-17
-verified: 2026-10-17
-code_anchors: [settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/bundle.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
+updated: 2026-10-24
+verified: 2026-10-24
+code_anchors: [cmd/cad/render.go, tools/gui/run.go, settings/file.go, updater/assets.go, justfile, ui/agent_demo.go, cmd/cad/main.go, tools/docs/main.go, tools/icons/icons.py, tools/gui/main.go, packaging/lib.sh, packaging/windows/bundle.sh, packaging/windows/cad-lite.iss, .github/workflows/release.yml, .github/workflows/ci.yml]
 depends_on: [tech-architecture]
 review_cycle: quarterly
 ---
@@ -73,6 +73,7 @@ Run `go mod tidy` after adding an import.
 | `-version` | Print the version (`dev` unless the build sets `-X main.version=...`) and exit |
 | `-scale` | Device scale for `-png` |
 | `-smoke MS` | Quit the window after MS milliseconds |
+| `-render MODE` | How the window is presented: `auto` (default), `gpu` or `software` (`cpu` is accepted too); beats `CADLITE_RENDER` and the `display.renderer` setting. No effect on macOS and in the browser; `-png` renders headlessly on the CPU and ignores it (a bad value is still refused). See [Rendering](rendering.md) |
 | `-save-on-exit PATH` | Write the drawing to this DXF path when the window closes or on SIGINT or SIGTERM; the real-window tests assert on that file |
 | `-agent NAME` | Select the agent harness (`opencode`, `claude` or `codex`) and open the [agent panel](../features/agent-panel.md); Start launches it |
 | `-agent-cmd PATH` | Run this executable for the selected harness instead of the one on `PATH` |
@@ -117,11 +118,24 @@ into `cad-lite/tools` under `%LocalAppData%` on Windows, `~/Library/Application 
 Every `CADLITE_*` variable is read through `appenv`, which still accepts the old `GODRAW_*` name when the new one is unset. `cmd/cad` loads the file at startup unless `-png` is given (a failure is
 logged and the defaults apply) and saves it, with the window size, when the window closes. The browser build has no file and keeps them in memory.
 
+## Render mode variables
+
+| Variable | Meaning |
+|---|---|
+| `CADLITE_RENDER=auto\|gpu\|software\|cpu` | The renderer, as `-render` (which wins); an invalid value is logged and ignored |
+| `CADLITE_RENDER_FALLBACK=1` | Set, with `CADLITE_RENDER=software`, on the process the automatic fallback starts after a failed `auto` start; that process never falls back again and removes both variables at startup |
+
+`render-probe`, a marker file beside `settings.toml` (so under `CADLITE_CONFIG_DIR` when set), exists
+while an `auto` start on Windows or Linux has not presented its first frame; a stale one sends the
+next `auto` start to software. Deleting it is always safe. A machine where even `-render gpu` fails
+starts with `-render software`.
+
 ## Environment notes
 
 - The interactive window needs a display and OpenGL. Agent shells have neither, and ebiten fails at
   startup there, so use the real-window harness `tools/gui`: it starts Xvfb, runs `cmd/cad` with
-  `LIBGL_ALWAYS_SOFTWARE=1` (Mesa llvmpipe), drives it with xdotool and screenshots it. It needs
+  `LIBGL_ALWAYS_SOFTWARE=1` and `CADLITE_RENDER=software` (the software render mode, Mesa llvmpipe;
+  `go run ./tools/gui -render auto|gpu` or `CADLITE_GUI_RENDER` for `just gui-test` changes it), drives it with xdotool and screenshots it. It needs
   `apt-get install -y xvfb xdotool x11-utils imagemagick ffmpeg` (`ffmpeg` only for `-video`). The
   harness does not exercise HiDPI scales, the clipboard, IME or window resizing; say which
   interactive behaviour was not run.

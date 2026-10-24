@@ -1116,6 +1116,11 @@ type GlyphSprite struct {
     // are scaled into Bounds (bilinear, 1:1 when the sizes match) and Color's
     // alpha multiplies them (opaque white draws the image as is).
     Image       *image.NRGBA
+    // ImageVersion 0 makes the rasterizer hash Image's pixels every frame,
+    // so an image mutated in place is repainted. Non-zero promises the
+    // pixels stay unchanged while (Image, ImageVersion) does: only the
+    // pointer and the version are hashed (bump it after a change).
+    ImageVersion uint64
 }
 
 type GlyphMask struct {
@@ -1132,6 +1137,8 @@ type GlyphMask struct {
     Scale  float32
     X0, Y0 int
 }
+// A GlyphMask must not change after it is painted: damage tracking hashes
+// GlyphSprite.Mask by pointer, so a mask mutated in place is not repainted.
 
 type Underline struct {
     Order       uint32
@@ -1189,7 +1196,35 @@ func (r *Rasterizer) Pixels() []byte            // premultiplied, tightly packed
 func (r *Rasterizer) Reset(clear Rgba)          // fill with premultiplied clear color
 func (r *Rasterizer) Render(s *Scene)           // draw all primitives in Order
 func (r *Rasterizer) Image() *image.NRGBA       // non-premultiplied copy (for png.Encode)
+// RenderDamage brings the buffer to exactly the pixels Reset(clear)+Render(s)
+// would produce, repainting only the 64x64 tiles whose content changed since
+// the previous RenderDamage, and returns the changed device-pixel rects
+// (empty when nothing changed; the slice is reused by the next call).
+func (r *Rasterizer) RenderDamage(s *Scene, clear Rgba) []image.Rectangle
+// Invalidate makes the next RenderDamage repaint (and report) the whole buffer.
+func (r *Rasterizer) Invalidate()
 ```
+
+Damage tracking: the buffer is split into 64x64 device-pixel tiles. Each
+`RenderDamage` bins every primitive by its device-space pixel window (its
+bounds, grown by the anti-aliasing margin, blur extent or stroke reach, ∩ its
+`ContentMask.Bounds` ∩ the buffer) and folds a hash of the primitive into the
+running hash of each tile it touches, in paint order (`hash/maphash`, one
+seed per rasterizer). A tile whose hash differs from the previous call is
+reset to `clear` and redrawn from its bin with every pixel loop limited to
+the tile; per-pixel results do not depend on the loop window, so the output is
+byte-identical to a full render. Hashing covers every field the raster reads:
+stroke points by content, `GlyphSprite.Mask` by pointer (masks are immutable
+once painted), `GlyphSprite.Image` by content when `ImageVersion` is 0 and by
+pointer and version otherwise. The rasterizer keeps the previous frame's mask
+and image pointers alive, so a pointer cannot be reused by a different mask
+between two compared frames. The whole buffer is repainted on the first
+call, after `Invalidate`, `Reset` or `Render`, and when `clear` changes; when
+at least three quarters of the tiles changed it repaints in one pass and
+reports the whole buffer. `Window` renders through `renderDamage`, which
+takes the logical scene and the scale and scales each primitive while binning
+and drawing (no per-frame scaled copy of the scene); a scale change repaints
+everything.
 
 `Render` draws every primitive in scene order: quads, shadows, strokes,
 underlines and sprites are merged by `Order` (each kind stably sorted; on equal
@@ -1812,6 +1847,10 @@ func (w *Window) PaintGlyph(g GlyphSprite)
 // PaintImage draws img scaled into b (window space, logical pixels), clipped
 // to the current content mask, with the current opacity. nil draws nothing.
 func (w *Window) PaintImage(b Bounds, img *image.NRGBA)
+// PaintImageVersion is PaintImage with GlyphSprite.ImageVersion set: a
+// non-zero version promises img's pixels are unchanged while (img, version)
+// is, so damage tracking skips hashing them (use it for large frozen images).
+func (w *Window) PaintImageVersion(b Bounds, img *image.NRGBA, version uint64)
 func (w *Window) PaintShadow(s Shadow)
 func (w *Window) PaintStroke(s Stroke)    // unset ContentMask = current clip; opacity applied
 // FocusNext / FocusPrev move focus along the rendered frame's tab stops,
@@ -1942,8 +1981,12 @@ func (f *Frame) HitTest(p Point) int
 7. Swap `nextFrame` into `renderedFrame`.
 8. If there is a `PlatformWindow`: re-read its `ScaleFactor()` (the device scale;
    the effective scale is that times `UIScale()`), scale the scene
-   from logical to device px, rasterize (cleared to the background color) and
-   call `Present(pix, round(w*scale), round(h*scale))`; then call
+   from logical to device px, rasterize (cleared to the background color) with
+   tile damage tracking (`Rasterizer.RenderDamage` semantics; only changed
+   tiles are repainted) and call `PresentDamage(pix, pw, ph, damage)` when the
+   platform window implements `DamagePresenter`, else
+   `Present(pix, pw, ph)`, with `pw, ph = round(w*scale), round(h*scale)`;
+   then call
    `SetInputHandler(focusedInputHandler())` (nil when none is focused).
 
 `Prepaint` is where `Interactivity` decides hover/active/focus style refinements
@@ -2065,6 +2108,16 @@ type FrameRequester interface {
 
 // Optional: replace the timed wakeup; zero clears. RequestFrame remains separate.
 type FrameDeadlineRequester interface { RequestFrameAt(deadline time.Time) }
+
+// Optional: receive frames with their damage. Window.Draw calls PresentDamage
+// instead of Present when the platform window implements it. pix is the
+// whole frame (same rules as Present); damage lists the device-pixel rects
+// that changed since the previous presented frame (may be empty, may overlap;
+// the slice is only valid during the call). A platform that lost its copy (a
+// size change, a lost device) uploads the whole of pix instead.
+type DamagePresenter interface {
+    PresentDamage(pix []byte, w, h int, damage []image.Rectangle)
+}
 ```
 
 The `App` wires `platform.OpenWindow` → creates a `Window` → calls
@@ -2117,7 +2170,9 @@ Semantics: `w`,`h` are logical px; the output image is `round(w*scale) x
 round(h*scale)` device px. Default background is opaque white. HeadlessWindow
 draws lazily: `Pixels()` /
 `Image()` / `Dispatch` draw if the window is invalid; `Window.Draw` rasterizes
-and `Present`s to the HeadlessWindow, which keeps the pixels. `HeadlessWindow` implements
+and presents to the HeadlessWindow, which keeps the pixels. It implements
+`DamagePresenter` and copies only the damaged rects into its own buffer (the
+whole frame when its size changed), so tests see what a real platform shows. `HeadlessWindow` implements
 no `FrameRequester`; `RequestFrame` only sets a pending flag, so redraws never
 re-enter an in-flight event dispatch. Text shaping is not
 headless-specific: every window created through `App.OpenWindow` gets the
@@ -2285,7 +2340,45 @@ func DefaultSnapshotKey() string
 // the default icon. macOS ignores it: the Dock icon is the .app bundle's
 // AppIcon.icns.
 func WithWindowIcon(imgs []image.Image) Option
+
+// Graphics selects the device ebiten presents frames with; frames are
+// rasterized on the CPU in every mode.
+type Graphics int
+
+const (
+    GraphicsAuto     Graphics = iota // ebiten's native choice (default)
+    GraphicsHardware                 // the same, chosen explicitly
+    GraphicsSoftware                 // D3D11 WARP on Windows, Mesa llvmpipe on Linux/BSD
+)
+
+func (g Graphics) String() string // "auto", "gpu", "software"
+
+// WithGraphics selects the graphics device; the default is GraphicsAuto.
+func WithGraphics(g Graphics) Option
+
+// WithOnFirstFrame registers f to run once, on the game loop, right after the
+// first frame was handed to the graphics device.
+func WithOnFirstFrame(f func()) Option
+
+// ErrStartup wraps every error Run returns before the first frame.
+var ErrStartup error
 ```
+
+Graphics and startup:
+
+- `Run` calls `ebiten.RunGameWithOptions` with the `GraphicsLibrary` of the
+  mode. `GraphicsSoftware` on Windows is `GraphicsLibraryDirectX` with
+  `EBITENGINE_DIRECTX=warp` (a value already there keeps its tokens); on
+  Linux and the BSDs `GraphicsLibraryOpenGL` with `LIBGL_ALWAYS_SOFTWARE=1`
+  and `GALLIUM_DRIVER=llvmpipe`. The variables are set before ebiten starts
+  and restored after the first frame, so a process the app starts later does
+  not inherit them. On macOS and js the mode is logged and ignored.
+- `ebiten.SetTPS(ebiten.SyncWithFPS)`: one `Update` per presented frame, so a
+  slow frame never triggers catch-up `Update`s that rasterize more frames.
+  ebiten paces the loop when vsync is ignored or nothing is presented, so
+  `RequestFrameAt` deadlines are still polled at least about 60 times a second.
+- An error `RunGameWithOptions` returns before the first frame is wrapped in
+  `ErrStartup` (`errors.Is(err, ErrStartup)`); after it, errors pass through.
 
 Snapshot: when the bound keystroke is pressed, the last presented frame
 (device resolution) is copied on the game loop and encoded off it, to
@@ -2297,20 +2390,29 @@ shortcut predicate (see input mapping below).
 
 Implements `gpui.Platform`:
 
-- `Run(onLaunch)` → `ebiten.RunGame(g)` where `g` implements
+- `Run(onLaunch)` → `ebiten.RunGameWithOptions(g, opts)` where `g` implements
   `Update() error`, `Draw(screen *ebiten.Image)`, `Layout(ow, oh int) (int, int)`.
 - `Layout` returns **device pixels** (`outside * Monitor().DeviceScaleFactor()`)
   so the rasterizer and `CursorPosition` share one coordinate space.
 - `Update` polls input (see below) and forwards to the window's
   `DispatchEvent`, wrapped in `app.Update`.
-- `Draw` calls `screen.WritePixels(pix)` with premultiplied RGBA; skips the
-  upload when not dirty. `ebiten.SetScreenClearedEveryFrame(false)` at startup.
-- `Present(pix, w, h)` keeps a reference to the buffer (no copy) for the
-  next `Draw`; this is safe because `Window.Draw` only runs inside `Update`,
-  on the same goroutine as `Draw`.
+- Partial upload: the window implements `gpui.DamagePresenter`.
+  `PresentDamage` keeps a reference to the buffer (no copy) and accumulates
+  the damage until the next `Draw` (several `Update`s may run per `Draw`).
+  `Draw` marks the 64x64 tiles the rects touch, merges each tile row's runs
+  into strips (and vertically equal runs into one rect), packs each strip
+  into a scratch buffer (full-width strips need no copy) and uploads it with
+  `screen.SubImage(r).(*ebiten.Image).WritePixels`.
+  `ebiten.SetScreenClearedEveryFrame(false)` at startup keeps the screen
+  between frames. No damage: `Draw` returns without drawing. The whole frame
+  is uploaded with `screen.WritePixels(pix)` after a size or scale change, for
+  a plain `Present`, and at least every 5 s even when idle (a safety net
+  against a lost device). Referencing the buffer is safe because `Window.Draw` only runs
+  inside `Update`, on the same goroutine as `Draw`.
 - Idle cost: `Update` polls input every tick but only draws when
   `RequestFrame` was called (or the size/scale changed); `Draw` uploads only
-  a fresh frame, so with nothing changing ebiten skips presenting.
+  damaged strips of a fresh frame, so with nothing changing ebiten skips
+  presenting (apart from the 5 s safety upload).
 - `RequestFrame` sets a dirty flag that `Update`/`Draw` observe; the Window
   calls it from `flushEffects`.
 - Clean quit: return `ebiten.Termination` from `Update` when `app.IsQuitting()`.

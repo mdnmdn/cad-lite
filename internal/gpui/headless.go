@@ -218,6 +218,23 @@ func (hw *HeadlessWindow) Present(pix []byte, w, h int) {
 	hw.pw, hw.ph = w, h
 }
 
+// PresentDamage copies only the damaged rects of pix into the window's copy,
+// as a platform uploading partial frames does; after a size change (or before
+// the first frame) it copies the whole frame.
+func (hw *HeadlessWindow) PresentDamage(pix []byte, w, h int, damage []image.Rectangle) {
+	if hw.pix == nil || hw.pw != w || hw.ph != h || len(hw.pix) != len(pix) {
+		hw.Present(pix, w, h)
+		return
+	}
+	for _, r := range damage {
+		r = r.Intersect(image.Rect(0, 0, w, h))
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			i, j := 4*(y*w+r.Min.X), 4*(y*w+r.Max.X)
+			copy(hw.pix[i:j], pix[i:j])
+		}
+	}
+}
+
 // SetInputHandler installs the focused text field's editing surface.
 func (hw *HeadlessWindow) SetInputHandler(h PlatformInputHandler) { hw.handler = h }
 

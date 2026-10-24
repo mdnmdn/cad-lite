@@ -61,6 +61,10 @@ func RunFile(path, exe, out string, video bool) error {
 	return Run(sc, exe, out, video)
 }
 
+// renderMode is the CADLITE_RENDER value the app runs with ("" leaves the
+// app's own choice); the -render flag and CADLITE_GUI_RENDER set it.
+var renderMode = "software"
+
 type runner struct {
 	sc      *Scenario
 	out     string
@@ -96,6 +100,9 @@ func Run(sc *Scenario, exe, out string, video bool) (err error) {
 	defer func() { xvfb.Process.Kill(); xvfb.Wait() }()
 	r.display = display
 	r.env = append(os.Environ(), "DISPLAY="+display, "LIBGL_ALWAYS_SOFTWARE=1")
+	if renderMode != "" {
+		r.env = append(r.env, "CADLITE_RENDER="+renderMode)
+	}
 
 	var rec *exec.Cmd
 	if video {

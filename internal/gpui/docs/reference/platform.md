@@ -28,7 +28,16 @@ type PlatformWindow interface {                          // all methods on the m
 }
 
 type FrameRequester interface{ OnRequestFrame(f func()) }  // optional: the Window registers its draw routine here
+type FrameDeadlineRequester interface{ RequestFrameAt(deadline time.Time) }  // optional: timed wakeup; zero clears
+type DamagePresenter interface {                           // optional: called instead of Present
+    PresentDamage(pix []byte, w, h int, damage []image.Rectangle)
+}
 ```
+
+A window implementing `DamagePresenter` receives the whole frame plus the
+device-pixel rects that changed since the previous frame (possibly none), so
+it can upload only those; after a size change it should upload everything.
+`HeadlessWindow` and the ebiten window implement it.
 
 `WindowOptions` / `DefaultWindowOptions` are in
 [app-window.md](app-window.md#windowoptions). The pixel buffer given to
@@ -93,6 +102,7 @@ func (p *HeadlessPlatform) Windows() []*HeadlessWindow             // creation o
 | `ScaleFactor() float32` | Device scale. |
 | `RequestFrame()` | Mark a redraw wanted. |
 | `Present(pix []byte, w, h int)` | Store a copy of the frame. |
+| `PresentDamage(pix []byte, w, h int, damage []image.Rectangle)` | Copy only the damaged rects into the stored frame (all of it after a size change), as a real platform uploads; the window draws through it. |
 | `SetInputHandler(h)` / `TakeInputHandler()` | Install/take the focused text field's surface. |
 | `Quit()` | No-op. |
 
@@ -144,7 +154,7 @@ shadow, quad, stroke, underline, sprite.
 |---|---|
 | `Quad` | `Order uint32`, `Bounds`, `ContentMask`, `Background BackgroundKind`, `Fill Rgba`, `BorderColor Rgba`, `BorderWidths Edges`, `CornerRadii Corners`, `Gradient Gradient` |
 | `Shadow` | `Order`, `Bounds` (shape before blur), `CornerRadii`, `ContentMask`, `Color`, `BlurRadius`, `Inset bool`, `Clip Bounds`, `ClipRadii Corners` (the element shape an inset shadow is drawn in) |
-| `GlyphSprite` | `Order`, `Bounds`, `ContentMask`, `Mask *GlyphMask`, `Color Rgba`, `Image *image.NRGBA` (a colour picture drawn instead of the mask, scaled bilinearly into `Bounds`; `Color.A` multiplies it) |
+| `GlyphSprite` | `Order`, `Bounds`, `ContentMask`, `Mask *GlyphMask` (must not change once painted), `Color Rgba`, `Image *image.NRGBA` (a colour picture drawn instead of the mask, scaled bilinearly into `Bounds`; `Color.A` multiplies it), `ImageVersion uint64` (0: the pixels are hashed every frame, so in-place edits repaint; non-zero: the pixels are promised unchanged while the image and version are) |
 | `Underline` | `Order`, `Bounds`, `ContentMask`, `Color`, `Thickness Pixels` (a rule drawn at the bottom of `Bounds`) |
 | `Stroke` | `Order`, `ContentMask`, `Points []Point`, `Closed bool`, `Width Pixels`, `Color`: an anti-aliased polyline with round joins and caps; `Width` 0 is a one-device-pixel hairline. Do not mutate `Points` before the frame is presented. |
 | `ContentMask` | `Bounds Bounds`, `CornerRadii Corners`. The zero value clips everything away; use `InfiniteContentMask()` for "unclipped". |
@@ -159,7 +169,15 @@ func (r *Rasterizer) Render(s *Scene)          // draw every primitive in scene 
 func (r *Rasterizer) Pixels() []byte           // premultiplied RGBA, 4*w*h
 func (r *Rasterizer) Image() *image.NRGBA      // un-premultiplied copy
 func (r *Rasterizer) Size() (int, int)
+func (r *Rasterizer) RenderDamage(s *Scene, clear Rgba) []image.Rectangle  // = Reset+Render, repainting only changed 64x64 tiles; returns them
+func (r *Rasterizer) Invalidate()              // next RenderDamage repaints everything
 ```
+
+`RenderDamage` hashes each primitive into the tiles it touches and repaints
+only the tiles whose hash changed since the previous call; the pixels are
+byte-identical to `Reset` plus `Render`. The window renders this way, so a
+frame that changes a few primitives costs a few tiles. Details and the
+full-repaint triggers are in the API contract (§6).
 
 `GlyphMask` is described in [text-and-fonts.md](text-and-fonts.md#glyph-masks).
 
@@ -174,12 +192,24 @@ type Option func(*Platform)
 func WithSnapshotKey(keystroke string) Option   // keymap syntax; "" disables; panics on a malformed keystroke
 func DefaultSnapshotKey() string                // "cmd-shift-s" on darwin, "ctrl-shift-s" elsewhere
 func WithWindowIcon(imgs []image.Image) Option  // ebiten.SetWindowIcon; several sizes (16-256), the OS picks; empty = default; title bar/taskbar on Windows/Linux, ignored on macOS (the bundle's AppIcon.icns)
+func WithGraphics(g Graphics) Option            // presenting device; default GraphicsAuto
+func WithOnFirstFrame(f func()) Option          // f runs once on the game loop after the first presented frame
+type Graphics int                               // GraphicsAuto, GraphicsHardware, GraphicsSoftware; String() "auto"/"gpu"/"software"
+var ErrStartup error                            // wraps every Run error before the first frame
 
 type Platform struct{ /* opaque */ }            // Name() ("macos"/"windows"/"linux"), OpenWindow, Run, Quit
 ```
 
 `Run` creates the `App`, calls your launch callback, then blocks in
-`ebiten.RunGame`; `ebiten.Termination` becomes a clean `nil` return. The
+`ebiten.RunGameWithOptions`; `ebiten.Termination` becomes a clean `nil` return,
+and an error before the first frame wraps `ErrStartup`. Frames are rasterized
+on the CPU in every mode; `Graphics` only picks the device that shows them.
+`GraphicsSoftware` is Direct3D 11 WARP on Windows and Mesa llvmpipe on Linux
+and the BSDs (set through environment variables that are restored after the
+first frame); macOS and js ignore it. The loop runs one `Update` per presented
+frame (`ebiten.SetTPS(ebiten.SyncWithFPS)`). `Draw` uploads only the
+tile strips damaged since the last `Draw` (sub-image `WritePixels`), the whole
+frame after a size or scale change and at least every 5 seconds. The
 snapshot shortcut saves the last presented frame as
 `snapshot-YYYYMMDD-HHMMSS.png` in the working directory and is swallowed (not
 dispatched to the app).

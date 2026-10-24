@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -146,9 +147,10 @@ func (ws *Workspace) UpdateAvailable() (updater.Release, bool) {
 	return updater.Release{}, false
 }
 
-// RelaunchIfPending starts the newly installed version when an update asked
-// for a restart. The host calls it as the very last step of quitting, after
-// settings are saved and the agent is closed.
+// RelaunchIfPending starts the application again when a restart was asked for:
+// the newly installed version after an update, or the same executable with the
+// same arguments after RequestRestart. The host calls it as the very last step
+// of quitting, after settings are saved and the agent is closed.
 func (ws *Workspace) RelaunchIfPending() error {
 	u := ws.upd()
 	if !u.restart {
@@ -321,9 +323,43 @@ func (ws *Workspace) finishInstall(w *gpui.Window, _ *gpui.App) {
 func (ws *Workspace) restartNow(w *gpui.Window, cx *gpui.App) {
 	u := ws.upd()
 	u.confirm = false
-	u.restart = true
+	ws.relaunchAfterQuit(u.plan, cx.Quit)
+}
+
+// relaunchAfterQuit records plan for RelaunchIfPending, saves the settings and quits.
+func (ws *Workspace) relaunchAfterQuit(plan updater.Plan, quit func()) {
+	u := ws.upd()
+	u.restart, u.plan = true, plan
 	ws.SaveSettings()
-	cx.Quit()
+	quit()
+}
+
+// RequestRestart quits the application and has the host start it again once
+// it is closed, with the same executable and arguments (a setting that takes
+// effect at the next start, such as the renderer). Drawings with unsaved
+// changes are listed in the unsaved-changes dialog first, and Cancel there
+// keeps the application running. It returns an error, and does nothing, when
+// the executable cannot be found.
+func (ws *Workspace) RequestRestart(cx *gpui.App) error {
+	plan, err := restartPlan()
+	if err != nil {
+		return err
+	}
+	quit := ws.quit.f
+	if quit == nil {
+		quit = cx.Quit
+	}
+	ws.askQuit(func() { ws.relaunchAfterQuit(plan, quit) })
+	return nil
+}
+
+// restartPlan is the plan that starts this executable again with its arguments.
+func restartPlan() (updater.Plan, error) {
+	exe, err := updater.Executable()
+	if err != nil {
+		return updater.Plan{}, err
+	}
+	return updater.Plan{GOOS: runtime.GOOS, Exe: exe, Args: append([]string(nil), os.Args[1:]...)}, nil
 }
 
 // openReleasePage opens the release on GitHub in the browser.

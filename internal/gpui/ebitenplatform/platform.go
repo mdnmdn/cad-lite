@@ -3,6 +3,8 @@ package ebitenplatform
 
 import (
 	"errors"
+	"fmt"
+	"image"
 	"log"
 	"os"
 	"runtime"
@@ -21,6 +23,9 @@ type Platform struct {
 	quit atomic.Bool
 	// snapshotKey is the frame-snapshot binding; nil disables it.
 	snapshotKey *gpui.Keystroke
+	// graphics and onFirstFrame are set by WithGraphics and WithOnFirstFrame.
+	graphics     Graphics
+	onFirstFrame func()
 }
 
 // New returns an ebiten-backed gpui.Platform configured by opts. The
@@ -75,11 +80,18 @@ func (p *Platform) OpenWindow(o gpui.WindowOptions) (gpui.PlatformWindow, error)
 	return p.win, nil
 }
 
-// Run creates the App, calls onLaunch, then blocks in ebiten.RunGame until
-// the app quits. On macOS it first installs the open-documents handler, whose
-// requests reach App.OpenPaths.
+// Run creates the App, calls onLaunch, then blocks in ebiten.RunGameWithOptions
+// until the app quits. On macOS it first installs the open-documents handler,
+// whose requests reach App.OpenPaths. An error before the first frame wraps
+// ErrStartup.
 func (p *Platform) Run(onLaunch func(*gpui.App)) error {
+	lib, env := graphicsConfig(p.graphics, runtime.GOOS)
+	if p.graphics == GraphicsSoftware && env == nil {
+		log.Printf("gpui: software rendering is not available on %s; using the default graphics", runtime.GOOS)
+	}
+	restoreEnv := setEnv(env)
 	ebiten.SetScreenClearedEveryFrame(false)
+	ebiten.SetTPS(ebiten.SyncWithFPS)
 	// The app decides whether the close button quits (Window.RequestClose).
 	ebiten.SetWindowClosingHandled(true)
 	app := gpui.NewAppWithPlatform(p)
@@ -90,11 +102,44 @@ func (p *Platform) Run(onLaunch func(*gpui.App)) error {
 	if err := installOpenFilesHandler(g.opens); err != nil && !errors.Is(err, errOpenFilesUnsupported) {
 		log.Printf("gpui: opening files from the OS unavailable: %v", err)
 	}
-	err := ebiten.RunGame(g)
+	ff := &firstFrameGame{game: g, done: func() {
+		restoreEnv()
+		if p.onFirstFrame != nil {
+			p.onFirstFrame()
+		}
+	}}
+	err := ebiten.RunGameWithOptions(ff, &ebiten.RunGameOptions{GraphicsLibrary: lib})
+	if !ff.fired {
+		restoreEnv()
+	}
 	if errors.Is(err, ebiten.Termination) {
 		return nil
 	}
+	if err != nil && !ff.fired {
+		return fmt.Errorf("%w: %w", ErrStartup, err)
+	}
 	return err
+}
+
+// firstFrameGame runs done on the first Update after a Draw, that is once the
+// graphics device has presented a frame.
+type firstFrameGame struct {
+	*game
+	drawn, fired bool
+	done         func()
+}
+
+func (f *firstFrameGame) Update() error {
+	if f.drawn && !f.fired {
+		f.fired = true
+		f.done()
+	}
+	return f.game.Update()
+}
+
+func (f *firstFrameGame) Draw(screen *ebiten.Image) {
+	f.game.Draw(screen)
+	f.drawn = true
 }
 
 // window is the single PlatformWindow.
@@ -113,6 +158,16 @@ type window struct {
 	fresh   bool
 	screenW int
 	screenH int
+
+	// damage accumulates the rects presented since the last Draw; fullUpload
+	// asks Draw to upload the whole frame, lastFull is when it last did.
+	damage     []image.Rectangle
+	fullUpload bool
+	lastFull   time.Time
+	// strips, tileBits and scratch are Draw's reusable merge and pack space.
+	strips   []image.Rectangle
+	tileBits []bool
+	scratch  []byte
 }
 
 // Bounds returns the window size in logical pixels.
@@ -138,6 +193,7 @@ func (w *window) Present(pix []byte, pw, ph int) {
 	w.pix = pix
 	w.pixW, w.pixH = pw, ph
 	w.fresh = true
+	w.fullUpload = true
 }
 
 // SetInputHandler installs the focused text field's editing surface.
@@ -195,6 +251,7 @@ func (g *game) Layout(ow, oh int) (int, int) {
 		w.screenW, w.screenH, w.scale = dw, dh, scale
 		w.w, w.h = gpui.Pixels(float32(dw)/scale), gpui.Pixels(float32(dh)/scale)
 		w.pending = true
+		w.fullUpload = true
 	}
 	return dw, dh
 }
@@ -237,16 +294,20 @@ func (g *game) Update() error {
 
 func (g *game) Draw(screen *ebiten.Image) {
 	w := g.p.win
-	if w == nil || !w.fresh {
+	if w == nil || w.pix == nil {
+		return
+	}
+	now := time.Now()
+	if !w.fresh && now.Sub(w.lastFull) < fullUploadEvery {
 		return
 	}
 	b := screen.Bounds()
 	if w.pixW != b.Dx() || w.pixH != b.Dy() || len(w.pix) != 4*w.pixW*w.pixH {
 		w.pending = true
+		w.fullUpload = true
 		return
 	}
-	screen.WritePixels(w.pix)
-	w.fresh = false
+	w.upload(screen, now)
 }
 
 func (g *game) modifiers() gpui.Modifiers {

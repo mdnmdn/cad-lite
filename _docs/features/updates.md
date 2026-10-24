@@ -109,6 +109,9 @@ tooltip `updateButtonTip`; `ui/titlebar.go` places it) and the restart dialog; t
 the dot on the *Updates* tab are in `ui/settings_view.go`.
 `cmd/cad/main.go` calls `SetVersion`, `EnableUpdates` (not with `-png`) and defers `RelaunchIfPending`
 before the agent's `CloseAgent` defer, so it runs after both the settings save and the agent close.
+`RelaunchIfPending` also starts the application again after `Workspace.RequestRestart` (the renderer
+setting's restart button, see [Settings](settings.md)); both paths record the plan in
+`relaunchAfterQuit`.
 
 ## Failure
 

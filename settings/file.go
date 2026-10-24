@@ -105,6 +105,7 @@ var tables = map[string]map[string]bool{
 	"agent":      {"default": true, "binaries": true, "mode": true, "opencode_key": true, "ollama_key": true},
 	"update":     {"auto_check": true, "last_check": true},
 	"window":     {"width": true, "height": true},
+	"display":    {"renderer": true},
 	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
 		"side_collapsed": true, "layers_collapsed": true, "properties_collapsed": true, "history_collapsed": true, "ribbon_collapsed": true},
 	"recent": {"files": true, "folders": true},
@@ -316,6 +317,12 @@ func Parse(data []byte) (Settings, []string, error) {
 				} else {
 					s.Recent.Folders = paths
 				}
+			case "display.renderer":
+				if x, ok := v.(string); ok {
+					s.Renderer = x
+				} else {
+					bad(full, "a string", v)
+				}
 			case "window.width", "window.height":
 				x, ok := v.(int64)
 				if !ok {
@@ -415,6 +422,8 @@ func Marshal(s Settings) []byte {
 		update = append(update, "last_check = "+s.LastUpdateCheck.UTC().Format(time.RFC3339))
 	}
 	section("update", "auto_check: look for a new release now and then. last_check: when the last check finished (set by the app).", update...)
+	section("display", "renderer: auto (graphics card, software if it fails to start), gpu or software (CPU only, for old graphics drivers). Takes effect at the next start.",
+		"renderer = "+quote(s.Renderer))
 	section("window", "last window size in logical pixels; 0 means unset.",
 		"width = "+strconv.Itoa(s.Window.Width),
 		"height = "+strconv.Itoa(s.Window.Height))

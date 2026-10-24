@@ -131,10 +131,16 @@ type GlyphSprite struct {
 	// are scaled into Bounds (bilinear, 1:1 when the sizes match) and Color's
 	// alpha multiplies them, so opaque white draws the image as is.
 	Image *image.NRGBA
+	// ImageVersion 0 makes damage tracking hash Image's pixels every frame,
+	// so an image mutated in place is repainted. A non-zero version promises
+	// the pixels stay unchanged while (Image, ImageVersion) does: only the
+	// pointer and the version are hashed, so bump it after changing them.
+	ImageVersion uint64
 }
 
 // GlyphMask is a grayscale alpha mask: 1 byte of coverage per pixel,
-// row-major, stride W.
+// row-major, stride W. A mask must not change after it is painted: damage
+// tracking hashes GlyphSprite.Mask by pointer.
 type GlyphMask struct {
 	// Pix is the coverage data, row-major with stride W.
 	Pix []uint8
@@ -197,9 +203,6 @@ type Scene struct {
 	// Strokes are the accumulated polyline stroke commands.
 	Strokes []Stroke
 
-	// points backs the scaled copies of stroke points made by scaleScene.
-	points []Point
-
 	nextOrder uint32
 }
 
@@ -214,7 +217,6 @@ func (s *Scene) Clear() {
 	s.Sprites = s.Sprites[:0]
 	s.Underlines = s.Underlines[:0]
 	s.Strokes = s.Strokes[:0]
-	s.points = s.points[:0]
 	s.nextOrder = 0
 }
 

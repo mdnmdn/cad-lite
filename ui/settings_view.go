@@ -78,6 +78,9 @@ func (ws *Workspace) settingsOverlay(cx *gpui.App) gpui.IntoElement {
 		body.Child(ws.updateSection())
 	default:
 		body.Child(ws.appearanceSection(), ws.drawingSection())
+		if d := ws.displaySection(); d != nil {
+			body.Child(d)
+		}
 	}
 
 	card := gpui.NewDiv().ID("settings-card").TrackFocus(p.focus).FlexCol().
@@ -417,6 +420,8 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 			ws.change(w, func(s *settings.Settings) {
 				d := settings.Default()
 				d.Extra, d.Window, d.Layout, d.LastUpdateCheck = s.Extra, s.Window, s.Layout, s.LastUpdateCheck
+				// The renderer suits this machine's graphics driver, not a taste.
+				d.Renderer = s.Renderer
 				d.Recent = s.Recent
 				*s = d
 			})

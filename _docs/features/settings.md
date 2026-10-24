@@ -3,11 +3,11 @@ id: feat-settings
 title: Settings
 kind: feature
 status: current
-summary: The settings panel and its General, AI (Basic and Advanced) and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, provider keys, default agent, updates) and the TOML file in the user config folder that keeps them.
+summary: The settings panel and its General, AI (Basic and Advanced) and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, renderer, provider keys, default agent, updates) and the TOML file in the user config folder that keeps them.
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
 updated: 2026-10-24
-verified: 2026-10-17
-code_anchors: [ui/agent_basic_check.go, ui/agent_basic.go, settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
+verified: 2026-10-24
+code_anchors: [ui/rendermode.go, ui/update.go, ui/agent_basic_check.go, ui/agent_basic.go, settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
 review_cycle: monthly
 ---
@@ -29,7 +29,7 @@ behaviour and the default agent and where agents are found. Changes apply at onc
   belongs to it and nothing under the backdrop receives pointer input. A waiting release has its own
   title bar button ([Updates](updates.md)); the gear carries no badge.
 - **Tabs.** Under the title bar a strip styled like the document tabs offers **General** (appearance,
-  language, drawing aids, mouse wheel), **AI** (Basic OpenCode setup and provider keys; Advanced agent, executable and discovery controls) and **Updates** (About and updates). A click on a tab, or **Ctrl+Tab** and
+  language, drawing aids, mouse wheel, renderer), **AI** (Basic OpenCode setup and provider keys; Advanced agent, executable and discovery controls) and **Updates** (About and updates). A click on a tab, or **Ctrl+Tab** and
   **Ctrl+Shift+Tab** while the panel is open (they switch tabs, not drawings, and wrap around),
   shows it with its body scrolled to the top; each tab's tooltip says what it holds and names the keys.
   The Updates tab carries the update dot while a release waits. The panel opens on General and then on
@@ -54,6 +54,17 @@ behaviour and the default agent and where agents are found. Changes apply at onc
   document tab and each new one too (toggling with F7, F3 or F8 afterwards does not change the stored default). The mouse
   wheel is `auto` or `zoom` (the wheel zooms, Shift pans) or `pan` (the wheel pans, Ctrl or Cmd zooms);
   `Workspace.WheelMode` reports it to the canvas.
+- **Display** (the General tab, Windows and Linux only; hidden on macOS and in the browser, which
+  have no software renderer). **Renderer**: `Automatic` (the graphics card, software rendering when
+  it fails to start), `GPU` or `Software (CPU only)`, with a hint per choice, the line *Takes effect
+  after restart* and the renderer this session uses. When the choice differs from the renderer in use,
+  the **Restart** button quits through the unsaved-changes dialog (Cancel keeps the application running)
+  and starts the same executable with the same arguments (`Workspace.RequestRestart`). When
+  `-render` or `CADLITE_RENDER` chose this session's renderer, a line says so and no restart is
+  offered. After an automatic fallback the window shows a one-time card, *Started with software
+  rendering because the graphics driver failed*, with **OK** and **Always use software rendering**
+  (which sets the renderer to Software). The modes and the fallback are in
+  [Rendering](../tech/rendering.md).
 - **Panel layout.** The title bar (Settings, Close), the tab strip and the footer (where the file is, Reset to
   defaults) stay in place; only the body between them scrolls, with a thin scrollbar. The card is 600
   pixels tall, or taller when a tab needs it, and its top is where a 600-pixel card is centred, so the
@@ -117,7 +128,7 @@ behaviour and the default agent and where agents are found. Changes apply at onc
   reopening captures a fresh one.
 - **Saving.** Every change is written about half a second after the last one, and on close, with the
   window's size. The panel footer shows where the file is, or that settings are kept in memory.
-  `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout, the recent lists and the last update check.
+  `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout, the recent lists, the last update check and the renderer (which suits the machine's graphics driver).
 - **Loading.** The file is read at startup. A missing file gives the defaults. A value of the wrong
   type or out of range is replaced (the UI scale is clamped to 0.75 to 2.0 and snapped to 0.05, window
   sides to 320 to 16384, panel sizes to 0 to 4096) and one warning per value shows in the panel footer. An unknown theme name falls back to `dark`.
@@ -147,6 +158,7 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 | `agent.favorites_<harness>` (`favorites_opencode`, `favorites_claude`, `favorites_codex`) | favorite model ID array per harness, insertion order; blank and duplicate IDs are dropped | absent |
 | `update.auto_check` | boolean | true |
 | `update.last_check` | timestamp, written by the app | unset |
+| `display.renderer` | `auto`, `gpu`, `software` (read at startup; `-render` and `CADLITE_RENDER` win) | `auto` |
 | `window.width`, `window.height` | logical pixels, 0 for unset | 1280, 800 |
 | `layout.side_width`, `layout.agent_width`, `layout.layers_height`, `layout.history_height` | logical pixels, 0 for automatic, at most 4096 | 0 |
 | `recent.files`, `recent.folders` | arrays of absolute paths, newest first, at most 10 each, written by the app | empty |
@@ -156,9 +168,9 @@ The `layout` table is the arrangement of the workspace panels, written by the ap
 splitter or folds a panel (see [Drawing canvas](canvas.md)); a size of 0 is automatic, and a saved size is
 kept even when a smaller window cannot show it. The file starts with a comment header and a comment per table; comments a user adds are not kept.
 API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Parse`, `Marshal`, `Save`,
-`ClampUIScale`, `Recent` with `AddFile`, `AddFolder`, `RemoveFile`, `RemoveFolder`, `Clear`, `CleanPath`);
+`ClampUIScale`, `Renderers` and the `Renderer*` constants, `Recent` with `AddFile`, `AddFolder`, `RemoveFile`, `RemoveFolder`, `Clear`, `CleanPath`);
 `Workspace.RecentFiles`, `RecentFolders`, `ClearRecent`, `OpenMenuShown`, `StartPanelShown`; `Workspace.EnableAgentDiscovery`, `AgentDiscovery`, `SetAgentDiscoveryProbe`, `SetTerminalOpener` (`ui.TerminalOpener`), `ui.OpenTerminal`, `ui.OpenTerminalCommand`; `settings.Layout`; `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
-`SaveSettings`, `SetLanguageHandler`, `Language`, `OpenSettings` (on the last tab shown), `CloseSettings`, `ToggleSettings`, `WheelMode`; theme registry
+`SaveSettings`, `SetLanguageHandler`, `Language`, `SetRenderInfo` (`ui.RenderInfo`), `RenderInfo`, `RenderNoticeShown`, `RequestRestart`, `RelaunchIfPending`, `OpenSettings` (on the last tab shown), `CloseSettings`, `ToggleSettings`, `WheelMode`; theme registry
 `ui.Themes`, `ThemeByName`, `ApplyTheme`; element `ui.NewSlider` with `SliderState`; action
 `cad-settings`.
 
@@ -197,6 +209,11 @@ Windows console without inherited standard handles so the shell uses its own con
 NUL streams; PowerShell receives an encoded script to preserve literal paths and arguments. Hosts call `Workspace.EnableAgentDiscovery` to start the background probe (`cmd/cad` does, except for `-png`); tests use `SetAgentDiscoveryProbe` and `SetTerminalOpener`. The panel body scrolls through a `gpui.ScrollHandle`, and `scrollSettings` consumes every wheel event over the overlay. `cmd/cad/main.go` sets the system language, calls `Workspace.LoadSettings` before the window opens,
 applies the stored language with `i18n.Set` and takes the window size from it; a loaded UI scale
 applies on the first frame. The wording of the warnings is in `i18n/locales` (`settings.warn.*`).
+`ui/rendermode.go` holds the renderer row (`displaySection`, which `settingsOverlay` adds to the
+General tab), the fallback card (`renderNotice`, mounted by `mountSettings`) and the render state
+`cmd/cad` hands over with `SetRenderInfo`; `rendererRestartNeeded` compares the setting with the
+renderer in use. `ui/update.go` holds `RequestRestart`, which shares `relaunchAfterQuit` and
+`RelaunchIfPending` with the update restart.
 
 ## Failure
 

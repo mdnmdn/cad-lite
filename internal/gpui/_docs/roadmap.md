@@ -5,7 +5,7 @@ It replaces the former first-wave plan and work-in-progress notes
 (activity registry). Contract: [api-contract.md](api-contract.md) (change
 signatures there first). Layout of the repo: [project-structure.md](project-structure.md).
 
-Last updated: 2026-10-17.
+Last updated: 2026-10-24.
 
 Current wave: **E1 — in progress**, owned by `l1`, coordinated by Jake.
 Scope: animation frames, UI-thread timers, easing and deterministic headless
@@ -39,8 +39,8 @@ What works today:
   unscaled opaque image runs copy directly (`window_snapshot_test.go`, `image_test.go`).
 - Large translucent solid fills use channel lookup tables for identical source-over pixels
   with less backdrop blending work (`raster_translucent_test.go` covers rounding).
-- CPU rasterizer (Scene to premultiplied RGBA), PNG output, headless platform
-  with synthetic input injection.
+- CPU rasterizer (Scene to premultiplied RGBA) with tile damage tracking,
+  PNG output, headless platform with synthetic input injection.
 - Ebiten backend (`ebitenplatform`): window, input mapping, present loop,
   clipboard, snapshot key (`cmd/ctrl-shift-s`).
 - 17 examples, each with `-png PATH` headless rendering; user docs in `docs/`.
@@ -82,6 +82,7 @@ Commit hashes from `git log --oneline` (oldest first within a group).
 | `74e1df8` | Default text shaper installed for every window, not just headless |
 | `cb6d403` | Ebiten snapshot key (`cmd/ctrl-shift-s`, `WithSnapshotKey`) |
 | `c48c7ec` | `ebitenplatform.WithWindowIcon` sets the window icon from several image sizes |
+| - | `ebitenplatform.WithGraphics` (software presentation through WARP or llvmpipe), `WithOnFirstFrame`, `ErrStartup`; one `Update` per presented frame |
 
 ### Examples
 
@@ -97,6 +98,7 @@ Commit hashes from `git log --oneline` (oldest first within a group).
 | Commit | What |
 |--------|------|
 | `cb6d403` | Bounds-limited rasterizer fills (2.5 s to 1 ms/frame at 2x), shaping cache |
+| - | Tile damage tracking (`RenderDamage`, primitives scaled while binning, no per-frame scaled scene copy) and partial upload (`DamagePresenter`, ebiten sub-image strips): an unchanged todo frame at 2x 2 ms to 0.2 ms, a 1080p crosshair move 10 ms to 4 ms (`raster_tiles_test.go`) |
 
 ### Feature waves
 
@@ -205,6 +207,7 @@ standard verification (section 1) and a contract update when signatures change.
 | S8 | P3 | S | - | Underline colour and strikethrough colour, wavy decoration | `text` example drops its 1px-bar emulation |
 | S9 | P3 | S | - | Sprite raster loop iterates sprite bounds rather than the clip window | Benchmark in `bench_test.go` shows no regression; perf only |
 | S10 | P2 | M | - | Colour emoji (bitmap/COLR fonts currently draw as tofu) | Emoji row in `opacity` renders glyphs; raster supports RGBA glyph sprites |
+| S11 | P2 | M | - | Parallel tile rasterization: damaged tiles are independent (`Rasterizer.renderTile` touches only its tile and per-draw scratch), so per-worker scratch (stroke buffer, gradient table, row buffer, mask state) lets them render across cores; pan and zoom repaint every tile in one pass today | Byte-identical to `RenderDamage` under `-race`; a full-repaint benchmark scales with cores |
 
 ### 3.3 Interaction and input
 
@@ -316,8 +319,10 @@ Later overlay/data phases remain proposals inside the document.
   (contract section 10); `ID`-based focus works but it cannot be observed as an entity.
 - Scroll offsets are positive (distance scrolled), unlike GPUI's negative
   offsets. `OverflowHidden` is not programmatically scrollable.
-- CPU rasterizer only: no GPU path, no shader effects; the ebiten backend uploads
-  premultiplied pixels with `WritePixels` and skips frames when not dirty.
+- CPU rasterizer only: no GPU path, no shader effects. Damage tracking repaints
+  only changed 64x64 tiles, and the ebiten backend uploads only those strips
+  with sub-image `WritePixels`, skipping frames with no damage. Tiles are
+  repainted on one core; parallel tile rasterization is open work.
 - Go has no overloading: fluent builders (`ID(string) *Div`) coexist with the
   `Element` interface through adapter types (`divElement`).
 - `New()` in `ebitenplatform` returns `gpui.Platform` (an interface).

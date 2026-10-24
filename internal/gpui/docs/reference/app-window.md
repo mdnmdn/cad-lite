@@ -200,6 +200,7 @@ finishes ([architecture](../architecture.md#element-state)).
 | `HandleInput(h PlatformInputHandler)` | Register a text-input handler for this frame (called by focused text elements in prepaint). |
 | `PaintQuad(q Quad)` / `PaintShadow(s Shadow)` / `PaintGlyph(g GlyphSprite)` / `PaintUnderline(u Underline)` / `PaintStroke(s Stroke)` | Insert a primitive; an unset `ContentMask` is filled with the current one and the element opacity is applied. |
 | `PaintImage(b Bounds, img *image.NRGBA)` | Draw a colour image scaled into `b` (a `GlyphSprite` with `Image` set), clipped and with the current opacity; `nil` draws nothing. |
+| `PaintImageVersion(b Bounds, img *image.NRGBA, version uint64)` | `PaintImage` with a version: non-zero promises `img` is unchanged while `(img, version)` is, so the rasterizer skips hashing its pixels each frame (large frozen images); bump it after an edit. |
 | `PushClip(b Bounds)` / `PushContentMask(m ContentMask)` / `PopClip()` | Push/pop a clip (intersected with the current one). |
 | `CurrentClip() Bounds` / `CurrentContentMask() ContentMask` | Innermost clip; "infinite" when none. |
 | `PushLayer()` | Z-order boundary: everything painted afterwards is above everything before. |

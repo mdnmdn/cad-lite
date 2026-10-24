@@ -19,7 +19,7 @@ Start at `_docs/index.md`. Contract: `_docs/api-contract.md`. Status, open work
 and process: `_docs/roadmap.md`. Repo map and where to add things:
 `_docs/project-structure.md`. User docs: `docs/README.md`.
 
-## Current status (2026-10-14)
+## Current status (2026-10-24)
 
 - **Works:**
   - Flexbox layout with wrapping and absolute positioning, including margins (auto margins too), gaps, min/max and grow/shrink/basis.
@@ -31,7 +31,7 @@ and process: `_docs/roadmap.md`. Repo map and where to add things:
   - Ebiten backend, with a snapshot key (`cmd/ctrl-shift-s`).
 - **Examples:** 17 under `examples/`. 14 are ports of gpui-ce examples; each file's header comment says what was not ported.
 - **Missing:** animation, an image element and SVG (colour images paint through `Window.PaintImage`), grid, colour emoji, IME, multi-window, in-app drag and drop (files dropped from the OS arrive as `FileDropEvent`). Priorities are in `_docs/roadmap.md` §3.
-- **Performance:** a full todo frame at scale 2 takes about 1.2 ms (`go test . -run X -bench Draw`). Treat a clear regression as a bug.
+- **Performance:** the window repaints only the 64x64 tiles whose primitives changed (`Rasterizer.RenderDamage`) and platforms upload only those (`DamagePresenter`); an unchanged todo frame at scale 2 takes about 0.2 ms (`go test . -run X -bench Draw`), a crosshair move on a 1080p canvas about 4 ms (`go test ./ui -bench CrosshairMove1080p` from the repo root). Treat a clear regression as a bug.
 
 ## Rules
 

@@ -399,5 +399,5 @@ func (ws *Workspace) mountSettings(cx *gpui.App, root *gpui.Div) *gpui.Div {
 	ws.startDiscovery(ws.win)
 	return root.Relative().
 		OnAction(actionSettings, func(_ gpui.Action, w *gpui.Window, _ *gpui.App) { ws.ToggleSettings(w) }).
-		Child(ws.settingsOverlay(cx), ws.updateOverlay())
+		Child(ws.renderNotice(), ws.settingsOverlay(cx), ws.updateOverlay())
 }

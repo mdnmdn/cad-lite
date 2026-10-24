@@ -3,11 +3,11 @@ id: tech-rendering
 title: Rendering
 kind: tech
 status: current
-summary: How entities become pixels — the view, camera-relative coordinates, the display list, the per-band tessellation cache and the gpui adapter.
-read_when: you are changing what or how the canvas draws, adding a display primitive, or chasing jitter or a stale render
-updated: 2026-10-15
-verified: 2026-10-16
-code_anchors: [doc/textfont.go, render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, doc/insert.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
+summary: How entities become pixels — the view, camera-relative coordinates, the display list, the per-band tessellation cache, the gpui adapter, and how frames are presented (render modes, software fallback).
+read_when: you are changing what or how the canvas draws, adding a display primitive, chasing jitter or a stale render, or changing how the window presents frames (render modes, the software fallback)
+updated: 2026-10-24
+verified: 2026-10-24
+code_anchors: [internal/gpui/raster_tiles.go, internal/gpui/ebitenplatform/damage.go, internal/gpui/ebitenplatform/graphics.go, cmd/cad/render.go, ui/rendermode.go, doc/textfont.go, render/view.go, render/viewstack.go, render/displaylist.go, render/builder.go, doc/insert.go, render/gpuirender/paint.go, doc/aci.go, ui/agent.go]
 depends_on: [tech-architecture, tech-document-model]
 review_cycle: quarterly
 ---
@@ -107,16 +107,71 @@ layer positions the complete reference, while explicit child layers retain visib
 and emits a `gpui.Stroke` per polyline and a `gpui.Quad` per rectangle. Stroke points live in one
 slice allocated per frame, because the gpui scene reads them at raster time.
 
+## Presentation and render modes
+
+Every frame is rasterized on the CPU by gpui (`internal/gpui/raster.go`) into an RGBA buffer, in
+every mode, in the window and in `-png` renders alike. The window's platform, `ebitenplatform`,
+only uploads the changed parts of the finished buffer with `WritePixels` and lets the graphics
+device show it, so the graphics card does no drawing. What fails on old machines is the start: ebiten needs an OpenGL 3.2
+core context, or on Windows a Direct3D 11 device at feature level 10, before the first frame.
+
+Every image the application takes of itself comes from that CPU buffer, never from the device: the
+feedback screenshot (`Window.Snapshot`, in `ui/feedback.go`), the snapshot key of `ebitenplatform`
+and `-png` renders (a headless window, which ignores `-render`). They are identical in every mode.
+
+The renderer therefore only chooses the device that presents:
+
+| Mode | Device | Falls back |
+|---|---|---|
+| `auto` (default) | ebiten's own choice: DirectX or OpenGL on Windows, OpenGL on Linux, Metal on macOS | to `software`, on Windows and Linux |
+| `gpu` | the same, chosen explicitly | never; a failed start exits with a hint to use `-render software` |
+| `software` | Windows: Direct3D 11 WARP (`GraphicsLibraryDirectX`, `EBITENGINE_DIRECTX=warp`); Linux and the BSDs: Mesa llvmpipe (`GraphicsLibraryOpenGL`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`) | not applicable |
+
+macOS and the browser have no software switch: there the mode is always `auto` and the setting is
+hidden. The `-render` flag beats `CADLITE_RENDER`, which beats the `display.renderer` setting
+(`resolveRenderMode` in `cmd/cad/render.go`; flags and variables in [Operations](operations.md)).
+
+**Automatic fallback.** An `auto` start on Windows or Linux writes the marker file `render-probe`
+beside the settings file and removes it once the first frame is presented
+(`ebitenplatform.WithOnFirstFrame`). If `Platform.Run` returns an error wrapping
+`ebitenplatform.ErrStartup` (the device or the window could not be created), `cmd/cad` starts its
+own executable again with the same arguments, `CADLITE_RENDER=software` and
+`CADLITE_RENDER_FALLBACK=1` (through `updater.Relaunch`, detached), and exits; the child does not
+fall back again. A marker that is still there at the next `auto` start means the last start died
+before its first frame (a driver crash rather than an error), so that start goes to software
+directly and removes the marker. Either way the workspace shows a one-time notice with *Always use
+software rendering*, which sets the setting (`ui/rendermode.go`). The child removes the two
+variables at startup, and `ebitenplatform` restores the graphics variables after the first frame, so
+a process the application starts later (a restart, an update) follows the setting again.
+
+**Pacing.** `ebitenplatform` runs ebiten with `SetTPS(SyncWithFPS)`: one `Update`, and so at most
+one rasterized frame, per presented frame. With the default 60 ticks a second, a frame slower than
+16 ms (likely under WARP or llvmpipe on a large window) would make ebiten run catch-up `Update`s, each of which could
+rasterize again. ebiten paces the loop itself when vsync is ignored or nothing is presented, so
+timed redraws (`RequestFrameAt` deadlines) are still polled at least about 60 times a
+second.
+
 ## Rationale
 
 **Display list rather than direct drawing.** Commands draw their previews into the same list the
-canvas uses, without knowing the backend; an SVG or PDF exporter and a GPU backend can consume the
-same lists.
+canvas uses, without knowing the backend; an SVG or PDF exporter, or a rasterizer that runs on the
+graphics card, could consume the same lists.
 
-**Why every pointer move redraws the window.** gpui rasterizes the whole window on the CPU each
-frame, and the crosshair moves with the pointer. That is fast enough for the drawings the spike
-handles; base-layer caching, which keeps the drawing in an offscreen image and redraws only the
-overlay, is the planned answer for large drawings and is in the backlog.
+**Software presentation rather than a native presenter.** Because frames are CPU-rasterized in any case,
+software mode needs nothing but a device that can show a buffer; WARP and llvmpipe provide one
+through the libraries ebiten uses anyway, so the window, input and clipboard code stay the same in
+every mode (D46).
+
+**What a pointer move costs.** The crosshair moves with the pointer, so every move builds a new
+frame: the display list is painted into a fresh gpui scene. gpui then repaints only the 64x64
+device-pixel tiles whose primitives changed (`Rasterizer.RenderDamage`: each primitive is hashed
+into the tiles it touches, and a tile whose hash differs is cleared and redrawn, byte-identical to
+a full render), and `ebitenplatform` uploads only those tiles, merged into strips, with sub-image
+`WritePixels`. A crosshair move repaints the tiles along its two lines and the status readout, not
+the window; pan and zoom change every tile and repaint in one pass. The scene build and the per-frame
+hashing of every visible stroke still grow with the drawing: base-layer caching, which would keep
+the drawing out of the per-move frame, is the remaining answer for large drawings and is in the
+backlog.
 
 ## Related docs
 

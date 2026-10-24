@@ -11,6 +11,7 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -69,6 +70,7 @@ func main() {
 	agentDemo := flag.Bool("agent-demo", false, "open the agent panel on a canned conversation (for -png)")
 	saveOnExit := flag.String("save-on-exit", "", "dev: write the drawing to this DXF path when the window closes or on SIGINT/SIGTERM (GUI tests)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	renderFlag := flag.String("render", "", "renderer: auto (default), gpu or software (cpu); overrides CADLITE_RENDER and the setting; ignored with -png")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags] [file ...]\n", os.Args[0])
 		flag.PrintDefaults()
@@ -78,6 +80,12 @@ func main() {
 	if *showVersion {
 		fmt.Println("cad-lite", version)
 		return
+	}
+	// -render is checked even with -png, which renders headlessly on the CPU and ignores it.
+	if *renderFlag != "" {
+		if _, ok := parseRenderMode(*renderFlag); !ok {
+			log.Fatalf("-render %q: want auto, gpu or software (cpu)", *renderFlag)
+		}
 	}
 	args, argErr := fileArgs(*open, flag.Args())
 	if argErr != nil {
@@ -208,7 +216,27 @@ func main() {
 		return
 	}
 
-	p := ebitenplatform.New(ebitenplatform.WithWindowIcon(appicon.Images()))
+	fallbackChild := takeFallbackEnv()
+	mode, forced, warn, rerr := resolveRenderMode(*renderFlag, appenv.Get(envRender), ws.Settings().Renderer, runtime.GOOS)
+	if rerr != nil {
+		fatal(rerr)
+	}
+	if warn != "" {
+		log.Printf("render: %s", warn)
+	}
+	probe := probePath()
+	start := decideRenderStart(mode, forced, fallbackChild, probeExists(probe), runtime.GOOS)
+	removeProbe(probe)
+	if start.info.Fallback && !fallbackChild {
+		log.Printf("render: the last start on the graphics card did not reach its first frame; using software rendering")
+	}
+	ws.SetRenderInfo(start.info)
+	if start.probe {
+		writeProbe(probe)
+	}
+	p := ebitenplatform.New(ebitenplatform.WithWindowIcon(appicon.Images()),
+		ebitenplatform.WithGraphics(start.graphics),
+		ebitenplatform.WithOnFirstFrame(func() { removeProbe(probe) }))
 	err := p.Run(func(cx *gpui.App) {
 		if *saveOnExit != "" {
 			sig := make(chan os.Signal, 1)
@@ -227,8 +255,26 @@ func main() {
 			time.AfterFunc(time.Duration(*smoke)*time.Millisecond, cx.Quit)
 		}
 	})
+	if start.probe {
+		removeProbe(probe)
+	}
+	if err != nil && shouldFallback(start, err) {
+		log.Printf("render: %v; restarting with software rendering", err)
+		if rerr := relaunchSoftware(); rerr == nil {
+			ws.CloseAgent()
+			ws.ShutdownFeedback()
+			analytics.Record(metrics, "error", analytics.Properties{"source": "application", "code": "render_fallback"})
+			stopAnalytics(metrics)
+			os.Exit(0)
+		} else {
+			log.Printf("render: fallback: %v", rerr)
+		}
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, ebitenplatform.ErrStartup) && softwareAvailable(runtime.GOOS) {
+			fmt.Fprintln(os.Stderr, "The graphics card could not start the window; try -render software (or CADLITE_RENDER=software).")
+		}
 		ws.CloseAgent()
 		ws.ShutdownFeedback()
 		analytics.Record(metrics, "error", analytics.Properties{"source": "application", "code": "platform_failed"})

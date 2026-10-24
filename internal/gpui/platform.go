@@ -1,6 +1,9 @@
 package gpui
 
-import "time"
+import (
+	"image"
+	"time"
+)
 
 // Platform is the OS/backend abstraction. Implemented by
 // gpui/ebitenplatform and by the headless test platform.
@@ -49,6 +52,17 @@ type FrameRequester interface {
 // replaces the prior timed deadline; zero clears it. RequestFrame is separate.
 // Wakeup callbacks must be queued on the UI goroutine, never called inline.
 type FrameDeadlineRequester interface{ RequestFrameAt(deadline time.Time) }
+
+// DamagePresenter is implemented by a PlatformWindow that can update only the
+// changed part of its displayed frame. Window.Draw calls PresentDamage instead
+// of Present when it is implemented: pix is the whole frame (premultiplied
+// RGBA, 4*w*h bytes, valid until the next Window.Draw) and damage lists the
+// device-pixel rects that changed since the previous presented frame. damage
+// may be empty or overlapping and is only valid during the call. A platform
+// that lost its copy (after a size change or a lost device) uploads all of pix.
+type DamagePresenter interface {
+	PresentDamage(pix []byte, w, h int, damage []image.Rectangle)
+}
 
 // PlatformInputHandler is the focused text field's editing surface. The
 // textbox implementation in input.go satisfies it. It is declared here so

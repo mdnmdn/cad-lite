@@ -1,6 +1,9 @@
 package gpui
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // pixelAtRGBA reads the premultiplied RGBA bytes at (x, y) from the buffer.
 func pixelAtRGBA(t *testing.T, r *Rasterizer, x, y int) [4]uint8 {
@@ -380,6 +383,16 @@ func TestRoundedFastPathsMatchReference(t *testing.T) {
 				t.Fatalf("case %d: b=%v radii=%v bw=%v clip=%v: byte %d (px %d,%d) = %d, want %d",
 					i, b, radii, bw, clip, j, (j/4)%90, j/4/90, got.pix[j], want.pix[j])
 			}
+		}
+	}
+}
+
+// Regression: z just below phiRange rounded to the table's last index and
+// read past its end (a blurred shadow at scale 1.25 panicked).
+func TestPhiNearRangeEnd(t *testing.T) {
+	for z := float32(phiRange - 0.01); z < phiRange; z = math.Nextafter32(z, phiRange) {
+		if v := phi(z); v < 0.99 || v > 1 {
+			t.Fatalf("phi(%v) = %v", z, v)
 		}
 	}
 }
