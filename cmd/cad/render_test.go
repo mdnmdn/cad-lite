@@ -29,7 +29,7 @@ func TestResolveRenderMode(t *testing.T) {
 		{"software", "gpu", "auto", "windows", settings.RendererSoftware, true, false},
 		{"cpu", "", "", "windows", settings.RendererSoftware, true, false},
 		{"Auto", "software", "software", "windows", settings.RendererAuto, true, false},
-		{"software", "", "", "darwin", settings.RendererAuto, true, true},
+		{"software", "", "", "darwin", settings.RendererSoftware, true, false},
 		{"", "", "software", "js", settings.RendererAuto, false, true},
 		{"", "", "auto", "darwin", settings.RendererAuto, false, false},
 	}
@@ -61,7 +61,9 @@ func TestDecideRenderStart(t *testing.T) {
 		{"fallback child", settings.RendererSoftware, true, true, false, "windows", soft, false, ui.RenderInfo{Active: "software", Fallback: true}},
 		{"software setting", settings.RendererSoftware, false, false, true, "windows", soft, false, ui.RenderInfo{Active: "software"}},
 		{"gpu flag ignores marker", settings.RendererGPU, true, false, true, "linux", hw, false, ui.RenderInfo{Active: "gpu", Forced: true}},
-		{"macOS never probes", settings.RendererAuto, false, false, true, "darwin", auto, false, ui.RenderInfo{}},
+		{"macOS stale marker starts OpenGL", settings.RendererAuto, false, false, true, "darwin", soft, false, ui.RenderInfo{Active: "software", Fallback: true}},
+		{"macOS auto probes", settings.RendererAuto, false, false, false, "darwin", auto, true, ui.RenderInfo{Active: "gpu"}},
+		{"browser never probes", settings.RendererAuto, false, false, true, "js", auto, false, ui.RenderInfo{}},
 	}
 	for _, c := range cases {
 		got := decideRenderStart(c.mode, c.forced, c.child, c.stale, c.goos)

@@ -67,7 +67,10 @@ settings key is added. The outbox is `feedback-outbox` beside the settings file,
 ## Implementation
 
 `ui/titlebar.go` opens `ui/feedback.go`; `Window.Snapshot` copies rendered pixels before the modal
-is mounted. `ui/feedback_view.go` paints the frozen background, form and full-window image editor.
+is mounted. `ui/feedback_view.go` paints the frozen background, form and full-window image editor. The
+background and the attached screenshot are replaced, never changed in place, so they paint with a
+constant `Window.PaintImageVersion`; the editor paints its preview with `Editor.Version`, which every
+stroke and Undo advances.
 `feedbackTheme` selects the local contrasting palette for both dialog and editor; `newSliderWithTheme` applies it to
 the brush control without changing the shared application theme. Only the UI goroutine changes
 form and editor state. PNG encoding, metadata queries, native image

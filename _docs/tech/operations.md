@@ -73,7 +73,7 @@ Run `go mod tidy` after adding an import.
 | `-version` | Print the version (`dev` unless the build sets `-X main.version=...`) and exit |
 | `-scale` | Device scale for `-png` |
 | `-smoke MS` | Quit the window after MS milliseconds |
-| `-render MODE` | How the window is presented: `auto` (default), `gpu` or `software` (`cpu` is accepted too); beats `CADLITE_RENDER` and the `display.renderer` setting. No effect on macOS and in the browser; `-png` renders headlessly on the CPU and ignores it (a bad value is still refused). See [Rendering](rendering.md) |
+| `-render MODE` | How the window is presented: `auto` (default), `gpu` or `software` (`cpu` is accepted too); beats `CADLITE_RENDER` and the `display.renderer` setting. On macOS `software` presents through OpenGL instead of Metal; no effect in the browser; `-png` renders headlessly on the CPU and ignores it (a bad value is still refused). See [Rendering](rendering.md) |
 | `-save-on-exit PATH` | Write the drawing to this DXF path when the window closes or on SIGINT or SIGTERM; the real-window tests assert on that file |
 | `-agent NAME` | Select the agent harness (`opencode`, `claude` or `codex`) and open the [agent panel](../features/agent-panel.md); Start launches it |
 | `-agent-cmd PATH` | Run this executable for the selected harness instead of the one on `PATH` |

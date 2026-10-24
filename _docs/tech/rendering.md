@@ -123,15 +123,14 @@ The renderer therefore only chooses the device that presents:
 
 | Mode | Device | Falls back |
 |---|---|---|
-| `auto` (default) | ebiten's own choice: DirectX or OpenGL on Windows, OpenGL on Linux, Metal on macOS | to `software`, on Windows and Linux |
+| `auto` (default) | ebiten's own choice: DirectX or OpenGL on Windows, OpenGL on Linux, Metal on macOS | to `software`, on Windows, Linux and macOS |
 | `gpu` | the same, chosen explicitly | never; a failed start exits with a hint to use `-render software` |
-| `software` | Windows: Direct3D 11 WARP (`GraphicsLibraryDirectX`, `EBITENGINE_DIRECTX=warp`); Linux and the BSDs: Mesa llvmpipe (`GraphicsLibraryOpenGL`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`) | not applicable |
+| `software` | Windows: Direct3D 11 WARP (`GraphicsLibraryDirectX`, `EBITENGINE_DIRECTX=warp`); Linux and the BSDs: Mesa llvmpipe (`GraphicsLibraryOpenGL`, `LIBGL_ALWAYS_SOFTWARE=1`, `GALLIUM_DRIVER=llvmpipe`); macOS: OpenGL instead of Metal (`GraphicsLibraryOpenGL`; macOS has no CPU presentation ebiten can reach) | not applicable |
 
-macOS and the browser have no software switch: there the mode is always `auto` and the setting is
-hidden. The `-render` flag beats `CADLITE_RENDER`, which beats the `display.renderer` setting
+The browser has no software switch: there the mode is always `auto` and the setting is hidden. The `-render` flag beats `CADLITE_RENDER`, which beats the `display.renderer` setting
 (`resolveRenderMode` in `cmd/cad/render.go`; flags and variables in [Operations](operations.md)).
 
-**Automatic fallback.** An `auto` start on Windows or Linux writes the marker file `render-probe`
+**Automatic fallback.** An `auto` start on Windows, Linux or macOS writes the marker file `render-probe`
 beside the settings file and removes it once the first frame is presented
 (`ebitenplatform.WithOnFirstFrame`). If `Platform.Run` returns an error wrapping
 `ebitenplatform.ErrStartup` (the device or the window could not be created), `cmd/cad` starts its

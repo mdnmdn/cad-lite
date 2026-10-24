@@ -90,16 +90,21 @@ type Editor struct {
 	base, preview *image.NRGBA
 	strokes       []annotation
 	active        bool
+	version       uint64
 }
 
 // NewEditor copies the screenshot so cancelling edits never changes the original attachment.
 func NewEditor(src image.Image) *Editor {
 	base := PrepareImage(src)
-	return &Editor{base: base, preview: PrepareImage(base)}
+	return &Editor{base: base, preview: PrepareImage(base), version: 1}
 }
 
 // Image returns the current preview, which the caller must treat as read-only.
 func (e *Editor) Image() *image.NRGBA { return e.preview }
+
+// Version identifies the preview's pixels: it starts at 1 and changes whenever a stroke or
+// Undo changes them, so a painter can pass it to gpui's Window.PaintImageVersion.
+func (e *Editor) Version() uint64 { return e.version }
 
 // Snapshot returns an independent flattened copy suitable for attachment to a report.
 func (e *Editor) Snapshot() *image.NRGBA { return PrepareImage(e.preview) }
@@ -144,6 +149,7 @@ func (e *Editor) Undo() {
 		return
 	}
 	e.strokes = e.strokes[:len(e.strokes)-1]
+	e.version++
 	draw.Draw(e.preview, e.preview.Bounds(), e.base, image.Point{}, draw.Src)
 	for _, s := range e.strokes {
 		e.segment(s.points[0], s.points[0], s)
@@ -160,6 +166,7 @@ func (e *Editor) clamp(p Point) Point {
 }
 
 func (e *Editor) segment(a, b Point, s annotation) {
+	e.version++
 	distance := math.Hypot(b.X-a.X, b.Y-a.Y)
 	steps := max(1, int(math.Ceil(distance/math.Max(1, s.width/4))))
 	for i := 0; i <= steps; i++ {

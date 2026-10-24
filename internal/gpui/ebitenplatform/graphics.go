@@ -55,8 +55,9 @@ func WithOnFirstFrame(f func()) Option {
 // graphicsConfig maps a mode to the ebiten library and the environment the
 // graphics stack reads at startup, for the OS goos. ebiten's DirectX driver
 // reads EBITENGINE_DIRECTX ("warp" selects D3D_DRIVER_TYPE_WARP); Mesa reads
-// LIBGL_ALWAYS_SOFTWARE and GALLIUM_DRIVER. Modes without a software switch
-// on goos return GraphicsLibraryAuto and no environment.
+// LIBGL_ALWAYS_SOFTWARE and GALLIUM_DRIVER. macOS has no CPU presentation
+// ebiten can reach, so software there is OpenGL instead of Metal. Modes without
+// a software switch on goos return GraphicsLibraryAuto and no environment.
 func graphicsConfig(mode Graphics, goos string) (ebiten.GraphicsLibrary, map[string]string) {
 	if mode != GraphicsSoftware {
 		return ebiten.GraphicsLibraryAuto, nil
@@ -66,6 +67,8 @@ func graphicsConfig(mode Graphics, goos string) (ebiten.GraphicsLibrary, map[str
 		return ebiten.GraphicsLibraryDirectX, map[string]string{"EBITENGINE_DIRECTX": "warp"}
 	case "linux", "freebsd", "netbsd", "openbsd", "dragonfly":
 		return ebiten.GraphicsLibraryOpenGL, map[string]string{"LIBGL_ALWAYS_SOFTWARE": "1", "GALLIUM_DRIVER": "llvmpipe"}
+	case "darwin":
+		return ebiten.GraphicsLibraryOpenGL, nil
 	}
 	return ebiten.GraphicsLibraryAuto, nil
 }

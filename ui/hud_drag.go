@@ -69,7 +69,7 @@ func (ws *Workspace) hudBox(p *hudPosition) hudRect {
 	}
 	b.x = min(max(b.x, a.x), a.x+a.w-b.w)
 	b.y = min(max(b.y, a.y), a.y+a.h-b.h)
-	// Clear the top-right zoom column, the top-left viewport label and the bottom-left UCS.
+	// Clear the top-right zoom column and the bottom-left UCS.
 	zoom := hudRect{a.x + a.w - zoomHUDWidth, a.y, zoomHUDWidth, zoomHUDHeight}
 	if b.overlaps(zoom) {
 		if x := zoom.x - 8 - b.w; x >= a.x {
@@ -89,9 +89,6 @@ func (ws *Workspace) hudBox(p *hudPosition) hudRect {
 func (ws *Workspace) hudVerticalRange(x, width float32) (top, bottom float32) {
 	a := ws.hudArea()
 	top, bottom = a.y, a.y+a.h
-	if x < a.x+196 {
-		top = max(top, a.y+28)
-	}
 	if x < a.x+72 {
 		bottom = min(bottom, a.y+a.h-80)
 	}

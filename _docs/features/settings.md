@@ -54,12 +54,13 @@ behaviour and the default agent and where agents are found. Changes apply at onc
   document tab and each new one too (toggling with F7, F3 or F8 afterwards does not change the stored default). The mouse
   wheel is `auto` or `zoom` (the wheel zooms, Shift pans) or `pan` (the wheel pans, Ctrl or Cmd zooms);
   `Workspace.WheelMode` reports it to the canvas.
-- **Display** (the General tab, Windows and Linux only; hidden on macOS and in the browser, which
-  have no software renderer). **Renderer**: `Automatic` (the graphics card, software rendering when
+- **Display** (the General tab; hidden in the browser, which has no software renderer; on macOS
+  `Software` presents through OpenGL instead of Metal and its hint says so). **Renderer**: `Automatic` (the graphics card, software rendering when
   it fails to start), `GPU` or `Software (CPU only)`, with a hint per choice, the line *Takes effect
   after restart* and the renderer this session uses. When the choice differs from the renderer in use,
   the **Restart** button quits through the unsaved-changes dialog (Cancel keeps the application running)
-  and starts the same executable with the same arguments (`Workspace.RequestRestart`). When
+  and starts the same executable with the same arguments (`Workspace.RequestRestart`; on macOS it
+  reopens the `.app` bundle with `open -n`). When
   `-render` or `CADLITE_RENDER` chose this session's renderer, a line says so and no restart is
   offered. After an automatic fallback the window shows a one-time card, *Started with software
   rendering because the graphics driver failed*, with **OK** and **Always use software rendering**

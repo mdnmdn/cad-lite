@@ -22,7 +22,8 @@ rasterizer with no cgo. The same view renders to an ebiten window (`internal/gpu
 or headlessly to an image, which is how Cad-lite renders PNGs and runs UI tests.
 
 Settings captures `Window.Snapshot` on opening and paints the owned image with
-`Window.PaintImage` behind the modal. The workspace tree resumes when Settings closes;
+`Window.PaintImageVersion` behind the modal (a constant version: the image never changes while shown,
+so damage tracking does not hash its pixels each frame). The workspace tree resumes when Settings closes;
 scrolling only rebuilds the modal over the fixed background. Unscaled opaque image runs
 copy directly in the CPU rasterizer.
 
@@ -144,7 +145,7 @@ Icons are monochrome SVG files that the shell rasterizes to an alpha mask and ti
 colour, the analogue of GPUI's `paint_svg`:
 
 1. `assets/icons/<name>.svg`, one per row of the registry `assets/icons/icons.yaml` (categories
-   draw, modify, edit, view, snap, measure, layer, file and app; `source` is `custom` or `adopted:<lucide-name>`
+   draw, modify, edit, view, snap, measure, dim, layer, file and app; `source` is `custom` or `adopted:<lucide-name>`
    from Lucide under ISC, with the licence in `assets/icons/LICENSE-lucide`).
 2. `icons.SVG(name)` returns the embedded source. The package is data only and imports `embed`;
    its `Name` constants are generated into `names_gen.go` by `just icons-gen`.

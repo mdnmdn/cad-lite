@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"cad-lite/doc"
@@ -130,5 +131,17 @@ func TestRequestRestartRelaunchesAfterQuit(t *testing.T) {
 	u := h.ws.upd()
 	if quits != 1 || !u.restart || u.plan.Exe == "" {
 		t.Fatalf("clean drawing: quits %d restart %v plan %+v", quits, u.restart, u.plan)
+	}
+}
+
+func TestRendererHintNamesOpenGLOnMac(t *testing.T) {
+	if got := rendererHint(settings.RendererSoftware, true); !strings.Contains(got, "OpenGL") {
+		t.Fatalf("macOS software hint %q does not say OpenGL", got)
+	}
+	if got := rendererHint(settings.RendererSoftware, false); strings.Contains(got, "OpenGL") {
+		t.Fatalf("Windows/Linux software hint %q mentions OpenGL", got)
+	}
+	if rendererHint(settings.RendererGPU, true) != rendererHint(settings.RendererGPU, false) {
+		t.Fatal("only the software hint differs on macOS")
 	}
 }

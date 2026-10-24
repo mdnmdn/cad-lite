@@ -2348,7 +2348,7 @@ type Graphics int
 const (
     GraphicsAuto     Graphics = iota // ebiten's native choice (default)
     GraphicsHardware                 // the same, chosen explicitly
-    GraphicsSoftware                 // D3D11 WARP on Windows, Mesa llvmpipe on Linux/BSD
+    GraphicsSoftware                 // D3D11 WARP on Windows, Mesa llvmpipe on Linux/BSD, OpenGL on macOS
 )
 
 func (g Graphics) String() string // "auto", "gpu", "software"
@@ -2372,7 +2372,8 @@ Graphics and startup:
   Linux and the BSDs `GraphicsLibraryOpenGL` with `LIBGL_ALWAYS_SOFTWARE=1`
   and `GALLIUM_DRIVER=llvmpipe`. The variables are set before ebiten starts
   and restored after the first frame, so a process the app starts later does
-  not inherit them. On macOS and js the mode is logged and ignored.
+  not inherit them. On macOS `GraphicsSoftware` is `GraphicsLibraryOpenGL`
+  (no CPU presentation is reachable there); on js the mode is logged and ignored.
 - `ebiten.SetTPS(ebiten.SyncWithFPS)`: one `Update` per presented frame, so a
   slow frame never triggers catch-up `Update`s that rasterize more frames.
   ebiten paces the loop when vsync is ignored or nothing is presented, so

@@ -353,13 +353,18 @@ func (ws *Workspace) RequestRestart(cx *gpui.App) error {
 	return nil
 }
 
-// restartPlan is the plan that starts this executable again with its arguments.
+// restartPlan is the plan that starts this executable again with its arguments; on macOS it
+// reopens the .app bundle, as an update does, so the restarted app has its Dock icon.
 func restartPlan() (updater.Plan, error) {
 	exe, err := updater.Executable()
 	if err != nil {
 		return updater.Plan{}, err
 	}
-	return updater.Plan{GOOS: runtime.GOOS, Exe: exe, Args: append([]string(nil), os.Args[1:]...)}, nil
+	plan := updater.Plan{GOOS: runtime.GOOS, Exe: exe, Args: append([]string(nil), os.Args[1:]...)}
+	if runtime.GOOS == "darwin" {
+		plan.App = updater.AppBundle(exe)
+	}
+	return plan, nil
 }
 
 // openReleasePage opens the release on GitHub in the browser.

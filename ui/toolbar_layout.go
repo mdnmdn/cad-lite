@@ -23,8 +23,8 @@ const (
 	// ribbonLargePad and ribbonSmallPad are the horizontal padding of the two button shapes;
 	// ribbonSmallGap is the space between a small button's icon and its label.
 	ribbonLargePad = 8
-	ribbonSmallPad = 6
-	ribbonSmallGap = 6
+	ribbonSmallPad = 5
+	ribbonSmallGap = 5
 	// ribbonCharWidth is the average width of a ribbon label's character, which sizes the estimate
 	// of the groups' widths.
 	ribbonCharWidth = 7.3
@@ -44,18 +44,25 @@ type ribbonButton struct {
 	icon        icons.Name
 }
 
-// ribbonGroups returns the ribbon's groups in order: Draw, Modify and Utilities.
-func (ws *Workspace) ribbonGroups() []ribbonGroup {
-	draw := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).Child(
-		ws.ribbonLarge(ribbonButton{"line", "LINE", icons.DrawLine}),
-		ws.ribbonLarge(ribbonButton{"pline", "PLINE", icons.DrawPolyline}),
-		ws.ribbonLarge(ribbonButton{"circle", "CIRCLE", icons.DrawCircle}),
-		ws.ribbonLarge(ribbonButton{"arc", "ARC", icons.DrawArc}),
-		ws.smallColumns([][2]ribbonButton{{{"rect", "RECTANG", icons.DrawRectangle}, {"polygon", "POLYGON", icons.DrawPolygon}}}),
-	)
-	return []ribbonGroup{
-		{"draw", i18n.T("ui.ribbon.draw"), draw},
-		{"modify", i18n.T("ui.ribbon.modify"), ws.smallColumns([][2]ribbonButton{
+// ribbonSpec is the content of one group: large buttons (icon over label) first, then columns of
+// two small ones (icon left of label). Both the layout and the width estimate read it.
+type ribbonSpec struct {
+	id, nameKey string
+	large       []ribbonButton
+	small       [][2]ribbonButton
+}
+
+// ribbonSpecs lists the ribbon's groups in AutoCAD's Home tab order: Draw, Modify, Annotation and
+// Utilities.
+func ribbonSpecs() []ribbonSpec {
+	return []ribbonSpec{
+		{id: "draw", nameKey: "ui.ribbon.draw",
+			large: []ribbonButton{
+				{"line", "LINE", icons.DrawLine}, {"pline", "PLINE", icons.DrawPolyline},
+				{"circle", "CIRCLE", icons.DrawCircle}, {"arc", "ARC", icons.DrawArc},
+			},
+			small: [][2]ribbonButton{{{"rect", "RECTANG", icons.DrawRectangle}, {"polygon", "POLYGON", icons.DrawPolygon}}}},
+		{id: "modify", nameKey: "ui.ribbon.modify", small: [][2]ribbonButton{
 			{{"move", "MOVE", icons.ModifyMove}, {"copy", "COPY", icons.ModifyCopy}},
 			{{"rotate", "ROTATE", icons.ModifyRotate}, {"scale", "SCALE", icons.ModifyScale}},
 			{{"mirror", "MIRROR", icons.ModifyMirror}, {"erase", "ERASE", icons.ModifyErase}},
@@ -63,12 +70,32 @@ func (ws *Workspace) ribbonGroups() []ribbonGroup {
 			{{"chamfer", "CHAMFER", icons.ModifyChamfer}, {"trim", "TRIM", icons.ModifyTrim}},
 			{{"extend", "EXTEND", icons.ModifyExtend}, {"break", "BREAK", icons.ModifyBreak}},
 			{{"join", "JOIN", icons.ModifyJoin}, {"explode", "EXPLODE", icons.ModifyExplode}},
-		})},
-		{"utilities", i18n.T("ui.ribbon.utilities"), ws.smallColumns([][2]ribbonButton{
+		}},
+		{id: "annotation", nameKey: "ui.ribbon.annotation", small: [][2]ribbonButton{
+			{{"dimlinear", "DIMLINEAR", icons.DimLinear}, {"dimaligned", "DIMALIGNED", icons.DimAligned}},
+			{{"dimcontinue", "DIMCONTINUE", icons.DimContinue}, {"dimarc", "DIMARC", icons.DimArc}},
+		}},
+		{id: "utilities", nameKey: "ui.ribbon.utilities", small: [][2]ribbonButton{
 			{{"dist", "DIST", icons.MeasureDistance}, {"area", "AREA", icons.MeasureArea}},
 			{{"id", "ID", icons.MeasureIdPoint}, {"zoom", "ZOOM", icons.ViewZoomWindow}},
-		})},
+		}},
 	}
+}
+
+// ribbonGroups returns the ribbon's groups in the order of ribbonSpecs.
+func (ws *Workspace) ribbonGroups() []ribbonGroup {
+	var out []ribbonGroup
+	for _, sp := range ribbonSpecs() {
+		body := gpui.NewDiv().FlexRow().ItemsCenter().Gap(2)
+		for _, b := range sp.large {
+			body.Child(ws.ribbonLarge(b))
+		}
+		if len(sp.small) > 0 {
+			body.Child(ws.smallColumns(sp.small))
+		}
+		out = append(out, ribbonGroup{sp.id, i18n.T(sp.nameKey), body})
+	}
+	return out
 }
 
 // ribbon lays the groups out in a wrapping flex row: on a wide window they share one row, and as
@@ -77,10 +104,10 @@ func (ws *Workspace) ribbonGroups() []ribbonGroup {
 func (ws *Workspace) ribbon(window float32) *gpui.Div {
 	row := gpui.NewDiv().ID("ribbon").FlexRow().FlexWrap().ItemsStretch()
 	groups := ws.ribbonGroups()
-	// When the three groups do not fit one row, the small Utilities group moves before Modify so
-	// it can sit beside Draw, and the ribbon needs two rows rather than three.
-	if window < ribbonWidth() {
-		groups[1], groups[2] = groups[2], groups[1]
+	// When Draw and Modify do not fit one row, the smaller Annotation and Utilities groups move
+	// before Modify so they can sit beside Draw, and the ribbon needs two rows rather than three.
+	if w := ribbonWidths(); window < w[0]+w[1] {
+		groups = append([]ribbonGroup{groups[0]}, append(groups[2:], groups[1])...)
 	}
 	for _, g := range groups {
 		name := gpui.NewDiv().FlexRow().JustifyCenter().Child(gpui.NewText(g.name).TextSize(fontSmall).TextColor(uiMuted))
@@ -94,22 +121,25 @@ func (ws *Workspace) ribbon(window float32) *gpui.Div {
 	return gpui.NewDiv().FlexCol().FlexShrink(0).Px_(4).Bg(uiPanel).Child(row)
 }
 
-// ribbonWidth estimates the width of the ribbon with its groups on one row, from the length of
-// the translated labels: the layout engine wraps groups but cannot say whether it did.
-func ribbonWidth() float32 {
+// ribbonWidths estimates the width of each group of ribbonSpecs, in order, from the length of the
+// translated labels: the layout engine wraps groups but cannot say whether it did. The estimate
+// errs wide, so a reorder it triggers never costs a row.
+func ribbonWidths() []float32 {
 	label := func(command string) float32 {
 		return float32(utf8.RuneCountInString(i18n.Command(command).Name)) * ribbonCharWidth
 	}
-	large := func(command string) float32 { return max(ribbonLargeIcon, label(command)) + 2*ribbonLargePad + 2 }
-	small := func(a, b string) float32 {
-		return max(label(a), label(b)) + 2*ribbonSmallPad + ribbonSmallIcon + ribbonSmallGap + 2
+	var out []float32
+	for _, sp := range ribbonSpecs() {
+		w := float32(2*ribbonGroupPad + 1)
+		for _, b := range sp.large {
+			w += max(ribbonLargeIcon, label(b.command)) + 2*ribbonLargePad + 2
+		}
+		for _, c := range sp.small {
+			w += max(label(c[0].command), label(c[1].command)) + 2*ribbonSmallPad + ribbonSmallIcon + ribbonSmallGap + 2
+		}
+		out = append(out, w)
 	}
-	groupPad := float32(2*ribbonGroupPad + 1)
-	draw := large("LINE") + large("PLINE") + large("CIRCLE") + large("ARC") + small("RECTANG", "POLYGON") + groupPad
-	modify := small("MOVE", "COPY") + small("ROTATE", "SCALE") + small("MIRROR", "ERASE") + small("OFFSET", "FILLET") +
-		small("CHAMFER", "TRIM") + small("EXTEND", "BREAK") + small("JOIN", "EXPLODE") + groupPad
-	utilities := small("DIST", "AREA") + small("ID", "ZOOM") + groupPad
-	return draw + modify + utilities + 10
+	return out
 }
 
 // ribbonButtonBase is what both button shapes share: the id, the command's tooltip, hover, the

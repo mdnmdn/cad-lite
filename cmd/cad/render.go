@@ -40,8 +40,9 @@ func parseRenderMode(s string) (string, bool) {
 	return "", false
 }
 
-// softwareAvailable reports whether goos has a software renderer to switch to.
-func softwareAvailable(goos string) bool { return goos != "darwin" && goos != "js" }
+// softwareAvailable reports whether goos has a lighter presentation to switch to: WARP on
+// Windows, llvmpipe on Linux, OpenGL instead of Metal on macOS. The browser has none.
+func softwareAvailable(goos string) bool { return goos != "js" }
 
 // resolveRenderMode picks the renderer: the -render flag, else CADLITE_RENDER,
 // else the setting, else auto. forced reports that the flag or the variable
@@ -175,7 +176,9 @@ func shouldFallback(start renderStart, err error) bool {
 }
 
 // relaunchSoftware starts this executable again, with the same arguments, in
-// software mode and marked as the fallback; the caller then exits.
+// software mode and marked as the fallback; the caller then exits. It starts the
+// executable itself even inside a macOS bundle: `open` would not pass the
+// environment that carries the mode.
 func relaunchSoftware() error {
 	exe, err := updater.Executable()
 	if err != nil {

@@ -65,3 +65,29 @@ func TestEraserRestoresTransparentPixels(t *testing.T) {
 		t.Fatal("eraser did not restore transparent original pixel")
 	}
 }
+
+func TestEditorVersionChangesWithPixels(t *testing.T) {
+	e := NewEditor(image.NewNRGBA(image.Rect(0, 0, 20, 20)))
+	v := e.Version()
+	if v == 0 {
+		t.Fatal("version 0 means unversioned to gpui")
+	}
+	e.Begin(Point{X: 5, Y: 5}, 4, color.NRGBA{255, 0, 0, 255}, false)
+	if e.Version() == v {
+		t.Fatal("Begin changed pixels without a new version")
+	}
+	v = e.Version()
+	e.Move(Point{X: 10, Y: 5})
+	if e.Version() == v {
+		t.Fatal("Move changed pixels without a new version")
+	}
+	v = e.Version()
+	e.End()
+	if e.Version() != v {
+		t.Fatal("End changed the version without changing pixels")
+	}
+	e.Undo()
+	if e.Version() == v {
+		t.Fatal("Undo changed pixels without a new version")
+	}
+}

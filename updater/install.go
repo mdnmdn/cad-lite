@@ -223,6 +223,15 @@ func clearQuarantine(app string) {
 
 var errNoExe = errors.New("updater: no executable to start")
 
+// AppBundle returns the macOS .app bundle that holds exe, or "" when exe is
+// not inside one.
+func AppBundle(exe string) string {
+	if i := strings.Index(filepath.ToSlash(exe), macBundleMarker); i >= 0 {
+		return exe[:i+len(".app")]
+	}
+	return ""
+}
+
 // Relaunch starts the installed version with the plan's arguments and returns
 // at once; the caller then quits. On macOS it uses `open -n` on the bundle,
 // elsewhere it starts the executable detached from this process. Call it

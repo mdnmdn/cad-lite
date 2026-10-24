@@ -3,10 +3,10 @@ id: feat-canvas
 title: Drawing canvas
 kind: feature
 status: current
-summary: The canvas and the chrome around it — pan and zoom, grid, rulers, crosshair and pickbox, highlights, selection boxes, snap markers, the viewport label and zoom buttons, the title bar, the ribbon, the layers and properties panels, the layer popover and properties HUD, resizing and collapsing the panels, and the status bar.
+summary: The canvas and the chrome around it — pan and zoom, grid, rulers, crosshair and pickbox, highlights, selection boxes, snap markers, the zoom buttons, the title bar, the ribbon, the layers and properties panels, the layer popover and properties HUD, resizing and collapsing the panels, and the status bar.
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
 updated: 2026-10-24
-verified: 2026-10-15
+verified: 2026-10-24
 code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/layerorder.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
@@ -86,8 +86,8 @@ The canvas is framed by a 1 px border in the theme's border colour (`uiBorder`),
 drawing along the inside edge of the canvas area, so it reads as a viewport apart from the ribbon,
 side panel and command line.
 
-Two overlays float over the canvas, and a third at startup. At the top left a monospace, muted caption `[-][Top][2D Wireframe]`
-(`ui.canvas.viewport_label`) names the view, the only one Cad-lite has. At the top right a rounded
+One overlay floats over the canvas, and a second at startup. Cad-lite has no AutoCAD viewport controls
+caption (`[-][Top][2D Wireframe]`): it has one 2D top view, so the caption would offer nothing to choose. At the top right a rounded
 compact 36 by 100 px column of three 30 px icon buttons zooms in and out by a step of 1.25 about the canvas centre and zooms
 to extents; each is a step of its own for ZOOM Previous, has a tooltip, and a press on the column
 never reaches the canvas, so it neither picks nor answers a point prompt.
@@ -169,7 +169,7 @@ existing splitter or slider drag still ends.
 
 Dragging the header moves Properties freely within the canvas. Releasing within 28 px of a corner
 slot snaps it there with a 16 px canvas/ruler margin. The top-right slot clears the zoom column by
-8 px; the top-left sits below the viewport label, and the bottom-left clears the UCS icon. Narrow
+8 px, and the bottom-left clears the UCS icon. Narrow
 spaces and tall content retain these clearances by limiting the panel's height and scrolling its body.
 Positions follow canvas resize, ruler changes and selection-height changes. A
 panel narrower than 112 px or with less than 32 px of usable height is hidden and its drag ends;
@@ -244,21 +244,24 @@ before anything else moves.
 
 ### Ribbon
 
-Three panels, each with its name (`Draw`, `Modify`, `Utilities`) centred under its buttons in muted
+Four panels in AutoCAD's Home tab order, each with its name (`Draw`, `Modify`, `Annotation`, `Utilities`) centred under its buttons in muted
 12 px text and a vertical divider after it; on one row the ribbon is 84 px high. The title bar's ribbon toggle
 hides the panels (the commands stay on the command line) and shows them again. **Draw** has large buttons (icon over label) for Line,
 Polyline, Circle and Arc, then a column of two small ones (icon left of label), Rectangle over Polygon. **Modify** is a grid of small
 buttons in two rows and seven columns: Move, Rotate, Mirror, Offset, Chamfer, Extend, Join over Copy,
-Scale, Erase, Fillet, Trim, Break, Explode. **Utilities** is two columns of two: Distance, Area and ID point,
+Scale, Erase, Fillet, Trim, Break, Explode. **Annotation** is two columns of two dimension commands: DIMLINEAR,
+DIMCONTINUE over DIMALIGNED, DIMARC (the `dim-` icons). **Utilities** is two columns of two: Distance, Area and ID point,
 Zoom. Labels are the commands' display names in the interface language; a button runs its command as if typed, shows
 the command's tooltip (see Tooltips) and, while its command runs, takes the soft accent fill and text. A command
-without a button (LAYER, LIST, NEW, MEASUREGEOM) is still reached by typing it.
+without a button (LAYER, LIST, NEW, MEASUREGEOM, TEXT, MTEXT) is still reached by typing it.
 
 The ribbon reflows with the window width: on a wide window the groups share one row, and as the window
-narrows whole groups wrap onto the next row. A group is never split across rows and nothing clips or overlaps. When the
-three groups do not fit one row (`ribbonWidth` estimates the width from the labels), Utilities moves before Modify so
-it sits beside Draw, and the ribbon takes two rows rather than three. With English labels, the
-groups fit on one row at 1100 px; at 900 px, Draw and Utilities are the first row and Modify the second.
+narrows whole groups wrap onto the next row. A group is never split across rows and nothing clips or overlaps. When Draw
+and Modify do not fit one row (`ribbonWidths` estimates each group's width from the labels, erring wide), Annotation and
+Utilities move before Modify so they sit beside Draw, and the ribbon takes two rows rather than three. With English labels,
+the groups fit on one row from about 1190 px, so at the default 1280 px (Italian needs about 1265 px); at 1100 px Utilities
+wraps to the second row, at 900 px Annotation and Utilities do, and from about 895 px down to 690 px Draw, Annotation and
+Utilities are the first row and Modify the second. Narrower than that, the ribbon takes three rows.
 
 ### Tooltips
 
@@ -271,7 +274,7 @@ composed, never written in the catalog: the key comes from the binding in `Bindi
 macOS, the Ctrl form elsewhere) and the typed part is the command's shortest registered alias
 (`Registry.AliasesOf`), or the command itself when no alias is shorter, so a hint always names
 something that works. The agent button, the layer rows (make current), the lock switches, the
-visibility pills and the colour swatches, the document chip, the viewport label, the zoom buttons, the layer `+`,
+visibility pills and the colour swatches, the document chip, the zoom buttons, the layer `+`,
 the command history handle and its collapse button, the splitters, the panel chevrons and the recent commands button, the Open menu chevron and its rows, the layout tabs, the status bar toggles, the layer item and the popover's New layer row, and the coordinates readout, and
 every control of the settings and agent panels. The text lives in the catalog (`*_tip` keys) in both
 languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and grows to the wrapped height.
@@ -324,7 +327,7 @@ canvas column (the document tab strip `tabStrip` of `ui/doctabs.go`, then `canva
 `columnWidths`, `sideRange`, `agentRange`, `layersHeight`, `layersLimits` and `resizeSpan`, the `splitter`
 and `collapseButton` elements, and `layoutSettings`, `applyLayout` and `persistLayout`, which move the layout
 to and from `settings.Layout`; `sidePanel` measures its own height from a `gpui.ScrollHandle` of the previous frame. `ui/toolbar_layout.go` builds the ribbon:
-`Workspace.ribbonGroups` lists the groups, `ribbonLarge`, `ribbonSmall` and `smallColumns` build the
+`ribbonSpecs` lists the groups and their buttons as data, `Workspace.ribbonGroups` builds them, `ribbonLarge`, `ribbonSmall` and `smallColumns` build the
 buttons around `ui.NewIcon` (`ui/icon.go`) with `Workspace.commandTip` as the tooltip, and `Workspace.ribbon` puts each group in
 a no-shrink `Div` inside a `FlexWrap` row, so gpui wraps between groups only. `ui/chrome.go` holds
 the type scale, `iconButton`, `monoText` and the dividers shared by the chrome; `mix` in `ui/theme.go` derives the soft
@@ -376,7 +379,7 @@ in `paintCanvas`, applies the resize rule; a frame that changes the view refresh
 position and the window. `Workspace.FitOnFirstFrame`
 arms the zoom to extents; `cmd/cad` calls it after `-open`, `-demo`, `-script` and `-png`.
 
-`Workspace.viewportLabel`, `zoomPill` and `ucsLabels` in `ui/canvas.go` are the canvas overlays: absolutely
+`Workspace.zoomPill` and `ucsLabels` in `ui/canvas.go` are the canvas overlays: absolutely
 positioned children of the canvas `Div` (the UCS axes themselves are in the display list, `ucsIcon`). The pill
 stops mouse down, up and wheel from bubbling to the canvas. `paintCanvas` copies `Session.LineweightDisplay`
 to `render.Builder.Lineweights` each frame.

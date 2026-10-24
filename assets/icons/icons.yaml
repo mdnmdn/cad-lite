@@ -168,6 +168,20 @@ categories:
       source: adopted:crosshair
       keywords: [id, point, coordinates, crosshair, locate]
 
+  dim:
+    dim-linear:
+      goal: a horizontal dimension, two extension lines and a dimension line with arrows, its text above
+      keywords: [dimlinear, linear dimension, horizontal, vertical, quota, dimension]
+    dim-aligned:
+      goal: the linear dimension slanted, parallel to the diagonal it measures
+      keywords: [dimaligned, aligned dimension, parallel, slanted, diagonal, quota]
+    dim-continue:
+      goal: two linear dimensions chained end to end, sharing the middle extension line
+      keywords: [dimcontinue, continue, chain, chained dimensions, baseline, quota]
+    dim-arc:
+      goal: the length along an arc, a curved dimension line with arrows, radial extension lines and the arc symbol above
+      keywords: [dimarc, arc length, arc dimension, curved, quota]
+
   layer:
     layer-visible:
       goal: the layer is on, a lit bulb

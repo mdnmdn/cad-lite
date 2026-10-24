@@ -193,7 +193,7 @@ func (ws *Workspace) render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	}
 	if p := ws.prefs(); p.open && p.snapshot != nil {
 		snapshot := p.snapshot
-		frozen := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) { w.PaintImage(b, snapshot) })
+		frozen := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) { w.PaintImageVersion(b, snapshot, 1) })
 		return ws.withSettings(cx, gpui.NewDiv().KeyContext("cad").FlexCol().SizeFull().Bg(uiBg).TextColor(uiText).TextSize(13).Child(frozen))
 	}
 	ws.validateTextEditor(w)

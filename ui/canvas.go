@@ -150,7 +150,7 @@ func (ws *Workspace) canvasElement() *gpui.Div {
 			ws.pointerMoved(e.Position)
 			w.Refresh()
 		}).
-		Child(gpui.NewCanvas(ws.paintCanvas), ws.rulerLabels(), ws.viewportLabel(), ws.zoomPill(), ws.ucsLabels(), ws.startPanel())
+		Child(gpui.NewCanvas(ws.paintCanvas), ws.rulerLabels(), ws.zoomPill(), ws.ucsLabels(), ws.startPanel())
 }
 
 // Overlay metrics, in logical pixels from the canvas's edges.
@@ -163,13 +163,6 @@ const (
 	ucsInset = 30
 	ucsLen   = 40
 )
-
-// viewportLabel is the "[-][Top][2D Wireframe]" caption at the canvas's top left.
-func (ws *Workspace) viewportLabel() *gpui.Div {
-	left, top := ws.rulerInsets()
-	return gpui.NewDiv().ID("viewport-label").Absolute().Left(left + overlayInset + 4).Top(top + overlayInset).Tooltip(i18n.T("ui.canvas.viewport_tip")).
-		Child(monoText(i18n.T("ui.canvas.viewport_label"), fontUI).TextColor(uiMuted))
-}
 
 // zoomPill is the floating column of zoom in, zoom out and zoom extents at the canvas's top right.
 // Presses on it do not reach the canvas, so they never pick, focus or start a box. Releases do

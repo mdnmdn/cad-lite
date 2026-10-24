@@ -75,22 +75,21 @@ func TestRulersMoveOverlaysNotTheView(t *testing.T) {
 	if top != rulerBand || left < 20 {
 		t.Fatalf("insets %v, %v", left, top)
 	}
-	lbl, ok := h.locate("viewport-label")
-	zoom, ok2 := h.locate("canvas-zoom")
-	if !ok || !ok2 {
-		t.Fatal("viewport label or zoom buttons not found")
+	zoom, ok := h.locate("canvas-zoom")
+	if !ok {
+		t.Fatal("zoom buttons not found")
 	}
 	f := h.hw.Window().UIScale()
-	if float32(lbl.Y)/f-float32(c.Y) < top+8 || float32(lbl.X)/f-float32(c.X) < left || float32(zoom.Y)/f-float32(c.Y) < top+30 {
-		t.Fatalf("overlays under the rulers: label %v, zoom %v, canvas at %v", lbl, zoom, c)
+	if float32(zoom.Y)/f-float32(c.Y) < top+30 {
+		t.Fatalf("overlays under the rulers: zoom %v, canvas at %v", zoom, c)
 	}
 	h.ws.toggleRulers(h.hw.Window())
 	h.hw.Pixels()
 	if h.ws.Rulers() || *h.ws.View() != v || h.ws.ScreenPoint(geom.V(10, 20)) != p {
 		t.Fatalf("turning the rulers off moved the view: %+v -> %+v", v, *h.ws.View())
 	}
-	if lbl2, _ := h.locate("viewport-label"); lbl2.Y >= lbl.Y || lbl2.X >= lbl.X {
-		t.Fatalf("label did not move back to the corner: %v -> %v", lbl, lbl2)
+	if zoom2, _ := h.locate("canvas-zoom"); zoom2.Y >= zoom.Y {
+		t.Fatalf("zoom buttons did not move back up: %v -> %v", zoom, zoom2)
 	}
 }
 

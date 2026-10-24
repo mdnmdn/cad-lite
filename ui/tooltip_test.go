@@ -76,7 +76,7 @@ func (r *tipRig) centre(id string) (gpui.Pixels, gpui.Pixels) {
 func TestControlTooltipsAppearAfterDelay(t *testing.T) {
 	r := openTip(t)
 	for _, id := range []string{"tool-line", "tool-mirror", "tool-dist", "tool-open", "tool-save", "tool-undo", "tool-agent", "tool-settings",
-		"doc-chip", "viewport-label", "canvas-zoom-in", "canvas-zoom-out", "canvas-zoom-fit", "layer-add", "cmd-recent", "cmd-handle",
+		"doc-chip", "canvas-zoom-in", "canvas-zoom-out", "canvas-zoom-fit", "layer-add", "cmd-recent", "cmd-handle",
 		"status-tab-model", "status-tab-layout1", "status-coords", "status-grid", "status-snapgrid", "status-ortho", "status-polar",
 		"status-snap", "status-lwt", "status-model", "status-units"} {
 		x, y := r.centre(id)

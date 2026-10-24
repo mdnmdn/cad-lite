@@ -12,8 +12,8 @@ import (
 
 // buttonCommands are the commands of every ribbon and title bar command button.
 var buttonCommands = []string{"LINE", "PLINE", "CIRCLE", "ARC", "RECTANG", "POLYGON", "MOVE", "COPY", "ROTATE", "SCALE", "ERASE",
-	"MIRROR", "OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "JOIN", "EXPLODE", "DIST", "AREA", "ID", "ZOOM",
-	"U", "REDO"}
+	"MIRROR", "OFFSET", "FILLET", "CHAMFER", "TRIM", "EXTEND", "BREAK", "JOIN", "EXPLODE",
+	"DIMLINEAR", "DIMALIGNED", "DIMCONTINUE", "DIMARC", "DIST", "AREA", "ID", "ZOOM", "U", "REDO"}
 
 func platformShortcutExpectation(text string) string {
 	if runtime.GOOS == "darwin" {
@@ -30,7 +30,8 @@ func TestCommandTipHeadlines(t *testing.T) {
 		"SCALE": "Scale (SC)", "ERASE": "Erase (E)", "MIRROR": "Mirror (MI)", "OFFSET": "Offset (O)",
 		"FILLET": "Fillet (F)", "CHAMFER": "Chamfer (CHA)", "TRIM": "Trim (TR)", "EXTEND": "Extend (EX)",
 		"BREAK": "Break (BR)", "JOIN": "Join (J)", "EXPLODE": "Explode (X)", "DIST": "Distance (DI)",
-		"AREA": "Area (AA)", "ID": "ID point (ID)", "ZOOM": "Zoom (Z)",
+		"DIMLINEAR": "Dimlinear (DLI)", "DIMALIGNED": "Dimaligned (DAL)", "DIMCONTINUE": "Dimcontinue (DCO)",
+		"DIMARC": "Dimarc (DAR)", "AREA": "Area (AA)", "ID": "ID point (ID)", "ZOOM": "Zoom (Z)",
 		"U": "Undo (Ctrl+Z / U)", "REDO": "Redo (Ctrl+Y / REDO)",
 	}
 	if runtime.GOOS == "darwin" {

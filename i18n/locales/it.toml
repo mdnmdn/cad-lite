@@ -890,6 +890,7 @@ save_tip = "Salva il disegno nel suo file, o chiede dove quando non ne ha uno; c
 [ui.ribbon]
 draw = "Disegna"
 modify = "Modifica"
+annotation = "Annotazione"
 utilities = "Utilità"
 
 [ui.title]
@@ -902,8 +903,6 @@ switch_tip = "Clic per mostrarlo, clic centrale o x per chiuderlo; Ctrl+Tab e Ct
 close_tip = "Chiudi questo disegno (CLOSE) — chiede conferma prima di perdere le modifiche non salvate"
 
 [ui.canvas]
-viewport_label = "[-][Alto][Wireframe 2D]"
-viewport_tip = "Vista — la vista dall'alto nello stile wireframe 2D, l'unica di Cad-lite"
 zoom_in_tip = "Ingrandisci — un passo attorno al centro della vista"
 zoom_out_tip = "Riduci — un passo attorno al centro della vista"
 zoom_fit_tip = "Zoom estensioni — adatta tutto il disegno alla finestra (Ctrl+E / ZOOM E)"
@@ -1240,6 +1239,7 @@ renderer_software = "Software (solo CPU)"
 renderer_hint_auto = "Automatico: usa la scheda grafica e passa al rendering software se non riesce ad avviarsi."
 renderer_hint_gpu = "GPU: usa sempre la scheda grafica. Se il driver non funziona, avviare con -render software."
 renderer_hint_software = "Software: mostra la finestra senza la scheda grafica, per driver grafici vecchi o difettosi. Usa più CPU."
+renderer_hint_software_mac = "Software: macOS non ha una visualizzazione solo CPU, quindi la finestra viene mostrata tramite OpenGL invece di Metal. Il disegno avviene sulla CPU in ogni modalità."
 renderer_restart = "Ha effetto al prossimo riavvio."
 renderer_forced = "Il flag -render o CADLITE_RENDER ha scelto il rendering di questa sessione; questa impostazione vale quando nessuno dei due è indicato."
 renderer_active = "In uso ora: %s."

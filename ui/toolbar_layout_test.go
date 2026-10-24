@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"cad-lite/doc"
+	"cad-lite/i18n"
 	"cad-lite/internal/gpui"
 	"cad-lite/ui"
 )
@@ -73,8 +74,12 @@ func (r *tbRig) boundsIn(id string, y0, y1, step float32) (rect, bool) {
 var ribbonGroupButtons = [][]string{
 	{"line", "pline", "circle", "arc", "rect", "polygon"},
 	{"move", "copy", "rotate", "scale", "erase", "mirror", "offset", "fillet", "chamfer", "trim", "extend", "break", "join", "explode"},
+	{"dimlinear", "dimaligned", "dimcontinue", "dimarc"},
 	{"dist", "area", "id", "zoom"},
 }
+
+// ribbonGroupIDs are the ids of the groups of ribbonGroupButtons, in the same order.
+var ribbonGroupIDs = []string{"tbgroup-draw", "tbgroup-modify", "tbgroup-annotation", "tbgroup-utilities"}
 
 // titleButtons are the title bar's buttons from left to right.
 var titleButtons = []string{"open", "save", "undo", "redo", "ribbon", "agent", "feedback", "settings"}
@@ -85,9 +90,12 @@ func TestRibbonReflowsWithWidth(t *testing.T) {
 		rows  func(n int) bool
 	}{
 		{1600, func(n int) bool { return n == 1 }},
-		{1100, func(n int) bool { return n == 1 }},
+		{1280, func(n int) bool { return n == 1 }},
+		{1100, func(n int) bool { return n == 2 }},
 		{900, func(n int) bool { return n == 2 }},
-		{800, func(n int) bool { return n >= 2 }},
+		{800, func(n int) bool { return n == 2 }},
+		{700, func(n int) bool { return n == 2 }},
+		{640, func(n int) bool { return n >= 2 }},
 	} {
 		t.Run(fmt.Sprint(c.width), func(t *testing.T) {
 			r := openWidth(t, c.width)
@@ -112,7 +120,7 @@ func TestRibbonReflowsWithWidth(t *testing.T) {
 					rs = append(rs, b)
 				}
 				// A group is one block: its buttons stay inside the group's own box.
-				box, ok := r.bounds([]string{"tbgroup-draw", "tbgroup-modify", "tbgroup-utilities"}[gi])
+				box, ok := r.bounds(ribbonGroupIDs[gi])
 				if !ok {
 					t.Fatalf("group %d has no box", gi)
 				}
@@ -131,6 +139,21 @@ func TestRibbonReflowsWithWidth(t *testing.T) {
 				t.Fatalf("width %d: %d ribbon rows (%v)", c.width, len(rows), tops)
 			}
 		})
+	}
+}
+
+// TestRibbonOneRowItalian keeps the ribbon on one row at the default 1280 px window with the
+// longer Italian labels.
+func TestRibbonOneRowItalian(t *testing.T) {
+	t.Cleanup(func() { i18n.Set(i18n.English) })
+	i18n.Set(i18n.Italian)
+	r := openWidth(t, 1280)
+	first, _ := r.bounds(ribbonGroupIDs[0])
+	for _, id := range ribbonGroupIDs[1:] {
+		b, ok := r.bounds(id)
+		if !ok || b.y0 != first.y0 || b.x1 > 1280 {
+			t.Fatalf("group %s at %v, Draw at %v: not on one row", id, b, first)
+		}
 	}
 }
 

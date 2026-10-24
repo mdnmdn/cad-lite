@@ -57,6 +57,18 @@ const (
 	// AppWarning: something needs attention, a triangle with an exclamation mark
 	AppWarning Name = "app-warning"
 
+	// DimAligned: the linear dimension slanted, parallel to the diagonal it measures
+	DimAligned Name = "dim-aligned"
+
+	// DimArc: the length along an arc, a curved dimension line with arrows, radial extension lines and the arc symbol above
+	DimArc Name = "dim-arc"
+
+	// DimContinue: two linear dimensions chained end to end, sharing the middle extension line
+	DimContinue Name = "dim-continue"
+
+	// DimLinear: a horizontal dimension, two extension lines and a dimension line with arrows, its text above
+	DimLinear Name = "dim-linear"
+
 	// DrawArc: a curved piece of a circle through three picked points (start, middle, end)
 	DrawArc Name = "draw-arc"
 
@@ -231,6 +243,10 @@ var All = []Name{
 	AppStop,
 	AppUpdate,
 	AppWarning,
+	DimAligned,
+	DimArc,
+	DimContinue,
+	DimLinear,
 	DrawArc,
 	DrawCircle,
 	DrawEllipse,

@@ -23,7 +23,7 @@ func TestGraphicsConfig(t *testing.T) {
 		{GraphicsHardware, "linux", ebiten.GraphicsLibraryAuto, nil},
 		{GraphicsSoftware, "linux", ebiten.GraphicsLibraryOpenGL, soft},
 		{GraphicsSoftware, "freebsd", ebiten.GraphicsLibraryOpenGL, soft},
-		{GraphicsSoftware, "darwin", ebiten.GraphicsLibraryAuto, nil},
+		{GraphicsSoftware, "darwin", ebiten.GraphicsLibraryOpenGL, nil},
 		{GraphicsSoftware, "js", ebiten.GraphicsLibraryAuto, nil},
 		{GraphicsAuto, "darwin", ebiten.GraphicsLibraryAuto, nil},
 	}

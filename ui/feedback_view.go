@@ -106,7 +106,7 @@ func (ws *Workspace) renderFeedback(w *gpui.Window, cx *gpui.App) gpui.IntoEleme
 		return ws.renderFeedbackEditor(root, w, cx)
 	}
 	if f.background != nil {
-		background := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) { w.PaintImage(b, f.background) })
+		background := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) { w.PaintImageVersion(b, f.background, 1) })
 		background.Absolute().Inset(0)
 		root.Child(background)
 	}
@@ -118,7 +118,9 @@ func (ws *Workspace) renderFeedback(w *gpui.Window, cx *gpui.App) gpui.IntoEleme
 	}
 	body := gpui.NewDiv().FlexCol().Gap(10).FlexShrink(0)
 	if f.shot != nil {
-		preview := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) { w.PaintImage(feedbackFit(b, f.shot), f.shot) })
+		preview := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
+			w.PaintImageVersion(feedbackFit(b, f.shot), f.shot, 1)
+		})
 		body.Child(gpui.NewDiv().ID("feedback-preview").FlexCol().SizeH(160).FlexShrink(0).Bg(theme.Bg).OverflowHidden().Child(preview).OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
 			if !f.busy {
 				f.editor = feedback.NewEditor(f.shot)
@@ -214,7 +216,7 @@ func (ws *Workspace) renderFeedbackEditor(root *gpui.Div, w *gpui.Window, cx *gp
 	toolbar.Child(ws.feedbackAction(cx, "feedback-edit-save", i18n.T("ui.feedback.save"), true, func(w *gpui.Window) { done(true, w) }))
 	screenshot := gpui.NewCanvas(func(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 		f.imageBounds = feedbackFit(b, f.editor.Image())
-		w.PaintImage(f.imageBounds, f.editor.Image())
+		w.PaintImageVersion(f.imageBounds, f.editor.Image(), f.editor.Version())
 	})
 	area := gpui.NewDiv().ID("feedback-editor-image").FlexCol().Flex1().MinH(0).Child(screenshot).OnMouseDown(func(e *gpui.MouseDownEvent, w *gpui.Window, _ *gpui.App) {
 		if e.IsLeft() && f.imageBounds.Contains(e.Position) {

@@ -27,8 +27,12 @@ type RenderInfo struct {
 }
 
 // rendererRowShown says whether the settings panel offers the renderer:
-// macOS and the browser have no software switch. Tests set it.
-var rendererRowShown = runtime.GOOS != "darwin" && runtime.GOOS != "js"
+// the browser has no software switch. Tests set it.
+var rendererRowShown = runtime.GOOS != "js"
+
+// rendererMac selects the macOS wording of the software hint (OpenGL instead
+// of Metal). Tests set it.
+var rendererMac = runtime.GOOS == "darwin"
 
 // renderState is a workspace's render information and the notice's state.
 type renderState struct {
@@ -104,6 +108,18 @@ func (ws *Workspace) restartForRenderer(w *gpui.Window, cx *gpui.App) {
 	w.Refresh()
 }
 
+// rendererHint is the line under the renderer choice r; on macOS software means OpenGL.
+func rendererHint(r string, mac bool) string {
+	if mac && r == settings.RendererSoftware {
+		return i18n.T("ui.settings.renderer_hint_software_mac")
+	}
+	return map[string]string{
+		settings.RendererAuto:     i18n.T("ui.settings.renderer_hint_auto"),
+		settings.RendererGPU:      i18n.T("ui.settings.renderer_hint_gpu"),
+		settings.RendererSoftware: i18n.T("ui.settings.renderer_hint_software"),
+	}[r]
+}
+
 // displaySection is the settings panel's renderer row, nil where there is no
 // choice to make.
 func (ws *Workspace) displaySection() *gpui.Div {
@@ -118,11 +134,7 @@ func (ws *Workspace) displaySection() *gpui.Div {
 		{settings.RendererGPU, i18n.T("ui.settings.renderer_gpu")},
 		{settings.RendererSoftware, i18n.T("ui.settings.renderer_software")},
 	}, tip, c.Renderer, func(v string, w *gpui.Window) { ws.change(w, func(s *settings.Settings) { s.Renderer = v }) })
-	hint := map[string]string{
-		settings.RendererAuto:     i18n.T("ui.settings.renderer_hint_auto"),
-		settings.RendererGPU:      i18n.T("ui.settings.renderer_hint_gpu"),
-		settings.RendererSoftware: i18n.T("ui.settings.renderer_hint_software"),
-	}[c.Renderer]
+	hint := rendererHint(c.Renderer, rendererMac)
 	col := gpui.NewDiv().FlexCol().Gap(4).Flex1().Child(seg, gpui.NewText(hint).TextSize(11).TextColor(uiMuted))
 	switch {
 	case r.info.Forced:

@@ -152,7 +152,7 @@ func TestRenderCompactHUDCorners(t *testing.T) {
 		}
 	}
 	d := doc.New()
-	h := openSettingsWS(t, NewWorkspace(d, nil), 640, 600, 1)
+	h := openSettingsWS(t, NewWorkspace(d, nil), 640, 680, 1)
 	h.ws.togglePropsHUD()
 	h.hw.Window().Refresh()
 	h.hw.Pixels()
@@ -202,7 +202,7 @@ func TestPropertiesHUDOverflowScrollDoesNotZoomCanvas(t *testing.T) {
 		hs = append(hs, tx.Add(e))
 	}
 	tx.Commit()
-	h := openSettingsWS(t, NewWorkspace(d, nil), 640, 600, 1)
+	h := openSettingsWS(t, NewWorkspace(d, nil), 640, 680, 1)
 	h.ws.session.Selection().Add(hs...)
 	h.ws.togglePropsHUD()
 	h.hw.Window().Refresh()

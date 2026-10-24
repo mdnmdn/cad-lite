@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"encoding/json"
+	"image"
 	"image/color"
 	"net/http"
 	"net/http/httptest"
@@ -91,6 +92,44 @@ func TestFeedbackDialogCaptureEditorAndIsolation(t *testing.T) {
 	h.hw.Pixels()
 	if f.open {
 		t.Fatal("escape did not close feedback")
+	}
+}
+
+func TestFeedbackEditorStrokeAndUndoReachTheScreen(t *testing.T) {
+	h := openSettingsApp(t)
+	t.Cleanup(h.ws.ShutdownFeedback)
+	h.clickID("tool-feedback")
+	h.hw.Pixels()
+	f := h.ws.fb
+	h.clickID("feedback-preview")
+	h.hw.Pixels()
+	if !f.editing {
+		t.Fatal("screenshot editor did not open")
+	}
+	// Only the screenshot's area: the toolbar repaints anyway when Undo becomes enabled.
+	shown := func() []byte {
+		h.hw.Window().Refresh()
+		h.hw.Pixels()
+		s, b := h.hw.ScaleFactor(), f.imageBounds
+		r := image.Rect(int(float32(b.Origin.X)*s), int(float32(b.Origin.Y)*s), int(float32(b.Origin.X+b.Size.W)*s), int(float32(b.Origin.Y+b.Size.H)*s))
+		img := h.hw.Image().SubImage(r).(*image.NRGBA)
+		var out []byte
+		for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
+			i := img.PixOffset(img.Rect.Min.X, y)
+			out = append(out, img.Pix[i:i+4*img.Rect.Dx()]...)
+		}
+		return out
+	}
+	before := shown()
+	f.editor.Begin(feedback.Point{X: 40, Y: 40}, 12, color.NRGBA{255, 0, 0, 255}, false)
+	f.editor.Move(feedback.Point{X: 120, Y: 40})
+	f.editor.End()
+	if bytes.Equal(shown(), before) {
+		t.Fatal("pen stroke not repainted on screen")
+	}
+	f.editor.Undo()
+	if !bytes.Equal(shown(), before) {
+		t.Fatal("undo not repainted on screen")
 	}
 }
 

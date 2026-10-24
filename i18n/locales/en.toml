@@ -889,6 +889,7 @@ save_tip = "Saves the drawing to its file, or asks where when it has none; right
 [ui.ribbon]
 draw = "Draw"
 modify = "Modify"
+annotation = "Annotation"
 utilities = "Utilities"
 
 [ui.title]
@@ -901,8 +902,6 @@ switch_tip = "Click to show it, middle-click or x to close it; Ctrl+Tab and Ctrl
 close_tip = "Close this drawing (CLOSE) — asks before unsaved changes are lost"
 
 [ui.canvas]
-viewport_label = "[-][Top][2D Wireframe]"
-viewport_tip = "Viewport — the top view in the 2D wireframe style, the only one Cad-lite has"
 zoom_in_tip = "Zoom in — a step about the centre of the view"
 zoom_out_tip = "Zoom out — a step about the centre of the view"
 zoom_fit_tip = "Zoom extents — fits the whole drawing in the window (Ctrl+E / ZOOM E)"
@@ -1235,6 +1234,7 @@ renderer_software = "Software (CPU only)"
 renderer_hint_auto = "Automatic: uses the graphics card and switches to software rendering when it fails to start."
 renderer_hint_gpu = "GPU: always uses the graphics card. If its driver fails, start with -render software."
 renderer_hint_software = "Software: shows the window without the graphics card, for old or broken graphics drivers. Uses more CPU."
+renderer_hint_software_mac = "Software: macOS has no CPU-only display, so this shows the window through OpenGL instead of Metal. Drawing is on the CPU in every mode."
 renderer_restart = "Takes effect after restart."
 renderer_forced = "The -render flag or CADLITE_RENDER chose the renderer of this session; this setting applies when neither is given."
 renderer_active = "In use now: %s."
