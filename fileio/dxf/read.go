@@ -184,6 +184,12 @@ func (Codec) Read(r io.Reader) (*doc.Drawing, []string, error) {
 	if d.Layer(d.CurrentLayer) == nil {
 		d.CurrentLayer = "0"
 	}
+	if _, ok := d.Linetype(d.CurrentLinetype); !ok && d.CurrentLinetype != doc.LinetypeByBlock {
+		d.CurrentLinetype = ""
+	}
+	if _, ok := d.DimStyle(d.CurrentDimStyle); !ok {
+		d.CurrentDimStyle = d.DimStyles()[0].Name
+	}
 	for _, h := range d.Handles() {
 		if in, ok := d.Entity(h).(*doc.Insert); ok {
 			if err := d.InsertError(in); err != nil {
@@ -204,8 +210,10 @@ type state struct {
 	mtextIgnored int
 	// main is the drawing being read (block contents are read into scratch drawings first).
 	main *doc.Drawing
-	// dimStyles are main's DIMSTYLE records, parsed when the first dimension is read.
-	dimStyles map[string]dimStyleRec
+	// dimArcSym is the DIMARCSYM of main's DIMSTYLE records by upper-cased name.
+	dimArcSym map[string]int
+	// names resolves the handles of the TABLES section: block records and text styles.
+	names names
 	// dimBlocks are the upper-cased names of the blocks of converted dimensions, not loaded
 	// (dimensionBlocks).
 	dimBlocks map[string]bool
@@ -213,14 +221,15 @@ type state struct {
 
 // preservedTables are the tables whose records the document does not model
 // and the writer emits again.
-var preservedTables = map[string]bool{"VPORT": true, "LTYPE": true, "STYLE": true, "VIEW": true, "UCS": true, "APPID": true, "DIMSTYLE": true}
+// LTYPE and DIMSTYLE are modelled (doc.Linetype, doc.DimStyle).
+var preservedTables = map[string]bool{"VPORT": true, "STYLE": true, "VIEW": true, "UCS": true, "APPID": true}
 
 func applySection(d *doc.Drawing, section string, objs []object, st *state) error {
 	switch section {
 	case "HEADER":
 		readHeader(d, objs)
 	case "TABLES":
-		readTables(d, objs)
+		readTables(d, objs, st)
 	case "BLOCKS":
 		readModeledBlocks(d, objs, st)
 	case "OBJECTS":
@@ -253,18 +262,28 @@ func bumpSeed(d *doc.Drawing, ps []doc.Pair) {
 	}
 }
 
-func readTables(d *doc.Drawing, objs []object) {
+func readTables(d *doc.Drawing, objs []object, st *state) {
 	var layerOrder []string
 	seenLayers := map[string]bool{}
 	table := ""
+	var dimStyleObjs []object
 	for _, o := range objs {
 		switch o.typ {
 		case "TABLE":
 			table = o.str(2)
 		case "ENDTAB":
 			table = ""
+		case "LTYPE":
+			if table == "LTYPE" {
+				readLinetype(d, o)
+			}
+		case "DIMSTYLE":
+			if table == "DIMSTYLE" {
+				dimStyleObjs = append(dimStyleObjs, o)
+			}
 		case "BLOCK_RECORD":
 			h, _ := doc.ParseHandle(o.str(5))
+			st.names.add(h, o.str(2), true)
 			switch strings.ToUpper(o.str(2)) {
 			case "*MODEL_SPACE":
 				d.Preserved.ModelOwner = h
@@ -282,8 +301,9 @@ func readTables(d *doc.Drawing, objs []object) {
 			if !preservedTables[table] || o.typ != table {
 				continue
 			}
-			if o.typ == "LTYPE" && strings.EqualFold(o.str(2), "CONTINUOUS") {
-				continue
+			if o.typ == "STYLE" {
+				h, _ := doc.ParseHandle(o.str(5))
+				st.names.add(h, o.str(2), false)
 			}
 			if o.typ == "APPID" && isLayerApp(o.str(2)) {
 				continue
@@ -296,6 +316,7 @@ func readTables(d *doc.Drawing, objs []object) {
 			d.Preserved.Tables[table] = append(d.Preserved.Tables[table], r)
 		}
 	}
+	readDimStyles(d, dimStyleObjs, st)
 	if len(layerOrder) > 0 {
 		for _, l := range d.Layers() {
 			if !seenLayers[l.Name] {
@@ -350,6 +371,22 @@ func readHeader(d *doc.Drawing, objs []object) {
 			d.Header.InsUnits, _ = strconv.Atoi(strings.TrimSpace(p.val))
 		case "$CLAYER":
 			d.CurrentLayer = strings.TrimSpace(p.val)
+		case "$CECOLOR":
+			if v, err := strconv.Atoi(strings.TrimSpace(p.val)); err == nil && v >= 0 && v <= doc.ByLayer {
+				d.CurrentColor = v
+			}
+		case "$CELTYPE":
+			d.CurrentLinetype = linetypeName(p.val)
+		case "$CELTSCALE":
+			d.CurrentLinetypeScale = scaleValue(p.val)
+		case "$CELWEIGHT":
+			if v, err := strconv.Atoi(strings.TrimSpace(p.val)); err == nil {
+				d.CurrentLineweight = doc.LineweightFromDXF(v)
+			}
+		case "$LTSCALE":
+			d.LTScale = scaleValue(p.val)
+		case "$DIMSTYLE":
+			d.CurrentDimStyle = strings.TrimSpace(p.val)
 		case "$ACADVER":
 			// The drawing saves in the version it was read in, except R12 and older: R12 is what
 			// Cad-lite writes by default, and such a file saves as the codec chooses (R12 unless
@@ -388,8 +425,9 @@ func readLayer(d *doc.Drawing, o object) {
 	if o.has(290) {
 		l.NoPlot = o.int(290) == 0
 	}
-	if o.has(370) && o.int(370) > 0 {
-		l.Lineweight = o.int(370)
+	if o.has(370) {
+		// -3 is the default and 0 is 0.00 mm; ByLayer and ByBlock mean nothing on a layer.
+		l.Lineweight = doc.LineweightFromDXF(o.int(370)).LayerValue()
 	}
 	readLayerXData(l, o)
 }
@@ -409,7 +447,7 @@ func readLayerXData(l *doc.Layer, o object) {
 			if ints == 0 {
 				l.NoPlot = v != 0
 			} else if ints == 1 {
-				l.Lineweight = v
+				l.Lineweight = doc.LineweightFromLayer(v).LayerValue()
 			}
 			ints++
 		case p.code == 1000:
@@ -431,8 +469,10 @@ func isLayerApp(name string) bool {
 	return strings.EqualFold(name, layerApp) || strings.EqualFold(name, legacyLayerApp)
 }
 
+// common reads the groups every entity has: handle (5), layer (8), colour (62; 0 is ByBlock),
+// linetype (6; BYLAYER is ""), linetype scale (48; 1 is 0) and lineweight (370).
 func common(o object) doc.EntityCommon {
-	c := doc.EntityCommon{Layer: o.str(8), Color: doc.ByLayer}
+	c := doc.EntityCommon{Layer: o.str(8), Color: doc.ByLayer, Linetype: linetypeName(o.str(6))}
 	if c.Layer == "" {
 		c.Layer = "0"
 	}
@@ -444,7 +484,68 @@ func common(o object) doc.EntityCommon {
 			c.Color = v
 		}
 	}
+	if o.has(48) {
+		c.LinetypeScale = scaleValue(o.str(48))
+	}
+	if o.has(370) {
+		c.Lineweight = doc.LineweightFromDXF(o.int(370))
+	}
 	return c
+}
+
+// linetypeName is an entity or header linetype as the document keeps it: "" for BYLAYER (or none),
+// doc.LinetypeByBlock for BYBLOCK, any other name as written.
+func linetypeName(v string) string {
+	v = strings.TrimSpace(v)
+	switch {
+	case doc.IsByLayerLinetype(v):
+		return ""
+	case doc.IsByBlockLinetype(v):
+		return doc.LinetypeByBlock
+	}
+	return v
+}
+
+// scaleValue is a linetype scale as the document keeps it: 0 (unset, reading as 1) for 1 or a
+// value that is not a positive finite number.
+func scaleValue(v string) float64 {
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil || !(f > 0) || math.IsInf(f, 0) || f == 1 {
+		return 0
+	}
+	return f
+}
+
+// readLinetype reads an LTYPE record: name (2), description (3), the dash count (73) and each
+// element's length (49). A record with an embedded shape or text (74 non-zero) keeps its groups
+// in doc.Linetype.Raw. BYLAYER and BYBLOCK, which R2000 files list, are not records here.
+func readLinetype(d *doc.Drawing, o object) {
+	name := o.str(2)
+	if name == "" || doc.IsByLayerLinetype(name) || doc.IsByBlockLinetype(name) {
+		return
+	}
+	l := doc.Linetype{Name: name}
+	l.Description, _ = o.raw(3)
+	complexType := false
+	for _, p := range o.pairs {
+		switch p.code {
+		case 49:
+			v, _ := strconv.ParseFloat(strings.TrimSpace(p.val), 64)
+			l.Pattern = append(l.Pattern, v)
+		case 74:
+			if v, _ := strconv.Atoi(strings.TrimSpace(p.val)); v != 0 {
+				complexType = true
+			}
+		}
+	}
+	if strings.EqualFold(name, doc.LinetypeContinuous) {
+		l.Name, l.Pattern = doc.LinetypeContinuous, nil
+	}
+	if complexType {
+		l.Raw = rawPairs(o)
+		bumpSeed(d, l.Raw)
+	}
+	d.LoadLinetype(l)
 }
 
 func vec(o object, xc int) geom.Vec2 { return geom.V(o.float(xc), o.float(xc+10)) }
@@ -476,7 +577,7 @@ func readEntities(d *doc.Drawing, objs []object, st *state) {
 				e = unknown(o, nil, c)
 			}
 		case "INSERT":
-			if dim := readDimInsert(o, c); dim != nil {
+			if dim := readDimInsert(o, c, st.main); dim != nil {
 				e = dim
 				break
 			}

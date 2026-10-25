@@ -38,13 +38,13 @@ What Cad-lite uses from the library:
 | From gpui | Used for |
 |---|---|
 | `Div`, `Text`, flexbox builders, `Hover` styles | Every panel, button and label |
-| `TextInput` with `OnSubmit`, `OnChange`, `OnEscape` | The command line (single-line) and the agent prompt (`Multiline`) |
-| `TextInput.OnKeyDown` | The command line's Delete and Backspace on an empty field, which erase the selection instead of editing |
+| `TextInput` with `OnSubmit`, `OnChange`, `OnEscape`, `OnBlur` | The command line (single-line), the agent prompt (`Multiline`) and the Properties panel's shared value field, which commits on Enter or blur and reverts on Escape |
+| `TextInput.OnKeyDown` | The command line's Delete and Backspace on an empty field, which erase the selection instead of editing; Tab and Shift+Tab between the Properties panel's rows |
 | `Window.OnShouldClose` | The window's close button (and macOS Cmd+Q), which asks about unsaved drawings before quitting |
-| `TextInput.Multiline`, `FocusHandle`, `Div.OnAction` | TEXTEDIT's plain multiline field, trapped field/button navigation and drawing-action suppression while its modal is open |
+| `TextInput.Multiline`, `FocusHandle`, `Div.OnAction` | TEXTEDIT's plain multiline field, trapped field/button navigation and drawing-action suppression while its modal is open; the Properties panel's focusable drop-down controls and its suppression of Undo, Redo and command keys while a panel control has the keyboard |
 | `List`, `ListState`, `ScrollHandle` | The agent transcript: a virtualized list of variable-height blocks; only those near the viewport are built |
-| `Canvas` | The drawing area: a leaf that paints through a callback with its bounds |
-| `Stroke` via `Window.PaintStroke` | Every line the canvas draws |
+| `Canvas` | The drawing area: a leaf that paints through a callback with its bounds; also the Properties panel's linetype and arrow samples and the anchors its drop-downs hang from |
+| `Stroke` via `Window.PaintStroke` | Every line the canvas draws, and the Properties panel's dash and arrowhead samples (filled arrowheads as horizontal strokes, as `render/gpuirender` fills) |
 | `Quad` via `Window.PaintQuad` | The canvas background and box-selection rectangles |
 | Keymap, `NewAction`, key context `cad` | Shortcuts (see the command line feature) |
 | `HeadlessPlatform`, `HeadlessWindow.Dispatch` | `-png` renders and UI tests |
@@ -53,7 +53,7 @@ What Cad-lite uses from the library:
 | `Div.Tooltip`, `App.SetTooltipStyle` | A hover tooltip on every clickable control, styled from the theme |
 | `Div.OnFileDrop`, `App.OnOpenPaths` | Files dropped on the window and files the OS asks the app to open (macOS Finder and Dock), both into `Workspace.OpenPaths` |
 
-`Stroke`, `Canvas`, `TextInput.OnEscape`, `TextInput.OnKeyDown`, `TextInput.Multiline`, `Window.OnShouldClose` and `List` exist in the library for Cad-lite. A new need follows the
+`Stroke`, `Canvas`, `TextInput.OnEscape`, `TextInput.OnBlur`, `TextInput.OnKeyDown`, `TextInput.Multiline`, `Window.OnShouldClose` and `List` exist in the library for Cad-lite. A new need follows the
 library's rule: its API contract changes first, then its code, then this table.
 
 ## Conventions

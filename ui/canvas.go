@@ -27,6 +27,8 @@ type canvasState struct {
 	panLast  gpui.Point
 	dl       render.DisplayList
 	hoverHit doc.Handle
+	// paint is the painter's fill scratch, kept from frame to frame.
+	paint gpuirender.Scratch
 	// sized is true once the view has been sized to a painted canvas.
 	sized bool
 	// ref is the scale and canvas size the view was last framed at by the
@@ -328,7 +330,7 @@ func (ws *Workspace) paintCanvas(b gpui.Bounds, w *gpui.Window, _ *gpui.App) {
 		ws.cursorItems(dl)
 	}
 	ws.rulerItems(dl)
-	gpuirender.Painter{Origin: b.Origin, View: *v}.Paint(w, dl)
+	gpuirender.Painter{Origin: b.Origin, View: *v, Scratch: &ws.canvas.paint}.Paint(w, dl)
 	paintFrame(w, b)
 }
 

@@ -10,7 +10,12 @@ type ChangeSet struct {
 	Added, Modified, Erased []Handle
 	// Groups and Blocks list changed metadata objects.
 	Groups, Blocks []Handle
-	// Support reports an imported supporting-layer or symbol-table change.
+	// Support reports a change to the drawing's tables or current properties: layers, linetypes,
+	// dimension styles, imported STYLE records (Txn.ImportBlockSupport) or CurrentProps. A layer
+	// property may have changed the appearance of any entity. Block references and dimensions are
+	// listed in Modified only when the change affects how existing entities draw (a table, LTSCALE
+	// or LWDEFAULT); a change of only CLAYER, CECOLOR, CELTYPE, CELTSCALE, CELWEIGHT, DIMSTYLE or
+	// INSUNITS lists none.
 	Support bool
 	// LayerOrder reports a change to the canonical front-to-back order.
 	LayerOrder bool
@@ -37,7 +42,10 @@ type Txn struct {
 	order  []Handle
 	// edits lists every handle Add, Modify and Erase touched since Begin or the last TakeEdits.
 	edits []Handle
-	done  bool
+	// dependentsQueued reports that edits already holds the block references and dimensions a
+	// table edit queued.
+	dependentsQueued bool
+	done             bool
 }
 
 // Begin opens a transaction. Only one may be open at a time.
@@ -62,10 +70,20 @@ func (t *Txn) touch(h Handle) {
 	}
 }
 
-// Add inserts e into model space on its layer (the current layer when
-// unset) and returns its new handle. It adds nothing and returns 0 for an
-// *Unknown, which only a file reader may create.
-func (t *Txn) Add(e Entity) Handle {
+// Add inserts e into model space and returns its new handle. Unset properties take the
+// drawing's current ones: an empty Layer the current layer, a Color of 0 CurrentColor (so a
+// ByBlock entity is added with CurrentColor ByBlock, or with AddCopy), an empty Linetype
+// CurrentLinetype, a LinetypeScale of 0 CurrentLinetypeScale and a ByLayer Lineweight
+// CurrentLineweight. It adds nothing and returns 0 for an *Unknown, which only a file reader may
+// create.
+func (t *Txn) Add(e Entity) Handle { return t.add(e, true) }
+
+// AddCopy is Add for a copy of an existing entity (COPY, MIRROR, ARRAY, OFFSET): it keeps every
+// property as it is, ByBlock colour and ByLayer linetype and lineweight included, except an
+// empty Layer, which takes the current layer.
+func (t *Txn) AddCopy(e Entity) Handle { return t.add(e, false) }
+
+func (t *Txn) add(e Entity, current bool) Handle {
 	if _, ok := e.(*Unknown); ok {
 		return 0
 	}
@@ -92,16 +110,32 @@ func (t *Txn) Add(e Entity) Handle {
 	if c.Layer == "" {
 		c.Layer = t.d.CurrentLayer
 	}
-	if c.Color == 0 {
-		c.Color = ByLayer
-		if t.d.CurrentColor >= 1 && t.d.CurrentColor <= 255 {
-			c.Color = t.d.CurrentColor
-		}
+	if current {
+		t.d.applyCurrent(c)
 	}
 	t.touch(c.H)
 	t.edits = append(t.edits, c.H)
 	t.d.insert(e)
 	return c.H
+}
+
+// applyCurrent gives c's unset properties the current ones (see Txn.Add).
+func (d *Drawing) applyCurrent(c *EntityCommon) {
+	if c.Color == 0 {
+		c.Color = ByLayer
+		if d.CurrentColor >= 0 && d.CurrentColor < ByLayer {
+			c.Color = d.CurrentColor
+		}
+	}
+	if c.Linetype == "" && !IsByLayerLinetype(d.CurrentLinetype) {
+		c.Linetype = d.CurrentLinetype
+	}
+	if c.LinetypeScale == 0 && d.CurrentLinetypeScale != 1 && validScale(d.CurrentLinetypeScale) {
+		c.LinetypeScale = d.CurrentLinetypeScale
+	}
+	if c.Lineweight == LineweightByLayer && d.CurrentLineweight.valid() {
+		c.Lineweight = d.CurrentLineweight
+	}
 }
 
 // Modify snapshots the entity h, then calls fn to change it in place.
@@ -220,6 +254,7 @@ func (t *Txn) Touched() bool {
 func (t *Txn) TakeEdits() []Handle {
 	hs := t.edits
 	t.edits = nil
+	t.dependentsQueued = false
 	return hs
 }
 
@@ -244,8 +279,10 @@ func (d *Drawing) restore(h Handle, state Entity, cs ChangeSet) ChangeSet {
 // JournalStep is one undoable unit: each touched handle's state before and
 // after (nil = absent).
 type JournalStep struct {
-	Before, After                     map[Handle]Entity
-	supportBefore, supportAfter       *blockSupport
+	Before, After               map[Handle]Entity
+	supportBefore, supportAfter *blockSupport
+	// supportLook reports that the support change affects how existing entities draw.
+	supportLook                       bool
 	layerOrderBefore, layerOrderAfter []string
 	// GroupsBefore and GroupsAfter snapshot group membership; nil means untouched.
 	GroupsBefore, GroupsAfter map[Handle]*Group
@@ -289,7 +326,7 @@ func (d *Drawing) Undo() bool {
 	d.restoreSupport(s.supportBefore, s.supportAfter)
 	d.applyMetadata(s.GroupsBefore, s.BlocksBefore)
 	orderChanged := d.restoreLayerOrder(s.layerOrderBefore)
-	d.applyWithMetadata(s.Before, s.GroupsBefore, s.BlocksBefore, s.supportBefore, orderChanged)
+	d.applyWithMetadata(s.Before, s.GroupsBefore, s.BlocksBefore, s.supportBefore != nil, s.supportLook, orderChanged)
 	return true
 }
 
@@ -305,11 +342,11 @@ func (d *Drawing) Redo() bool {
 	d.restoreSupport(s.supportAfter, s.supportBefore)
 	d.applyMetadata(s.GroupsAfter, s.BlocksAfter)
 	orderChanged := d.restoreLayerOrder(s.layerOrderAfter)
-	d.applyWithMetadata(s.After, s.GroupsAfter, s.BlocksAfter, s.supportAfter, orderChanged)
+	d.applyWithMetadata(s.After, s.GroupsAfter, s.BlocksAfter, s.supportAfter != nil, s.supportLook, orderChanged)
 	return true
 }
 
-func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]*Group, blocks map[string]*Block, support *blockSupport, orderChanged bool) {
+func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]*Group, blocks map[string]*Block, support, look bool, orderChanged bool) {
 	hs := make([]Handle, 0, len(states))
 	for h := range states {
 		hs = append(hs, h)
@@ -319,15 +356,8 @@ func (d *Drawing) applyWithMetadata(states map[Handle]Entity, groups map[Handle]
 	for _, h := range hs {
 		cs = d.restore(h, states[h], cs)
 	}
-	d.metadataChanges(&cs, groups, blocks)
-	if support != nil {
-		cs.Support = true
-		for _, h := range d.insertHandles() {
-			if !slices.Contains(cs.Modified, h) && !slices.Contains(cs.Added, h) {
-				cs.Modified = append(cs.Modified, h)
-			}
-		}
-	}
+	d.metadataChanges(&cs, groups, blocks, look)
+	cs.Support = support
 	d.publish(cs)
 }
 
@@ -338,13 +368,11 @@ func (t *Txn) finishMetadata(step *JournalStep, cs *ChangeSet) {
 		cs.LayerOrder = true
 	}
 	if t.supportBefore != nil {
-		step.supportBefore = t.supportBefore
-		step.supportAfter = t.d.snapshotSupport()
-		cs.Support = true
-		for _, h := range t.d.insertHandles() {
-			if !slices.Contains(cs.Added, h) && !slices.Contains(cs.Modified, h) {
-				cs.Modified = append(cs.Modified, h)
-			}
+		if now := t.d.snapshotSupport(); !t.supportBefore.equal(now) {
+			step.supportBefore = t.supportBefore
+			step.supportAfter = now
+			step.supportLook = !t.supportBefore.sameLook(now)
+			cs.Support = true
 		}
 	}
 	if t.groupsBefore != nil {
@@ -355,17 +383,20 @@ func (t *Txn) finishMetadata(step *JournalStep, cs *ChangeSet) {
 		step.BlocksBefore = t.blocksBefore
 		step.BlocksAfter = cloneBlocks(t.d.blocks)
 	}
-	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore)
+	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore, step.supportLook)
 }
 func (t *Txn) restoreMetadata(cs *ChangeSet) {
+	look := false
 	if t.supportBefore != nil {
-		t.d.restoreSupport(t.supportBefore, t.d.snapshotSupport())
-		cs.Support = true
-		cs.Modified = append(cs.Modified, t.d.insertHandles()...)
+		if now := t.d.snapshotSupport(); !t.supportBefore.equal(now) {
+			look = !t.supportBefore.sameLook(now)
+			t.d.restoreSupport(t.supportBefore, now)
+			cs.Support = true
+		}
 	}
 	t.d.applyMetadata(t.groupsBefore, t.blocksBefore)
 	cs.LayerOrder = t.d.restoreLayerOrder(t.layerOrderBefore)
-	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore)
+	t.d.metadataChanges(cs, t.groupsBefore, t.blocksBefore, look)
 }
 func (d *Drawing) applyMetadata(groups map[Handle]*Group, blocks map[string]*Block) {
 	if groups != nil {
@@ -376,13 +407,19 @@ func (d *Drawing) applyMetadata(groups map[Handle]*Group, blocks map[string]*Blo
 		d.bindBlocks()
 	}
 }
-func (d *Drawing) metadataChanges(cs *ChangeSet, groups map[Handle]*Group, blocks map[string]*Block) {
+
+// metadataChanges adds the groups and blocks of a metadata change to cs and, when a block
+// definition or (look) a table that affects how entities draw changed, every block reference and
+// dimension to cs.Modified, each once.
+func (d *Drawing) metadataChanges(cs *ChangeSet, groups map[Handle]*Group, blocks map[string]*Block, look bool) {
 	if groups != nil {
+		seen := make(map[Handle]bool, len(groups)+len(d.groups))
 		for h := range groups {
+			seen[h] = true
 			cs.Groups = append(cs.Groups, h)
 		}
 		for h := range d.groups {
-			if !slices.Contains(cs.Groups, h) {
+			if !seen[h] {
 				cs.Groups = append(cs.Groups, h)
 			}
 		}
@@ -391,21 +428,41 @@ func (d *Drawing) metadataChanges(cs *ChangeSet, groups map[Handle]*Group, block
 		}
 	}
 	if blocks != nil {
+		seen := make(map[Handle]bool, len(blocks)+len(d.blocks))
 		for _, b := range blocks {
+			seen[b.H] = true
 			cs.Blocks = append(cs.Blocks, b.H)
 		}
 		for _, b := range d.blocks {
-			if !slices.Contains(cs.Blocks, b.H) {
+			if !seen[b.H] {
 				cs.Blocks = append(cs.Blocks, b.H)
 			}
 		}
 		if len(cs.Blocks) == 0 {
 			cs.Blocks = append(cs.Blocks, 0)
 		}
-		for _, h := range d.insertHandles() {
-			if !slices.Contains(cs.Added, h) && !slices.Contains(cs.Modified, h) {
-				cs.Modified = append(cs.Modified, h)
-			}
+	}
+	if blocks != nil || look {
+		cs.markModified(d.dependentHandles())
+	}
+}
+
+// markModified appends to Modified each of hs that Added and Modified do not list yet.
+func (cs *ChangeSet) markModified(hs []Handle) {
+	if len(hs) == 0 {
+		return
+	}
+	listed := make(map[Handle]bool, len(cs.Added)+len(cs.Modified))
+	for _, h := range cs.Added {
+		listed[h] = true
+	}
+	for _, h := range cs.Modified {
+		listed[h] = true
+	}
+	for _, h := range hs {
+		if !listed[h] {
+			listed[h] = true
+			cs.Modified = append(cs.Modified, h)
 		}
 	}
 }

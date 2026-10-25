@@ -32,13 +32,6 @@ func coreVars(s *Session, v *Vars) {
 	v.Register(Var{Name: "LASTPOINT", Kind: VarPoint, Default: geom.Vec2{},
 		Read:     func() any { return s.mem.Point() },
 		OnChange: func(_, n any) { s.mem.SetPoint(n.(geom.Vec2)) }})
-	v.Register(Var{Name: "CLAYER", Kind: VarText, Default: "0",
-		Read: func() any { return s.ctx.Doc.CurrentLayer },
-		OnChange: func(_, n any) {
-			if name := n.(string); s.ctx.Doc.Layer(name) != nil {
-				s.ctx.Doc.CurrentLayer = name
-			}
-		}})
 	v.Register(Var{Name: "LUPREC", Kind: VarInt, Default: 4, Min: 0, Max: 8})
 	v.Register(Var{Name: "AUPREC", Kind: VarInt, Default: 0, Min: 0, Max: 8})
 }
@@ -63,7 +56,8 @@ type storedVar struct {
 // no Cad-lite package owns yet: the ones with no meaning here (FILEDIA) are permanent no-ops, some
 // are read where they are used (MIRROR reads MIRRTEXT), the rest hold the value until their
 // package registers the real variable, which then takes the name (registerStoredVars skips a
-// registered name; TEXTSIZE and DIMSCALE are the commands package's). Angle variables (POLARANG,
+// registered name; TEXTSIZE is the commands package's). The current properties and the DIM*
+// variables are drawing-backed (propvars.go). Angle variables (POLARANG,
 // SNAPANG, ANGBASE, CHAMFERD) are not listed: their unit is the units package's.
 var storedVars = []storedVar{
 	// Command line and scripts.
@@ -77,7 +71,6 @@ var storedVars = []storedVar{
 	{name: "SHORTCUTMENU", kind: VarInt, def: 11, max: 31},
 	{name: "MIRRTEXT", kind: VarInt, def: 0, max: 1},
 	{name: "UCSFOLLOW", kind: VarInt, def: 0, max: 1},
-	{name: "DIMSCALE", kind: VarReal, def: 1.0},
 	{name: "TEXTSIZE", kind: VarReal, def: 2.5},
 	{name: "FILLMODE", kind: VarInt, def: 1, max: 1},
 	{name: "BLIPMODE", kind: VarInt, def: 0, max: 1},
@@ -304,7 +297,7 @@ func VarErrorKey(err error, v *Vars, name string) string {
 		return "session.setvar.unknown"
 	case errors.Is(err, ErrVarReadOnly):
 		return "session.setvar.read_only"
-	case !ok:
+	case !ok, errors.Is(err, ErrVarInvalid), errors.Is(err, ErrVarBusy):
 		return MsgInvalidValue
 	case errors.Is(err, ErrVarRange):
 		if d.Kind == VarInt {

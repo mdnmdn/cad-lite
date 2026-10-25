@@ -158,7 +158,7 @@ func Tools(e Env) []mcp.Tool {
 		def(e, "set_entity_layer", "Move entities to an existing layer.", schemaEntityLayer, true, setEntityLayer),
 		def(e, "batch", "Apply many add_* and edit operations (add_line, add_circle, add_arc, add_polyline, add_rectangle, add_polygon, add_text, add_mtext, erase, move, rotate, scale, set_entity_layer, update_text) in one call and ONE undo step, like an AutoCAD UNDO BEGIN ... UNDO END group. Each op is {op, id?, args} where args are exactly the single tool's arguments. Give an add_* op an id (e.g. \"door1\") and later ops can name its entity as \"$door1\" in handles. All or nothing: every op is checked first and the batch runs in one transaction; any failure changes nothing and names the failing ops[i]. Returns handles (id -> handle), created, modified and erased. At most 500 ops and 200000 polyline points per call.", schemaBatch, true, runBatch),
 		def(e, "set_layer", "Make an existing layer current.", schemaSetLayer, true, setLayer),
-		def(e, "create_layer", "Create a layer (or update an existing one's color, visibility and lock); optionally make it current. Layer table edits are not undoable.", schemaCreateLayer, true, createLayer),
+		def(e, "create_layer", "Create a layer (or update an existing one's color, visibility and lock); optionally make it current. One undo step.", schemaCreateLayer, true, createLayer),
 		def(e, "undo", "Undo the last steps (default 1).", schemaSteps, true, undo),
 		def(e, "redo", "Redo undone steps (default 1).", schemaSteps, true, redo),
 		def(e, "zoom_extents", "Fit the view to the drawing's extents.", schemaEmpty, true, zoomExtents),

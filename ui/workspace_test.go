@@ -159,12 +159,22 @@ func TestPanAndZoom(t *testing.T) {
 func TestSelectionHighlightIsPainted(t *testing.T) {
 	h := open(t)
 	h.ws.Session().Script("CIRCLE 0,0 40")
-	before := len(h.hw.Window().Scene().Strokes)
+	// Only the canvas's strokes count: the Properties panel's samples change with the selection.
+	canvasStrokes := func() int {
+		right, n := h.hw.Window().Bounds().Size.W-360, 0 // left of the widest side panel
+		for _, s := range h.hw.Window().Scene().Strokes {
+			if len(s.Points) > 0 && s.Points[0].X < right {
+				n++
+			}
+		}
+		return n
+	}
+	before := canvasStrokes()
 	h.click(h.at(geom.V(40, 0)), gpui.MouseLeft)
 	if h.ws.Session().Selection().Len() != 1 {
 		t.Fatal("click on the circle did not select it")
 	}
-	if after := len(h.hw.Window().Scene().Strokes); after <= before {
+	if after := canvasStrokes(); after <= before {
 		t.Fatalf("strokes %d -> %d: no highlight painted", before, after)
 	}
 }

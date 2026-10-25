@@ -28,7 +28,19 @@ type writer struct {
 	dims     []dimOut
 	dimNames map[doc.Handle]string
 	// dimStyles are the written DIMSTYLE records as a reader sees them (dimStyleTable).
-	dimStyles map[string]dimStyleRec
+	dimStyles map[string]doc.DimStyle
+	// dimStylesOwn are the same records as this reader sees them (with CADLITE_DIMSTYLE).
+	dimStylesOwn map[string]doc.DimStyle
+	// arrowHandles are the block record handles of the arrow blocks by upper-cased name, and
+	// arrowGen the arrow blocks to generate (planArrows; AC1015 handles, R12 names only).
+	arrowHandles map[string]string
+	arrowGen     []arrowOut
+	// styleHandles are the STYLE record handles by upper-cased name (AC1015).
+	styleHandles map[string]string
+	// ltNames are the written linetype names by upper-cased name, and ltRecords the records
+	// (planLinetypes).
+	ltNames   map[string]string
+	ltRecords []doc.Linetype
 }
 
 func (w *writer) pair(code int, val string) {
@@ -58,8 +70,9 @@ func (w *writer) point(code int, p geom.Vec2) {
 // written verbatim, group for group. R12 has no SPLINE, MTEXT, HATCH and the
 // like, so an unknown entity whose class is not in r12Entities is not
 // written and a warning names it; the other classes are written as read,
-// without the groups R12 lacks (see pairs). Only the CONTINUOUS linetype, the
-// layers and the entities are generated.
+// without the groups R12 lacks (see pairs). The LTYPE (from the linetype table),
+// LAYER, STYLE, DIMSTYLE and APPID tables, the modelled header variables and the entities
+// are generated.
 func (c Codec) Write(out io.Writer, d *doc.Drawing) ([]string, error) {
 	return c.WriteVersion(out, d, "")
 }
@@ -86,6 +99,8 @@ func writeR12(out io.Writer, d *doc.Drawing) ([]string, error) {
 	w.pair(1, "AC1009")
 	w.pair(9, "$CLAYER")
 	w.pair(8, d.CurrentLayer)
+	w.planLinetypes(d)
+	w.headerProps(d)
 	w.pair(9, "$HANDLING")
 	w.int(70, 1)
 	w.pair(9, "$HANDSEED")
@@ -95,22 +110,17 @@ func writeR12(out io.Writer, d *doc.Drawing) ([]string, error) {
 	w.pair(0, "SECTION")
 	w.pair(2, "TABLES")
 	w.rawTable(d, "VPORT")
+	lts := w.ltypeRecords()
 	w.pair(0, "TABLE")
 	w.pair(2, "LTYPE")
-	w.int(70, 1+len(d.Preserved.Tables["LTYPE"]))
-	w.pair(0, "LTYPE")
-	w.pair(2, "CONTINUOUS")
-	w.int(70, 0)
-	w.pair(3, "Solid line")
-	w.int(72, 65)
-	w.int(73, 0)
-	w.num(40, 0)
-	w.records(d.Preserved.Tables["LTYPE"])
+	w.int(70, len(lts))
+	for _, r := range lts {
+		w.pairs(r)
+	}
 	w.pair(0, "ENDTAB")
 	w.pair(0, "TABLE")
 	w.pair(2, "LAYER")
 	w.int(70, len(d.Layers()))
-	loaded := loadedLinetypes(d)
 	for _, l := range d.Layers() {
 		w.pair(0, "LAYER")
 		w.pair(2, l.Name)
@@ -127,11 +137,7 @@ func writeR12(out io.Writer, d *doc.Drawing) ([]string, error) {
 			c = -c
 		}
 		w.int(62, c)
-		lt := "CONTINUOUS"
-		if loaded[strings.ToUpper(l.Linetype)] {
-			lt = l.Linetype
-		}
-		w.pair(6, lt)
+		w.pair(6, w.layerLinetype(l))
 		if l.NoPlot || l.Lineweight != 0 || l.Description != "" {
 			// R12 has no plot flag, lineweight or description: they ride along as extended data of
 			// the application CADLITE_LAYER, which the reader restores.
@@ -147,7 +153,14 @@ func writeR12(out io.Writer, d *doc.Drawing) ([]string, error) {
 		w.rawTable(d, t)
 	}
 	w.appidTable(d)
-	w.rawTable(d, "DIMSTYLE")
+	dims := w.dimStyleTable(d)
+	w.pair(0, "TABLE")
+	w.pair(2, "DIMSTYLE")
+	w.int(70, len(dims))
+	for _, r := range dims {
+		w.pairs(r)
+	}
+	w.pair(0, "ENDTAB")
 	w.pair(0, "ENDSEC")
 
 	if len(d.Preserved.Blocks) > 0 {
@@ -374,7 +387,9 @@ func (w *writer) head(typ string, e doc.Entity) {
 	w.headAs(typ, c.H.String(), c)
 }
 
-// headAs writes an entity's type, the handle h, the layer and a colour other than ByLayer.
+// headAs writes an entity's type, the handle h, the layer, a linetype other than ByLayer (6), a
+// colour other than ByLayer (62, 0 for ByBlock) and, in AC1015, a lineweight other than ByLayer
+// (370) and a linetype scale other than 1 (48). R12 has no 370 or 48.
 func (w *writer) headAs(typ, h string, c *doc.EntityCommon) {
 	if w.typeOverride != "" {
 		typ = w.typeOverride
@@ -402,10 +417,19 @@ func (w *writer) headAs(typ, h string, c *doc.EntityCommon) {
 		w.pair(100, "AcDbEntity")
 	}
 	w.pair(8, c.Layer)
-	if c.Color != doc.ByLayer && c.Color >= 0 {
+	if lt := w.entityLinetype(c.Linetype); lt != "" {
+		w.pair(6, lt)
+	}
+	if c.Color != doc.ByLayer && c.Color >= 0 && c.Color < doc.ByLayer {
 		w.int(62, c.Color)
 	}
 	if w.modern {
+		if c.Lineweight != doc.LineweightByLayer {
+			w.int(370, c.Lineweight.DXF())
+		}
+		if sc := c.LtScale(); sc != 1 {
+			w.num(48, sc)
+		}
 		sub := map[string]string{"LINE": "AcDbLine", "CIRCLE": "AcDbCircle", "ARC": "AcDbCircle", "TEXT": "AcDbText", "MTEXT": "AcDbMText", "ATTDEF": "AcDbText", "ATTRIB": "AcDbText", "LWPOLYLINE": "AcDbPolyline", "INSERT": "AcDbBlockReference", "DIMENSION": "AcDbDimension"}[typ]
 		if sub != "" {
 			w.pair(100, sub)
@@ -471,36 +495,157 @@ func boolInt(b bool) int {
 	return 0
 }
 
-// loadedLinetypes returns the upper-cased names of the linetypes the written LTYPE table defines.
-func loadedLinetypes(d *doc.Drawing) map[string]bool {
-	m := map[string]bool{"CONTINUOUS": true}
-	for _, r := range d.Preserved.Tables["LTYPE"] {
-		m[strings.ToUpper(r.Name())] = true
+// planLinetypes decides the LTYPE records to write: the drawing's table, then, for a name a
+// layer, an entity (in model space or a block) or $CELTYPE uses that the table lacks, the built-in
+// library's definition, or a solid record of that name when the library lacks it too, so every
+// reference resolves.
+func (w *writer) planLinetypes(d *doc.Drawing) {
+	w.ltNames, w.ltRecords = map[string]string{}, nil
+	add := func(l doc.Linetype) {
+		u := strings.ToUpper(l.Name)
+		if _, ok := w.ltNames[u]; !ok {
+			w.ltNames[u] = l.Name
+			w.ltRecords = append(w.ltRecords, l)
+		}
 	}
-	return m
+	for _, l := range d.Linetypes() {
+		add(l)
+	}
+	need := func(name string) {
+		if doc.IsByLayerLinetype(name) || doc.IsByBlockLinetype(name) {
+			return
+		}
+		if _, ok := w.ltNames[strings.ToUpper(name)]; ok {
+			return
+		}
+		l, ok := doc.LibraryLinetype(name)
+		if !ok {
+			l = doc.Linetype{Description: "Solid line"}
+		}
+		l.Name = name
+		add(l)
+	}
+	for _, l := range d.Layers() {
+		need(l.Linetype)
+	}
+	for _, h := range d.Handles() {
+		need(d.Entity(h).Common().Linetype)
+	}
+	for _, b := range d.Blocks() {
+		for _, e := range b.Entities {
+			need(e.Common().Linetype)
+		}
+	}
+	need(d.CurrentLinetype)
+}
+
+// ltypeRecords returns the LTYPE records to write: in AC1015 BYBLOCK and BYLAYER first, then the
+// planned linetypes. A simple linetype is generated (2, 70, 3, 72 65, 73 the element count, 40 the
+// length, then 49 per element, each followed by 74 0 in AC1015); a complex one is written as read
+// in AC1015 and as its dashes alone in R12, which has no complex linetypes.
+func (w *writer) ltypeRecords() [][]doc.Pair {
+	f := func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
+	gen := func(l doc.Linetype) []doc.Pair {
+		ps := []doc.Pair{{Code: 0, Value: "LTYPE"}, {Code: 2, Value: l.Name}, {Code: 70, Value: "0"},
+			{Code: 3, Value: l.Description}, {Code: 72, Value: "65"}, {Code: 73, Value: strconv.Itoa(len(l.Pattern))},
+			{Code: 40, Value: f(l.Length())}}
+		for _, v := range l.Pattern {
+			ps = append(ps, doc.Pair{Code: 49, Value: f(v)})
+			if w.modern {
+				ps = append(ps, doc.Pair{Code: 74, Value: "0"})
+			}
+		}
+		return ps
+	}
+	var out [][]doc.Pair
+	if w.modern {
+		out = append(out, gen(doc.Linetype{Name: "ByBlock"}), gen(doc.Linetype{Name: "ByLayer"}))
+	}
+	for _, l := range w.ltRecords {
+		if w.modern && l.Raw != nil {
+			out = append(out, l.Raw)
+		} else {
+			out = append(out, gen(l))
+		}
+	}
+	return out
+}
+
+// layerLinetype is the linetype a layer record names (6): CONTINUOUS for none.
+func (w *writer) layerLinetype(l *doc.Layer) string {
+	if l.Linetype == "" {
+		return doc.LinetypeContinuous
+	}
+	if n, ok := w.ltNames[strings.ToUpper(l.Linetype)]; ok {
+		return n
+	}
+	return l.Linetype
+}
+
+// entityLinetype is an entity's group 6, "" for ByLayer (not written).
+func (w *writer) entityLinetype(name string) string {
+	switch {
+	case doc.IsByLayerLinetype(name):
+		return ""
+	case doc.IsByBlockLinetype(name):
+		return "BYBLOCK"
+	}
+	if n, ok := w.ltNames[strings.ToUpper(name)]; ok {
+		return n
+	}
+	return name
+}
+
+// headerProps writes the current properties: $CECOLOR, $CELTYPE, $LTSCALE and $DIMSTYLE, and in
+// AC1015 $CELTSCALE and $CELWEIGHT, which R12 lacks.
+func (w *writer) headerProps(d *doc.Drawing) {
+	c := d.CurrentColor
+	if c < 0 || c > doc.ByLayer {
+		c = doc.ByLayer
+	}
+	w.pair(9, "$CECOLOR")
+	w.int(62, c)
+	w.pair(9, "$CELTYPE")
+	lt := w.entityLinetype(d.CurrentLinetype)
+	if lt == "" {
+		lt = "BYLAYER"
+	}
+	w.pair(6, lt)
+	w.pair(9, "$LTSCALE")
+	w.num(40, d.LTScaleValue())
+	w.pair(9, "$DIMSTYLE")
+	w.pair(2, d.CurrentDimStyle)
+	if w.modern {
+		w.pair(9, "$CELTSCALE")
+		w.num(40, doc.LinetypeScaleOf(d.CurrentLinetypeScale))
+		w.pair(9, "$CELWEIGHT")
+		w.int(370, d.CurrentLineweight.DXF())
+	}
 }
 
 // appidTable writes the APPID table: the preserved records plus CADLITE_LAYER when a layer
-// carries extended data.
+// carries extended data and CADLITE_DIMSTYLE for the DIMSTYLE records' extended data.
 func (w *writer) appidTable(d *doc.Drawing) {
 	rs := d.Preserved.Tables["APPID"]
-	need := false
+	var apps []string
 	for _, l := range d.Layers() {
 		if l.NoPlot || l.Lineweight != 0 || l.Description != "" {
-			need = true
+			apps = append(apps, layerApp)
+			break
 		}
 	}
-	if !need {
-		w.rawTable(d, "APPID")
-		return
+	if !hasRecord(d, "APPID", dimStyleApp) {
+		apps = append(apps, dimStyleApp)
 	}
 	w.pair(0, "TABLE")
 	w.pair(2, "APPID")
-	w.int(70, len(rs)+1)
+	w.int(70, len(rs)+len(apps))
 	w.records(rs)
-	w.pair(0, "APPID")
-	w.pair(2, layerApp)
-	w.int(70, 0)
+	for _, a := range apps {
+		w.pair(0, "APPID")
+		w.pair(2, a)
+		w.int(70, 0)
+	}
 	w.pair(0, "ENDTAB")
 }
 

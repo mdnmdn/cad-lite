@@ -87,6 +87,17 @@ func TestLayerCLILtypeLweightPlot(t *testing.T) {
 	}
 }
 
+// A linetype the drawing's linetype table defines (as a file read puts it there) is accepted.
+func TestLayerCLILtypeAcceptsFileLinetype(t *testing.T) {
+	s := newSession(t)
+	l, _ := doc.LibraryLinetype("DASHED")
+	s.Drawing().LoadLinetype(l)
+	s.Script("-LAYER\nN\nA\nLT\ndashed\nA\n\n")
+	if lt := s.Drawing().Layer("A").Linetype; lt != "DASHED" {
+		t.Fatalf("linetype %q", lt)
+	}
+}
+
 func TestLayerCLIListsLayers(t *testing.T) {
 	s := newSession(t)
 	s.Script("-LAYER\nN\nWALLS\nF\nWALLS\n?\n\n\n")
@@ -161,5 +172,19 @@ func TestLayerCLIItalian(t *testing.T) {
 	}
 	if !strings.Contains(history(s), "Layer corrente") {
 		t.Fatalf("history is not Italian:\n%s", history(s))
+	}
+}
+
+// TestLayerLineweightZeroAndDefault checks -LAYER LWeight 0.00 gives the layer 0.00 mm, not
+// Default, and DEFAULT gives it Default again.
+func TestLayerLineweightZeroAndDefault(t *testing.T) {
+	s := newSession(t)
+	s.Script("-LAYER\nN\nA\nLW\n0.00\nA\n\n")
+	if got := s.Drawing().Layer("A").Lineweight; got != doc.LineweightZero.LayerValue() {
+		t.Fatalf("0.00 mm: layer lineweight %d\n%s", got, history(s))
+	}
+	s.Script("-LAYER\nLW\nDEFAULT\nA\n\n")
+	if got := s.Drawing().Layer("A").Lineweight; got != 0 {
+		t.Fatalf("DEFAULT: layer lineweight %d", got)
 	}
 }

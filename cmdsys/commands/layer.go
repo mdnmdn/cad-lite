@@ -39,12 +39,18 @@ func (*layerCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	}
 	l := ctx.Doc.Layer(name)
 	if l == nil {
-		l = ctx.Doc.AddLayer(name, color)
+		if !validLayerName(name) {
+			ctx.Say("cmd.layer.msg.bad_name")
+			return nil
+		}
+		if l = addLayer(ctx, name, color); l == nil {
+			return nil
+		}
 		ctx.Say("cmd.layer.msg.created", name)
 	} else if hasColor {
-		l.Color = color
+		modifyLayer(ctx, l, func(l *doc.Layer) { l.Color = color })
 	}
-	ctx.Doc.CurrentLayer = l.Name
+	setCurrentLayer(ctx, l)
 	return nil
 }
 
@@ -150,7 +156,7 @@ func (c *layerCLI) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		if in.Kind == cmdsys.InputText {
 			c.make(ctx, in.Text)
 		} else if l := ctx.Doc.Layer(ctx.Doc.CurrentLayer); l != nil {
-			l.Off, l.Frozen = false, false
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Off, l.Frozen = false, false })
 		}
 		return c.options(ctx)
 	case lsSet:
@@ -170,7 +176,7 @@ func (c *layerCLI) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			return c.options(ctx)
 		}
 		n, ok := ParseColor(in.Text)
-		if !ok || n == doc.ByLayer {
+		if !ok || n == doc.ByLayer || n == doc.ByBlock {
 			ctx.Say("cmd.layer.msg.bad_color")
 			return c.options(ctx)
 		}
@@ -205,11 +211,11 @@ func (c *layerCLI) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		c.desc, c.step = ls[0], lsDescText
 		return c.text(ctx, "cmd.layer.prompt.description", nil, 0, c.desc.Name)
 	case lsDescText:
+		text := ""
 		if in.Kind == cmdsys.InputText {
-			c.desc.Description = in.Text
-		} else {
-			c.desc.Description = ""
+			text = in.Text
 		}
+		modifyLayer(ctx, c.desc, func(l *doc.Layer) { l.Description = text })
 		return c.options(ctx)
 	}
 	return nil
@@ -285,16 +291,18 @@ func (c *layerCLI) apply(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	}
 	ls, _ := resolveLayers(ctx, text)
 	for _, l := range ls {
-		switch c.op {
-		case lyColor:
-			l.Color = c.color
-		case lyLtype:
-			l.Linetype = c.ltype
-		case lyLWt:
-			l.Lineweight = c.lweight
-		case lyPlot:
-			l.NoPlot = c.noPlot
-		}
+		modifyLayer(ctx, l, func(l *doc.Layer) {
+			switch c.op {
+			case lyColor:
+				l.Color = c.color
+			case lyLtype:
+				l.Linetype = c.ltype
+			case lyLWt:
+				l.Lineweight = c.lweight
+			case lyPlot:
+				l.NoPlot = c.noPlot
+			}
+		})
 	}
 	return c.options(ctx)
 }
@@ -320,7 +328,7 @@ func (c *layerCLI) names(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	switch c.op {
 	case lyOn:
 		for _, l := range ls {
-			l.Off = false
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Off = false })
 		}
 	case lyOff:
 		if i := slices.IndexFunc(ls, func(l *doc.Layer) bool { return l.Name == cur }); i >= 0 {
@@ -330,7 +338,7 @@ func (c *layerCLI) names(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 			return &cmdsys.Prompt{Message: ctx.T("cmd.layer.prompt.really_off", cur), Accepts: cmdsys.InputKeyword, Keywords: []string{"Yes", "No"}, Default: &def}
 		}
 		for _, l := range ls {
-			l.Off = true
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Off = true })
 		}
 	case lyFreeze:
 		for _, l := range ls {
@@ -338,19 +346,19 @@ func (c *layerCLI) names(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 				ctx.Say("cmd.layer.msg.freeze_current", l.Name)
 				continue
 			}
-			l.Frozen = true
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Frozen = true })
 		}
 	case lyThaw:
 		for _, l := range ls {
-			l.Frozen = false
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Frozen = false })
 		}
 	case lyLock:
 		for _, l := range ls {
-			l.Locked = true
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Locked = true })
 		}
 	case lyUnlock:
 		for _, l := range ls {
-			l.Locked = false
+			modifyLayer(ctx, l, func(l *doc.Layer) { l.Locked = false })
 		}
 	}
 	return c.options(ctx)
@@ -361,7 +369,7 @@ func (c *layerCLI) reallyOff(ctx *cmdsys.Context, in cmdsys.Input) {
 		if l.Name == ctx.Doc.CurrentLayer && in.Keyword != "Yes" {
 			continue
 		}
-		l.Off = true
+		modifyLayer(ctx, l, func(l *doc.Layer) { l.Off = true })
 	}
 	c.pending = nil
 }
@@ -388,7 +396,7 @@ func (c *layerCLI) set(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 	case l.Frozen:
 		ctx.Say("cmd.layer.msg.set_frozen", l.Name)
 	default:
-		ctx.Doc.CurrentLayer = l.Name
+		setCurrentLayer(ctx, l)
 	}
 	return c.options(ctx)
 }
@@ -401,10 +409,12 @@ func (c *layerCLI) make(ctx *cmdsys.Context, name string) {
 	}
 	l := ctx.Doc.Layer(name)
 	if l == nil {
-		l = ctx.Doc.AddLayer(name, 7)
+		if l = addLayer(ctx, name, 7); l == nil {
+			return
+		}
 	}
-	l.Off, l.Frozen = false, false
-	ctx.Doc.CurrentLayer = l.Name
+	modifyLayer(ctx, l, func(l *doc.Layer) { l.Off, l.Frozen = false, false })
+	setCurrentLayer(ctx, l)
 }
 
 func (c *layerCLI) newLayers(ctx *cmdsys.Context, list string) {
@@ -417,7 +427,7 @@ func (c *layerCLI) newLayers(ctx *cmdsys.Context, list string) {
 		case ctx.Doc.Layer(n) != nil:
 			ctx.Say("cmd.layer.msg.exists", n)
 		default:
-			ctx.Doc.AddLayer(n, 7)
+			addLayer(ctx, n, 7)
 		}
 	}
 }
@@ -479,6 +489,34 @@ func (c *layerCLI) list(ctx *cmdsys.Context, pat string) {
 }
 
 // --- helpers ------------------------------------------------------------
+
+// modifyLayer applies fn to layer l as part of the command's undo step (Txn.ModifyLayer), and
+// leaves the step alone when fn changes nothing.
+func modifyLayer(ctx *cmdsys.Context, l *doc.Layer, fn func(*doc.Layer)) {
+	probe := *l
+	if fn(&probe); probe == *l {
+		return
+	}
+	_ = ctx.TableTx().ModifyLayer(l.Name, fn)
+}
+
+// addLayer creates the named layer with color as part of the command's undo step; nil when the
+// name is refused.
+func addLayer(ctx *cmdsys.Context, name string, color int) *doc.Layer {
+	l, err := ctx.TableTx().AddLayer(name, color)
+	if err != nil {
+		ctx.Say("cmd.layer.msg.bad_name")
+		return nil
+	}
+	return l
+}
+
+// setCurrentLayer makes l current through CLAYER, as part of the command's undo step.
+func setCurrentLayer(ctx *cmdsys.Context, l *doc.Layer) {
+	if ctx.Doc.CurrentLayer != l.Name {
+		_ = ctx.Vars().Set("CLAYER", l.Name)
+	}
+}
 
 // validLayerName reports whether name is a legal layer name: non-empty and free of the
 // characters AutoCAD reserves (< > / \ " : ; ? * | , = `).
@@ -577,33 +615,15 @@ func layerAt(ctx *cmdsys.Context, p geom.Vec2) *doc.Layer {
 	return nil
 }
 
-var colorNames = map[string]int{
-	"RED": 1, "YELLOW": 2, "GREEN": 3, "CYAN": 4, "BLUE": 5, "MAGENTA": 6, "WHITE": 7,
-	"ROSSO": 1, "GIALLO": 2, "VERDE": 3, "CIANO": 4, "BLU": 5, "BIANCO": 7,
-}
-
-// ParseColor reads a colour answer: an AutoCAD Color Index 1-255, a name (red, yellow, green,
-// cyan, blue, magenta, white, or their Italian forms) or BYLAYER, which is doc.ByLayer.
-func ParseColor(text string) (int, bool) {
-	t := strings.ToUpper(strings.TrimSpace(text))
-	if t == "BYLAYER" || t == "DALAYER" || t == "DA LAYER" {
-		return doc.ByLayer, true
-	}
-	if n, ok := colorNames[t]; ok {
-		return n, true
-	}
-	n, err := strconv.Atoi(t)
-	if err != nil || n < 1 || n > 255 {
-		return 0, false
-	}
-	return n, true
-}
+// ParseColor reads a colour answer; see cmdsys.ParseColor.
+func ParseColor(text string) (int, bool) { return cmdsys.ParseColor(text) }
 
 // lineweights are the standard lineweights in hundredths of a millimetre.
 var lineweights = []int{0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211}
 
 // parseLineweight reads a lineweight in millimetres ("0.25", "0.25mm") or DEFAULT and returns it
-// in hundredths; only the standard values are valid. 0 is the default lineweight.
+// as Layer.Lineweight stores it (doc.Lineweight.LayerValue): hundredths, int(doc.LineweightZero)
+// for 0.00 mm, 0 for DEFAULT; only the standard values are valid.
 func parseLineweight(text string) (int, bool) {
 	t := strings.ToUpper(strings.TrimSpace(text))
 	if t == "DEFAULT" || t == "PREDEFINITO" {
@@ -618,17 +638,17 @@ func parseLineweight(text string) (int, bool) {
 	if !slices.Contains(lineweights, w) {
 		return 0, false
 	}
+	if w == 0 {
+		return doc.LineweightZero.LayerValue(), true
+	}
 	return w, true
 }
 
-// loadedLinetypes returns the linetype names the drawing has: CONTINUOUS and the ones a loaded
-// file defined.
+// loadedLinetypes returns the linetype names the drawing's linetype table has, CONTINUOUS first.
 func loadedLinetypes(d *doc.Drawing) []string {
-	out := []string{"CONTINUOUS"}
-	for _, r := range d.Preserved.Tables["LTYPE"] {
-		if n := r.Name(); n != "" && !strings.EqualFold(n, "CONTINUOUS") {
-			out = append(out, strings.ToUpper(n))
-		}
+	var out []string
+	for _, l := range d.Linetypes() {
+		out = append(out, strings.ToUpper(l.Name))
 	}
 	return out
 }

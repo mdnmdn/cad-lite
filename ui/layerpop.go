@@ -174,12 +174,45 @@ func (ws *Workspace) setCurrentLayer(l *doc.Layer, w *gpui.Window) {
 	ws.closeLayerPopover(w)
 }
 
+// makeLayerCurrent makes l current (CLAYER) as one LAYER undo step, unless it is frozen or
+// already current, or a command or transaction is under way.
 func (ws *Workspace) makeLayerCurrent(l *doc.Layer) {
 	d := ws.session.Drawing()
-	if !l.Frozen && d.CurrentLayer != l.Name {
-		d.CurrentLayer = l.Name
-		ws.session.MarkModified()
+	if l.Frozen || d.CurrentLayer == l.Name {
+		return
 	}
+	ws.layerTxn(func(tx *doc.Txn) error {
+		cur := d.Current()
+		cur.Layer = l.Name
+		return tx.SetCurrent(cur)
+	})
+}
+
+// layerStep is the undo step name of the layer lists' edits (the switches, the current layer).
+const layerStep = "LAYER"
+
+// layerTxn runs fn, a layer list's edit, in a transaction committed as one undo step named LAYER,
+// and reports whether it did. Like the Properties panel's edits it is refused while a command runs
+// or a transaction is open. The commit's change set redraws the canvas (a Support change syncs the
+// display cache) and moves the Properties sheet on.
+func (ws *Workspace) layerTxn(fn func(*doc.Txn) error) bool {
+	s := ws.session
+	if s.Active() != "" {
+		return false
+	}
+	d := s.Drawing()
+	tx, err := d.Begin()
+	if err != nil {
+		return false
+	}
+	if err := fn(tx); err != nil {
+		tx.Abort()
+		return false
+	}
+	if cs := tx.Commit(); !cs.Empty() {
+		d.NameLastStep(layerStep)
+	}
+	return true
 }
 
 // layerFold returns the layer whose name is name ignoring case, or nil: layer names compare
@@ -320,7 +353,8 @@ func (ws *Workspace) statusOverlays(w *gpui.Window) []gpui.IntoElement {
 	winW, winH := float32(w.Bounds().Size.W), float32(w.Bounds().Size.H)
 	out := []gpui.IntoElement{gpui.NewDiv().Absolute().Left(0).Top(0).SizeWH(0, 0).
 		Child(gpui.NewCanvas(func(b gpui.Bounds, _ *gpui.Window, _ *gpui.App) { s.barTop = float32(b.Origin.Y) }))}
-	if s.hud {
+	// The HUD hides while the side panel's Properties section shows the same target, editable.
+	if s.hud && !ws.propsPanelShown() {
 		out = append(out, ws.propsHUD())
 	}
 	if ws.propsDragActive() {

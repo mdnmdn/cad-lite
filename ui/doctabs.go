@@ -34,6 +34,8 @@ type docTab struct {
 	pathDoc *doc.Drawing
 	// agents is the agent panel's state for this drawing; nil until the panel shows the tab.
 	agents *agentSet
+	// pp is the Properties panel's target and cached sheet for this drawing (propsgrid.go).
+	pp propsPanel
 }
 
 // docTabHeight is the height of the document tab strip.
@@ -50,6 +52,7 @@ func (ws *Workspace) newDocTab(d *doc.Drawing) *docTab {
 	}
 	s := cmdsys.NewSession(d, t.view, commands.NewRegistry())
 	t.session = s
+	s.OnVarChange(func(string, any, any) { t.pp.rev++ })
 	s.SetFiles(ws.files)
 	s.SetAnalytics(ws.analytics)
 	t.attach(d)
@@ -78,6 +81,7 @@ func (ws *Workspace) newDocTab(d *doc.Drawing) *docTab {
 func (t *docTab) attach(d *doc.Drawing) {
 	t.builder = render.NewBuilder(d, colCanvas)
 	d.OnChange(t.builder.Invalidate)
+	d.OnChange(func(doc.ChangeSet) { t.pp.rev++ })
 }
 
 // untouched reports whether the tab holds the empty untitled drawing nothing was done to, which a
@@ -178,6 +182,8 @@ func (ws *Workspace) activate(t *docTab) {
 	if t == ws.docTab {
 		return
 	}
+	// The Properties panel's open field is committed in the tab it belongs to before that tab goes.
+	ws.flushPropEdit(ws.win)
 	ws.closeTextEditor(ws.win)
 	ws.status().hudDrag.active = false
 	if cur := ws.docTab; cur != nil {

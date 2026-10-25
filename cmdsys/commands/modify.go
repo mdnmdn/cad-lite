@@ -27,7 +27,7 @@ func addCopy(ctx *cmdsys.Context, h doc.Handle, m geom.Mat3) doc.Handle {
 	}
 	cp := copyOf(e)
 	cp.Transform(m)
-	return ctx.Tx().Add(cp)
+	return ctx.Tx().AddCopy(cp)
 }
 
 // defaultKeyword is a prompt default that is a keyword (<Displacement>, <Exit>).

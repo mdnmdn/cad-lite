@@ -142,7 +142,8 @@ func (c *dimArcCmd) onArc(p geom.Vec2) geom.Vec2 {
 func (c *dimArcCmd) entity(ctx *cmdsys.Context, loc geom.Vec2) *doc.Dimension {
 	d := &doc.Dimension{Kind: doc.DimArcLength, Center: c.arc.C, Radius: c.arc.R, StartAngle: c.arc.Start, EndAngle: c.arc.End,
 		DimLine: loc, Partial: c.partial, Ext1: c.q1, Ext2: c.q2, ArcSymbol: ctx.Vars().Int("DIMARCSYM"),
-		Text: c.text, TextAngle: c.tAngle, Style: dimStyle(ctx)}
+		Text: c.text, TextAngle: c.tAngle}
+	d.SetStyle(ctx.Doc, dimStyle(ctx))
 	d.Recompute()
 	return d
 }

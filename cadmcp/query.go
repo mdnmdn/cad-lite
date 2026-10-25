@@ -97,10 +97,10 @@ func dimensionInfo(m map[string]any, e *doc.Dimension) {
 	if e.TextAngle != 0 {
 		m["text_angle"] = degrees(e.TextAngle)
 	}
-	st := e.Style
+	st := e.Style()
 	m["style"] = map[string]any{"name": st.Name, "dimscale": st.Scale, "dimasz": st.ArrowSize, "dimtxt": st.TextHeight,
 		"dimexo": st.ExtOffset, "dimexe": st.ExtExtend, "dimgap": st.Gap, "dimdec": st.Decimals, "dimdsep": st.DecSep,
-		"dimzin": st.ZeroSupp, "dimtad": st.TextAbove}
+		"dimzin": st.ZeroSupp, "dimtad": st.TextVertical}
 }
 
 func hasBulge(bs []float64) bool {

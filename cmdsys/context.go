@@ -23,7 +23,9 @@ type Context struct {
 	agentCaller func() bool
 	txn         *doc.Txn
 	// commit commits txn the way the session does (Session.commitOpen).
-	commit  func() doc.ChangeSet
+	commit func() doc.ChangeSet
+	// tableTx returns the transaction a table edit joins (Session.commandTxn).
+	tableTx func() (*doc.Txn, error)
 	out     func(string)
 	say     func(string, ...any)
 	tr      func() i18n.Translator
@@ -62,6 +64,22 @@ func (c *Context) Tx() *doc.Txn {
 		c.txn = t
 	}
 	return c.txn
+}
+
+// TableTx returns the transaction a layer, linetype, style or current-property edit of the
+// running command joins: the command's own, or, under a transparent command (LAYER, 'SETVAR), the
+// interrupted command's, so the edit is undone with it; with neither open it opens the command's
+// own, as Tx does. Tx would fail under a transparent command whose interrupted command holds a
+// transaction. It panics when another holder keeps the drawing busy, as Tx does.
+func (c *Context) TableTx() *doc.Txn {
+	if c.tableTx == nil {
+		return c.Tx()
+	}
+	t, err := c.tableTx()
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 // Printf writes a line to the command history. The format is a finished sentence; user-facing

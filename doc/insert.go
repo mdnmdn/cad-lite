@@ -57,7 +57,7 @@ func (e *Insert) Bounds() geom.Box2 {
 		return geom.EmptyBox()
 	}
 	b := geom.EmptyBox()
-	for _, part := range e.parts(geom.Identity(), e.Layer, e.Color, map[string]bool{}, 0, false) {
+	for _, part := range e.parts(geom.Identity(), e.d.Resolve(&e.EntityCommon, nil), map[string]bool{}, 0, false) {
 		for _, c := range part.Geometry {
 			b = b.Union(c.Bounds())
 		}
@@ -101,35 +101,101 @@ func (e *Insert) Transform(m geom.Mat3) {
 	}
 }
 
-// BlockPart is resolved geometry with its effective layer and colour.
+// BlockPart is resolved geometry with its effective layer and display properties.
 type BlockPart struct {
 	// Layer is the resolved effective layer.
 	Layer string
-	// Color is the resolved effective ACI.
+	// Color is the resolved effective ACI, 1 to 255.
 	Color int
+	// Linetype, LinetypeScale and Lineweight are resolved as Appearance's are. The linetype
+	// scale applies in definition coordinates: the reference's transform scales it further.
+	Linetype      string
+	LinetypeScale float64
+	Lineweight    Lineweight
+	// Scale is the accumulated scale of every reference between the part and model space,
+	// sqrt|det| of the product of their transforms: AutoCAD scales a pattern by it, so inside
+	// nested references it is the product of the levels' scales, not the outermost one's.
+	Scale float64
+	// Kind says what the part was drawn from, which decides whether a linetype applies.
+	Kind PartKind
 	// Geometry is transformed model-space geometry.
 	Geometry []geom.Curve
+}
+
+// PartKind is what a BlockPart's geometry came from.
+type PartKind int
+
+// The kinds of block part.
+const (
+	// PartCurve is ordinary geometry, and a dimension's dimension, extension and arc lines: the
+	// part's linetype draws it.
+	PartCurve PartKind = iota
+	// PartText is text, multiline text and attribute text: it draws solid whatever the linetype.
+	PartText
+	// PartSolid is a dimension's arrowheads: they draw solid whatever the linetype.
+	PartSolid
+)
+
+func partOf(a Appearance, m geom.Mat3, kind PartKind) BlockPart {
+	return BlockPart{Layer: a.Layer, Color: a.Color, Linetype: a.Linetype, LinetypeScale: a.LinetypeScale, Lineweight: a.Lineweight,
+		Scale: math.Sqrt(math.Abs(m.Det())), Kind: kind}
+}
+
+// addPrimitives appends curves, transformed by m, to the part.
+func (p *BlockPart) addPrimitives(curves []geom.Curve, m geom.Mat3) {
+	for _, curve := range curves {
+		for _, primitive := range geom.Primitives(curve) {
+			p.Geometry = append(p.Geometry, affineTransform(primitive, m))
+		}
+	}
+}
+
+// dimensionParts splits a dimension into the parts that draw differently: its dimension,
+// extension and arc lines (PartCurve, in the style's DIMCLRE and DIMCLRD), then its arrowheads
+// (PartSolid, DIMCLRD) and its text and arc length symbol (PartText, DIMCLRT), as render draws
+// one at the top level.
+func (e *Insert) dimensionParts(dim *Dimension, ca Appearance, m geom.Mat3) []BlockPart {
+	st, lay := dim.Style(), dim.Layout()
+	ext, line := partOf(ca, m, PartCurve), partOf(ca, m, PartCurve)
+	ext.Color, line.Color = e.d.ResolveColorIn(st.ExtColor, ca), e.d.ResolveColorIn(st.LineColor, ca)
+	solid, text := partOf(ca, m, PartSolid), partOf(ca, m, PartText)
+	solid.Color, text.Color = line.Color, e.d.ResolveColorIn(st.TextColor, ca)
+	for _, l := range lay.ExtLines {
+		ext.addPrimitives([]geom.Curve{l}, m)
+	}
+	if dim.Kind == DimArcLength {
+		line.addPrimitives([]geom.Curve{lay.DimArc}, m)
+	}
+	for _, l := range lay.DimLine {
+		line.addPrimitives([]geom.Curve{l}, m)
+	}
+	for _, a := range lay.Arrows {
+		outline, fill := a.curves(true)
+		solid.addPrimitives(outline, m)
+		solid.addPrimitives(fill, m)
+	}
+	if lay.Symbol.R > 0 {
+		text.addPrimitives([]geom.Curve{lay.Symbol}, m)
+	}
+	if lay.Text != nil {
+		text.addPrimitives(lay.Text.Geometry(), m)
+	}
+	return []BlockPart{ext, line, solid, text}
 }
 
 func (e *Insert) valid() bool {
 	return finitePoint(e.Position) && e.ScaleX != 0 && e.ScaleY != 0 && !math.IsNaN(e.Rotation) && !math.IsInf(e.Rotation, 0) && !math.IsNaN(e.ScaleX) && !math.IsInf(e.ScaleX, 0) && !math.IsNaN(e.ScaleY) && !math.IsInf(e.ScaleY, 0)
 }
 
-// Parts resolves visible definition geometry with inherited layer and colour.
+// Parts resolves visible definition geometry with inherited layer and display properties
+// (Drawing.Resolve, the reference being the parent of its definition's entities).
 func (e *Insert) Parts() []BlockPart {
 	if e.d == nil || e.d.InsertError(e) != nil {
 		return nil
 	}
-	color := e.Color
-	if color == ByLayer || color == ByBlock {
-		color = 7
-		if l := e.d.Layer(e.Layer); l != nil {
-			color = l.Color
-		}
-	}
-	return e.parts(geom.Identity(), e.Layer, color, map[string]bool{}, 0, true)
+	return e.parts(geom.Identity(), e.d.Resolve(&e.EntityCommon, nil), map[string]bool{}, 0, true)
 }
-func (e *Insert) parts(parent geom.Mat3, layer string, color int, seen map[string]bool, depth int, visible bool) []BlockPart {
+func (e *Insert) parts(parent geom.Mat3, app Appearance, seen map[string]bool, depth int, visible bool) []BlockPart {
 	key := strings.ToUpper(e.BlockName)
 	b := e.d.blocks[key]
 	if b == nil || seen[key] || depth >= MaxBlockDepth || !e.valid() {
@@ -151,49 +217,41 @@ func (e *Insert) parts(parent geom.Mat3, layer string, color int, seen map[strin
 	}
 	var out []BlockPart
 	for _, child := range b.Entities {
-		l, c := child.Common().Layer, child.Common().Color
-		if l == "0" || l == "" {
-			l = layer
-		}
-		if c == ByBlock {
-			c = color
-		} else if c == ByLayer {
-			c = 7
-			if ly := e.d.Layer(l); ly != nil {
-				c = ly.Color
-			}
-		}
-		if ly := e.d.Layer(l); visible && ly != nil && !ly.Visible() {
+		ca := e.d.Resolve(child.Common(), &app)
+		if ly := e.d.Layer(ca.Layer); visible && ly != nil && !ly.Visible() {
 			continue
 		}
 		if in, ok := child.(*Insert); ok {
-			out = append(out, in.parts(m, l, c, seen, depth+1, visible)...)
+			out = append(out, in.parts(m, ca, seen, depth+1, visible)...)
 			continue
 		}
 		var curves []geom.Curve
-		if a, ok := child.(*AttributeDefinition); ok {
-			if a.Invisible {
+		kind := PartCurve
+		switch c := child.(type) {
+		case *Dimension:
+			out = append(out, e.dimensionParts(c, ca, m)...)
+			continue
+		case *AttributeDefinition:
+			if c.Invisible {
 				continue
 			}
-			if placed[strings.ToUpper(a.Tag)] {
+			if placed[strings.ToUpper(c.Tag)] {
 				continue
 			}
-			t := *a.Text.Clone().(*Text)
-			if !a.Constant {
-				if value, found := values[strings.ToUpper(a.Tag)]; found {
+			t := *c.Text.Clone().(*Text)
+			if !c.Constant {
+				if value, found := values[strings.ToUpper(c.Tag)]; found {
 					t.Value = value
 				}
 			}
-			curves = t.Geometry()
-		} else {
+			curves, kind = t.Geometry(), PartText
+		case Annotation:
+			curves, kind = c.Geometry(), PartText
+		default:
 			curves = child.Geometry()
 		}
-		part := BlockPart{Layer: l, Color: c}
-		for _, curve := range curves {
-			for _, primitive := range geom.Primitives(curve) {
-				part.Geometry = append(part.Geometry, affineTransform(primitive, m))
-			}
-		}
+		part := partOf(ca, m, kind)
+		part.addPrimitives(curves, m)
 		out = append(out, part)
 	}
 	for _, a := range e.Attributes {
@@ -202,21 +260,11 @@ func (e *Insert) parts(parent geom.Mat3, layer string, color int, seen map[strin
 		}
 		t := a.Text.Clone().(*Text)
 		t.Value = a.Value
-		part := BlockPart{Layer: t.Layer, Color: t.Color}
-		if part.Layer == "0" || part.Layer == "" {
-			part.Layer = layer
-		}
-		if part.Color == ByBlock {
-			part.Color = color
-		}
+		part := partOf(e.d.Resolve(&t.EntityCommon, &app), parent, PartText)
 		if visible && !e.d.Layer(part.Layer).Visible() {
 			continue
 		}
-		for _, c := range t.Geometry() {
-			for _, primitive := range geom.Primitives(c) {
-				part.Geometry = append(part.Geometry, affineTransform(primitive, parent))
-			}
-		}
+		part.addPrimitives(t.Geometry(), parent)
 		out = append(out, part)
 	}
 	return out

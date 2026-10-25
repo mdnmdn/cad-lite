@@ -8,19 +8,16 @@ import (
 )
 
 // The units variables. LUPREC and AUPREC are registered in cmdsys (sysvars.go); the rest live
-// here. ANGBASE is stored in degrees whatever AUNITS is, like the other real variables;
-// INSUNITS reads and writes the drawing's header, so it follows the open drawing.
+// here. ANGBASE is stored in degrees whatever AUNITS is, like the other real variables.
+// INSUNITS is drawing-backed and undoable: cmdsys/propvars.go registers it.
 func init() { cmdsys.RegisterVarGroup(unitsVars) }
 
-func unitsVars(s *cmdsys.Session, v *cmdsys.Vars) {
+func unitsVars(_ *cmdsys.Session, v *cmdsys.Vars) {
 	v.Register(cmdsys.Var{Name: "LUNITS", Kind: cmdsys.VarInt, Default: 2, Min: 1, Max: 5})
 	v.Register(cmdsys.Var{Name: "AUNITS", Kind: cmdsys.VarInt, Default: 0, Min: 0, Max: 4})
 	v.Register(cmdsys.Var{Name: "ANGBASE", Kind: cmdsys.VarReal, Default: 0.0})
 	v.Register(cmdsys.Var{Name: "ANGDIR", Kind: cmdsys.VarInt, Default: 0, Min: 0, Max: 1})
 	v.Register(cmdsys.Var{Name: "UNITMODE", Kind: cmdsys.VarInt, Default: 0, Min: 0, Max: 1})
-	v.Register(cmdsys.Var{Name: "INSUNITS", Kind: cmdsys.VarInt, Default: 4, Min: 0, Max: 24,
-		Read:     func() any { return s.Drawing().Header.InsUnits },
-		OnChange: func(_, n any) { s.Drawing().Header.InsUnits = n.(int) }})
 }
 
 // --- UNITS, -UNITS ------------------------------------------------------

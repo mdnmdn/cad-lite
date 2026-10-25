@@ -18,26 +18,28 @@ func dimDrawing(t *testing.T) *doc.Drawing {
 	d := doc.New()
 	d.AddLayer("dims", 2)
 	custom := doc.DefaultDimStyle()
-	custom.Scale, custom.ArrowSize, custom.Decimals, custom.DecSep, custom.TextAbove, custom.ZeroSupp = 2, 3.5, 1, ".", false, 0
+	custom.Scale, custom.ArrowSize, custom.Decimals, custom.DecSep, custom.TextVertical, custom.ZeroSupp = 2, 3.5, 1, ".", 0, 0
 	custom.ExtOffset, custom.ExtExtend, custom.Gap, custom.TextHeight = 1, 2, 0.8, 3
 	other := doc.DefaultDimStyle()
 	other.Name = "Arch"
 	dims := []*doc.Dimension{
-		{Kind: doc.DimRotated, Ext1: geom.V(0, 0), Ext2: geom.V(120, 30), DimLine: geom.V(0, 50), Style: doc.DefaultDimStyle()},
+		{Kind: doc.DimRotated, Ext1: geom.V(0, 0), Ext2: geom.V(120, 30), DimLine: geom.V(0, 50)},
 		{EntityCommon: doc.EntityCommon{Layer: "dims", Color: 3}, Kind: doc.DimRotated, Ext1: geom.V(0, 0), Ext2: geom.V(120, 30.25),
-			DimLine: geom.V(140, 0), Rotation: math.Pi / 2, Text: "L=<> mm", Style: custom},
+			DimLine: geom.V(140, 0), Rotation: math.Pi / 2, Text: "L=<> mm"},
 		{Kind: doc.DimAligned, Ext1: geom.V(10, 10), Ext2: geom.V(40, 50), DimLine: geom.V(0, 20), TextMoved: true,
-			TextPos: geom.V(-30, 70), TextAngle: 0.3, Text: "fixed", Style: other},
-		{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(-30, -40), DimLine: geom.V(5, 5), Text: " ", Style: doc.DefaultDimStyle()},
+			TextPos: geom.V(-30, 70), TextAngle: 0.3, Text: "fixed"},
+		{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(-30, -40), DimLine: geom.V(5, 5), Text: " "},
 		{Kind: doc.DimArcLength, Center: geom.V(200, 0), Radius: 40, StartAngle: 0.2, EndAngle: 2.5,
-			DimLine: geom.V(200, 55), Style: doc.DefaultDimStyle()},
+			DimLine: geom.V(200, 55)},
 		{Kind: doc.DimArcLength, Center: geom.V(300, 0), Radius: 30, StartAngle: 0, EndAngle: math.Pi, Partial: true,
 			Ext1: geom.V(300+30*math.Cos(0.5), 30*math.Sin(0.5)), Ext2: geom.V(300+30*math.Cos(2), 30*math.Sin(2)),
 			DimLine: geom.V(300, 20), ArcSymbol: doc.DimArcSymAbove, Text: "<>*", TextMoved: true, TextPos: geom.V(290, 50),
-			TextAngle: math.Pi, Style: custom},
+			TextAngle: math.Pi},
 	}
+	styles := []doc.DimStyle{doc.DefaultDimStyle(), custom, other, doc.DefaultDimStyle(), doc.DefaultDimStyle(), custom}
 	tx, _ := d.Begin()
-	for _, e := range dims {
+	for i, e := range dims {
+		e.SetStyle(d, styles[i])
 		e.Recompute()
 		tx.Add(e)
 	}
@@ -68,7 +70,7 @@ func sameDim(a, b *doc.Dimension) string {
 		return "text angle"
 	case a.Text != b.Text:
 		return "text " + a.Text + " / " + b.Text
-	case a.Style != b.Style:
+	case a.Style() != b.Style():
 		return "style"
 	case a.Kind == doc.DimArcLength && (!a.Center.Near(b.Center, 1e-9) || !near(a.Radius, b.Radius) ||
 		!near(a.StartAngle, b.StartAngle) || !near(a.EndAngle, b.EndAngle)):
@@ -186,7 +188,7 @@ func blockNamesOf(d *doc.Drawing) []string {
 // A dimension inside a block definition gets its own *D block too.
 func TestDimensionInsideBlockRoundTrip(t *testing.T) {
 	d := doc.New()
-	dim := &doc.Dimension{EntityCommon: doc.EntityCommon{Layer: "0", Color: doc.ByLayer}, Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(10, 0), DimLine: geom.V(0, 5), Style: doc.DefaultDimStyle()}
+	dim := &doc.Dimension{EntityCommon: doc.EntityCommon{Layer: "0", Color: doc.ByLayer}, Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(10, 0), DimLine: geom.V(0, 5)}
 	dim.Recompute()
 	d.LoadBlock(&doc.Block{Name: "SYM", Entities: []doc.Entity{dim, &doc.Line{End: geom.V(10, 0)}}})
 	tx, _ := d.Begin()
@@ -268,7 +270,7 @@ func TestReadAutoCADDimensions(t *testing.T) {
 	}
 	want := doc.DefaultDimStyle()
 	want.ArrowSize, want.Decimals, want.DecSep = 5, 3, "."
-	if lin.Kind != doc.DimRotated || lin.Style != want || lin.Ext2 != geom.V(100, 0) || lin.DimLine != geom.V(100, 20) {
+	if lin.Kind != doc.DimRotated || lin.Style() != want || lin.Ext2 != geom.V(100, 0) || lin.DimLine != geom.V(100, 20) {
 		t.Fatalf("rotated dimension %+v", *lin)
 	}
 	if !near(lin.TextAngle, math.Pi/6) || lin.MeasurementText() != "100" {
@@ -282,8 +284,9 @@ func TestReadAutoCADDimensions(t *testing.T) {
 		t.Fatalf("arc dimension read as %T", d.Entity(0x52))
 	}
 	// Standard leaves every variable out: AutoCAD's built-in defaults.
-	std := doc.DimStyle{Name: "Standard", Scale: 1, ArrowSize: 0.18, TextHeight: 0.18, ExtOffset: 0.0625, ExtExtend: 0.18, Gap: 0.09, Decimals: 4, DecSep: "."}
-	if arc.Center != geom.V(0, 0) || arc.Radius != 50 || !near(arc.StartAngle, 0) || !near(arc.EndAngle, math.Pi) || arc.Style != std {
+	std := doc.DimStyle{Name: "Standard", Scale: 1, ArrowSize: 0.18, TextHeight: 0.18, ExtOffset: 0.0625, ExtExtend: 0.18, Gap: 0.09, Decimals: 4, DecSep: ".",
+		TextInsideHorizontal: true, TextOutsideHorizontal: true, TextStyle: "Standard", Fit: doc.DimFitBest}
+	if arc.Center != geom.V(0, 0) || arc.Radius != 50 || !near(arc.StartAngle, 0) || !near(arc.EndAngle, math.Pi) || arc.Style() != std {
 		t.Fatalf("arc dimension %+v", *arc)
 	}
 	if !near(arc.Measurement(), 50*math.Pi) || arc.DimLine.Dist(arc.Center) != 60 {
@@ -331,8 +334,9 @@ func TestReadR12Dimension(t *testing.T) {
 	if !ok {
 		t.Fatalf("read as %T", d.Entity(0x20))
 	}
-	want := doc.DimStyle{Name: "STANDARD", Scale: 10, ArrowSize: 0.2, TextHeight: 0.25, ExtOffset: 0.1, ExtExtend: 0.3, Gap: 0.05, Decimals: 4, DecSep: ".", TextAbove: true}
-	if e.Kind != doc.DimAligned || e.Style != want || e.MeasurementText() != "40.0000" {
+	want := doc.DimStyle{Name: "STANDARD", Scale: 10, ArrowSize: 0.2, TextHeight: 0.25, ExtOffset: 0.1, ExtExtend: 0.3, Gap: 0.05, Decimals: 4, DecSep: ".", TextVertical: 1,
+		TextInsideHorizontal: true, TextOutsideHorizontal: true, TextStyle: "Standard", Fit: doc.DimFitBest}
+	if e.Kind != doc.DimAligned || e.Style() != want || e.MeasurementText() != "40.0000" {
 		t.Fatalf("dimension %+v, text %q", *e, e.MeasurementText())
 	}
 	// An explicit 0° text angle is horizontal text, kept as 180° (readable: horizontal).

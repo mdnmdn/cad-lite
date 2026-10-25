@@ -151,6 +151,7 @@ struct and call `Render` every frame. Setters that mutate it call
 | `SetText(s string)` | Replace the value; caret moves to end, cancels selection capture and refreshes if rendered. |
 | `OnChange(f func(string, *Window, *App)) *TextInput` | Called on every edit made through input dispatch. |
 | `OnSubmit(f func(string, *Window, *App)) *TextInput` | Called with the text on Enter while focused. |
+| `OnBlur(f func(text string, w *Window, cx *App)) *TextInput` | Called once each time the field loses focus (another handle focused, `Window.Blur`, a press elsewhere, Escape with no `OnEscape`), with the current text. Not called while focus stays or on an Escape that `OnEscape` handles. |
 | `OnEscape(f func(*Window, *App)) *TextInput` | Called on Escape while focused. With any callback registered the field keeps focus; without one, Escape blurs it. |
 | `OnKeyDown(f func(*KeyDownEvent, *Window, *App) bool) *TextInput` | Sees each non-character key press (Enter, Escape, Backspace, Delete, arrows) before the field's editing keys; returning `true` consumes it (no edit, propagation stops). A later call replaces it; `nil` removes it. |
 | `SetPlaceholder(s string)` | Replace the placeholder text (for example on a language change); refreshes if rendered. |

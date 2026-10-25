@@ -25,7 +25,8 @@ type Layer struct {
 	NoPlot bool
 	// Linetype is the layer's linetype name; "" means CONTINUOUS.
 	Linetype string
-	// Lineweight is the layer's lineweight in hundredths of a millimetre; 0 means the default.
+	// Lineweight is the layer's lineweight in hundredths of a millimetre; 0 means the default and
+	// int(LineweightZero) 0.00 mm. LineweightFromLayer and Lineweight.LayerValue convert it.
 	Lineweight int
 	// Description is the layer's free-text description.
 	Description string
@@ -58,13 +59,34 @@ type Drawing struct {
 	Preserved Preserved
 	// CurrentLayer is the layer new entities go on ($CLAYER).
 	CurrentLayer string
-	// CurrentColor is the colour new entities get ($CECOLOR): an AutoCAD Color Index (1–255), or
-	// 0 or ByLayer for the layer's colour.
+	// CurrentColor is the colour new entities get ($CECOLOR), encoded as EntityCommon.Color: an
+	// AutoCAD Color Index (1–255), ByLayer (256, what New sets) or ByBlock (0). Any other value
+	// reads as ByLayer.
 	CurrentColor int
+	// CurrentLinetype is the linetype new entities get ($CELTYPE): "" or LinetypeByLayer (the
+	// default), LinetypeByBlock, or a name in the linetype table.
+	CurrentLinetype string
+	// CurrentLinetypeScale is the linetype scale new entities get ($CELTSCALE); 0 reads as 1.
+	CurrentLinetypeScale float64
+	// CurrentLineweight is the lineweight new entities get ($CELWEIGHT); the zero value is ByLayer.
+	CurrentLineweight Lineweight
+	// LTScale is the global linetype scale ($LTSCALE) every pattern is multiplied by; 0 reads as 1
+	// (LTScaleValue).
+	LTScale float64
+	// LWDefault is LWDEFAULT, the width LineweightDefault resolves to: a positive width or
+	// LineweightZero; any other value (the zero value) reads as DefaultLineweightHundredths
+	// (LWDefaultValue). AutoCAD keeps it per user, not in the drawing: no file stores it.
+	LWDefault Lineweight
+	// CurrentDimStyle names the dimension style new dimensions take ($DIMSTYLE); ActiveDimStyle
+	// returns it.
+	CurrentDimStyle string
 
 	groups map[Handle]*Group
 	blocks map[string]*Block
-	layers []*Layer
+	// linetypes is the LTYPE table, CONTINUOUS first; dimStyles the DIMSTYLE table.
+	linetypes []*Linetype
+	dimStyles []*dimStyleEntry
+	layers    []*Layer
 	// layerIndex maps a layer name to its record in layers, so Layer is O(1).
 	layerIndex map[string]*Layer
 	layerRanks map[string]int
@@ -81,14 +103,20 @@ type Drawing struct {
 	open      *Txn
 }
 
-// New returns an empty drawing with layer "0" current.
+// New returns an empty drawing with layer "0" current, the CONTINUOUS linetype, the ISO-25
+// dimension style current (DefaultDimStyle) and every current property ByLayer.
 func New() *Drawing {
+	iso := DefaultDimStyle()
 	d := &Drawing{
-		Header:       Header{HandSeed: 0x100, InsUnits: 4},
-		CurrentLayer: "0",
-		entities:     map[Handle]Entity{},
-		groups:       map[Handle]*Group{}, blocks: map[string]*Block{},
-		sorted: true,
+		Header:          Header{HandSeed: 0x100, InsUnits: 4},
+		CurrentLayer:    "0",
+		CurrentColor:    ByLayer,
+		CurrentDimStyle: iso.Name,
+		entities:        map[Handle]Entity{},
+		groups:          map[Handle]*Group{}, blocks: map[string]*Block{},
+		linetypes: []*Linetype{continuousLinetype()},
+		dimStyles: []*dimStyleEntry{{style: iso}},
+		sorted:    true,
 	}
 	d.layers = []*Layer{{Name: "0", Color: 7}}
 	d.reindexLayers()
@@ -124,8 +152,8 @@ func (d *Drawing) reindexLayers() {
 	}
 }
 
-// AddLayer returns the named layer, creating it with color when missing.
-// Layer table edits are not journalled.
+// AddLayer returns the named layer, creating it with color when missing. It is not journalled:
+// file readers and hosts that edit layers directly use it; Txn.AddLayer is the undoable form.
 func (d *Drawing) AddLayer(name string, color int) *Layer {
 	if l := d.Layer(name); l != nil {
 		return l

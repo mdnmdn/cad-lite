@@ -52,7 +52,10 @@ type Entity interface {
 // ByLayer is the colour index meaning "use the layer's colour" (ACI 256).
 const ByLayer = 256
 
-// EntityCommon holds the properties shared by every entity.
+// EntityCommon holds the properties shared by every entity. Its zero value is ByLayer for the
+// linetype, the linetype scale (which reads as 1) and the lineweight; Txn.Add gives the zero
+// fields the drawing's current properties (see Txn.Add for the colour). Drawing.Resolve gives the
+// properties an entity draws with.
 type EntityCommon struct {
 	// Handle is the entity's handle.
 	H Handle
@@ -60,8 +63,16 @@ type EntityCommon struct {
 	Owner Handle
 	// Layer is the layer name.
 	Layer string
-	// Color is an AutoCAD Color Index (1–255) or ByLayer.
+	// Color is an AutoCAD Color Index: 1–255, ByLayer (256) or ByBlock (0, DXF group 62 0).
 	Color int
+	// Linetype is the linetype name (DXF group 6): "" or LinetypeByLayer for the layer's,
+	// LinetypeByBlock, or a name in the drawing's linetype table (Drawing.Linetype).
+	Linetype string
+	// LinetypeScale is the entity's linetype scale (DXF group 48, CELTSCALE); 0 reads as 1
+	// (LtScale).
+	LinetypeScale float64
+	// Lineweight is the entity's lineweight (DXF group 370); the zero value is ByLayer.
+	Lineweight Lineweight
 }
 
 // Handle implements Object.

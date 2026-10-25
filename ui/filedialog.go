@@ -87,6 +87,7 @@ func (ws *Workspace) openFile(w *gpui.Window) { ws.startDialog(w, dialogOpen) }
 // saveFile is the Save button and Ctrl+S: a drawing with a writable file is saved to it; one
 // without a file, or read from a format Cad-lite only reads (DWG), asks where.
 func (ws *Workspace) saveFile(w *gpui.Window) {
+	ws.flushPropEdit(w)
 	if p := ws.session.FilePath(); p != "" && ws.canWrite(p) {
 		ws.run("QSAVE", w)
 		return
@@ -98,6 +99,7 @@ func (ws *Workspace) saveFile(w *gpui.Window) {
 // formats it shows the format menu first (a second press closes it); without a dialog it runs SAVEAS
 // on the command line, which asks for the format there.
 func (ws *Workspace) saveFileAs(w *gpui.Window) {
+	ws.flushPropEdit(w)
 	if ws.dlg.dialog != nil && ws.files != nil && !ws.dlg.busy {
 		if vs, _ := ws.saveFormats(); vs != nil {
 			ws.dlg.formatMenu = !ws.dlg.formatMenu
@@ -132,6 +134,7 @@ func (ws *Workspace) startDialogIn(w *gpui.Window, kind dialogKind, dir string) 
 // startSaveDialog is startDialogIn with the file format chosen in the Save as format menu: the save
 // dialog lists that format alone, and SAVEAS is answered with it.
 func (ws *Workspace) startSaveDialog(w *gpui.Window, kind dialogKind, dir, version string) {
+	ws.flushPropEdit(w)
 	d := &ws.dlg
 	if d.dialog == nil || ws.files == nil {
 		ws.run(kind.command(true), w)

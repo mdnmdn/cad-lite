@@ -113,7 +113,7 @@ func (c *purgeCmd) next(ctx *cmdsys.Context) *cmdsys.Prompt {
 
 func (c *purgeCmd) remove(ctx *cmdsys.Context, l *doc.Layer) {
 	name := l.Name
-	if ctx.Doc.RemoveLayer(name) {
+	if ctx.Tx().RemoveLayer(name) {
 		ctx.Say("cmd.purge.msg.deleted", name)
 	}
 }

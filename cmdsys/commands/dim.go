@@ -2,7 +2,6 @@ package commands
 
 import (
 	"math"
-	"unicode/utf8"
 
 	"cad-lite/cmdsys"
 	"cad-lite/doc"
@@ -10,27 +9,14 @@ import (
 	"cad-lite/render"
 )
 
-// The dimension commands build each new DIMENSION's style from AutoCAD's dimension variables,
-// with the ISO-25 defaults of acadiso.dwt (doc.DefaultDimStyle): DIMSCALE, DIMASZ, DIMTXT,
-// DIMEXO, DIMEXE, DIMGAP, DIMDEC, DIMDSEP (its first character), DIMZIN, DIMTAD (only zero
-// against non-zero matters: on the line or above it), DIMARCSYM, and DIMSTYLE, the read-only
-// style name. DRAW_DIMLAST is command memory: the handle of the last dimension a dimension
-// command made, which DIMCONTINUE continues.
+// The dimension commands give each new DIMENSION the current dimension style (DIMSTYLE), whose
+// record the DIM* variables read and write (cmdsys/propvars.go), with no overrides. DIMARCSYM, the
+// arc length symbol, is a property of the dimension rather than of the style. DRAW_DIMLAST is
+// command memory: the handle of the last dimension a dimension command made, which DIMCONTINUE
+// continues.
 func init() {
 	cmdsys.RegisterVarGroup(func(_ *cmdsys.Session, v *cmdsys.Vars) {
-		st := doc.DefaultDimStyle()
-		v.Register(cmdsys.Var{Name: "DIMSCALE", Kind: cmdsys.VarReal, Default: st.Scale})
-		v.Register(cmdsys.Var{Name: "DIMASZ", Kind: cmdsys.VarReal, Default: st.ArrowSize})
-		v.Register(cmdsys.Var{Name: "DIMTXT", Kind: cmdsys.VarReal, Default: st.TextHeight})
-		v.Register(cmdsys.Var{Name: "DIMEXO", Kind: cmdsys.VarReal, Default: st.ExtOffset})
-		v.Register(cmdsys.Var{Name: "DIMEXE", Kind: cmdsys.VarReal, Default: st.ExtExtend})
-		v.Register(cmdsys.Var{Name: "DIMGAP", Kind: cmdsys.VarReal, Default: st.Gap})
-		v.Register(cmdsys.Var{Name: "DIMDEC", Kind: cmdsys.VarInt, Default: st.Decimals, Min: 0, Max: 8})
-		v.Register(cmdsys.Var{Name: "DIMDSEP", Kind: cmdsys.VarText, Default: st.DecSep})
-		v.Register(cmdsys.Var{Name: "DIMZIN", Kind: cmdsys.VarInt, Default: st.ZeroSupp, Min: 0, Max: 15})
-		v.Register(cmdsys.Var{Name: "DIMTAD", Kind: cmdsys.VarInt, Default: 1, Min: 0, Max: 4})
 		v.Register(cmdsys.Var{Name: "DIMARCSYM", Kind: cmdsys.VarInt, Default: doc.DimArcSymBefore, Min: 0, Max: 2})
-		v.Register(cmdsys.Var{Name: "DIMSTYLE", Kind: cmdsys.VarText, Default: st.Name, ReadOnly: true})
 		v.Register(cmdsys.Var{Name: dimLastVar, Kind: cmdsys.VarInt, Default: 0})
 	})
 }
@@ -54,19 +40,8 @@ var (
 	dimAlignedKeywords = []string{"Mtext", "Text", "Angle"}
 )
 
-// dimStyle returns the style a new dimension gets from the DIM* variables.
-func dimStyle(ctx *cmdsys.Context) doc.DimStyle {
-	v := ctx.Vars()
-	sep := v.Text("DIMDSEP")
-	if r, n := utf8.DecodeRuneInString(sep); n > 0 && r != utf8.RuneError {
-		sep = string(r)
-	}
-	return doc.DimStyle{
-		Name: v.Text("DIMSTYLE"), Scale: v.Real("DIMSCALE"), ArrowSize: v.Real("DIMASZ"), TextHeight: v.Real("DIMTXT"),
-		ExtOffset: v.Real("DIMEXO"), ExtExtend: v.Real("DIMEXE"), Gap: v.Real("DIMGAP"), Decimals: v.Int("DIMDEC"),
-		DecSep: sep, ZeroSupp: v.Int("DIMZIN"), TextAbove: v.Int("DIMTAD") != 0,
-	}
-}
+// dimStyle returns the style a new dimension gets: the current DIMSTYLE record.
+func dimStyle(ctx *cmdsys.Context) doc.DimStyle { return ctx.Doc.ActiveDimStyle() }
 
 // measuredText is the measurement of d formatted by its style, without its text override: what
 // "Dimension text =" echoes and the Text option offers.
@@ -323,7 +298,8 @@ func (c *linearDimCmd) rotation(loc geom.Vec2) float64 {
 
 // entity returns the dimension the command makes with its line through loc.
 func (c *linearDimCmd) entity(ctx *cmdsys.Context, loc geom.Vec2) *doc.Dimension {
-	d := &doc.Dimension{Kind: doc.DimAligned, Ext1: c.p1, Ext2: c.p2, DimLine: loc, Text: c.text, TextAngle: c.tAngle, Style: dimStyle(ctx)}
+	d := &doc.Dimension{Kind: doc.DimAligned, Ext1: c.p1, Ext2: c.p2, DimLine: loc, Text: c.text, TextAngle: c.tAngle}
+	d.SetStyle(ctx.Doc, dimStyle(ctx))
 	if !c.aligned {
 		d.Kind, d.Rotation = doc.DimRotated, geom.NormAngle(c.rotation(loc))
 		if c.circle != nil {
@@ -459,7 +435,7 @@ func (c *dimContinueCmd) next(ctx *cmdsys.Context, p geom.Vec2) *doc.Dimension {
 	if b.Kind != doc.DimRotated {
 		rot = geom.NormAngle(b.Direction().Angle())
 	}
-	d := &doc.Dimension{Kind: doc.DimRotated, Ext1: c.from, Ext2: p, DimLine: b.DimLine, Rotation: rot, Style: b.Style}
+	d := &doc.Dimension{Kind: doc.DimRotated, Ext1: c.from, Ext2: p, DimLine: b.DimLine, Rotation: rot, StyleName: b.StyleName, Overrides: b.Overrides}
 	d.Recompute()
 	return d
 }

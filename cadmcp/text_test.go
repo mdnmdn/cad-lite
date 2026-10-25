@@ -132,6 +132,7 @@ func TestListEntitiesTextFilter(t *testing.T) {
 func TestBatchPlacesLabelledRooms(t *testing.T) {
 	r := newRig(t)
 	r.must("create_layer", `{"name":"labels"}`)
+	depth := r.s.Drawing().UndoDepth()
 	m := r.must("batch", `{"ops":[
 		{"op":"add_rectangle","id":"r1","args":{"origin":[0,0],"width":400,"height":300}},
 		{"op":"add_rectangle","id":"r2","args":{"origin":[400,0],"width":300,"height":300}},
@@ -142,7 +143,7 @@ func TestBatchPlacesLabelledRooms(t *testing.T) {
 		{"op":"move","args":{"handles":["$l1","$l2"],"dx":0,"dy":10}}
 	]}`)
 	hs := m["handles"].(map[string]any)
-	if len(hs) != 5 || r.s.Drawing().UndoDepth() != 1 {
+	if len(hs) != 5 || r.s.Drawing().UndoDepth() != depth+1 {
 		t.Fatalf("batch = %v", m)
 	}
 	l2 := r.s.Drawing().Entity(mustHandle(t, hs["l2"].(string))).(*doc.Text)

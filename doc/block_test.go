@@ -5,6 +5,7 @@ import (
 	"cad-lite/geom"
 	"fmt"
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -442,4 +443,75 @@ func TestDefinitionReplacementHonorsRootAttributeBudget(t *testing.T) {
 		t.Fatal("replacement exceeded live root attribute budget")
 	}
 	tx.Abort()
+}
+
+// TestImportBlockSupportDimStyles checks that a block's dimensions keep their look in another
+// drawing: the dimension styles they name come along, with their unmodelled groups and the arrow
+// blocks they name, and undo takes them away again.
+func TestImportBlockSupportDimStyles(t *testing.T) {
+	src := doc.New()
+	src.LoadBlock(&doc.Block{Name: "TICK", Entities: []doc.Entity{&doc.Line{End: geom.V(1, 1)}}})
+	big := doc.DefaultDimStyle()
+	big.Name, big.ArrowSize, big.ArrowBlock = "BIG", 10, "TICK"
+	src.LoadDimStyles(append(src.DimStyles(), big), [][]doc.Pair{nil, {{Code: 3, Value: "mm"}}})
+	dm := &doc.Dimension{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(100, 0), DimLine: geom.V(0, 10)}
+	dm.SetStyle(src, big)
+	tx, _ := src.Begin()
+	if err := tx.DefineBlock(&doc.Block{Name: "B", Entities: []doc.Entity{dm}}); err != nil {
+		t.Fatal(err)
+	}
+	tx.Commit()
+
+	dst := doc.New()
+	tx, _ = dst.Begin()
+	if err := tx.DefineBlock(src.Block("B")); err != nil {
+		t.Fatal(err)
+	}
+	tx.ImportBlockSupport(src)
+	if cs := tx.Commit(); !cs.Support {
+		t.Fatal("import did not report a support change")
+	}
+	got := dst.Block("B").Entities[0].(*doc.Dimension).Style()
+	if got.Name != "BIG" || got.ArrowSize != 10 || got.ArrowBlock != "TICK" {
+		t.Fatalf("imported dimension style %+v", got)
+	}
+	if ex := dst.DimStyleExtra("BIG"); len(ex) != 1 || ex[0].Value != "mm" {
+		t.Fatalf("extras %v", ex)
+	}
+	if dst.Block("TICK") == nil {
+		t.Fatal("arrow block not imported")
+	}
+	dst.Undo()
+	if _, ok := dst.DimStyle("BIG"); ok || dst.Block("TICK") != nil {
+		t.Fatal("undo kept the imported dimension style or arrow block")
+	}
+	dst.Redo()
+	if _, ok := dst.DimStyle("BIG"); !ok || dst.Block("TICK") == nil {
+		t.Fatal("redo lost the imported dimension style or arrow block")
+	}
+}
+
+// TestLayerUndoKeepsLaterDirectEdits checks that undoing and redoing a layer edit restore only
+// the fields it changed: a direct lock toggle made since survives.
+func TestLayerUndoKeepsLaterDirectEdits(t *testing.T) {
+	if n := reflect.TypeOf(doc.Layer{}).NumField(); n != 9 {
+		t.Fatalf("Layer has %d fields: make restoreLayerFields restore the new one, then update this count", n)
+	}
+	d := doc.New()
+	d.AddLayer("A", 1)
+	tx, _ := d.Begin()
+	if err := tx.ModifyLayer("A", func(l *doc.Layer) { l.Color = 5 }); err != nil {
+		t.Fatal(err)
+	}
+	tx.Commit()
+	d.Layer("A").Locked = true
+	d.Undo()
+	if l := d.Layer("A"); l.Color != 1 || !l.Locked {
+		t.Fatalf("undo: %+v, want colour 1 and still locked", l)
+	}
+	d.Layer("A").Off = true
+	d.Redo()
+	if l := d.Layer("A"); l.Color != 5 || !l.Locked || !l.Off {
+		t.Fatalf("redo: %+v, want colour 5, locked and off", l)
+	}
 }

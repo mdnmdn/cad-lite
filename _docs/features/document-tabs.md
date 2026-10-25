@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: Several drawings open at once, one tab each above the canvas, each with its own session, undo history, view and agent conversations; how OPEN, NEW, CLOSE, QUIT and files from the OS choose a tab, and what follows the active tab.
 read_when: you are changing the document tab strip, which tab a file opens in, closing or quitting with several drawings, or what is per drawing and what the window shares
-updated: 2026-10-24
-verified: 2026-10-24
+updated: 2026-10-25
+verified: 2026-10-25
 code_anchors: [ui/doctabs.go, ui/discard.go, ui/workspace.go, ui/openpaths.go, ui/agent.go, ui/agent_store.go, cmdsys/dirty.go, cmdsys/commands/files.go, cmd/cad/main.go]
 depends_on: [feat-dxf-files, feat-canvas, feat-agent-panel, tech-command-system]
 review_cycle: monthly
@@ -31,13 +31,19 @@ command line field) is shared and shows the active tab.
   tooltip gives the path (or says the drawing is untitled), the unsaved-changes note and the keys.
   `+` after the tabs runs NEW. There is always at least one tab; the strip shows with one.
 - **Unsaved changes.** Each tab's session tracks entity commits, undo and redo and host-recorded
-  metadata edits. A layer property changed in the UI marks that tab unsaved without adding an entity
-  undo step; saving clears the marker and replacing the drawing resets it.
+  metadata edits. A layer switch or current-layer click in the UI is a `LAYER` undo step of that tab and
+  marks it unsaved; saving clears the marker and replacing the drawing resets it.
 - **Switching.** Clicking a tab, Ctrl+Tab (next) and Ctrl+Shift+Tab (previous; both wrap) make a tab
   active. The canvas, the command history and prompt, the status bar, the layers and properties
   panels, the title bar's document chip and the agent panel then show that drawing. A command running
   in the tab left keeps its prompt there and goes on when the tab is shown again; the command line's
   text is cleared. The view (centre and scale) and the drafting toggles are per tab.
+- **Properties panel.** Its state is per tab: the target (a layer clicked in the Layers section, else
+  the selection, else the defaults), the object-type filter and polyline vertex chosen for that
+  selection, and the folded categories; a tab shows again as it was left. An open panel field belongs
+  to the tab it was opened in: switching tabs (a click, Ctrl+Tab, Ctrl+Shift+Tab), closing that tab,
+  Save, Save As, Open, New and quitting commit it there first, as one `PROPERTIES` undo step of that
+  tab. A value that tab refuses is dropped on the switch, and an open drop-down closes.
   TEXTEDIT's modal blocks tab switching through clicks and shortcuts. If the host switches tabs or
   replaces the drawing, its uncommitted draft is discarded without changing the old document.
 - **OPEN.** A typed OPEN, the Open button and dialog, the recent files menu, the start panel and files

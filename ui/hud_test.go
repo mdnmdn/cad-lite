@@ -9,13 +9,16 @@ import (
 	"cad-lite/internal/gpui"
 )
 
-// hudRig opens a workspace with two lines on layer Walls, zoomed to them.
+// hudRig opens a workspace with two lines on layer Walls, zoomed to them, with the side panel's
+// Properties section folded: the HUD hides while it is expanded.
 func hudRig(t *testing.T) *sHarness {
 	t.Helper()
 	d := doc.New()
 	d.AddLayer("Walls", 1)
 	d.CurrentLayer = "Walls"
-	h := openSettingsWS(t, NewWorkspace(d, nil), 1280, 800, 1)
+	ws := NewWorkspace(d, nil)
+	ws.lay.propsOff = true
+	h := openSettingsWS(t, ws, 1280, 800, 1)
 	h.ws.Session().Script("LINE 0,0 100,0  LINE 0,50 100,50  ZOOM E")
 	h.ws.session.Selection().Clear()
 	h.hw.Window().Refresh()
@@ -232,7 +235,7 @@ func BenchmarkSelectionSummary(b *testing.B) {
 func TestSelectionSummaryDimension(t *testing.T) {
 	h := hudRig(t)
 	d := h.ws.session.Drawing()
-	dm := &doc.Dimension{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(30, 40), DimLine: geom.V(30, 40), Style: doc.DefaultDimStyle()}
+	dm := &doc.Dimension{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(30, 40), DimLine: geom.V(30, 40)}
 	dm.Color = 3
 	dm.Recompute()
 	tx, _ := d.Begin()

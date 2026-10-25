@@ -121,9 +121,8 @@ func (c *mirrorCmd) Input(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt {
 		}
 		cp := e.Clone().(doc.Entity)
 		mirrorEntity(cp, m, readable)
-		layer, color := cp.Common().Layer, cp.Common().Color
-		*cp.Common() = doc.EntityCommon{Layer: layer, Color: color}
-		tx.Add(cp)
+		cp.Common().H, cp.Common().Owner = 0, 0
+		tx.AddCopy(cp)
 		if in.Keyword == "Yes" {
 			tx.Erase(h)
 		}
@@ -270,7 +269,7 @@ func (c *offsetCmd) undo(ctx *cmdsys.Context) bool {
 	tx.Erase(r.added)
 	back := r.from
 	if r.erased != nil {
-		back = tx.Add(r.erased)
+		back = tx.AddCopy(r.erased)
 		for i := range c.done {
 			if c.done[i].from == r.from {
 				c.done[i].from = back
@@ -393,7 +392,7 @@ func (c *offsetCmd) inSide(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt 
 		return c.selectPrompt(ctx)
 	}
 	if ctx.Vars().Int("OFFSETLAYER") == 1 {
-		ne.Common().Layer, ne.Common().Color = "", 0
+		ne.Common().Layer = "" // AddCopy puts it on the current layer
 	}
 	tx := ctx.Tx()
 	rec := offsetRec{from: c.src}
@@ -401,7 +400,7 @@ func (c *offsetCmd) inSide(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt 
 		rec.erased = src.Clone().(doc.Entity)
 		tx.Erase(c.src)
 	}
-	rec.added = tx.Add(ne)
+	rec.added = tx.AddCopy(ne)
 	c.done = append(c.done, rec)
 	if c.multiple {
 		c.src = rec.added
@@ -514,7 +513,6 @@ func offsetEntity(e doc.Entity, side geom.Vec2, dist float64, through bool) (doc
 	default:
 		return nil, "cmd.offset.msg.cannot_offset"
 	}
-	c := out.Common()
-	c.Layer, c.Color = e.Common().Layer, e.Common().Color
+	*out.Common() = sourceProps(e)
 	return out, ""
 }

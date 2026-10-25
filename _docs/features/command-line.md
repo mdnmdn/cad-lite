@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: The command line under the canvas — typing commands and answers, the prompt, AutoComplete suggestions, Up/Down recall, the resizable history and recent commands, Enter, Space, Escape and right-click, and the keyboard shortcuts.
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
-updated: 2026-10-24
-verified: 2026-10-24
+updated: 2026-10-25
+verified: 2026-10-25
 code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, ui/layout.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, ui/textedit_view.go]
 depends_on: [tech-command-system, tech-ui-framework]
 review_cycle: quarterly
@@ -69,7 +69,10 @@ history. It sits under the canvas only: the layers and agent columns run down be
 - **Right-click** on the canvas is Enter.
 - **Escape** cancels the running command and prints `*Cancel*`; with no command running it clears
   the selection. What a command committed before Escape stays in the drawing. It also closes the Open menu and
-  the start panel (see [Drawing canvas](canvas.md)).
+  the start panel (see [Drawing canvas](canvas.md)). With no command running, successive Escapes peel
+  the Properties panel back in order: an open panel field first (Escape in it reverts the value and gives
+  the keyboard back to the command line), then the panel's layer target (the sheet goes back to the
+  selection or the defaults; the field must be empty), then the selection.
 - **Delete** (`Canc` on Italian keyboards), and **Backspace**, which the key labelled delete on a Mac
   sends, erase the selection when the field is empty, no command is running and something is
   selected: they run `ERASE` on that selection (AutoCAD's Delete with the pickfirst set), so the history

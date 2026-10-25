@@ -323,7 +323,7 @@ func TestWriteKeepsR12UnknownEntitiesVerbatimAndWarnsForTheRest(t *testing.T) {
 			t.Fatalf("%s: %v vs %v", h, before[h], after[h])
 		}
 	}
-	if len(after) != 3 || len(back.Blocks()) != 1 || len(back.Preserved.Tables["LTYPE"]) != 1 {
+	if _, ok := back.Linetype("DASHED"); len(after) != 3 || len(back.Blocks()) != 1 || !ok || len(back.Linetypes()) != 2 {
 		t.Fatalf("reread: %d unknown, %d blocks, %v", len(after), len(back.Blocks()), back.Preserved.Tables)
 	}
 }
@@ -333,8 +333,8 @@ func TestPreservedTablesAndBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lt := d.Preserved.Tables["LTYPE"]
-	if len(lt) != 1 || lt[0].Name() != "DASHED" || lt[0].Type() != "LTYPE" {
+	lt := d.Linetypes()
+	if len(lt) != 2 || lt[1].Name != "DASHED" || len(d.Preserved.Tables["LTYPE"]) != 0 {
 		t.Fatalf("linetypes = %+v", lt)
 	}
 	if len(d.Blocks()) != 1 || d.Block("B1") == nil || len(d.Block("B1").Entities) != 1 {

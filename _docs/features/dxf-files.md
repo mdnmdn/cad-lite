@@ -5,9 +5,9 @@ kind: feature
 status: current
 summary: Opening DXF and DWG drawings and saving DXF from the toolbar buttons, the native dialogs, the recent files menu, the command line, the -open flag and files the OS hands over (dropped, opened from Finder or the Dock, file arguments), how warnings and errors are reported, and where the lossy edges are.
 read_when: you are changing OPEN, SAVE, the Open and Save buttons, the recent files and folders, the file dialogs, the -open flag, opening dropped or OS-opened files, which file types they accept, how file problems are reported to the user, or the Windows file associations
-updated: 2026-10-24
-verified: 2026-10-24
-code_anchors: [fileio/dxf/dimension.go, ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/saveformat.go, ui/titlebar.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
+updated: 2026-10-25
+verified: 2026-10-25
+code_anchors: [fileio/dxf/dimension.go, fileio/dxf/write.go, ui/doctabs.go, packaging/windows/cad-lite.iss, filedialog/filedialog.go, filedialog/build.go, ui/filedialog.go, ui/saveformat.go, ui/titlebar.go, ui/recent.go, settings/recent.go, ui/openpaths.go, packaging/macos/Info.plist, packaging/linux/cad-lite.desktop, cmdsys/commands/files.go, cmd/cad/main.go, fileio/format.go, doc/unknown.go, cmdsys/command.go, fileio/dwg/read.go]
 depends_on: [tech-file-io, tech-command-system]
 review_cycle: quarterly
 ---
@@ -58,7 +58,8 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   and the path (AutoCAD picks the type inside its own save dialog; the system dialogs Cad-lite shows
   cannot report a chosen type, hence the menu, and Save of an untitled drawing offers no choice). A
   press outside the menu, or Save as again, closes it. Cancelling the dialog does
-  nothing. One dialog is open at a time; the window stays usable behind it.
+  nothing. One dialog is open at a time; the window stays usable behind it. Save, Save as and Open
+  first commit a value still being typed in a Properties panel field, so the file holds it.
 - **Recent files and folders.** Every drawing a successful OPEN or SAVE, SAVEAS or QSAVE names (typed, from the
   buttons, the dialogs, the recent menu or `-open`) moves to the front of the recent files, and its folder to the
   front of the recent folders; choosing a folder in the menu moves it to the front too. Paths are absolute and
@@ -119,13 +120,20 @@ is reported rather than hidden, so the drafter knows what the opened drawing lac
   becoming the default; the Linux desktop entry lists the DXF and DWG MIME types and passes `%F`.
 - Opening into the untouched untitled tab replaces that drawing, its undo history and the selection;
   any other open leaves the current tab as it is.
-- Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype name, description), colours and geometry for `LINE`, `CIRCLE`, `ARC`,
+- Reading and writing keep handles, layers (colour, off, frozen, locked, plot flag, lineweight, linetype, description; a
+  layer's Default lineweight and 0.00 mm stay apart, as AutoCAD's 370 -3 and 0), the linetype definitions
+  (dash patterns), each object's colour (ByLayer, ByBlock or an index), linetype, linetype scale and lineweight, the current
+  properties (colour, linetype, linetype scale, lineweight, global linetype scale, dimension style) and geometry for `LINE`, `CIRCLE`, `ARC`,
   polylines and `TEXT` (position, height, rotation, justification, width factor, obliquing, style name).
   Text sizes outside the ranges AutoCAD allows (a width factor past 100, a slant past 85°, a height past
   1e15) are clamped on reading, so a damaged file cannot make a text infinitely large.
   `MTEXT` opens as multiline text; saved to R12, which has no MTEXT, it becomes one TEXT per line,
-  with a warning, and loses its box and wrapping. Linear, aligned and arc length dimensions open as
-  dimensions with their style (the DIMSTYLE table and AutoCAD's per-dimension overrides), text
+  with a warning, and loses its box and wrapping. A drawing with lineweights or linetype scales saves as
+  AutoCAD 2000, since R12 has neither; saved to R12 explicitly, it loses them without a warning. A
+  linetype a layer or object names that the drawing does not define is saved with the built-in
+  definition of that name (acadiso.lin), or as a solid line when there is none. Linear, aligned and arc length dimensions open as
+  dimensions that follow their dimension style (the DIMSTYLE table: arrowheads, colours, text style,
+  text placement and fit) with AutoCAD's per-dimension overrides on top, text
   override, moved text and text angle, and save in both formats with a regenerated drawing block, so
   other programs draw them; an arc length dimension, which R12 and AutoCAD 2000 lack, saves as a block
   reference that only Cad-lite reads back as a dimension. Other dimension types (angular, radial,

@@ -50,13 +50,11 @@ func TestRoundTripThroughDXF(t *testing.T) {
 					t.Errorf("%s %s: geometry changed:\n %+v\n %+v", a.Class(), h, a, b)
 				}
 			}
-			// The R12 writer carries no linetype definitions, so a layer's linetype name does not
-			// survive, and it writes no $INSUNITS.
+			// The writer writes a linetype the DWG reader names but does not define from the
+			// built-in library, so a layer's linetype name survives.
 			for i, l := range src.Layers() {
 				m := back.Layers()[i]
-				want := *l
-				want.Linetype = ""
-				if want != *m {
+				if *l != *m {
 					t.Errorf("layer %q changed: %+v -> %+v", l.Name, *l, *m)
 				}
 			}

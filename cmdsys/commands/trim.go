@@ -85,10 +85,20 @@ func setGeometry(e doc.Entity, c geom.Curve) bool {
 	return false
 }
 
-// newEntity returns an entity of the kind of c carrying like's layer and
-// colour, or nil for a curve with no entity kind.
+// sourceProps returns e's common properties for a new entity made from it (a TRIM, BREAK or
+// EXPLODE piece, an OFFSET or FILLET result): layer, colour, linetype, linetype scale and
+// lineweight, without the handle and owner. Add it with Txn.AddCopy, which keeps ByBlock and
+// ByLayer values as they are.
+func sourceProps(e doc.Entity) doc.EntityCommon {
+	c := *e.Common()
+	c.H, c.Owner = 0, 0
+	return c
+}
+
+// newEntity returns an entity of the kind of c carrying like's properties (sourceProps), or nil
+// for a curve with no entity kind.
 func newEntity(c geom.Curve, like doc.Entity) doc.Entity {
-	common := doc.EntityCommon{Layer: like.Common().Layer, Color: like.Common().Color}
+	common := sourceProps(like)
 	switch c := c.(type) {
 	case geom.Line:
 		return &doc.Line{EntityCommon: common, Start: c.A, End: c.B}
@@ -102,7 +112,7 @@ func newEntity(c geom.Curve, like doc.Entity) doc.Entity {
 	return nil
 }
 
-// replaceWith replaces entity h by curves, all on h's layer and colour. The
+// replaceWith replaces entity h by curves, all with h's properties (sourceProps). The
 // first curve reuses h when it is of the same kind; no curves erase h.
 func replaceWith(ctx *cmdsys.Context, h doc.Handle, curves []geom.Curve) {
 	e := ctx.Doc.Entity(h)
@@ -121,7 +131,7 @@ func replaceWith(ctx *cmdsys.Context, h doc.Handle, curves []geom.Curve) {
 	}
 	for _, c := range rest {
 		if ne := newEntity(c, e); ne != nil {
-			tx.Add(ne)
+			tx.AddCopy(ne)
 		}
 	}
 }
@@ -506,7 +516,7 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 				continue
 			}
 			for _, e := range parts {
-				ctx.Tx().Add(e)
+				ctx.Tx().AddCopy(e)
 			}
 			ctx.Tx().Erase(h)
 			exploded++
@@ -514,7 +524,7 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 		}
 		if dm, ok := ctx.Doc.Entity(h).(*doc.Dimension); ok {
 			for _, e := range explodeDimension(dm) {
-				ctx.Tx().Add(e)
+				ctx.Tx().AddCopy(e)
 			}
 			ctx.Tx().Erase(h)
 			exploded++
@@ -537,7 +547,7 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 		}
 		tx := ctx.Tx()
 		for _, s := range parts {
-			tx.Add(newEntity(s, pl))
+			tx.AddCopy(newEntity(s, pl))
 		}
 		tx.Erase(h)
 		exploded++
@@ -548,44 +558,61 @@ func (c *explodeCmd) run(ctx *cmdsys.Context) {
 	ctx.SayPlural("cmd.explode.msg.exploded", exploded)
 }
 
-// explodeDimension returns the parts a dimension explodes into, on its layer and colour, as
-// AutoCAD explodes its block: the extension lines and dimension line (or stubs) as LINEs, the
-// dimension arc and the arc symbol as ARCs, each arrowhead as a closed three-point LWPOLYLINE
-// (AutoCAD makes a SOLID; there are no fills) and the text as a middle-centred TEXT. The
-// definition points (POINTs on layer DEFPOINTS in AutoCAD) are not kept.
+// explodeDimension returns the parts a dimension explodes into, on its layer, as AutoCAD explodes
+// its block: the extension lines and dimension line (or stubs) as LINEs, the dimension arc and the
+// arc symbol as ARCs, each arrowhead as its outline curves (DimArrow.Curves: a closed LWPOLYLINE,
+// lines, circles and arcs; AutoCAD makes a SOLID, and the outline is not filled) and the text as a
+// middle-centred TEXT. Each part takes the colour of the style's DIMCLRE (extension lines),
+// DIMCLRD (dimension line, arc and arrowheads) or DIMCLRT (text and arc symbol), ByBlock being
+// the dimension's own colour. The definition points (POINTs on layer DEFPOINTS in AutoCAD) are not
+// kept.
 func explodeDimension(dm *doc.Dimension) []doc.Entity {
-	lay := dm.Layout()
+	lay, st := dm.Layout(), dm.Style()
 	var out []doc.Entity
-	add := func(c geom.Curve) {
+	add := func(c geom.Curve, color int) {
 		if e := newEntity(c, dm); e != nil {
+			e.Common().Color = partColor(color, dm.Color)
 			out = append(out, e)
 		}
 	}
 	for _, l := range lay.ExtLines {
 		if l.A != l.B {
-			add(l)
+			add(l, st.ExtColor)
 		}
 	}
 	if dm.Kind == doc.DimArcLength && lay.DimArc.R > 0 && lay.DimArc.Start != lay.DimArc.End {
-		add(lay.DimArc)
+		add(lay.DimArc, st.LineColor)
 	}
 	for _, l := range lay.DimLine {
 		if l.A != l.B {
-			add(l)
+			add(l, st.LineColor)
 		}
 	}
 	for _, a := range lay.Arrows {
-		add(geom.Polyline{Pts: []geom.Vec2{a[0], a[1], a[2]}, Bulges: make([]float64, 3), Closed: true})
+		for _, cv := range a.Curves() {
+			add(cv, st.LineColor)
+		}
 	}
 	if lay.Symbol.R > 0 {
-		add(lay.Symbol)
+		add(lay.Symbol, st.TextColor)
 	}
 	if lay.Text != nil && lay.Text.Value != "" {
 		t := lay.Text.Clone().(*doc.Text)
-		t.EntityCommon = doc.EntityCommon{Layer: dm.Layer, Color: dm.Color}
+		t.EntityCommon = sourceProps(dm)
+		t.Color = partColor(st.TextColor, dm.Color)
 		out = append(out, t)
 	}
 	return out
+}
+
+// partColor returns the colour of an exploded dimension part whose style colour is color: the
+// dimension's own colour (own) for ByBlock, else color. ByLayer stays ByLayer, as the part keeps
+// the dimension's layer.
+func partColor(color, own int) int {
+	if color == doc.ByBlock {
+		return own
+	}
+	return color
 }
 
 func isArc(c geom.Curve) bool { _, ok := c.(geom.Arc); return ok }

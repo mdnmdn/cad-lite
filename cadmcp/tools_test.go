@@ -547,3 +547,35 @@ func TestDirectDispatcher(t *testing.T) {
 		t.Fatal("cancelled ctx should not run")
 	}
 }
+
+// TestLayerToolsAreUndoable checks set_layer and create_layer are journaled transactions that tell
+// the drawing's change listeners (the Properties panel's cache) about the table change.
+func TestLayerToolsAreUndoable(t *testing.T) {
+	r := newRig(t)
+	d := r.s.Drawing()
+	support := 0
+	d.OnChange(func(cs doc.ChangeSet) {
+		if cs.Support {
+			support++
+		}
+	})
+	r.must("create_layer", `{"name":"walls","color":4}`)
+	r.must("set_layer", `{"name":"walls"}`)
+	r.must("create_layer", `{"name":"walls","color":5,"locked":true}`)
+	if support != 3 {
+		t.Fatalf("support notifications = %d, want 3", support)
+	}
+	if !d.Undo() || d.Layer("walls").Color != 4 || d.Layer("walls").Locked {
+		t.Fatalf("undo of the layer update: %+v", d.Layer("walls"))
+	}
+	if !d.Undo() || d.CurrentLayer != "0" {
+		t.Fatalf("undo of set_layer: current = %q", d.CurrentLayer)
+	}
+	if !d.Undo() || d.Layer("walls") != nil {
+		t.Fatal("undo of create_layer left the layer")
+	}
+	r.must("create_layer", `{"name":"doors","make_current":true}`)
+	if !d.Undo() || d.Layer("doors") != nil || d.CurrentLayer != "0" {
+		t.Fatalf("create_layer make_current is not one undo step: current = %q", d.CurrentLayer)
+	}
+}

@@ -64,6 +64,12 @@ type Workspace struct {
 	closeHooked bool
 	fb          *feedbackState
 	analytics   analytics.Recorder
+	// pe is the Properties panel's editing state (propsgrid.go), made on first use.
+	pe *propsEdit
+	// frameN counts the frames built; building is set while Render builds one, when the
+	// selection cannot change (syncSel compares it once per frame).
+	frameN   int
+	building bool
 }
 
 // NewWorkspace returns a workspace editing d in its one tab. files may be nil, which
@@ -100,6 +106,10 @@ func (ws *Workspace) submit(text string, w *gpui.Window) {
 }
 
 func (ws *Workspace) escape(w *gpui.Window) {
+	// Escape first drops the Properties panel's layer target, as the × beside its title does.
+	if ws.session.Active() == "" && ws.input.Text() == "" && ws.clearLayerTarget(w) {
+		return
+	}
 	ws.cmd.open = false
 	ws.recent.menu = false
 	ws.dismissStart()
@@ -109,6 +119,8 @@ func (ws *Workspace) escape(w *gpui.Window) {
 }
 
 func (ws *Workspace) run(name string, w *gpui.Window) {
+	// A command started from the UI (Save, New, Close, a ribbon button) sees the panel's open edit.
+	ws.flushPropEdit(w)
 	ws.input.SetText("")
 	t := ws.docTab
 	n := t.session.RunCount()
@@ -172,6 +184,9 @@ func Bindings() []gpui.KeyBinding {
 // it is open.
 func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 	ws.win = w
+	ws.frameN++
+	ws.building = true
+	defer func() { ws.building = false }()
 	if !ws.closeHooked {
 		ws.closeHooked = true
 		w.OnShouldClose(ws.windowClosing)
@@ -248,7 +263,7 @@ func (ws *Workspace) render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 			}
 		}).
 		Child(ws.chrome(win, sideW, agentW, cmdline, w, cx)...).
-		Child(ws.statusBar(), ws.openMenuOverlay())))
+		Child(ws.statusBar(), ws.openMenuOverlay(), ws.propsMenuOverlay(w, cx))))
 }
 
 // chrome returns the window's rows above the status bar: the title bar, the ribbon unless it is
@@ -273,7 +288,7 @@ func (ws *Workspace) chrome(win, sideW, agentW float32, cmdline gpui.IntoElement
 		body.Child(ws.splitter("split-side", splitSide, false, i18n.T("ui.panel.side_splitter_tip"),
 			func() float32 { s, _ := ws.widths(ws.winW); return s }, func() { l.sideW = 0 }))
 	}
-	body.Child(ws.sidePanel(sideW))
+	body.Child(ws.sidePanel(sideW, w, cx))
 	if ws.agentShown() {
 		body.Child(ws.splitter("split-agent", splitAgent, false, i18n.T("ui.panel.agent_splitter_tip"),
 			func() float32 { _, a := ws.widths(ws.winW); return a }, func() { l.agentW = 0 }),

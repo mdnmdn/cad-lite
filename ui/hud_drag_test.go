@@ -202,7 +202,9 @@ func TestPropertiesHUDOverflowScrollDoesNotZoomCanvas(t *testing.T) {
 		hs = append(hs, tx.Add(e))
 	}
 	tx.Commit()
-	h := openSettingsWS(t, NewWorkspace(d, nil), 640, 680, 1)
+	ws := NewWorkspace(d, nil)
+	ws.lay.propsOff = true // the HUD hides while Properties is expanded
+	h := openSettingsWS(t, ws, 640, 680, 1)
 	h.ws.session.Selection().Add(hs...)
 	h.ws.togglePropsHUD()
 	h.hw.Window().Refresh()
@@ -252,6 +254,7 @@ func TestPropertiesHUDHidesWithoutUsableCanvas(t *testing.T) {
 func TestPropertiesHUDSpaceRecoveryCancelsDragAndReappears(t *testing.T) {
 	ws := NewWorkspace(doc.New(), nil)
 	ws.lay.ribbonOff = true
+	ws.lay.propsOff = true
 	h := openSettingsWS(t, ws, 1280, 376, 1)
 	ws.togglePropsHUD()
 	h.hw.Window().Refresh()

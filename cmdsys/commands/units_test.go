@@ -98,3 +98,23 @@ func TestTypedAngleUnits(t *testing.T) {
 		t.Fatalf("100g rotated to %v degrees", got*180/math.Pi)
 	}
 }
+
+func TestInsunitsIsUndoable(t *testing.T) {
+	s := newSession(t)
+	d := s.Drawing()
+	s.Script("INSUNITS 6\n")
+	if d.Header.InsUnits != 6 || s.Vars().Int("INSUNITS") != 6 {
+		t.Fatalf("SETVAR: header %d", d.Header.InsUnits)
+	}
+	d.Undo()
+	if d.Header.InsUnits != 4 || s.Vars().Int("INSUNITS") != 4 {
+		t.Fatalf("undo: header %d", d.Header.InsUnits)
+	}
+	d.Redo()
+	if d.Header.InsUnits != 6 {
+		t.Fatalf("redo: header %d", d.Header.InsUnits)
+	}
+	if err := s.Vars().SetString("INSUNITS", "25"); err == nil {
+		t.Fatal("INSUNITS 25 accepted")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"cad-lite/geom"
 	"cad-lite/render"
 	"cad-lite/spatial"
+	"math"
 	"testing"
 )
 
@@ -53,5 +54,106 @@ func TestBlockLayerVisibilityBoundsAndByBlock(t *testing.T) {
 	d.Undo()
 	if b.Cached() != 0 || len(ix.Query(geom.BoxOf(geom.V(1000, -1), geom.V(1010, 1)))) != 1 {
 		t.Fatal("definition undo stale")
+	}
+}
+
+// firstDash returns the length of the first dash the insert h draws.
+func firstDash(t *testing.T, b *render.Builder, h doc.Handle) float64 {
+	t.Helper()
+	r := runs(b.Items(h, render.DefaultView(800, 600)))
+	if len(r) == 0 {
+		t.Fatal("no dashes drawn")
+	}
+	return r[0].Points[0].Dist(r[0].Points[len(r[0].Points)-1])
+}
+
+// Regression: a nested reference's pattern scaled with the outermost reference only.
+func TestNestedInsertScalesPatternByAccumulatedScale(t *testing.T) {
+	d, b := dashDrawing(t, "ACAD_ISO02W100")
+	tx, _ := d.Begin()
+	line := dashLine("ACAD_ISO02W100", 100)
+	if err := tx.DefineBlock(&doc.Block{Name: "inner", Entities: []doc.Entity{line}}); err != nil {
+		t.Fatal(err)
+	}
+	nest := doc.NewInsert("inner", geom.V(0, 0))
+	nest.ScaleX, nest.ScaleY = 2, 2
+	if err := tx.DefineBlock(&doc.Block{Name: "outer", Entities: []doc.Entity{nest}}); err != nil {
+		t.Fatal(err)
+	}
+	flat := func(s float64) *doc.Insert {
+		in := doc.NewInsert("inner", geom.V(0, 0))
+		in.ScaleX, in.ScaleY = s, s
+		return in
+	}
+	nested := doc.NewInsert("outer", geom.V(0, 0))
+	nested.ScaleX, nested.ScaleY = 2, 2
+	hNested, h2, h4 := tx.Add(nested), tx.Add(flat(2)), tx.Add(flat(4))
+	tx.Commit()
+	// The pattern is in model units, so the dash length shows the scale it was drawn with.
+	d2, d4, dn := firstDash(t, b, h2), firstDash(t, b, h4), firstDash(t, b, hNested)
+	if math.Abs(d4-2*d2) > 1e-9 {
+		t.Fatalf("dashes of scale 2 and 4: %g, %g", d2, d4)
+	}
+	if math.Abs(dn-d4) > 1e-9 {
+		t.Fatalf("nested 2x2 dash %g, want %g of scale 4 (scale 2 draws %g)", dn, d4, d2)
+	}
+}
+
+// Regression: text inside a block took the part's dashed linetype.
+func TestDashedTextInsideBlockDrawsSolid(t *testing.T) {
+	d, b := dashDrawing(t, "ACAD_ISO02W100")
+	tx, _ := d.Begin()
+	txt := &doc.Text{Insert: geom.V(0, 0), Height: 100, Value: "HIL", WidthFactor: 1}
+	txt.Linetype = "ACAD_ISO02W100"
+	if err := tx.DefineBlock(&doc.Block{Name: "label", Entities: []doc.Entity{txt}}); err != nil {
+		t.Fatal(err)
+	}
+	h := tx.Add(doc.NewInsert("label", geom.V(0, 0)))
+	tx.Commit()
+	items := b.Items(h, render.DefaultView(800, 600))
+	if len(items) == 0 {
+		t.Fatal("no text drawn")
+	}
+	for _, it := range items {
+		if it.Starts != nil {
+			t.Fatalf("block text drawn dashed: %+v", it)
+		}
+	}
+}
+
+// A dimension inside a block follows its linetype on the dimension and extension lines only,
+// as a top-level one does; arrowheads and text stay solid.
+func TestDimensionInsideBlockDashesOnlyItsLines(t *testing.T) {
+	d, b := dashDrawing(t, "HIDDEN")
+	tx, _ := d.Begin()
+	dm := &doc.Dimension{Kind: doc.DimRotated, Ext1: geom.V(0, 0), Ext2: geom.V(100, 0), DimLine: geom.V(0, 20)}
+	dm.Linetype = "HIDDEN"
+	st := doc.DefaultDimStyle()
+	st.ExtColor, st.LineColor, st.TextColor = 1, 2, 3
+	dm.SetStyle(d, st)
+	dm.Recompute()
+	if err := tx.DefineBlock(&doc.Block{Name: "dim", Entities: []doc.Entity{dm}}); err != nil {
+		t.Fatal(err)
+	}
+	h := tx.Add(doc.NewInsert("dim", geom.V(0, 0)))
+	tx.Commit()
+	v := render.DefaultView(800, 600)
+	v.Scale = 8
+	var dashed, text, arrows int
+	for _, it := range b.Items(h, v) {
+		switch {
+		case it.Starts != nil:
+			dashed++
+			if it.Color == render.ACI(3) {
+				t.Fatalf("text dashed: %+v", it)
+			}
+		case it.Color == render.ACI(3):
+			text++
+		case it.Color == render.ACI(2):
+			arrows++
+		}
+	}
+	if dashed == 0 || text == 0 || arrows == 0 {
+		t.Fatalf("dashed %d, solid text %d, solid arrow strokes %d", dashed, text, arrows)
 	}
 }

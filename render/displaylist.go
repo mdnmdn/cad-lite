@@ -20,6 +20,10 @@ const (
 	// ItemRect fills the axis-aligned box spanned by Points[0] and
 	// Points[1], with a Weight-wide outline in Outline when it is opaque.
 	ItemRect
+	// ItemFill fills the polygon Points (closed implicitly, even-odd) with Color. It has no
+	// outline: a builder that wants the edge crisp, or the shape visible when it is under a pixel,
+	// adds an ItemPolyline over it.
+	ItemFill
 )
 
 // DisplayItem is one backend-neutral drawing primitive in model space.
@@ -29,6 +33,10 @@ type DisplayItem struct {
 	Kind  ItemKind
 	// Points are model-space vertices, pre-tessellated.
 	Points []geom.Vec2
+	// Starts, when set, splits an ItemPolyline's Points into separate open polylines (the dashes
+	// of a linetype): run i is Points[Starts[i]:Starts[i+1]], the last one running to the end.
+	// Starts[0] is 0. Nil is one polyline.
+	Starts []int32
 	Color  Color
 	// Outline is the border colour of an ItemRect.
 	Outline Color
@@ -57,6 +65,11 @@ func (dl *DisplayList) Polyline(pts []geom.Vec2, c Color, weight float32, closed
 // Curve appends c tessellated at tol.
 func (dl *DisplayList) Curve(c geom.Curve, tol float64, col Color, weight float32) {
 	dl.Polyline(c.Tessellate(tol, nil), col, weight, false)
+}
+
+// Fill appends a filled polygon.
+func (dl *DisplayList) Fill(pts []geom.Vec2, c Color) {
+	dl.Items = append(dl.Items, DisplayItem{Kind: ItemFill, Points: pts, Color: c})
 }
 
 // Rect appends a filled box from a to b with an outline.

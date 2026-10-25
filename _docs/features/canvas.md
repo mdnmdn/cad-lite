@@ -5,8 +5,8 @@ kind: feature
 status: current
 summary: The canvas and the chrome around it — pan and zoom, grid, rulers, crosshair and pickbox, highlights, selection boxes, snap markers, the zoom buttons, the title bar, the ribbon, the layers and properties panels, the layer popover and properties HUD, resizing and collapsing the panels, and the status bar.
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
-updated: 2026-10-24
-verified: 2026-10-24
+updated: 2026-10-25
+verified: 2026-10-25
 code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/layerorder.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
 review_cycle: monthly
@@ -62,7 +62,7 @@ Later items draw over earlier ones.
 | Item | Rule |
 |---|---|
 | Grid | F7 or the GRID flag toggles it. Lines sit every `GRIDUNIT` (x and y), widened by powers of ten until at least 16 px apart; every `GRIDMAJOR`-th (5) line is stronger. It is omitted when more than 400 lines would show |
-| Entities | Visible entities, on layers that are on, in their layer or entity colour; ACI 7 contrasts with the background. One logical pixel wide, or with the LWT toggle on as wide as the layer's lineweight (1 mm is 3.8 px), never thinner than one pixel. TEXT and MTEXT draw in the built-in single-line font whatever their style; text under 3 to 6 pixels high (by zoom band) draws as one line per row |
+| Entities | Visible entities, on layers that are on, with the colour, linetype and lineweight they inherit from themselves, their block reference (ByBlock), their layer (ByLayer) or the drawing's defaults; ACI 7 contrasts with the background. Linetypes draw dashed as in AutoCAD, scaled by the entity's linetype scale and LTSCALE; a pattern too fine to see at the zoom draws solid. One logical pixel wide, or with the LWT toggle on as wide as the lineweight (1 mm is 3.8 px; Default is LWDEFAULT), never thinner than one pixel. Dimensions draw their lines, arrowheads and text in DIMCLRD, DIMCLRE and DIMCLRT, with filled arrowheads filled. TEXT and MTEXT draw in the built-in single-line font whatever their style; text under 3 to 6 pixels high (by zoom band) draws as one line per row |
 | Hover highlight | The entity under the pickbox, in a lighter blue and thicker. Absent while a command asks for a point, while a box is dragged, and for selected entities |
 | Selection highlight | Selected entities, in blue and thicker |
 | Command preview | The rubber band and ghosts of the running command. What the command has made so far (LINE's segments, OFFSET's and COPY's copies, TEXT's lines, a TRIM pick) is not preview: it draws as entities, in their colours, from the moment it is made |
@@ -126,13 +126,17 @@ document transaction is active is refused with a message; no partial change occu
 
 The column's top section is headed `Layers` (semibold, normal case, behind a disclosure chevron) with a
 `+` icon button at its right that runs `LAYER` and a chevron that folds the whole column, where `name=colour` creates a layer. Each layer shows its colour swatch, its name, reorder arrows, a lock switch (an open or closed padlock) and an `on`, `off` or `frozen` button (frozen is set by `-LAYER Freeze`; the button toggles off and on only). The current layer's name
-is bold. Clicking a row makes that layer current, except a frozen layer, which cannot be current (as
-`-LAYER Set` refuses it; the row's tooltip says to thaw it). Clicking the button toggles the layer off or on;
+is bold. Clicking a row makes that layer current and shows its properties in the Properties section
+(below); a frozen layer cannot be current (as `-LAYER Set` refuses it; the row's tooltip says to thaw
+it), so a click on it only shows its properties. The status-bar popover's rows only make a layer current. Clicking the button toggles the layer off or on;
 entities on an off layer are neither drawn nor selectable. Clicking the padlock locks or unlocks the layer:
 a locked layer is drawn but its entities cannot be selected. The switches never make their layer current.
-Changing the current layer, visibility or lock marks the drawing modified, so `CLOSE` and `QUIT` ask to save.
-Selecting the current layer again, or trying to select a frozen layer, leaves that state unchanged.
-Ordinary layer property edits do not create an undo step; reordering creates one.
+Each switch and each change of the current layer (here and in the layer popover) is one undo step named
+`LAYER`, which `U` and `REDO` take back and replay; it marks the drawing modified, so `CLOSE` and `QUIT` ask
+to save. While a command runs (or a transaction is open) the switches and the current-layer click are
+refused, as the Properties panel's edits are; the click still shows the layer's properties. The canvas and
+the Properties sheet follow at once. Selecting the current layer again, or trying to select a frozen layer,
+leaves that state unchanged and adds no step. Reordering is an undo step too.
 
 ### Layer popover
 
@@ -152,16 +156,60 @@ with the current layer highlighted.
 
 ### Properties panel
 
-Below a splitter, under a `Properties` heading with its own disclosure chevron, the panel is read-only. With nothing selected it reads `No selection`. Otherwise it shows the count and a line per entity
-class (`LINE × 3`); a single selected entity also shows its layer, its colour (`Color: BYLAYER` or the index) and
-handle, and a single DIMENSION its kind and measurement (`Linear dimension: 120`, `Aligned dimension: ...`,
-`Arc length dimension: ...`, the measurement formatted by its style without the text override).
+Below a splitter, under a `Properties` heading with its own disclosure chevron, the section is AutoCAD's
+Properties palette in a compact form: the property sheet of `cmdsys/props` (see Property model in
+[Command system](../tech/command-system.md)) for one target, as collapsible categories (General, Geometry,
+Text, Lines & Arrows...) of 22 px rows at 12 px type, the label at the left (about 36% of the width, 64 to
+140 px, cut with an ellipsis; its tooltip has the whole label and the system variable it edits) and the
+value's control at the right. Only the rows relevant to the target appear.
+
+- **Targets.** The most recent gesture wins:
+  - the selection, with an object-type filter at the top (`All (3)`, `Line (2)`...) on a mixed selection;
+    choosing a type shows that type's own categories and limits edits to it; values that differ read `*VARIES*`;
+  - a layer, after a click on its row in the Layers section (`Layer: WALLS`, with an × at the right); a
+    later change of the selection, Escape on the command line or the × go back;
+  - the defaults when nothing is selected and no layer is targeted: the current colour, layer, linetype,
+    linetype scale and lineweight, `LTSCALE`, `INSUNITS`, `TEXTSIZE` and the current DIMSTYLE's values.
+- **Controls.** A number, length, angle or text is plain text until clicked; the click opens one shared
+  field on it with the value selected. Enter or moving the focus away commits, Escape reverts, and after
+  either the keyboard goes back to the command line. Switching or closing a drawing tab (Ctrl+Tab, a click
+  on a tab), Save, Save As, Open, New, Close, quitting and any command started from the ribbon or a
+  shortcut commit the open field first, in the drawing it belongs to; a refused value stays open with its
+  error, and a tab switch then drops it. Tab and Shift+Tab commit and move to the next or
+  previous editable row. A colour, linetype, lineweight, layer, style, arrowhead, choice or Yes/No switch is a
+  drop-down (a switch is one so it can show `*VARIES*`): a press opens its list under it (above it when the
+  window has no room below), with a filter field above ten items; Up, Down, Enter and Escape work in it.
+  A focused drop-down opens on Enter, Space or Down. A colour list ends with `More colors…`, which shows
+  the 255 AutoCAD Color Index colours in AutoCAD's index layout. A library linetype the drawing has not
+  loaded is muted in the list and is loaded when picked. A multi-line text shows its first line and a `…`
+  button that opens TEXTEDIT on a single text.
+- **Samples.** Every colour, linetype, lineweight and arrowhead shows a sample before its text, in the
+  closed control and in every list item: a colour swatch (ACI 7 black or white as the canvas draws it,
+  outlined), a dash preview of the pattern (two repeats), a bar as thick as the lineweight, the arrowhead
+  `doc.LayoutArrow` draws. The strips are 18 px wide in the closed control, where the text needs the room,
+  and 48 px in the lists, where the dashes need it. The Layers rows' swatches are outlined too, so white
+  layer 0 shows on the light theme.
+  ByLayer and ByBlock show what they resolve to.
+- **Inheritance.** A value that comes from the layer, the block reference, the dimension style or a
+  default is muted, its tooltip saying where it comes from (`From layer WALLS`). A dimension variable the
+  dimension overrides has an accent marker before its value, and a clear button (as does any value the
+  level can drop) that clears the override back to the style's value.
+- **Edits.** Each edit is one undo step named `PROPERTIES`. A refused value outlines the row in the error
+  colour, with the message as its tooltip, and keeps the field open. An edit outside the undo history
+  (`TEXTSIZE`) shows a note under the header. While a command runs the rows are read-only and a note says
+  to finish it.
+- **Keys.** While a panel field or drop-down has the keyboard, the canvas shortcuts do not run: Delete
+  does not erase, Space is a space, and Undo, Redo and the command keys are held back. Ctrl, Cmd and
+  function-key shortcuts (Ctrl+S, Ctrl+Tab, F8...) still work, committing the field first.
 
 ### Properties HUD
 
-The `PROPS` chip in the status bar shows a small read-only panel floating over the canvas at its top right,
-left of and level with the zoom buttons by default, with the same lines as the Properties section
-(`No selection` included). It is 184 px wide, narrowing when space requires, with 12 px body text and a
+The `PROPS` chip in the status bar shows a small read-only panel floating over the canvas at its top right
+while the side panel's Properties section is not expanded (the column or the section folded): with the
+section expanded the HUD is hidden, the chip keeps its on or off state and its tooltip says why. It sits
+left of and level with the zoom buttons by default and shows a short read-only summary of the selection:
+`No selection`, or the count, a line per entity class (`LINE × 3`) and, for a single entity, its layer,
+colour and handle, and for a single DIMENSION its kind and measurement. It is 184 px wide, narrowing when space requires, with 12 px body text and a
 `Properties` header with a short grip and a drag tooltip. Both HUD backgrounds use the panel colour at
 200/255 opacity (about 78%); their text and icons stay opaque. Presses stay on the HUD; the wheel
 scrolls overflowing Properties content without zooming the canvas. Other releases go through so an
@@ -286,7 +334,7 @@ languages. The bubble follows the theme (`tooltipStyle`), wraps at 320 px and gr
 | Layout tabs | `Model` is the selected tab. `Layout1` and `Layout2` are disabled (paper space is not supported) and say so in their tooltip |
 | Coordinates | The cursor as `x, y, 0.0000` in four decimals, monospace: the snapped point while a point is asked for, otherwise the pointer; dimmed and holding the last position while the pointer is not over the canvas |
 | MODEL | A static label for the space being edited, with a tooltip |
-| GRID, RULER, SNAP, ORTHO, POLAR, OSNAP, LWT, PROPS | Switch chips in monospace capitals (captions follow the language: `GRIGLIA`, `ORTO`, `POLARE`, `SNAP OGG.`, `SPESS`, `PROPR`, `RIGHELLI` in Italian). Muted when off; the soft accent fill, border and text when on. GRID is F7 (`Session.SetGrid`), SNAP is the snap grid, F9 (`Session.SetSnapGrid`), ORTHO is F8, POLAR is polar tracking, F10 (`Session.SetPolar`: the rubber band locks to multiples of `POLARANG` within 5 degrees; ortho and polar exclude each other), OSNAP is F3 (`Session.SnapOn`), and LWT draws layer lineweights (`LWDISPLAY`). All start as the settings say, with POLAR and LWT off. RULER shows or hides the canvas rulers (`Workspace.Rulers`, `toggleRulers`). PROPS shows the properties HUD (above) and starts off |
+| GRID, RULER, SNAP, ORTHO, POLAR, OSNAP, LWT, PROPS | Switch chips in monospace capitals (captions follow the language: `GRIGLIA`, `ORTO`, `POLARE`, `SNAP OGG.`, `SPESS`, `PROPR`, `RIGHELLI` in Italian). Muted when off; the soft accent fill, border and text when on. GRID is F7 (`Session.SetGrid`), SNAP is the snap grid, F9 (`Session.SetSnapGrid`), ORTHO is F8, POLAR is polar tracking, F10 (`Session.SetPolar`: the rubber band locks to multiples of `POLARANG` within 5 degrees; ortho and polar exclude each other), OSNAP is F3 (`Session.SnapOn`), and LWT draws lineweights (`LWDISPLAY`). All start as the settings say, with POLAR and LWT off. RULER shows or hides the canvas rulers (`Workspace.Rulers`, `toggleRulers`). PROPS shows the properties HUD (above) and starts off |
 | Right side | `Layer <current>` (a press opens the layer popover), the entity count (`10 entities`), the drawing unit from `INSUNITS` (`mm`, or `unitless`; the tooltip gives `1 px = <size> units`), then the zoom slider and the scale as a percentage |
 | Zoom | The slider is logarithmic from 0.1% to 100000% (scale 1e-3 to 1e3; a scale outside pins the thumb to an end), zooms about the canvas centre and updates the view while it is dragged. The thumb and percentage follow wheel, pinch and command zoom. A drag, a key press or a canvas zoom button is one step for ZOOM Previous (100% is one screen pixel per model unit) |
 
@@ -302,8 +350,11 @@ line at the right.
   `Session.Aperture`, `Session.SnapOn`, `Session.Ortho`, `Session.Polar`, `Session.Grid`,
   `Session.SnapGrid`, `Session.LineweightDisplay`, `Session.Units`; written through `Session.Click`,
   `Session.SelectBox`, `Session.Hover` and `Session.Submit`.
-- Document: reads layers and entities; the layer panel and the layer popover write `Layer.Off`,
-  `Layer.Locked` and `Drawing.CurrentLayer` directly, outside a transaction.
+- Document: reads layers and entities; the layer panel and the layer popover change `Layer.Off`,
+  `Layer.Locked` (`Txn.ModifyLayer`) and the current layer (`Txn.SetCurrent`) in a transaction named
+  `LAYER` (`Drawing.NameLastStep`).
+- Properties: `props.Build`, `props.Parse` and `props.Apply` with the session as host; the panel never
+  writes the document itself.
 
 ## Implementation
 
@@ -347,9 +398,16 @@ runs directly, from which `Workspace.Render` also registers the key handlers.
 `Workspace.openButtons` (`ui/recent.go`) adds the chevron and a zero-width marker before Open whose paint callback
 records the button's position, because `openMenuOverlay` is mounted on the root after the chrome (gpui paints in
 tree order and has no z-index) and must hang under it. `startPanel` is the last canvas overlay.
-`toggleChip` and `layoutTab` in `ui/statusbar.go` build the status bar. `layerRow` and `propsBody` in
-`ui/sidepanel.go` are the layer row and the Properties lines that the side panel, the layer popover and the HUD
-share. `ui/layerpop.go` holds the status bar's overlay state (`statusState`, beside the workspace like the
+`toggleChip` and `layoutTab` in `ui/statusbar.go` build the status bar. `layerRow` in `ui/sidepanel.go` is the
+layer row the side panel and the layer popover share; `propsBody` there is the HUD's read-only lines.
+`ui/propsgrid.go` is the Properties panel: `propsPanel` (per tab, in `docTab.pp`) holds the layer target,
+the type filter, the vertex, the folded categories and the cached sheet, rebuilt only when the target, a
+revision counter (document changes, variable changes and `Modified` moving), the language or the running
+command changed; `propsEdit` (on the workspace) holds the shared `TextInput`, the row it edits, the error,
+the drop-down controls' focus handles and the bounds they recorded while painting. `ui/propsmenu.go` builds
+the drop-down, mounted on the root after the chrome over a backdrop that closes it, and the ACI grid;
+`ui/propssample.go` paints the samples with `Canvas` strokes (filled arrowheads as horizontal strokes, as
+`render/gpuirender` fills). `ui/layerpop.go` holds the status bar's overlay state (`statusState`, beside the workspace like the
 settings state), `layerItem`, `layerPopover` and `statusOverlays`, which hangs the HUD and the popover from the
 status bar as absolute children: gpui gives every div a hitbox over its whole box and delivers a press only to the
 topmost one and its ancestors, so no overlay is larger than what it shows, except the popover's backdrop.
@@ -402,10 +460,12 @@ Colours are the `col*` and `ui*` variables in `ui/theme.go`.
   one.
 - Zoom stops at the scale limits; panning is unbounded.
 - A grid that would need more than 400 lines in either direction is skipped, not thinned.
-- The layer panel's toggle and current-layer click are not undoable and leave the selection
-  alone.
+- The layer panel's switches and current-layer click leave the selection alone.
 - `Layout1` and `Layout2` do nothing: there is no paper space.
-- Lineweights come from the layer only; an entity has no lineweight of its own yet.
+- A Properties edit the model refuses (a locked layer, a value out of range, freezing the current
+  layer) changes nothing: the row shows the message. A command started from the command line (whose
+  field took the keyboard, committing the panel's field) or the row vanishing drops a refused field
+  without applying it.
 
 ## Related docs
 
@@ -418,5 +478,7 @@ Colours are the `col*` and `ui*` variables in `ui/theme.go`.
 
 - Hide the operating system cursor over the canvas, which needs a platform API.
 - Base-layer caching so a pointer move redraws only the overlay.
-- Grips on selected entities and an editable properties palette.
+- Grips on selected entities.
+- A wider Properties panel option: in the default column (220 px in a 1280 px window) long values such as
+  linetype names are cut with an ellipsis.
 - Paper space layouts behind the `Layout1` and `Layout2` tabs.

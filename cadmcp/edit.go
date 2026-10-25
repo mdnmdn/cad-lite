@@ -626,9 +626,15 @@ func setLayer(s *cmdsys.Session, a layerNameArgs) (any, error) {
 	if err := checkLayer(s, a.Name); err != nil || a.Name == "" {
 		return nil, errors.Join(err, requireName(a.Name))
 	}
-	idle(s)
-	s.Drawing().CurrentLayer = a.Name
-	return map[string]any{"current_layer": a.Name}, nil
+	if l := s.Drawing().Layer(a.Name); l.Frozen {
+		return nil, fmt.Errorf("layer %q is frozen and cannot be made current", l.Name)
+	}
+	if err := withTx(s, func(tx *doc.Txn) error {
+		return s.Vars().SetTx(tx, "CLAYER", a.Name)
+	}); err != nil {
+		return nil, err
+	}
+	return map[string]any{"current_layer": s.Drawing().CurrentLayer}, nil
 }
 
 func requireName(n string) error {
@@ -655,25 +661,41 @@ func createLayer(s *cmdsys.Session, a createLayerArgs) (any, error) {
 	if a.Color != nil && (*a.Color < 1 || *a.Color > 255) {
 		return nil, errors.New("color must be 1-255")
 	}
-	idle(s)
 	d := s.Drawing()
-	existed := d.Layer(a.Name) != nil
-	color := 7
-	if a.Color != nil {
-		color = *a.Color
-	}
-	l := d.AddLayer(a.Name, color)
-	if existed && a.Color != nil {
-		l.Color = color
-	}
-	if a.Off != nil {
-		l.Off = *a.Off
-	}
-	if a.Locked != nil {
-		l.Locked = *a.Locked
-	}
-	if a.MakeCurrent {
-		d.CurrentLayer = a.Name
+	var existed bool
+	var l *doc.Layer
+	err := withTx(s, func(tx *doc.Txn) error {
+		existed = d.Layer(a.Name) != nil
+		color := 7
+		if a.Color != nil {
+			color = *a.Color
+		}
+		var err error
+		if l, err = tx.AddLayer(a.Name, color); err != nil {
+			return err
+		}
+		if existed && a.Color != nil || a.Off != nil || a.Locked != nil {
+			if err := tx.ModifyLayer(a.Name, func(l *doc.Layer) {
+				if a.Color != nil {
+					l.Color = color
+				}
+				if a.Off != nil {
+					l.Off = *a.Off
+				}
+				if a.Locked != nil {
+					l.Locked = *a.Locked
+				}
+			}); err != nil {
+				return err
+			}
+		}
+		if a.MakeCurrent {
+			return s.Vars().SetTx(tx, "CLAYER", a.Name)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return map[string]any{"layer": layerInfo(l), "created": !existed, "current_layer": d.CurrentLayer}, nil
 }

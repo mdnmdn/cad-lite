@@ -5,9 +5,9 @@ kind: tech
 status: current
 summary: The command model, the session state machine, typed-input parsing, the input pipeline from pointer to point, object snaps, ortho and selection.
 read_when: you are writing a command, adding an input form or a snap mode, or changing how clicks and keys reach commands
-updated: 2026-10-24
-verified: 2026-10-24
-code_anchors: [cmdsys/commands/dim.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
+updated: 2026-10-25
+verified: 2026-10-25
+code_anchors: [cmdsys/commands/dim.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, cmdsys/inflight.go, cmdsys/polar.go, cmdsys/command.go, cmdsys/context.go, cmdsys/registry.go, cmdsys/selection.go, cmdsys/session.go, cmdsys/cursor.go, cmdsys/select.go, cmdsys/cursor.go, cmdsys/input.go, cmdsys/snap.go, cmdsys/override.go, cmdsys/aids.go, cmdsys/vars.go, cmdsys/sysvars.go, cmdsys/propvars.go, cmdsys/props/model.go, cmdsys/props/build.go, cmdsys/props/apply.go, cmdsys/props/parse.go, cmdsys/props/defs.go, cmdsys/props/geometry.go, cmdsys/props/dims.go, cmdsys/textin.go, cmdsys/names.go, cmdsys/script.go, cmdsys/lastmem.go, cmdsys/selmem.go, cmdsys/select.go, cmdsys/selectopts.go, cmdsys/transparent.go, cmdsys/format.go, cmdsys/dirty.go, cmdsys/wording.go, cmdsys/commands/register.go, cmdsys/commands/base.go, cmdsys/commands/text.go, cmdsys/commands/textedit.go, ui/textedit.go]
 depends_on: [tech-architecture, tech-document-model, tech-geometry]
 review_cycle: quarterly
 ---
@@ -163,11 +163,30 @@ default that changes nothing.
   variable), `Names`, `String`, `Subscribe` and `Session.OnVarChange`. `Register` panics on a duplicate
   name. A package registers its variables from an `init` in its own file with `RegisterVarGroup`;
   `NewSession` runs the groups. `sysvars.go` registers the live ones (`ORTHOMODE`, `APERTURE`,
-  `LASTPOINT`, `CLAYER`, which read and write session state) and `LUPREC`, `AUPREC`; `commands/units.go` registers `LUNITS`, `AUNITS`, `ANGBASE`, `ANGDIR`, `UNITMODE` and `INSUNITS` (live on the drawing header); `commands/construct.go`
-  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, `CHAMFERD`, `OFFSETERASE`, `OFFSETLAYER`, so the construct defaults are per session (`TRIMMODE`, `CHAMFERC`, `CHAMMODE` are the stored placeholders the session registers). `commands/dim.go` registers the dimension variables the dimension commands build a new DIMENSION's style from (`DIMSCALE`, `DIMASZ`, `DIMTXT`, `DIMEXO`, `DIMEXE`, `DIMGAP`, `DIMDEC`, `DIMDSEP`, `DIMZIN`, `DIMTAD`, `DIMARCSYM`, read-only `DIMSTYLE`).
+  `LASTPOINT`, which read and write session state) and `LUPREC`, `AUPREC`. **Drawing-backed variables**
+  (`Var.Write`) are stored in the drawing and written through a transaction: `Set` runs the write in the
+  running command's transaction (or, under a transparent command, the interrupted command's; with no
+  command, one of its own committed at once as an undo step named after the variable), `SetTx` writes into
+  a transaction the caller holds, `Undoable` reports them, and a value the drawing refuses is
+  `ErrVarInvalid` (`ErrVarBusy` when another holder has the drawing). `propvars.go` registers them:
+  `CLAYER`, `CECOLOR` (`BYBLOCK` too), `CELTYPE`, `CELTSCALE`, `CELWEIGHT` (AutoCAD's -1/-2/-3 and
+  hundredths), `LTSCALE`, `LWDEFAULT` (a standard width in hundredths, 0 to 211, default 25; AutoCAD keeps
+  it per user in the registry, here it is `Drawing.LWDefault`, undoable and not saved) and `DIMSTYLE` on
+  `doc.CurrentProps` (`Txn.SetCurrent`), and every `DIM*`
+  variable the DIMSTYLE record models (`DIMSCALE`, `DIMASZ`, `DIMTXT`, `DIMEXO`, `DIMEXE`, `DIMGAP`,
+  `DIMDEC`, `DIMDSEP`, `DIMZIN`, `DIMTAD` 0–4, `DIMJUST`, `DIMTIH`, `DIMTOH`, `DIMTXSTY`, `DIMBLK`, `DIMBLK1`,
+  `DIMBLK2`, `DIMSAH`, `DIMCLRD`, `DIMCLRE`, `DIMCLRT`, `DIMATFIT`, `DIMTIX`, `DIMTOFL`) on the current
+  style's record (`ActiveDimStyle`, `Txn.SetDimStyle`), described by `DimVarSpecs`. Lengths and `DIMSCALE`
+  refuse a negative value: `DIMSCALE` 0 is taken and reads as 1 (AutoCAD's value with no paper space
+  viewport), and a negative `DIMGAP`, which boxes the text in AutoCAD, is refused because the box is not
+  drawn (a file's negative value is kept and draws with no gap). `DIMDSEP` takes one character and refuses
+  a longer answer. The same file holds the
+  shared parsers `ParseColor`, `ParseLineweight`, `CanonicalLinetype`, `CanonicalArrow` and their
+  formatters. `Context.TableTx` is the transaction a command's table edit joins, by the same rule; `commands/units.go` registers `LUNITS`, `AUNITS`, `ANGBASE`, `ANGDIR`, and `UNITMODE`; `INSUNITS` lives on the drawing header and is registered with the other current properties in `cmdsys/propvars.go` (undoable); `commands/construct.go`
+  registers `OFFSETDIST`, `FILLETRAD`, `CHAMFERA`, `CHAMFERB`, `CHAMFERD`, `OFFSETERASE`, `OFFSETLAYER`, so the construct defaults are per session (`TRIMMODE`, `CHAMFERC`, `CHAMMODE` are the stored placeholders the session registers). `commands/dim.go` registers `DIMARCSYM` and `DRAW_DIMLAST`; a new DIMENSION takes the current DIMSTYLE record, with no overrides.
   After every group ran, `registerStoredVars` adds what section 1.11 of the AutoCAD specification lists and
   nobody registered: **stored placeholders** that read back what was set (`MIRRTEXT`, `FILEDIA`
-  and also names a package will own, such as `OSMODE`, `CIRCLERAD`, `CECOLOR`), and live read-only state
+  and also names a package will own, such as `OSMODE`, `CIRCLERAD`), and live read-only state
   (`VIEWCTR`, `VIEWSIZE`, `SCREENSIZE`, `LASTPROMPT`, `CMDNAMES`, `CMDACTIVE`, `DWGNAME`, `DWGPREFIX`). A package that
   owns a variable just registers it: the placeholder steps aside whatever the init order. Angle variables
   are not placeholders (their unit belongs to the units package).
@@ -222,6 +241,41 @@ The command package mirrors this split: one file per command group, each with a 
 `commands.Register` calls, a frozen `aliases.go` (a package registers its own aliases with `Registry.Alias`
 in its `registerX`) and `base.go` for the shared helpers. The table of which package owns which file is in
 the AutoCAD command specification's Wave 0 result (`_docs/inbox/autocad-commands.md`).
+
+## Property model
+
+`cmdsys/props` is the UI-free model behind the Properties panel and structured agent edits. It imports
+`cmdsys`, `doc`, `geom` and `i18n`, never gpui. Its `Host` (`Drawing`, `Vars`, `MarkModified`,
+`Active`) is a `Session`.
+
+- **Targets.** A `Target` is a selection (handles, an optional DXF class filter, the polyline vertex
+  shown), a layer, or the defaults (what the panel shows with nothing selected).
+- **Sheets.** `Build(h, t)` returns a `Sheet`: the selection's class counts for the filter, a title, `Editable`
+  (false while a command runs), and `Category` lists of typed `Property` rows. A row carries its `Kind`, `Value`
+  (`Varies` when the selection disagrees), `Display` (LUNITS and AUNITS, the current language), `Options`
+  with a resolved `Sample` swatch each, its bounds, the system variable it edits (`Var`), and where the value
+  comes from (`Source`, `From`, the ready `Inherited` tip). `Overridden` and `Clearable` say whether the level
+  has a value of its own to drop.
+- **Rows on a selection.** General rows apply to every object; the class's own categories appear when the
+  filtered objects share a class: line, circle, arc and polyline geometry, text, block reference placement
+  and attributes, and the dimension categories.
+- **Dimension rows.** On a dimension a row reads the effective style and writes an override. A value equal
+  to the style's is no override, and `Value.Clear` drops it.
+- **Layer and defaults targets.** The layer target edits the record through `Txn.ModifyLayer` and loads a
+  library linetype on pick. The defaults target edits the current properties, `LTSCALE`, `LWDEFAULT` (Drawing
+  category, a lineweight row offering the widths only), `INSUNITS`, `TEXTSIZE`,
+  `DIMARCSYM` and the current DIMSTYLE record. They all go through `Vars.SetTx`, so SETVAR and the panel
+  cannot disagree.
+- **Edits.** `Parse(h, p, text)` reads typed text in the drawing's units and accepts a decimal comma.
+  `Apply(h, t, id, v)` makes one undo step named `PROPERTIES`. It refuses with `ErrBusy` while a command
+  runs or a transaction is open. It skips objects on locked, off or frozen layers, unknown objects and vanished
+  handles, and records nothing when nothing changed.
+- **Agents.** `ApplyTx(tx, d, handles, id, v)` applies the same row inside a transaction the caller holds:
+  the engine cadmcp's `update_entity` will use (N13). Nothing calls it yet.
+- **Errors.** Errors are `*props.Error` values with a catalog key. `errors.Is` matches the sentinels
+  `ErrBusy`, `ErrReadOnly`, `ErrInvalid`, `ErrStale` and `ErrRefused`.
+- **Performance.** A large selection is read once, in parallel parts. A 100,000-line `Build` takes about
+  13 ms (`BenchmarkBuild100k`).
 
 ## Language
 

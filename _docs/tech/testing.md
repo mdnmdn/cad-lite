@@ -5,8 +5,8 @@ kind: tech
 status: current
 summary: What each level of test covers and where it lives, how UI behaviour is tested without a display, and the performance targets.
 read_when: you are adding a feature or fixing a bug and need to know which test to write and where
-updated: 2026-10-17
-verified: 2026-10-17
+updated: 2026-10-25
+verified: 2026-10-25
 code_anchors: [ui/agent_basic_test.go, ui/agent_basic_check_test.go, ui/settings_snapshot_test.go, internal/gpui/raster_translucent_test.go, geom/geom_test.go, doc/doc_test.go, cmdsys/commands/commands_test.go, cmdsys/commands/inflight_test.go, fileio/dxf/dxf_test.go, ui/workspace_test.go, ui/ruler_test.go, ui/hud_test.go, ui/layerpop_test.go, ui/cmdcomplete_test.go, ui/settings_tabs_test.go, ui/agent_review_test.go, ui/agent_review_internal_test.go, tools/gui/main.go, tools/gui/gui_test.go, agentmanager/store/store_test.go, cmdsys/panic_test.go, cmdsys/commands/nonfinite_test.go, cmdsys/commands/i18n_test.go, cmdsys/commands/aids_test.go, ui/italian_snap_test.go, render/view_test.go, fileio/format_test.go, cadmcp/safety_test.go, ui/agent_quit_test.go, fileio/dwg/read_test.go, fileio/dwg/fuzz_test.go, spatial/bench_test.go, cmdsys/commands/textedit_test.go, ui/textedit_test.go, ui/hud_drag_test.go]
 depends_on: [tech-architecture]
 review_cycle: quarterly
@@ -49,6 +49,7 @@ unexported access.
 | UI | Agent prompt images (a drop on the composer attaches and never opens a drawing, a drop on the canvas still does, paste, chip removal, refusal without vision) and opencode's free models (ordering, the free default, a settings default and *Default* winning over it) | `ui/agent_image_test.go`, `ui/agent_free_test.go`, `ui/agent_free_internal_test.go`; the backends' image wire in `agentmanager/acp/images_test.go`, `claude/images_test.go`, `codex/images_test.go` against the fake agent's image echo |
 | UI | Typed commands, clicks, right-click Enter, Space as Enter, Escape, box drag, Ctrl+Z, middle-drag pan, wheel zoom, the selection highlight | `ui/workspace_test.go`: a `ui.Workspace` in a headless window, driven by `HeadlessWindow.Dispatch` |
 | UI | Ruler labels and layout reuse, HUD release propagation, layer popover filtering and lifecycle, layer dirty tracking, autocomplete and command recall, settings tabs | `ui/ruler_test.go`, `hud_test.go`, `layerpop_test.go`, `cmdcomplete_test.go`, `settings_tabs_test.go`, with headless input and renders |
+| UI | Properties panel: typed edits committed by Enter or blur and reverted by Escape, one undo step each, refused values, the object-type filter on a mixed selection, read-only while a command runs, layer and defaults targets, dimension override and clear, the HUD hidden while the section is expanded, samples in fields and drop-down items, panel keys kept from the canvas shortcuts, MTEXT's TEXTEDIT button | `ui/propsgrid_test.go`, with headless input; `TestRenderPropertiesPanel` writes every target and drop-down, dark and light, to `_tmp/props` |
 | UI | Compact HUD fills and zoom controls, Properties free dragging and four corner slots, narrow-body scrolling, bounds and drawing/modal drag handoff | `ui/hud_drag_test.go`, with headless pointer events and dark/light corner renders |
 | Command and UI | TEXTEDIT picking/preselection and agent refusal; draft Apply/Cancel/no-op, undo/redo, MTEXT preservation, stale targets, idle double-click, modal focus and short-window scrolling | `cmdsys/commands/textedit_test.go`, `ui/textedit_test.go`, `cadmcp/safety_test.go`, with headless input and editor/result renders |
 | UI | Agent Stop and Cancel, ordered and paused queues, bounded markdown parsing, redraw rate and asynchronous copy | `ui/agent_review_test.go`, `agent_review_internal_test.go`, using fake sessions and headless input |
@@ -116,7 +117,15 @@ save prompts; it also renders panel/popover/narrow controls.
 
 gpui draws only invalidated frames. `spatial/bench_test.go`, `BenchmarkQuery`, measures viewport
 queries on 10k and 100k entities through the uniform-grid index; the large-drawing file-open and
-full-frame targets have no end-to-end benchmark.
+full-frame targets have no end-to-end benchmark. `render/bench_test.go` measures the linetype
+cost: `BenchmarkBuildDashed`, `BenchmarkBuildSolid`, `BenchmarkBuildDashedCached` and
+`BenchmarkSyncUnchanged`, and `render/gpuirender/paint_test.go` `BenchmarkPaintFill` (see Cost of
+linetypes in [Rendering](rendering.md)); `TestBuildChecksSupportInPlace` holds a cached frame to zero
+allocations. `ui/hud_bench_test.go` measures whole frames with the HUD, the layer popover and the editable
+Properties panel (`BenchmarkFramePropsPanel`, about 2.5 ms at device scale 2), and the panel's cached
+sheet lookup on a 10,000-object selection (`BenchmarkPropsSheetCached`, about 7 µs, no allocation:
+one comparison of the selection per call; `BenchmarkPropsSheetInFrame`, under 0.1 µs, the same lookup
+repeated within a frame being built, which compares the selection only once per frame).
 
 ## Related docs
 

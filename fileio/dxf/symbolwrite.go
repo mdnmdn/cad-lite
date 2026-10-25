@@ -51,6 +51,15 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 		tables[t] = next()
 	}
 	w.planDimensions(d, next)
+	w.planLinetypes(d)
+	w.planArrows(d, func(name string) string {
+		for i, b := range d.Preserved.Blocks {
+			if strings.EqualFold(b.Name(), name) {
+				return preservedOwners[i]
+			}
+		}
+		return ""
+	}, next)
 	section := func(s string) { w.pair(0, "SECTION"); w.pair(2, s) }
 	end := func() { w.pair(0, "ENDSEC") }
 	section("HEADER")
@@ -64,6 +73,7 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 	w.pair(8, d.CurrentLayer)
 	w.pair(9, "$INSUNITS")
 	w.int(70, d.Header.InsUnits)
+	w.headerProps(d)
 	w.pair(9, "$HANDSEED")
 	w.pair(5, "CADLITE_HANDSEED")
 	end()
@@ -80,10 +90,11 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 			w.pair(100, "AcDbDimStyleTable")
 		}
 	}
-	record := func(t, name, subclass string) {
+	record := func(t, name, subclass string) string {
+		h := next()
 		w.pair(0, t)
 		if modern {
-			w.pair(5, next())
+			w.pair(5, h)
 			w.pair(330, tables[t])
 			w.pair(100, "AcDbSymbolTableRecord")
 			w.pair(100, subclass)
@@ -92,16 +103,13 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 		if t != "LAYER" {
 			w.int(70, 0)
 		}
+		return h
 	}
 	section("TABLES")
-	tableStart("LTYPE", 1+len(d.Preserved.Tables["LTYPE"]))
-	record("LTYPE", "CONTINUOUS", "AcDbLinetypeTableRecord")
-	w.pair(3, "Solid line")
-	w.int(72, 65)
-	w.int(73, 0)
-	w.num(40, 0)
-	for _, r := range d.Preserved.Tables["LTYPE"] {
-		w.tableRecord(r, tables["LTYPE"], next)
+	lts := w.ltypeRecords()
+	tableStart("LTYPE", len(lts))
+	for _, r := range lts {
+		w.tableRecord(doc.RawRecord{Pairs: r}, tables["LTYPE"], next)
 	}
 	w.pair(0, "ENDTAB")
 	layers := d.Layers()
@@ -125,14 +133,11 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 			color = -color
 		}
 		w.int(62, color)
-		lt := l.Linetype
-		if lt == "" {
-			lt = "CONTINUOUS"
-		}
-		w.pair(6, lt)
+		w.pair(6, w.layerLinetype(l))
 		if modern {
 			w.int(290, boolInt(!l.NoPlot))
-			w.int(370, l.Lineweight)
+			// 370 0 is 0.00 mm to AutoCAD; a layer's default is -3.
+			w.int(370, doc.LineweightFromLayer(l.Lineweight).DXF())
 		}
 		if l.NoPlot || l.Lineweight != 0 || l.Description != "" {
 			w.pair(1001, layerApp)
@@ -164,18 +169,34 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 			addStyle(e)
 		}
 	}
+	dimStyle := func(st doc.DimStyle) {
+		n := dimTextStyle(st)
+		for have := range styles {
+			if strings.EqualFold(have, n) {
+				return
+			}
+		}
+		styles[n] = true
+	}
+	for _, st := range d.DimStyles() {
+		dimStyle(st)
+	}
+	for _, o := range w.dims {
+		dimStyle(o.e.Style())
+	}
 	delete(styles, "")
 	tableStart("STYLE", len(styles))
 	pres := map[string]bool{}
+	w.styleHandles = map[string]string{}
 	for _, r := range d.Preserved.Tables["STYLE"] {
-		w.tableRecord(r, tables["STYLE"], next)
+		w.styleHandles[strings.ToUpper(r.Name())] = w.tableRecord(r, tables["STYLE"], next)
 		pres[r.Name()] = true
 	}
 	for name := range styles {
 		if pres[name] {
 			continue
 		}
-		record("STYLE", name, "AcDbTextStyleTableRecord")
+		w.styleHandles[strings.ToUpper(name)] = record("STYLE", name, "AcDbTextStyleTableRecord")
 		w.num(40, 0)
 		w.num(41, 1)
 		w.num(50, 0)
@@ -186,6 +207,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 	}
 	w.pair(0, "ENDTAB")
 	apps := []string{layerApp}
+	if !modern && !hasRecord(d, "APPID", dimStyleApp) {
+		apps = append(apps, dimStyleApp)
+	}
 	for _, app := range w.dimApps() {
 		if !hasRecord(d, "APPID", app) {
 			apps = append(apps, app)
@@ -218,7 +242,7 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 		w.pair(0, "ENDTAB")
 	}
 	if modern {
-		tableStart("BLOCK_RECORD", 2+len(d.Blocks())+len(d.Preserved.Blocks)+len(w.dims))
+		tableStart("BLOCK_RECORD", 2+len(d.Blocks())+len(d.Preserved.Blocks)+len(w.dims)+len(w.arrowGen))
 		blockRecord := func(h, name string) {
 			w.pair(0, "BLOCK_RECORD")
 			w.pair(5, h)
@@ -237,6 +261,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 		}
 		for _, o := range w.dims {
 			blockRecord(o.rec, o.block)
+		}
+		for _, o := range w.arrowGen {
+			blockRecord(o.rec, o.name)
 		}
 		w.pair(0, "ENDTAB")
 	}
@@ -302,6 +329,9 @@ func writeSymbols(out io.Writer, d *doc.Drawing, modern bool) ([]string, error) 
 	}
 	for _, o := range w.dims {
 		block(o.block, o.rec, geom.V(0, 0), dimBlockEntities(o.e, o.rec, next))
+	}
+	for _, o := range w.arrowGen {
+		block(o.name, o.rec, geom.V(0, 0), arrowBlockEntities(o.name, o.rec, next))
 	}
 	end()
 	section("ENTITIES")
@@ -509,10 +539,12 @@ func (w *writer) remapObjects(ps []doc.Pair, root, model, paper string, d *doc.D
 	return out
 }
 
-func (w *writer) tableRecord(r doc.RawRecord, owner string, next func() string) {
+// tableRecord writes a table record from its groups: as they are in R12 (minus the R13 groups),
+// with its handle, owner and subclass markers in AC1015. It returns the record's handle (AC1015).
+func (w *writer) tableRecord(r doc.RawRecord, owner string, next func() string) string {
 	if !w.modern {
 		w.pairs(r.Pairs)
-		return
+		return ""
 	}
 	var h string
 	hasSubclass := false
@@ -554,6 +586,7 @@ func (w *writer) tableRecord(r doc.RawRecord, owner string, next func() string) 
 			}
 		}
 	}
+	return h
 }
 
 func (w *writer) remapEntityOwners(ps []doc.Pair) []doc.Pair {

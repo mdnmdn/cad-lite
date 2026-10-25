@@ -195,7 +195,7 @@ func listDimension(ctx *cmdsys.Context, e *doc.Dimension) {
 	} else {
 		ctx.Say("cmd.list.msg.dim_text", e.Text)
 	}
-	ctx.Say("cmd.list.msg.dim_style", e.Style.Name)
+	ctx.Say("cmd.list.msg.dim_style", e.StyleName)
 }
 
 // listText prints a TEXT the way LIST does: style, points, height, value and the layout values.

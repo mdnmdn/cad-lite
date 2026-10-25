@@ -5,7 +5,7 @@ kind: tech
 status: current
 summary: How Cad-lite hosts AI agents: the separate agentmanager module, the in-process MCP server `cad`, the rule that only the UI goroutine touches the drawing, and the permission policy.
 read_when: you are adding a drawing tool for agents, changing the agent threading or lifecycle, or touching the permission defaults
-updated: 2026-10-24
+updated: 2026-10-25
 verified: 2026-10-17
 code_anchors: [ui/agent_basic_check.go, ui/agent_basic.go, agentmanager/acp/opencode.go, agentmanager/acp/client.go, agentmanager/internal/proc/proc.go, agentmanager/internal/proc/hide_windows.go, harnessspike/config.go, harnessspike/session.go, ui/harness_spike.go, ui/agent.go, ui/agent_model.go, ui/agent_image.go, agentmanager/session.go, ui/discovery.go, agentinstall/agentinstall.go, agentinstall/mise.go, agentinstall/opencode.go, agentinstall/auth.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/terminal_windows_test.go, ui/agent_binary.go, agentmanager/shellenv/shellenv.go, agentmanager/harnesses/harnesses.go, ui/agent_store.go, agentmanager/store/store.go, ui/agent_e2e_test.go, cadmcp/dispatcher.go, cadmcp/tools.go, cadmcp/edit.go, cadmcp/batch.go, cadmcp/text.go, cadmcp/render.go, ui/snapshot.go, agentmanager/_docs/api-contract.md, go.mod, agentmanager/options.go, agentmanager/mcp/server.go, agentmanager/jsonrpc/conn.go, cmdsys/command.go, cmd/cad/main.go, cadmcp/safety_test.go]
 depends_on: [tech-architecture, tech-ui-framework, tech-command-system, feat-agent-panel]
@@ -212,7 +212,7 @@ The tools (all coordinates in model units, Y up; one tool call is one undo step)
 | `erase`, `move`, `rotate`, `scale`, `set_entity_layer` | Edit entities by handle |
 | `add_text`, `add_mtext`, `update_text` | Create TEXT and MTEXT; change a text, or a dimension's text, by handle (below) |
 | `batch` | Many add and edit tools above in one call and one undo step, all or nothing (below) |
-| `set_layer`, `create_layer` | Current layer; layer table edits (not undoable) |
+| `set_layer`, `create_layer` | Current layer (a frozen layer is refused, as for CLAYER); create a layer or change its colour, on and lock. Both run in a transaction (`withTx`: the `CLAYER` variable through `Vars.SetTx`, `Txn.AddLayer`, `ModifyLayer`), so each call is one undo step and the drawing's change listeners (the Properties panel) see it |
 | `undo`, `redo`, `zoom_extents` | History and view |
 | `measure` | Length, perimeter, area, distance |
 | `render_png` | The drawing as a PNG, returned as MCP image content so a vision model can look at it, with a JSON block that maps pixels to model coordinates; views by extents, box, centre and scale, or the user's current view, with optional grid, rulers (bottom and left; drawn by `ui/ruler.go`, which the canvas rulers share) and selection highlight |
@@ -275,7 +275,9 @@ DIMENSION, and `text` matches a dimension's shown text (`Dimension.MeasurementTe
 (`dimensionInfo` in `cadmcp/query.go`) has `kind` (`rotated`, `aligned`, `arc_length`), `ext1`, `ext2`,
 `dim_line`, `text_position`, `measurement`, `text` (what it shows), `text_override` and `text_moved` when
 set, `rotation` (rotated), `center`, `radius`, `start_angle`, `end_angle` and `partial` (arc length),
-`text_angle` when set, and `style` with the DIMSTYLE name and the `dim*` values. `update_text` on a
+`text_angle` when set, and `style` with the DIMSTYLE name and the effective `dim*` values (the record with the
+dimension's overrides applied); `dimtad` is the DIMTAD integer 0–4 (centred, above, outside, JIS, below),
+not a boolean as in earlier builds. `update_text` on a
 dimension takes only `value`, the text override (`""` shows the measurement, `<>` inside stands for
 it), and `point`, which places the text and marks it user-positioned; other fields are an error.
 `move`, `rotate`, `scale`, `erase` and `set_entity_layer` work on it as on any entity; a scale changes the

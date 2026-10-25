@@ -80,7 +80,8 @@ func (ws *Workspace) askQuit(quit func()) {
 
 // windowClosing is the window's OnShouldClose handler: the close button quits at once when no
 // drawing has unsaved changes, and otherwise shows the quit dialog and keeps the window open.
-func (ws *Workspace) windowClosing(_ *gpui.Window, cx *gpui.App) bool {
+func (ws *Workspace) windowClosing(w *gpui.Window, cx *gpui.App) bool {
+	ws.flushPropEdit(w)
 	if d := ws.discard; d != nil && d.quit {
 		return false
 	}

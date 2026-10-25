@@ -35,12 +35,57 @@ const defpointsLayer = "DEFPOINTS"
 // leaves out (its built-in defaults, the imperial Standard style).
 func acadDimDefaults(name string) doc.DimStyle {
 	return doc.DimStyle{Name: name, Scale: 1, ArrowSize: 0.18, TextHeight: 0.18, ExtOffset: 0.0625,
-		ExtExtend: 0.18, Gap: 0.09, Decimals: 4, DecSep: ".", ZeroSupp: 0, TextAbove: false}
+		ExtExtend: 0.18, Gap: 0.09, Decimals: 4, DecSep: ".", ZeroSupp: 0, TextVertical: doc.DimTextCentered,
+		TextInsideHorizontal: true, TextOutsideHorizontal: true, TextStyle: doc.DefaultTextStyle, Fit: doc.DimFitBest}
 }
 
+// names maps the handles of block records and text styles to their names, for the dimension
+// variables R2000 stores as handles (DIMBLK 342 to 344, DIMTXSTY 340).
+type names struct {
+	blocks, styles map[doc.Handle]string
+}
+
+func (n *names) add(h doc.Handle, name string, block bool) {
+	if h == 0 || name == "" {
+		return
+	}
+	m := &n.styles
+	if block {
+		m = &n.blocks
+	}
+	if *m == nil {
+		*m = map[doc.Handle]string{}
+	}
+	(*m)[h] = name
+}
+
+func (n *names) lookup(v string, block bool) (string, bool) {
+	h, err := doc.ParseHandle(strings.TrimSpace(v))
+	if err != nil || n == nil {
+		return "", false
+	}
+	if h == 0 {
+		return "", true // a null handle: closed filled, or the default style
+	}
+	m := n.styles
+	if block {
+		m = n.blocks
+	}
+	name, ok := m[h]
+	return name, ok
+}
+
+// dimVarCodes are the DIMSTYLE group codes dimVar models; every other variable of a record is kept
+// as unmodelled groups (doc.Drawing.DimStyleExtra).
+var dimVarCodes = map[int]bool{40: true, 41: true, 42: true, 44: true, 140: true, 147: true, 271: true, 278: true,
+	78: true, 77: true, 90: true, 5: true, 6: true, 7: true, 342: true, 343: true, 344: true, 173: true, 176: true,
+	177: true, 178: true, 340: true, 280: true, 73: true, 74: true, 289: true, 174: true, 172: true}
+
 // dimVar applies dimension variable code (its DIMSTYLE group code, also the code DSTYLE
-// overrides use) with value v to s and *arcSym. Codes the document does not model are ignored.
-func dimVar(s *doc.DimStyle, arcSym *int, code int, v string) {
+// overrides use) with value v to s and *arcSym. R12 names the arrow blocks (5, 6, 7); R2000 points
+// at their block records (342, 343, 344) and at the text style (340), which nm resolves. Codes the
+// document does not model are ignored.
+func dimVar(s *doc.DimStyle, arcSym *int, code int, v string, nm *names) {
 	v = strings.TrimSpace(v)
 	f, ferr := strconv.ParseFloat(v, 64)
 	if ferr != nil || math.IsNaN(f) || math.IsInf(f, 0) {
@@ -50,31 +95,44 @@ func dimVar(s *doc.DimStyle, arcSym *int, code int, v string) {
 	if ierr != nil && ferr == nil {
 		i, ierr = int(f), nil
 	}
+	flt := func(dst *float64) {
+		if ferr == nil {
+			*dst = f
+		}
+	}
+	flag := func(dst *bool) {
+		if ierr == nil {
+			*dst = i != 0
+		}
+	}
+	color := func(dst *int) {
+		if ierr == nil && i >= 0 && i <= doc.ByLayer {
+			*dst = i
+		}
+	}
+	enum := func(dst *int, hi int) {
+		if ierr == nil && i >= 0 && i <= hi {
+			*dst = i
+		}
+	}
+	block := func(dst *string) {
+		if name, ok := nm.lookup(v, true); ok {
+			*dst = name
+		}
+	}
 	switch code {
 	case 40:
-		if ferr == nil {
-			s.Scale = f
-		}
+		flt(&s.Scale)
 	case 41:
-		if ferr == nil {
-			s.ArrowSize = f
-		}
+		flt(&s.ArrowSize)
 	case 42:
-		if ferr == nil {
-			s.ExtOffset = f
-		}
+		flt(&s.ExtOffset)
 	case 44:
-		if ferr == nil {
-			s.ExtExtend = f
-		}
+		flt(&s.ExtExtend)
 	case 140:
-		if ferr == nil {
-			s.TextHeight = f
-		}
+		flt(&s.TextHeight)
 	case 147:
-		if ferr == nil {
-			s.Gap = f
-		}
+		flt(&s.Gap)
 	case 271:
 		if ierr == nil {
 			s.Decimals = min(max(i, 0), 8)
@@ -91,8 +149,42 @@ func dimVar(s *doc.DimStyle, arcSym *int, code int, v string) {
 			s.ZeroSupp = i
 		}
 	case 77:
-		if ierr == nil {
-			s.TextAbove = i != 0
+		enum(&s.TextVertical, 4)
+	case 280:
+		enum(&s.TextJust, 4)
+	case 289:
+		enum(&s.Fit, 3)
+	case 73:
+		flag(&s.TextInsideHorizontal)
+	case 74:
+		flag(&s.TextOutsideHorizontal)
+	case 174:
+		flag(&s.TextInside)
+	case 172:
+		flag(&s.LineInside)
+	case 173:
+		flag(&s.SeparateArrows)
+	case 176:
+		color(&s.LineColor)
+	case 177:
+		color(&s.ExtColor)
+	case 178:
+		color(&s.TextColor)
+	case 5:
+		s.ArrowBlock = v
+	case 6:
+		s.ArrowBlock1 = v
+	case 7:
+		s.ArrowBlock2 = v
+	case 342:
+		block(&s.ArrowBlock)
+	case 343:
+		block(&s.ArrowBlock1)
+	case 344:
+		block(&s.ArrowBlock2)
+	case 340:
+		if name, ok := nm.lookup(v, false); ok {
+			s.TextStyle = name
 		}
 	case 90:
 		if ierr == nil && arcSym != nil && i >= 0 && i <= 2 {
@@ -101,35 +193,60 @@ func dimVar(s *doc.DimStyle, arcSym *int, code int, v string) {
 	}
 }
 
-// dimStyleRec is a DIMSTYLE record as the document sees it.
-type dimStyleRec struct {
-	style  doc.DimStyle
-	arcSym int
-}
-
-// parseDimStyle reads a DIMSTYLE record (R12 or R2000 and later: both keep the variables in
-// the groups dimVar reads; R12 has no DIMDEC or DIMDSEP); a variable it lacks takes AutoCAD's
-// built-in default.
-func parseDimStyle(o object) dimStyleRec {
-	r := dimStyleRec{style: acadDimDefaults(o.str(2))}
+// parseDimStyle reads a DIMSTYLE record (R12 or R2000 and later: both keep the variables in the
+// groups dimVar reads; R12 has no DIMDEC, DIMDSEP, DIMJUST, DIMATFIT or DIMTXSTY); a variable it
+// lacks takes AutoCAD's built-in default. It returns the groups of the variables the document
+// does not model too, without the record's own handle, owner and subclass groups and without
+// handles to other records (341, 345 to 347), which would not survive the rewrite.
+func parseDimStyle(o object, nm *names) (doc.DimStyle, int, []doc.Pair) {
+	s, arcSym := acadDimDefaults(o.str(2)), 0
+	var extra []doc.Pair
+	var own []pair
+	r2000 := o.has(105) || o.has(100)
+	xdata, mine := false, false
 	for _, p := range o.pairs {
-		if p.code >= 1000 {
-			break
+		if p.code == 1001 {
+			xdata, mine = true, strings.EqualFold(strings.TrimSpace(p.val), dimStyleApp)
+			if mine {
+				continue
+			}
 		}
-		dimVar(&r.style, &r.arcSym, p.code, p.val)
+		switch {
+		case mine:
+			own = append(own, p)
+		case xdata:
+			extra = append(extra, doc.Pair{Code: p.code, Value: p.val})
+		case p.code == 2 || p.code == 70 || p.code == 100 || p.code == 102 || p.code == 105 || p.code == 330 || p.code == 360 || p.code >= 341 && p.code <= 347 && !dimVarCodes[p.code]:
+		case p.code == 5 && r2000:
+		case dimVarCodes[p.code]:
+			dimVar(&s, &arcSym, p.code, p.val, nm)
+		default:
+			extra = append(extra, doc.Pair{Code: p.code, Value: p.val})
+		}
 	}
-	return r
+	if own != nil {
+		readDimStyleXData(&s, own)
+	}
+	if s.TextStyle == "" {
+		s.TextStyle = doc.DefaultTextStyle
+	}
+	return s, arcSym, extra
 }
 
-// dimStyles returns the DIMSTYLE records of d by upper-cased name.
-func dimStyles(d *doc.Drawing) map[string]dimStyleRec {
-	m := map[string]dimStyleRec{}
-	for _, r := range d.Preserved.Tables["DIMSTYLE"] {
-		if os := objectsFromRaw(r.Pairs); len(os) > 0 {
-			m[strings.ToUpper(r.Name())] = parseDimStyle(os[0])
+// readDimStyles replaces d's dimension style table with the file's DIMSTYLE records.
+func readDimStyles(d *doc.Drawing, objs []object, st *state) {
+	st.dimArcSym = map[string]int{}
+	var styles []doc.DimStyle
+	var extras [][]doc.Pair
+	for _, o := range objs {
+		if o.str(2) == "" {
+			continue
 		}
+		s, arcSym, extra := parseDimStyle(o, &st.names)
+		styles, extras = append(styles, s), append(extras, extra)
+		st.dimArcSym[strings.ToUpper(s.Name)] = arcSym
 	}
-	return m
+	d.LoadDimStyles(styles, extras)
 }
 
 // dstyleOverrides returns the code and value pairs of o's ACAD DSTYLE extended data:
@@ -166,21 +283,29 @@ func dstyleOverrides(o object) [][2]string {
 }
 
 // dimStyleOf returns the style a dimension record o draws with: the DIMSTYLE name (group 3; the
-// ISO-25 defaults when the table lacks it) and o's DSTYLE overrides, and the DIMARCSYM value.
-func dimStyleOf(name string, o object, styles map[string]dimStyleRec) (doc.DimStyle, int) {
-	r, ok := styles[strings.ToUpper(name)]
-	if !ok {
-		r = dimStyleRec{style: doc.DefaultDimStyle()}
-		if name != "" {
-			r.style.Name = name
-		}
-	}
+// ISO-25 defaults when the table lacks it) with o's DSTYLE overrides applied, the variables those
+// overrides set, and the DIMARCSYM value.
+func dimStyleOf(name string, o object, d *doc.Drawing, st *state) (doc.DimStyle, doc.DimVar, int) {
+	s := d.DimStyleBase(name)
+	arcSym := st.dimArcSym[strings.ToUpper(name)]
+	var set doc.DimVar
 	for _, kv := range dstyleOverrides(o) {
 		code, _ := strconv.Atoi(kv[0])
-		dimVar(&r.style, &r.arcSym, code, kv[1])
+		dimVar(&s, &arcSym, code, kv[1], &st.names)
+		set |= dimVarOfCode[code]
 	}
-	return r.style, r.arcSym
+	return s, set, arcSym
 }
+
+// dimVarOfCode maps a DIMSTYLE group code (and DSTYLE override code) to the variable it sets.
+var dimVarOfCode = map[int]doc.DimVar{40: doc.DimVarScale, 41: doc.DimVarArrowSize, 42: doc.DimVarExtOffset,
+	44: doc.DimVarExtExtend, 140: doc.DimVarTextHeight, 147: doc.DimVarGap, 271: doc.DimVarDecimals,
+	278: doc.DimVarDecSep, 78: doc.DimVarZeroSupp, 77: doc.DimVarTextVertical, 280: doc.DimVarTextJust,
+	289: doc.DimVarFit, 73: doc.DimVarTextInsideHorizontal, 74: doc.DimVarTextOutsideHorizontal,
+	174: doc.DimVarTextInside, 172: doc.DimVarLineInside, 173: doc.DimVarSeparateArrows,
+	176: doc.DimVarLineColor, 177: doc.DimVarExtColor, 178: doc.DimVarTextColor, 5: doc.DimVarArrowBlock,
+	342: doc.DimVarArrowBlock, 6: doc.DimVarArrowBlock1, 343: doc.DimVarArrowBlock1, 7: doc.DimVarArrowBlock2,
+	344: doc.DimVarArrowBlock2, 340: doc.DimVarTextStyle}
 
 // subclass returns the groups of o's subclass marker name, up to the next marker or the
 // extended data; o itself when it has no marker (R12).
@@ -224,7 +349,8 @@ func dimensionConvertible(o object) bool {
 		arc := subclass(o, "AcDbArcDimension")
 		return arc.has(15) && arc.int(71) == 0 && flatZ(o)
 	case "INSERT":
-		return o.int(66) != 1 && parseDimXData(o) != nil
+		e, _ := parseDimXData(o)
+		return o.int(66) != 1 && e != nil
 	}
 	return false
 }
@@ -269,12 +395,6 @@ func readDimension(o object, c doc.EntityCommon, st *state) doc.Entity {
 	if !dimensionConvertible(o) {
 		return nil
 	}
-	if st.dimStyles == nil {
-		st.dimStyles = map[string]dimStyleRec{}
-		if st.main != nil {
-			st.dimStyles = dimStyles(st.main)
-		}
-	}
 	base := subclass(o, "AcDbDimension")
 	e := &doc.Dimension{EntityCommon: c, DimLine: vec(base, 10), TextPos: vec(base, 11), TextMoved: base.int(70)&128 != 0}
 	if v, ok := base.raw(1); ok {
@@ -290,7 +410,19 @@ func readDimension(o object, c doc.EntityCommon, st *state) doc.Entity {
 			e.TextAngle = math.Pi
 		}
 	}
-	e.Style, e.ArcSymbol = dimStyleOf(base.str(3), o, st.dimStyles)
+	main := st.main
+	if main == nil {
+		main = doc.New()
+	}
+	var style doc.DimStyle
+	var set doc.DimVar
+	style, set, e.ArcSymbol = dimStyleOf(base.str(3), o, main, st)
+	rec := main.DimStyleBase(base.str(3))
+	// An override equal to the record's value is dropped, so the dimension follows later edits of
+	// the record (the R12 writer repeats values R12 records cannot hold as overrides).
+	set &= doc.DimStyleDiff(rec, style)
+	e.StyleName = rec.Name
+	e.Overrides = doc.DimOverrides{}.With(set, style)
 	if o.typ == "ARC_DIMENSION" {
 		readArcDimension(e, o)
 	} else {
@@ -349,7 +481,10 @@ func readArcDimension(e *doc.Dimension, o object) {
 // Radius, StartAngle, EndAngle and TextAngle (radians), 1070 flags (1 TextMoved, 2 Partial),
 // 1070 ArcSymbol, 1000 style name, 1040 DIMSCALE, DIMASZ, DIMTXT, DIMEXO, DIMEXE and DIMGAP,
 // 1070 DIMDEC, DIMZIN and DIMTAD, 1000 DIMDSEP, 1070 the number of text chunks and a 1000 for
-// each (the Text override, split to fit the 255-character limit).
+// each (the Text override, split to fit the 255-character limit). Version 2 (what the writer
+// writes) goes on with 1000 DIMBLK, DIMBLK1, DIMBLK2 and DIMTXSTY, 1070 DIMCLRD, DIMCLRE, DIMCLRT,
+// DIMJUST and DIMATFIT, and 1070 flags (1 DIMSAH, 2 DIMTIH, 4 DIMTOH, 8 DIMTIX, 16 DIMTOFL);
+// version 1 takes the ISO-25 values for those.
 const dimXDataKind = "ARC_LENGTH"
 
 // xcursor walks one application's extended data.
@@ -391,9 +526,9 @@ func (c *xcursor) point() geom.Vec2 {
 	return geom.V(x, y)
 }
 
-// parseDimXData returns the dimension o's CADLITE_DIM extended data defines, or nil when it has
-// none or it is malformed. The result has no EntityCommon.
-func parseDimXData(o object) *doc.Dimension {
+// parseDimXData returns the dimension o's CADLITE_DIM extended data defines and its full style, or
+// nil when it has none or it is malformed. The result has no EntityCommon and no style yet.
+func parseDimXData(o object) (*doc.Dimension, doc.DimStyle) {
 	var ps []pair
 	in := false
 	for _, p := range o.pairs {
@@ -409,42 +544,63 @@ func parseDimXData(o object) *doc.Dimension {
 		}
 	}
 	if !in {
-		return nil
+		return nil, doc.DimStyle{}
 	}
 	c := &xcursor{ps: ps}
-	if strings.TrimSpace(c.take(1000)) != dimXDataKind || c.int() != 1 {
-		return nil
+	if strings.TrimSpace(c.take(1000)) != dimXDataKind {
+		return nil, doc.DimStyle{}
+	}
+	version := c.int()
+	if version != 1 && version != 2 {
+		return nil, doc.DimStyle{}
 	}
 	e := &doc.Dimension{Kind: doc.DimArcLength}
+	style := doc.DefaultDimStyle()
 	e.Ext1, e.Ext2, e.DimLine, e.TextPos, e.Center = c.point(), c.point(), c.point(), c.point(), c.point()
 	e.Radius, e.StartAngle, e.EndAngle, e.TextAngle = c.num(1040), c.num(1040), c.num(1040), c.num(1040)
 	flags := c.int()
 	e.TextMoved, e.Partial = flags&1 != 0, flags&2 != 0
 	e.ArcSymbol = c.int()
-	s := &e.Style
+	s := &style
 	s.Name = decodeUnicode(c.take(1000))
 	s.Scale, s.ArrowSize, s.TextHeight = c.num(1040), c.num(1040), c.num(1040)
 	s.ExtOffset, s.ExtExtend, s.Gap = c.num(1040), c.num(1040), c.num(1040)
 	s.Decimals, s.ZeroSupp = c.int(), c.int()
-	s.TextAbove = c.int() != 0
+	s.TextVertical = c.int()
 	s.DecSep = decodeUnicode(c.take(1000))
 	var text strings.Builder
 	for n := c.int(); n > 0 && !c.bad; n-- {
 		text.WriteString(c.take(1000))
 	}
 	e.Text = decodeUnicode(text.String())
-	if c.bad || e.ArcSymbol < 0 || e.ArcSymbol > 2 {
-		return nil
+	if version == 2 {
+		s.ArrowBlock, s.ArrowBlock1, s.ArrowBlock2 = decodeUnicode(c.take(1000)), decodeUnicode(c.take(1000)), decodeUnicode(c.take(1000))
+		s.TextStyle = decodeUnicode(c.take(1000))
+		ints := []*int{&s.LineColor, &s.ExtColor, &s.TextColor, &s.TextJust, &s.Fit}
+		for _, p := range ints {
+			*p = c.int()
+		}
+		flags := c.int()
+		s.SeparateArrows, s.TextInsideHorizontal, s.TextOutsideHorizontal = flags&1 != 0, flags&2 != 0, flags&4 != 0
+		s.TextInside, s.LineInside = flags&8 != 0, flags&16 != 0
 	}
-	return e
+	if s.TextVertical < 0 || s.TextVertical > 4 || s.TextJust < 0 || s.TextJust > 4 || s.Fit < 0 || s.Fit > 3 {
+		return nil, doc.DimStyle{}
+	}
+	if c.bad || e.ArcSymbol < 0 || e.ArcSymbol > 2 {
+		return nil, doc.DimStyle{}
+	}
+	return e, style
 }
 
-// readDimInsert converts an INSERT carrying CADLITE_DIM extended data, or returns nil.
-func readDimInsert(o object, c doc.EntityCommon) doc.Entity {
+// readDimInsert converts an INSERT carrying CADLITE_DIM extended data, or returns nil. Its full
+// style becomes a style name and the variables that differ from main's record of that name.
+func readDimInsert(o object, c doc.EntityCommon, main *doc.Drawing) doc.Entity {
 	if !dimensionConvertible(o) {
 		return nil
 	}
-	e := parseDimXData(o)
+	e, style := parseDimXData(o)
+	e.SetStyle(main, style)
 	e.EntityCommon = c
 	e.Recompute()
 	return e
@@ -507,33 +663,123 @@ func (w *writer) planDimensions(d *doc.Drawing, next func() string) {
 
 // dimStyleName is the DIMSTYLE a dimension is written with.
 func dimStyleName(e *doc.Dimension) string {
-	if e.Style.Name == "" {
+	if e.StyleName == "" {
 		return doc.DefaultDimStyle().Name
 	}
-	return e.Style.Name
+	return e.StyleName
 }
 
-// generatedDimStyle is the DIMSTYLE record written for a style name the drawing's table lacks:
-// the ISO-25 values under that name (R12 has no DIMDEC or DIMDSEP).
-func generatedDimStyle(name string, modern bool) []doc.Pair {
-	s := doc.DefaultDimStyle()
+// dimStyleApp is the application of the extended data an R12 DIMSTYLE record carries for the
+// variables R12 lacks: 1070 DIMDEC, 1070 DIMDSEP (a character code), 1070 DIMJUST, 1070
+// DIMATFIT and 1000 DIMTXSTY. The reader restores them; other programs ignore them.
+const dimStyleApp = "CADLITE_DIMSTYLE"
+
+// r12DimCodes are the DIMSTYLE group codes R12 defines; an R12 record keeps only these of the
+// unmodelled groups.
+func r12DimCode(c int) bool {
+	return c >= 3 && c <= 7 || c >= 40 && c <= 48 || c >= 140 && c <= 147 || c >= 71 && c <= 78 || c >= 170 && c <= 178
+}
+
+// dimStyleRecord returns the DIMSTYLE record of s with its unmodelled groups extra: every
+// modelled variable, the arrow blocks as names (R12, groups 5 to 7) or block record handles
+// (AC1015, 342 to 344, from w.arrowHandles), DIMTXSTY as a STYLE handle (AC1015, 340). With xdata,
+// an R12 record also carries dimStyleApp.
+func (w *writer) dimStyleRecord(s doc.DimStyle, extra []doc.Pair, xdata bool) []doc.Pair {
 	f := func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
-	ps := []doc.Pair{{Code: 0, Value: "DIMSTYLE"}, {Code: 2, Value: name}, {Code: 70, Value: "0"},
-		{Code: 40, Value: f(s.Scale)}, {Code: 41, Value: f(s.ArrowSize)}, {Code: 42, Value: f(s.ExtOffset)},
-		{Code: 44, Value: f(s.ExtExtend)}, {Code: 77, Value: strconv.Itoa(boolInt(s.TextAbove))},
-		{Code: 78, Value: strconv.Itoa(s.ZeroSupp)}, {Code: 140, Value: f(s.TextHeight)}, {Code: 147, Value: f(s.Gap)}}
-	if modern {
-		ps = append(ps, doc.Pair{Code: 271, Value: strconv.Itoa(s.Decimals)}, doc.Pair{Code: 278, Value: strconv.Itoa(int(s.DecSep[0]))})
+	i := strconv.Itoa
+	b := func(v bool) string { return i(boolInt(v)) }
+	ps := []doc.Pair{{Code: 0, Value: "DIMSTYLE"}, {Code: 2, Value: s.Name}, {Code: 70, Value: "0"}}
+	for _, p := range extra {
+		if p.Code < 1000 && (w.modern || r12DimCode(p.Code)) {
+			ps = append(ps, p)
+		}
+	}
+	ps = append(ps, doc.Pair{Code: 40, Value: f(s.Scale)}, doc.Pair{Code: 41, Value: f(s.ArrowSize)},
+		doc.Pair{Code: 42, Value: f(s.ExtOffset)}, doc.Pair{Code: 44, Value: f(s.ExtExtend)},
+		doc.Pair{Code: 73, Value: b(s.TextInsideHorizontal)}, doc.Pair{Code: 74, Value: b(s.TextOutsideHorizontal)},
+		doc.Pair{Code: 77, Value: i(s.TextVertical)}, doc.Pair{Code: 78, Value: i(s.ZeroSupp)},
+		doc.Pair{Code: 140, Value: f(s.TextHeight)}, doc.Pair{Code: 147, Value: f(s.Gap)},
+		doc.Pair{Code: 172, Value: b(s.LineInside)}, doc.Pair{Code: 173, Value: b(s.SeparateArrows)},
+		doc.Pair{Code: 174, Value: b(s.TextInside)}, doc.Pair{Code: 176, Value: i(s.LineColor)},
+		doc.Pair{Code: 177, Value: i(s.ExtColor)}, doc.Pair{Code: 178, Value: i(s.TextColor)})
+	arrows := [3]string{s.ArrowBlock, s.ArrowBlock1, s.ArrowBlock2}
+	if w.modern {
+		ps = append(ps, doc.Pair{Code: 271, Value: i(s.Decimals)}, doc.Pair{Code: 278, Value: i(decSepCode(s.DecSep))},
+			doc.Pair{Code: 280, Value: i(s.TextJust)}, doc.Pair{Code: 289, Value: i(s.Fit)})
+		if h := w.styleHandles[strings.ToUpper(dimTextStyle(s))]; h != "" {
+			ps = append(ps, doc.Pair{Code: 340, Value: h})
+		}
+		for k, a := range arrows {
+			if h := w.arrowHandles[strings.ToUpper(a)]; a != "" && h != "" {
+				ps = append(ps, doc.Pair{Code: 342 + k, Value: h})
+			}
+		}
+	} else {
+		for k, a := range arrows {
+			if a != "" {
+				ps = append(ps, doc.Pair{Code: 5 + k, Value: a})
+			}
+		}
+	}
+	for _, p := range extra {
+		if p.Code >= 1000 {
+			ps = append(ps, p)
+		}
+	}
+	if xdata && !w.modern {
+		ps = append(ps, doc.Pair{Code: 1001, Value: dimStyleApp}, doc.Pair{Code: 1070, Value: i(s.Decimals)},
+			doc.Pair{Code: 1070, Value: i(decSepCode(s.DecSep))}, doc.Pair{Code: 1070, Value: i(s.TextJust)},
+			doc.Pair{Code: 1070, Value: i(s.Fit)}, doc.Pair{Code: 1000, Value: encodeText(dimTextStyle(s))})
 	}
 	return ps
 }
 
-// dimStyleTable returns the DIMSTYLE records to write after the preserved ones, one for each
-// style a linear dimension names that the table lacks, and records in w how a reader will see
-// every record, so the dimensions write only their differences as overrides.
+// dimTextStyle is DIMTXSTY as written: "" is Standard.
+func dimTextStyle(s doc.DimStyle) string {
+	if s.TextStyle == "" {
+		return doc.DefaultTextStyle
+	}
+	return s.TextStyle
+}
+
+// readDimStyleXData applies a record's dimStyleApp extended data (from xd, its pairs after the
+// 1001 group) to s.
+func readDimStyleXData(s *doc.DimStyle, xd []pair) {
+	c := &xcursor{ps: xd}
+	dec, sep, just, fit := c.int(), c.int(), c.int(), c.int()
+	style := decodeUnicode(c.take(1000))
+	if c.bad {
+		return
+	}
+	s.Decimals = min(max(dec, 0), 8)
+	dimVar(s, nil, 278, strconv.Itoa(sep), nil)
+	dimVar(s, nil, 280, strconv.Itoa(just), nil)
+	dimVar(s, nil, 289, strconv.Itoa(fit), nil)
+	if style != "" {
+		s.TextStyle = style
+	}
+}
+
+// dimStyleTable returns the DIMSTYLE records to write: the drawing's table, then one for each
+// style a linear dimension names that the table lacks (the ISO-25 values under that name). It
+// records in w how a reader that ignores dimStyleApp sees every record, so the dimensions write
+// their differences from it as overrides, which other programs read too.
 func (w *writer) dimStyleTable(d *doc.Drawing) [][]doc.Pair {
-	w.dimStyles = dimStyles(d)
-	var add [][]doc.Pair
+	w.dimStyles, w.dimStylesOwn = map[string]doc.DimStyle{}, map[string]doc.DimStyle{}
+	var out [][]doc.Pair
+	add := func(s doc.DimStyle, extra []doc.Pair) {
+		s.TextStyle = dimTextStyle(s)
+		view := s
+		if !w.modern {
+			view, _, _ = parseDimStyle(objectsFromRaw(w.dimStyleRecord(s, nil, false))[0], nil)
+		}
+		w.dimStyles[strings.ToUpper(s.Name)] = view
+		w.dimStylesOwn[strings.ToUpper(s.Name)] = s
+		out = append(out, w.dimStyleRecord(s, extra, true))
+	}
+	for _, s := range d.DimStyles() {
+		add(s, d.DimStyleExtra(s.Name))
+	}
 	for _, o := range w.dims {
 		if o.e.Kind == doc.DimArcLength {
 			continue
@@ -542,11 +788,11 @@ func (w *writer) dimStyleTable(d *doc.Drawing) [][]doc.Pair {
 		if _, ok := w.dimStyles[strings.ToUpper(name)]; ok {
 			continue
 		}
-		ps := generatedDimStyle(name, w.modern)
-		add = append(add, ps)
-		w.dimStyles[strings.ToUpper(name)] = parseDimStyle(objectsFromRaw(ps)[0])
+		s := doc.DefaultDimStyle()
+		s.Name = name
+		add(s, nil)
 	}
-	return add
+	return out
 }
 
 // dimension writes a doc.Dimension: a DIMENSION record for a linear one, an INSERT with
@@ -563,7 +809,7 @@ func (w *writer) dimension(e *doc.Dimension) {
 	w.head("DIMENSION", e)
 	w.pair(2, name)
 	w.point(10, e.DimLine)
-	w.point(11, e.TextPos)
+	w.point(11, e.TextMiddle())
 	flags := int(e.Kind) | 32
 	if e.TextMoved {
 		flags |= 128
@@ -595,38 +841,28 @@ func (w *writer) dimension(e *doc.Dimension) {
 }
 
 // dstyle writes the style values of e that differ from its DIMSTYLE record as ACAD DSTYLE
-// extended data.
+// extended data: 1040 for sizes, 1070 for integers and flags, and the arrow blocks and text
+// style as 1005 handles (AC1015) or the arrow blocks as 1000 names under groups 5 to 7 (R12,
+// which cannot override DIMTXSTY). A value is an override when it differs from the record as
+// this reader reads it or as a reader that ignores CADLITE_DIMSTYLE reads it (R12).
 func (w *writer) dstyle(e *doc.Dimension) {
-	rec, ok := w.dimStyles[strings.ToUpper(dimStyleName(e))]
+	key := strings.ToUpper(dimStyleName(e))
+	r, ok := w.dimStyles[key]
 	if !ok {
-		rec = dimStyleRec{style: doc.DefaultDimStyle()}
+		r = doc.DefaultDimStyle()
 	}
-	r, s := rec.style, e.Style
-	type ov struct {
-		code, xcode int
-		val         string
-	}
-	var ovs []ov
-	f := func(code int, a, b float64) {
-		if a != b {
-			ovs = append(ovs, ov{code, 1040, strconv.FormatFloat(a, 'f', -1, 64)})
+	ovs := w.styleDiffs(e.Style(), r)
+	if own, ok := w.dimStylesOwn[key]; ok {
+		seen := map[int]bool{}
+		for _, o := range ovs {
+			seen[o.code] = true
+		}
+		for _, o := range w.styleDiffs(e.Style(), own) {
+			if !seen[o.code] {
+				ovs = append(ovs, o)
+			}
 		}
 	}
-	i := func(code, a, b int) {
-		if a != b {
-			ovs = append(ovs, ov{code, 1070, strconv.Itoa(a)})
-		}
-	}
-	f(40, s.Scale, r.Scale)
-	f(41, s.ArrowSize, r.ArrowSize)
-	f(42, s.ExtOffset, r.ExtOffset)
-	f(44, s.ExtExtend, r.ExtExtend)
-	f(140, s.TextHeight, r.TextHeight)
-	f(147, s.Gap, r.Gap)
-	i(271, s.Decimals, r.Decimals)
-	i(278, decSepCode(s.DecSep), decSepCode(r.DecSep))
-	i(78, s.ZeroSupp, r.ZeroSupp)
-	i(77, boolInt(s.TextAbove), boolInt(r.TextAbove))
 	if len(ovs) == 0 {
 		return
 	}
@@ -640,6 +876,71 @@ func (w *writer) dstyle(e *doc.Dimension) {
 	w.pair(1002, "}")
 }
 
+// dimOverride is one DSTYLE override: the variable's group code, the extended data code of its
+// value and the value.
+type dimOverride struct {
+	code, xcode int
+	val         string
+}
+
+// styleDiffs returns the overrides that make record r into s.
+func (w *writer) styleDiffs(s, r doc.DimStyle) []dimOverride {
+	var ovs []dimOverride
+	f := func(code int, a, b float64) {
+		if a != b {
+			ovs = append(ovs, dimOverride{code, 1040, strconv.FormatFloat(a, 'f', -1, 64)})
+		}
+	}
+	i := func(code, a, b int) {
+		if a != b {
+			ovs = append(ovs, dimOverride{code, 1070, strconv.Itoa(a)})
+		}
+	}
+	bl := func(code int, a, b bool) { i(code, boolInt(a), boolInt(b)) }
+	f(40, s.Scale, r.Scale)
+	f(41, s.ArrowSize, r.ArrowSize)
+	f(42, s.ExtOffset, r.ExtOffset)
+	f(44, s.ExtExtend, r.ExtExtend)
+	f(140, s.TextHeight, r.TextHeight)
+	f(147, s.Gap, r.Gap)
+	i(271, s.Decimals, r.Decimals)
+	i(278, decSepCode(s.DecSep), decSepCode(r.DecSep))
+	i(78, s.ZeroSupp, r.ZeroSupp)
+	i(77, s.TextVertical, r.TextVertical)
+	i(280, s.TextJust, r.TextJust)
+	i(289, s.Fit, r.Fit)
+	bl(73, s.TextInsideHorizontal, r.TextInsideHorizontal)
+	bl(74, s.TextOutsideHorizontal, r.TextOutsideHorizontal)
+	bl(172, s.LineInside, r.LineInside)
+	bl(173, s.SeparateArrows, r.SeparateArrows)
+	bl(174, s.TextInside, r.TextInside)
+	i(176, s.LineColor, r.LineColor)
+	i(177, s.ExtColor, r.ExtColor)
+	i(178, s.TextColor, r.TextColor)
+	for k, a := range [3][2]string{{s.ArrowBlock, r.ArrowBlock}, {s.ArrowBlock1, r.ArrowBlock1}, {s.ArrowBlock2, r.ArrowBlock2}} {
+		if strings.EqualFold(a[0], a[1]) {
+			continue
+		}
+		if w.modern {
+			h := "0"
+			if a[0] != "" {
+				h = w.arrowHandles[strings.ToUpper(a[0])]
+			}
+			if h != "" {
+				ovs = append(ovs, dimOverride{342 + k, 1005, h})
+			}
+		} else {
+			ovs = append(ovs, dimOverride{5 + k, 1000, a[0]})
+		}
+	}
+	if w.modern && !strings.EqualFold(dimTextStyle(s), dimTextStyle(r)) {
+		if h := w.styleHandles[strings.ToUpper(dimTextStyle(s))]; h != "" {
+			ovs = append(ovs, dimOverride{340, 1005, h})
+		}
+	}
+	return ovs
+}
+
 // decSepCode is DIMDSEP as DXF stores it, a character code ("" is ".").
 func decSepCode(s string) int {
 	if s == "" {
@@ -648,11 +949,12 @@ func decSepCode(s string) int {
 	return int(s[0])
 }
 
-// dimXData writes an arc length dimension's CADLITE_DIM extended data (see dimXDataKind).
+// dimXData writes an arc length dimension's CADLITE_DIM extended data, version 2 (see
+// dimXDataKind).
 func (w *writer) dimXData(e *doc.Dimension) {
 	w.pair(1001, dimApp)
 	w.pair(1000, dimXDataKind)
-	w.int(1070, 1)
+	w.int(1070, 2)
 	for _, p := range []geom.Vec2{e.Ext1, e.Ext2, e.DimLine, e.TextPos, e.Center} {
 		w.point(1010, p)
 	}
@@ -661,14 +963,14 @@ func (w *writer) dimXData(e *doc.Dimension) {
 	}
 	w.int(1070, boolInt(e.TextMoved)|boolInt(e.Partial)<<1)
 	w.int(1070, e.ArcSymbol)
-	s := e.Style
+	s := e.Style()
 	w.pair(1000, encodeText(s.Name))
 	for _, v := range []float64{s.Scale, s.ArrowSize, s.TextHeight, s.ExtOffset, s.ExtExtend, s.Gap} {
 		w.num(1040, v)
 	}
 	w.int(1070, s.Decimals)
 	w.int(1070, s.ZeroSupp)
-	w.int(1070, boolInt(s.TextAbove))
+	w.int(1070, s.TextVertical)
 	w.pair(1000, encodeText(s.DecSep))
 	text := encodeText(e.Text)
 	var chunks []string
@@ -682,71 +984,183 @@ func (w *writer) dimXData(e *doc.Dimension) {
 	for _, c := range chunks {
 		w.pair(1000, c)
 	}
+	for _, v := range []string{s.ArrowBlock, s.ArrowBlock1, s.ArrowBlock2, s.TextStyle} {
+		w.pair(1000, encodeText(v))
+	}
+	for _, v := range []int{s.LineColor, s.ExtColor, s.TextColor, s.TextJust, s.Fit} {
+		w.int(1070, v)
+	}
+	w.int(1070, boolInt(s.SeparateArrows)|boolInt(s.TextInsideHorizontal)<<1|boolInt(s.TextOutsideHorizontal)<<2|
+		boolInt(s.TextInside)<<3|boolInt(s.LineInside)<<4)
+}
+
+// blockParts builds block entities: com makes the common fields of a new one with a colour.
+type blockParts struct {
+	out []doc.Entity
+	com func(color int) doc.EntityCommon
+	rec string
+}
+
+func (b *blockParts) line(l geom.Line, color int) {
+	if l.A != l.B {
+		b.out = append(b.out, &doc.Line{EntityCommon: b.com(color), Start: l.A, End: l.B})
+	}
+}
+
+func (b *blockParts) arc(a geom.Arc, color int) {
+	if a.R > 0 && a.Start != a.End {
+		b.out = append(b.out, &doc.Arc{EntityCommon: b.com(color), Center: a.C, Radius: a.R, StartAngle: a.Start, EndAngle: a.End})
+	}
+}
+
+// raw adds an entity the document does not model, as its groups.
+func (b *blockParts) raw(typ, sub string, c doc.EntityCommon, ps ...doc.Pair) {
+	r := []doc.Pair{{Code: 5, Value: c.H.String()}, {Code: 330, Value: b.rec}, {Code: 100, Value: "AcDbEntity"},
+		{Code: 8, Value: c.Layer}}
+	if c.Linetype != "" {
+		r = append(r, doc.Pair{Code: 6, Value: c.Linetype})
+	}
+	if c.Color != doc.ByLayer {
+		r = append(r, doc.Pair{Code: 62, Value: strconv.Itoa(c.Color)})
+	}
+	r = append(r, doc.Pair{Code: 100, Value: sub})
+	b.out = append(b.out, &doc.Unknown{EntityCommon: c, Type: typ, Raw: append(r, ps...)})
+}
+
+func ptPairs(code int, p geom.Vec2) []doc.Pair {
+	f := func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
+	return []doc.Pair{{Code: code, Value: f(p.X)}, {Code: code + 10, Value: f(p.Y)}, {Code: code + 20, Value: "0"}}
+}
+
+// arrow adds an arrowhead: a SOLID for a filled outline (a triangle, or a quadrilateral in
+// SOLID's zigzag order), LINEs for an open outline and strokes, CIRCLEs for dots and origin
+// indicators (a filled dot is a circle here, AutoCAD's a donut), ARCs for the integral sign.
+func (b *blockParts) arrow(a doc.DimArrow, color int) {
+	if n := len(a.Outline); n > 0 {
+		if a.Filled && (n == 3 || n == 4) {
+			pts := [4]geom.Vec2{a.Outline[0], a.Outline[1], a.Outline[2], a.Outline[2]}
+			if n == 4 {
+				pts = [4]geom.Vec2{a.Outline[0], a.Outline[1], a.Outline[3], a.Outline[2]}
+			}
+			var ps []doc.Pair
+			for i, p := range pts {
+				ps = append(ps, ptPairs(10+i, p)...)
+			}
+			b.raw("SOLID", "AcDbTrace", b.com(color), ps...)
+		} else {
+			for i := range a.Outline {
+				b.line(geom.Line{A: a.Outline[i], B: a.Outline[(i+1)%n]}, color)
+			}
+		}
+	}
+	for _, l := range a.Lines {
+		b.line(l, color)
+	}
+	for _, c := range a.Circles {
+		if c.R > 0 {
+			b.out = append(b.out, &doc.Circle{EntityCommon: b.com(color), Center: c.C, Radius: c.R})
+		}
+	}
+	for _, c := range a.Arcs {
+		b.arc(c, color)
+	}
 }
 
 // dimBlockEntities returns the drawing of a dimension as block entities owned by the block
-// record rec: LINE and ARC for the lines, SOLID arrowheads, a middle-centred TEXT and POINT
-// definition points on DEFPOINTS. The lines and text are on layer 0 with colour BYBLOCK, so
-// they take the dimension's layer and colour, as AutoCAD's are.
+// record rec: LINE and ARC for the lines, the arrowheads (blockParts.arrow), a middle-centred
+// TEXT and POINT definition points on DEFPOINTS. The lines, arrows and text are on layer 0 with
+// linetype and lineweight BYBLOCK and the colours DIMCLRE (extension lines), DIMCLRD (dimension
+// line and arrows) and DIMCLRT (text and arc symbol), BYBLOCK by default, so they take the
+// dimension's properties, as AutoCAD's do.
 func dimBlockEntities(e *doc.Dimension, rec string, next func() string) []doc.Entity {
 	owner, _ := doc.ParseHandle(rec)
-	com := func() doc.EntityCommon {
+	b := &blockParts{rec: rec, com: func(color int) doc.EntityCommon {
 		h, _ := doc.ParseHandle(next())
-		return doc.EntityCommon{H: h, Layer: "0", Color: 0, Owner: owner}
-	}
+		return doc.EntityCommon{H: h, Layer: "0", Color: color, Owner: owner, Linetype: doc.LinetypeByBlock, Lineweight: doc.LineweightByBlock}
+	}}
+	st := e.Style()
 	lay := e.Layout()
-	var out []doc.Entity
-	line := func(l geom.Line) {
-		if l.A != l.B {
-			out = append(out, &doc.Line{EntityCommon: com(), Start: l.A, End: l.B})
-		}
-	}
-	arc := func(a geom.Arc) {
-		if a.R > 0 && a.Start != a.End {
-			out = append(out, &doc.Arc{EntityCommon: com(), Center: a.C, Radius: a.R, StartAngle: a.Start, EndAngle: a.End})
-		}
-	}
-	f := func(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
-	raw := func(typ, sub string, c doc.EntityCommon, ps ...doc.Pair) {
-		r := []doc.Pair{{Code: 5, Value: c.H.String()}, {Code: 330, Value: rec}, {Code: 100, Value: "AcDbEntity"},
-			{Code: 8, Value: c.Layer}}
-		if c.Color != doc.ByLayer {
-			r = append(r, doc.Pair{Code: 62, Value: strconv.Itoa(c.Color)})
-		}
-		r = append(r, doc.Pair{Code: 100, Value: sub})
-		out = append(out, &doc.Unknown{EntityCommon: c, Type: typ, Raw: append(r, ps...)})
-	}
-	pt := func(code int, p geom.Vec2) []doc.Pair {
-		return []doc.Pair{{Code: code, Value: f(p.X)}, {Code: code + 10, Value: f(p.Y)}, {Code: code + 20, Value: "0"}}
-	}
 	for _, l := range lay.ExtLines {
-		line(l)
+		b.line(l, st.ExtColor)
 	}
 	if e.Kind == doc.DimArcLength {
-		arc(lay.DimArc)
+		b.arc(lay.DimArc, st.LineColor)
 	}
 	for _, l := range lay.DimLine {
-		line(l)
+		b.line(l, st.LineColor)
 	}
 	for _, a := range lay.Arrows {
-		var ps []doc.Pair
-		for i, p := range [4]geom.Vec2{a[0], a[1], a[2], a[2]} {
-			ps = append(ps, pt(10+i, p)...)
-		}
-		raw("SOLID", "AcDbTrace", com(), ps...)
+		b.arrow(a, st.LineColor)
 	}
-	arc(lay.Symbol)
+	b.arc(lay.Symbol, st.TextColor)
 	if lay.Text != nil && lay.Text.Value != "" {
 		t := lay.Text.Clone().(*doc.Text)
-		t.EntityCommon = com()
-		out = append(out, t)
+		t.EntityCommon = b.com(st.TextColor)
+		b.out = append(b.out, t)
 	}
 	for _, p := range []geom.Vec2{e.Ext1, e.Ext2, e.DimLine} {
-		c := com()
-		c.Layer = defpointsLayer
-		raw("POINT", "AcDbPoint", c, pt(10, p)...)
+		c := b.com(doc.ByLayer)
+		c.Layer, c.Linetype, c.Lineweight = defpointsLayer, "", doc.LineweightByLayer
+		b.raw("POINT", "AcDbPoint", c, ptPairs(10, p)...)
+	}
+	return b.out
+}
+
+// arrowBlockEntities returns AutoCAD's unit arrow block of the given name (doc.LayoutArrow at the
+// origin, pointing along +X) as block entities owned by rec, on layer 0 and BYBLOCK.
+func arrowBlockEntities(name, rec string, next func() string) []doc.Entity {
+	owner, _ := doc.ParseHandle(rec)
+	b := &blockParts{rec: rec, com: func(color int) doc.EntityCommon {
+		h, _ := doc.ParseHandle(next())
+		return doc.EntityCommon{H: h, Layer: "0", Color: color, Owner: owner, Linetype: doc.LinetypeByBlock, Lineweight: doc.LineweightByBlock}
+	}}
+	b.arrow(doc.LayoutArrow(name, geom.V(0, 0), geom.V(1, 0), 1), doc.ByBlock)
+	return b.out
+}
+
+// arrowOut is an arrow block the writer generates because the drawing lacks it.
+type arrowOut struct{ name, rec string }
+
+// arrowNames returns the arrow block names (DIMBLK, DIMBLK1, DIMBLK2) the dimension style table
+// and the dimensions use, other than closed filled, first spelling of each kept.
+func arrowNames(d *doc.Drawing) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(s doc.DimStyle) {
+		for _, a := range []string{s.ArrowBlock, s.ArrowBlock1, s.ArrowBlock2} {
+			if u := strings.ToUpper(a); a != "" && !seen[u] {
+				seen[u] = true
+				out = append(out, a)
+			}
+		}
+	}
+	for _, s := range d.DimStyles() {
+		add(s)
+	}
+	for _, e := range drawingDimensions(d) {
+		add(e.Style())
 	}
 	return out
+}
+
+// planArrows gives every arrow block name the styles use a block record handle: the drawing's
+// block or preserved block of that name, else a generated block (arrowBlockEntities).
+func (w *writer) planArrows(d *doc.Drawing, preserved func(name string) string, next func() string) {
+	w.arrowHandles = map[string]string{}
+	for _, name := range arrowNames(d) {
+		u := strings.ToUpper(name)
+		if b := d.Block(name); b != nil {
+			w.arrowHandles[u] = b.H.String()
+			continue
+		}
+		if h := preserved(name); h != "" {
+			w.arrowHandles[u] = h
+			continue
+		}
+		rec := next()
+		w.arrowHandles[u] = rec
+		w.arrowGen = append(w.arrowGen, arrowOut{name: name, rec: rec})
+	}
 }
 
 // dimApps returns the applications the dimensions' extended data needs: ACAD for the DSTYLE

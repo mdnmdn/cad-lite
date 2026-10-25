@@ -74,7 +74,7 @@ func (ws *Workspace) statusBar() *gpui.Div {
 		toggleChip("polar", i18n.T("ui.status.polar"), i18n.T("ui.status.polar_tip", cmdsys.FormatNumber(s.PolarAngle())), s.Polar(), func() { s.SetPolar(!s.Polar()) }),
 		toggleChip("snap", i18n.T("ui.status.osnap"), i18n.T("ui.status.osnap_tip"), s.SnapOn, func() { s.SnapOn = !s.SnapOn }),
 		toggleChip("lwt", i18n.T("ui.status.lwt"), i18n.T("ui.status.lwt_tip"), s.LineweightDisplay(), func() { s.SetLineweightDisplay(!s.LineweightDisplay()) }),
-		toggleChip("props", i18n.T("ui.status.props"), i18n.T("ui.status.props_tip"), ws.PropsHUDShown(), ws.togglePropsHUD),
+		toggleChip("props", i18n.T("ui.status.props"), ws.propsChipTip(), ws.PropsHUDShown(), ws.togglePropsHUD),
 	)
 	d := s.Drawing()
 	info := gpui.NewDiv().FlexRow().ItemsCenter().Gap(14).FlexShrink(0).Child(
@@ -89,4 +89,13 @@ func (ws *Workspace) statusBar() *gpui.Div {
 		bar.Relative().Child(ws.statusOverlays(ws.win)...)
 	}
 	return bar
+}
+
+// propsChipTip is the PROPS chip's tooltip, which says so while the Properties section hides the
+// HUD.
+func (ws *Workspace) propsChipTip() string {
+	if ws.propsPanelShown() {
+		return i18n.T("ui.status.props_tip") + "\n" + i18n.T("ui.props.hud_hidden_tip")
+	}
+	return i18n.T("ui.status.props_tip")
 }

@@ -1540,6 +1540,13 @@ func (t *TextInput) OnChange(f func(string, *Window, *App)) *TextInput
 // OnEscape replaces Escape's default (blur) while any callback is registered:
 // the callbacks run and the field keeps focus.
 func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput
+// OnBlur registers a callback that runs once each time the field held focus
+// and loses it: another handle's RequestFocus, Window.Blur (also Escape with
+// no OnEscape callback), or a mouse press that moves focus elsewhere. It
+// receives the current text. It does not run while focus stays, nor on an
+// Escape that OnEscape handles. The library has no window-activation model,
+// so the window losing OS focus does not run it. Callbacks accumulate.
+func (t *TextInput) OnBlur(f func(text string, w *Window, cx *App)) *TextInput
 // OnKeyDown sets a listener that sees each non-character key press before
 // the field's own editing keys (Enter, Escape, Backspace, Delete, arrows).
 // Returning true consumes the press: the field does nothing with it and

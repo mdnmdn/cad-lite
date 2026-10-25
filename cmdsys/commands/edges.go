@@ -111,7 +111,7 @@ func (o *edgeOp) replace(ctx *cmdsys.Context, h doc.Handle, curves []geom.Curve)
 	}
 	for _, c := range rest {
 		if ne := newEntity(c, e); ne != nil {
-			o.added = append(o.added, tx.Add(ne))
+			o.added = append(o.added, tx.AddCopy(ne))
 		}
 	}
 }
@@ -178,7 +178,7 @@ func (c *edgeCmd) undo(ctx *cmdsys.Context) {
 		if c.alias == nil {
 			c.alias = map[doc.Handle]doc.Handle{}
 		}
-		c.alias[h] = tx.Add(snap.Clone().(doc.Entity))
+		c.alias[h] = tx.AddCopy(snap.Clone().(doc.Entity))
 	}
 }
 

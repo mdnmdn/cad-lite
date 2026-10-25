@@ -80,3 +80,45 @@ func TestBuilderDrawsTextStrokesOrOneLineWhenTiny(t *testing.T) {
 		t.Fatalf("tiny text: %+v", items)
 	}
 }
+
+// A frame's support check copies nothing, yet a direct layer edit or LTSCALE change (no change
+// set) still reaches the next Build.
+func TestBuildChecksSupportInPlace(t *testing.T) {
+	d := doc.New()
+	for _, n := range []string{"A", "B", "C"} {
+		d.AddLayer(n, 2)
+	}
+	tx, _ := d.Begin()
+	_ = tx.LoadLibraryLinetype("DASHED")
+	h := tx.Add(&doc.Line{EntityCommon: doc.EntityCommon{Linetype: "DASHED"}, End: geom.V(200, 0)})
+	tx.Commit()
+	b := render.NewBuilder(d, render.Color{A: 255})
+	v := render.DefaultView(800, 600)
+	var dl render.DisplayList
+	hs := []doc.Handle{h}
+	b.Build(hs, v, &dl)
+	if n := testing.AllocsPerRun(50, func() { dl.Reset(); b.Build(hs, v, &dl) }); n != 0 {
+		t.Fatalf("a cached frame allocates %v times", n)
+	}
+	d.Layer("0").Color = 1
+	dl.Reset()
+	b.Build(hs, v, &dl)
+	if len(dl.Items) == 0 || dl.Items[0].Color != render.ACI(1) {
+		t.Fatal("a direct layer colour edit did not reach the frame")
+	}
+	d.Layer("0").Off = true
+	dl.Reset()
+	b.Build(hs, v, &dl)
+	if len(dl.Items) != 0 {
+		t.Fatal("a direct layer off did not reach the frame")
+	}
+	d.Layer("0").Off = false
+	b.Build(hs, v, &dl)
+	dashes := len(dl.Items[0].Starts)
+	d.LTScale = 4
+	dl.Reset()
+	b.Build(hs, v, &dl)
+	if got := len(dl.Items[0].Starts); dashes < 2 || got >= dashes {
+		t.Fatalf("LTSCALE 4: %d dashes, at 1 %d", got, dashes)
+	}
+}

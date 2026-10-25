@@ -32,6 +32,7 @@ type Window struct {
 	uiScale        float32
 	invalid        bool
 	focus          FocusID
+	blurHooks      map[FocusID]func(*Window, *App)
 	mousePosition  Point
 	hasMouse       bool
 	propagateEvent bool
@@ -340,8 +341,7 @@ func (w *Window) RequestFocus(h *FocusHandle) {
 	if h == nil || !h.IsValid() {
 		return
 	}
-	w.focus = h.ID()
-	w.Refresh()
+	w.setFocus(h.ID())
 }
 
 // Focus returns a handle to the currently focused element, or nil when
@@ -358,8 +358,7 @@ func (w *Window) Blur() {
 	if w.focus == 0 {
 		return
 	}
-	w.focus = 0
-	w.Refresh()
+	w.setFocus(0)
 }
 
 // StopPropagation halts the current DispatchEvent traversal: remaining
@@ -1584,8 +1583,33 @@ func (w *Window) focusID(id FocusID) {
 	if w.app != nil && !w.app.focusMap.alive(id) {
 		return
 	}
+	w.setFocus(id)
+}
+
+// setFocus moves focus to id and, when that changes it, runs the blur hook
+// of the handle that lost it.
+func (w *Window) setFocus(id FocusID) {
+	prev := w.focus
 	w.focus = id
 	w.Refresh()
+	if prev != 0 && prev != id {
+		if f := w.blurHooks[prev]; f != nil {
+			f(w, w.app)
+		}
+	}
+}
+
+// setBlurHook registers (or, with nil, removes) the callback run when id
+// loses focus in this window.
+func (w *Window) setBlurHook(id FocusID, f func(*Window, *App)) {
+	if f == nil {
+		delete(w.blurHooks, id)
+		return
+	}
+	if w.blurHooks == nil {
+		w.blurHooks = map[FocusID]func(*Window, *App){}
+	}
+	w.blurHooks[id] = f
 }
 
 // setFocusVisible records the input modality, redrawing when it flips while

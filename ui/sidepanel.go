@@ -36,10 +36,10 @@ func (ws *Workspace) sectionHeader(id, title string, off bool, collapseTip, expa
 }
 
 // sidePanel is the right-hand column, width wide: the Layers section with its add button, a
-// splitter, and the Properties section. The Layers section is as tall as its rows need (or the
+// splitter, and the Properties section (the editable grid of propsgrid.go). The Layers section is as tall as its rows need (or the
 // height the user dragged it to, if shorter) and scrolls when the rows do not fit; Properties
 // takes the rest. Either section folds to its header and the whole column folds to a strip.
-func (ws *Workspace) sidePanel(width float32) *gpui.Div {
+func (ws *Workspace) sidePanel(width float32, w *gpui.Window, cx *gpui.App) *gpui.Div {
 	if ws.lay.sideOff {
 		expand := collapseButton("side-expand", i18n.T("ui.panel.side_expand_tip"), icons.AppChevronLeft, func(w *gpui.Window) { ws.toggleFold(&ws.lay.sideOff, w) })
 		return gpui.NewDiv().ID("side-strip").FlexCol().ItemsCenter().SizeW(width).FlexShrink(0).Bg(uiPanel).Pt(6).Child(expand)
@@ -47,16 +47,17 @@ func (ws *Workspace) sidePanel(width float32) *gpui.Div {
 	d := ws.session.Drawing()
 	layers := gpui.NewDiv().FlexCol().Gap(layerRowGap).Px_(10).Pb(layerListPad)
 	for _, l := range d.Layers() {
+		// A click makes the layer current (unless it is frozen) and shows its properties.
 		layers.Child(ws.layerRow("layer-", d, l, false, func(w *gpui.Window) {
 			ws.makeLayerCurrent(l)
-			w.Refresh()
+			ws.targetLayer(l, w)
 		}))
 	}
 	add := iconButton("layer-add", i18n.T("ui.panel.layer_add_tip"), icons.AppAdd, false, func(w *gpui.Window) { ws.run("LAYER", w) })
 	add.SizeWH(24, 24)
 	fold := collapseButton("side-collapse", i18n.T("ui.panel.side_collapse_tip"), icons.AppChevronRight, func(w *gpui.Window) { ws.toggleFold(&ws.lay.sideOff, w) })
 
-	props := ws.propsBody().Px_(14).Pb(8)
+	props := ws.propsGrid(width, w, cx)
 
 	l := &ws.lay
 	layersH := layersHeight(ws.sectionAvail(), len(d.Layers()), l.layersH, l.layersOff, l.propsOff)
@@ -90,11 +91,12 @@ func (ws *Workspace) sidePanel(width float32) *gpui.Div {
 // popover so both look and act alike: the colour swatch, the name (bold and accented when the
 // layer is current), reorder arrows, the lock switch and the visibility switch. idPrefix starts every element id
 // ("layer-" in the panel, so the row is "layer-<name>" and its switches "layer-vis-<name>" and
-// "layer-lock-<name>"). A click on the row runs pick, except on a frozen layer, which cannot be
-// current (as -LAYER Set refuses it; the row's tooltip says so); the switches flip their flag
-// without picking. hi marks the popover's keyboard highlight.
+// "layer-lock-<name>"). A click on the row runs pick, also on a frozen layer: a frozen layer
+// cannot be current (as -LAYER Set refuses it; the row's tooltip says so), which pick must respect;
+// the switches flip their flag without picking. hi marks the popover's keyboard highlight.
 func (ws *Workspace) layerRow(idPrefix string, d *doc.Drawing, l *doc.Layer, hi bool, pick func(*gpui.Window)) *gpui.Div {
-	swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).FlexShrink(0).Bg(gpuiColor(render.ACI(l.Color))).Tooltip(i18n.T("ui.layers.swatch_tip", l.Color))
+	// The outline keeps a white (or black) swatch visible on either theme.
+	swatch := gpui.NewDiv().SizeWH(12, 12).Rounded(2).FlexShrink(0).Bg(gpuiColor(render.ACI(l.Color))).Border(1, uiBorder).Tooltip(i18n.T("ui.layers.swatch_tip", l.Color))
 	name := gpui.NewText(l.Name).Flex1().MinW(0)
 	if l.Name == d.CurrentLayer {
 		name.FontWeight(700).TextColor(uiOn)
@@ -107,16 +109,16 @@ func (ws *Workspace) layerRow(idPrefix string, d *doc.Drawing, l *doc.Layer, hi 
 	if l.Frozen {
 		state, stateCol = i18n.T("ui.layers.frozen"), uiMuted
 	}
-	flip := func(f func()) func(*gpui.ClickEvent, *gpui.Window, *gpui.App) {
+	// A switch is one LAYER undo step (layerTxn), refused while a command runs.
+	flip := func(f func(*doc.Layer)) func(*gpui.ClickEvent, *gpui.Window, *gpui.App) {
 		return func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-			f()
-			ws.session.MarkModified()
+			ws.layerTxn(func(tx *doc.Txn) error { return tx.ModifyLayer(l.Name, f) })
 			w.StopPropagation()
 			w.Refresh()
 		}
 	}
 	vis := gpui.NewDiv().ID(idPrefix + "vis-" + l.Name).Px_(6).Rounded(3).FlexShrink(0).Bg(uiPanelAlt).Tooltip(i18n.T("ui.layers.visibility_tip")).
-		OnClick(flip(func() { l.Off = !l.Off })).
+		OnClick(flip(func(l *doc.Layer) { l.Off = !l.Off })).
 		Child(gpui.NewText(state).TextColor(stateCol))
 	lockIcon, lockCol := icons.LayerUnlocked, uiMuted
 	if l.Locked {
@@ -125,7 +127,7 @@ func (ws *Workspace) layerRow(idPrefix string, d *doc.Drawing, l *doc.Layer, hi 
 	lock := gpui.NewDiv().ID(idPrefix+"lock-"+l.Name).FlexRow().ItemsCenter().JustifyCenter().SizeWH(20, 20).Rounded(3).FlexShrink(0).
 		Tooltip(i18n.T("ui.layers.lock_tip")).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-		OnClick(flip(func() { l.Locked = !l.Locked })).
+		OnClick(flip(func(l *doc.Layer) { l.Locked = !l.Locked })).
 		Child(NewIcon(lockIcon, 14, lockCol))
 	tip := i18n.T("ui.layers.current_tip")
 	if l.Frozen {
@@ -133,11 +135,7 @@ func (ws *Workspace) layerRow(idPrefix string, d *doc.Drawing, l *doc.Layer, hi 
 	}
 	row := gpui.NewDiv().ID(idPrefix+l.Name).FlexRow().ItemsCenter().Gap(4).Px_(6).SizeH(layerRowHeight).FlexShrink(0).Rounded(4).Tooltip(tip).
 		Hover(func(m *gpui.StyledMixin) *gpui.StyledMixin { return m.Bg(uiPanelAlt) }).
-		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) {
-			if !l.Frozen {
-				pick(w)
-			}
-		}).
+		OnClick(func(_ *gpui.ClickEvent, w *gpui.Window, _ *gpui.App) { pick(w) }).
 		Child(swatch, ws.layerOrderButtons(idPrefix, d, l), name, lock, vis)
 	if hi {
 		row.Bg(activeFill())
@@ -203,10 +201,9 @@ func (ws *Workspace) selectionSummary() *propsSummary {
 	return c
 }
 
-// propsBody is what the Properties section shows for the selection: "No selection", or the count,
-// the count per object type and, for a single object, its layer, colour and handle, and for a
-// dimension its kind and measurement (read-only). The side panel and the properties HUD both show
-// it.
+// propsBody is what the read-only properties HUD shows for the selection: "No selection", or the
+// count, the count per object type and, for a single object, its layer, colour and handle, and for
+// a dimension its kind and measurement.
 func (ws *Workspace) propsBody() *gpui.Div {
 	props := gpui.NewDiv().FlexCol().Gap(4)
 	c := ws.selectionSummary()

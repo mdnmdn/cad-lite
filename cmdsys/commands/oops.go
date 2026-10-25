@@ -63,7 +63,7 @@ func registerOops(r *cmdsys.Registry) {
 				return
 			}
 			for _, e := range ents {
-				ctx.Tx().Add(e)
+				ctx.Tx().AddCopy(e)
 			}
 		}}
 	})

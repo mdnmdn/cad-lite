@@ -2,6 +2,7 @@ package commands_test
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"cad-lite/cmdsys"
@@ -15,7 +16,8 @@ import (
 func testDim() *doc.Dimension {
 	st := doc.DefaultDimStyle()
 	st.Scale = 10
-	d := &doc.Dimension{Kind: doc.DimRotated, Ext1: geom.V(0, 0), Ext2: geom.V(1000, 0), DimLine: geom.V(1000, -200), Style: st}
+	d := &doc.Dimension{Kind: doc.DimRotated, Ext1: geom.V(0, 0), Ext2: geom.V(1000, 0), DimLine: geom.V(1000, -200)}
+	d.SetStyle(nil, st)
 	d.Recompute()
 	return d
 }
@@ -129,8 +131,8 @@ func TestDimensionMoveRotateScaleMirror(t *testing.T) {
 	}
 	sel()
 	xfeed(s, "SCALE", "10,5", "0.5")
-	if d := dimOf(t, s, h); math.Abs(d.Measurement()-500) > 1e-9 || d.Style.Scale != 10 || d.MeasurementText() != "500" {
-		t.Fatalf("after SCALE: %v %q style %+v", d.Measurement(), d.MeasurementText(), d.Style)
+	if d := dimOf(t, s, h); math.Abs(d.Measurement()-500) > 1e-9 || d.Style().Scale != 10 || d.MeasurementText() != "500" {
+		t.Fatalf("after SCALE: %v %q style %+v", d.Measurement(), d.MeasurementText(), d.Style())
 	}
 
 	// MIRROR keeps the text readable whatever MIRRTEXT says, as AutoCAD dimensions do.
@@ -262,7 +264,7 @@ func TestListDimension(t *testing.T) {
 
 	s2 := newSession(t)
 	a := &doc.Dimension{Kind: doc.DimArcLength, Center: geom.V(0, 0), Radius: 10, StartAngle: 0, EndAngle: math.Pi / 2,
-		DimLine: geom.V(0, 15), Style: doc.DefaultDimStyle()}
+		DimLine: geom.V(0, 15)}
 	a.Recompute()
 	addDim(t, s2, a)
 	s2.Script("LIST ALL ")
@@ -279,5 +281,79 @@ func TestMatchpropOntoDimension(t *testing.T) {
 	s.Script("MATCHPROP\n2000,50\n500,-200\n\n")
 	if d := dimOf(t, s, h); d.Layer != "Dims" || d.Color != 5 {
 		t.Fatalf("dimension = layer %q colour %d\n%s", d.Layer, d.Color, history(s))
+	}
+}
+
+// TestExplodeDimensionKeepsPartColours checks the pieces take the style's DIMCLRE (extension
+// lines), DIMCLRD (dimension line and arrowheads) and DIMCLRT (text), a ByBlock one being the
+// dimension's own colour.
+func TestExplodeDimensionKeepsPartColours(t *testing.T) {
+	s := newSession(t)
+	d := testDim()
+	st := d.Style()
+	st.ExtColor, st.LineColor, st.TextColor = 1, doc.ByBlock, 5
+	d.SetStyle(nil, st)
+	d.Recompute()
+	d.Color = 3
+	h := addDim(t, s, d)
+	s.Selection().Add(h)
+	xfeed(s, "EXPLODE")
+	ls, pls, ts := entities[*doc.Line](s), entities[*doc.LWPolyline](s), entities[*doc.Text](s)
+	if len(ls) != 3 || len(pls) != 2 || len(ts) != 1 {
+		t.Fatalf("parts: %d lines, %d polylines, %d texts", len(ls), len(pls), len(ts))
+	}
+	for _, l := range ls {
+		want := 1
+		if l.Start.Y == l.End.Y {
+			want = 3
+		}
+		if l.Color != want {
+			t.Errorf("line %v-%v colour %d, want %d", l.Start, l.End, l.Color, want)
+		}
+	}
+	for _, p := range pls {
+		if p.Color != 3 {
+			t.Errorf("arrowhead colour %d, want 3", p.Color)
+		}
+	}
+	if ts[0].Color != 5 {
+		t.Errorf("text colour %d, want 5", ts[0].Color)
+	}
+}
+
+// TestMatchpropCopiesDimensionStyle checks MATCHPROP's Dimension setting, on by default as in
+// AutoCAD, copies a dimension's style and overrides onto a dimension, and that switching it off
+// leaves them alone.
+func TestMatchpropCopiesDimensionStyle(t *testing.T) {
+	s := newSession(t)
+	d := s.Drawing()
+	arch := doc.DefaultDimStyle()
+	arch.Name, arch.TextHeight = "ARCH", 5
+	tx, _ := d.Begin()
+	if err := tx.SetDimStyle(arch); err != nil {
+		t.Fatal(err)
+	}
+	tx.Commit()
+	src := testDim()
+	st := arch
+	st.ArrowSize = 7
+	src.SetStyle(d, st)
+	src.Recompute()
+	addDim(t, s, src)
+	h := addDim(t, s, &doc.Dimension{Kind: doc.DimRotated, Ext1: geom.V(0, 1000), Ext2: geom.V(1000, 1000), DimLine: geom.V(1000, 1200)})
+	s.Script("MATCHPROP\n500,-200\n500,1200\n\n")
+	if got := dimOf(t, s, h); got.StyleName != "ARCH" || got.Overrides != src.Overrides || got.Style().ArrowSize != 7 {
+		t.Fatalf("target style %q overrides %+v\n%s", got.StyleName, got.Overrides.Set, history(s))
+	}
+	if !strings.Contains(history(s), "Dimension") {
+		t.Fatalf("settings line does not name Dimension\n%s", history(s))
+	}
+	d.Undo()
+	if got := dimOf(t, s, h); got.StyleName != "" || got.Overrides.Set != 0 {
+		t.Fatalf("undo: %q", got.StyleName)
+	}
+	s.Script("MATCHPROP\n500,-200\nS\nD\n\n500,1200\n\n")
+	if got := dimOf(t, s, h); got.StyleName != "" || got.Overrides.Set != 0 {
+		t.Fatalf("Dimension off still copied %q\n%s", got.StyleName, history(s))
 	}
 }

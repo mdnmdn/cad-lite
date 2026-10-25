@@ -192,8 +192,11 @@ func (d *Drawing) bindBlocks() {
 	}
 }
 func (d *Drawing) bindEntity(e Entity) {
-	if in, ok := e.(*Insert); ok {
-		in.d = d
+	switch e := e.(type) {
+	case *Insert:
+		e.d = d
+	case *Dimension:
+		e.d = d
 	}
 }
 func (t *Txn) touchBlocks() {
@@ -327,16 +330,27 @@ func countBlockGraph(blocks map[string]*Block, root string) (int, error) {
 	return result.count, err
 }
 
+// blockSupport is a snapshot of the drawing's tables and current properties: the layers, the
+// linetypes, the dimension styles, the preserved STYLE and LTYPE records and CurrentProps.
 type blockSupport struct {
 	layers    []*Layer
 	preserved Preserved
+	linetypes []Linetype
+	dimStyles []dimStyleEntry
+	current   CurrentProps
 }
 
 func (d *Drawing) snapshotSupport() *blockSupport {
-	s := &blockSupport{preserved: d.Preserved}
+	s := &blockSupport{preserved: d.Preserved, current: d.Current()}
 	for _, l := range d.layers {
 		c := *l
 		s.layers = append(s.layers, &c)
+	}
+	for _, l := range d.linetypes {
+		s.linetypes = append(s.linetypes, l.Clone())
+	}
+	for _, e := range d.dimStyles {
+		s.dimStyles = append(s.dimStyles, e.clone())
 	}
 	s.preserved.Tables = map[string][]RawRecord{}
 	for table, records := range d.Preserved.Tables {
@@ -372,13 +386,18 @@ func (d *Drawing) restoreSupport(target, previous *blockSupport) {
 		if a == nil {
 			d.layers = slices.DeleteFunc(d.layers, func(l *Layer) bool { return l.Name == name })
 		} else if l := d.Layer(name); l != nil {
-			*l = *a
+			if b == nil {
+				*l = *a
+			} else {
+				restoreLayerFields(l, a, b)
+			}
 		} else {
 			c := *a
 			d.layers = append(d.layers, &c)
 		}
 	}
 	d.reindexLayers()
+	d.restoreTables(target, previous)
 	if d.Layer(d.CurrentLayer) == nil {
 		d.CurrentLayer = "0"
 	}
@@ -415,12 +434,55 @@ func (d *Drawing) restoreSupport(target, previous *blockSupport) {
 	}
 }
 
-// ImportBlockSupport imports missing layers and STYLE/LTYPE records in this transaction.
-// Imported handles and cross-record pointers are remapped into the destination drawing.
+// restoreLayerFields sets the fields of l that differ between want and had to want's, leaving
+// the others (a direct edit made since) as they are.
+func restoreLayerFields(l, want, had *Layer) {
+	if want.Color != had.Color {
+		l.Color = want.Color
+	}
+	if want.Off != had.Off {
+		l.Off = want.Off
+	}
+	if want.Locked != had.Locked {
+		l.Locked = want.Locked
+	}
+	if want.Frozen != had.Frozen {
+		l.Frozen = want.Frozen
+	}
+	if want.NoPlot != had.NoPlot {
+		l.NoPlot = want.NoPlot
+	}
+	if want.Linetype != had.Linetype {
+		l.Linetype = want.Linetype
+	}
+	if want.Lineweight != had.Lineweight {
+		l.Lineweight = want.Lineweight
+	}
+	if want.Description != had.Description {
+		l.Description = want.Description
+	}
+}
+
+// ImportBlockSupport imports missing layers, linetypes, dimension styles (with their unmodelled
+// groups and the arrow blocks they name) and STYLE/LTYPE records in this transaction. A record
+// the destination already has by name is kept as it is. Imported handles and cross-record
+// pointers are remapped into the destination drawing.
 func (t *Txn) ImportBlockSupport(src *Drawing) {
 	changed := false
 	for _, l := range src.Layers() {
 		if t.d.Layer(l.Name) == nil {
+			changed = true
+		}
+	}
+	for _, l := range src.linetypes {
+		if t.d.linetypeIndex(l.Name) < 0 {
+			changed = true
+		}
+	}
+	var dimStyles []dimStyleEntry
+	for _, e := range src.dimStyles {
+		if t.d.dimStyleIndex(e.style.Name) < 0 {
+			dimStyles = append(dimStyles, e.clone())
 			changed = true
 		}
 	}
@@ -448,6 +510,14 @@ func (t *Txn) ImportBlockSupport(src *Drawing) {
 	for _, l := range src.Layers() {
 		if t.d.Layer(l.Name) == nil {
 			*t.d.AddLayer(l.Name, l.Color) = *l
+		}
+	}
+	for i := range dimStyles {
+		t.d.dimStyles = append(t.d.dimStyles, &dimStyles[i])
+		for _, name := range []string{dimStyles[i].style.ArrowBlock, dimStyles[i].style.ArrowBlock1, dimStyles[i].style.ArrowBlock2} {
+			if ArrowKindOf(name) == ArrowUser {
+				t.importBlock(src, name, 0)
+			}
 		}
 	}
 	if t.d.Preserved.Tables == nil {
@@ -499,6 +569,16 @@ func (t *Txn) ImportBlockSupport(src *Drawing) {
 			add = append(add, addition{name, r, target})
 		}
 	}
+	for _, l := range src.linetypes {
+		if t.d.linetypeIndex(l.Name) >= 0 {
+			continue
+		}
+		c := l.Clone()
+		if c.Raw != nil {
+			c.Raw = remapRecord(c.Raw, remap, t.d.allocHandle())
+		}
+		t.d.putLinetype(c)
+	}
 	for _, a := range add {
 		var pairs []Pair
 		for i, p := range a.record.Pairs {
@@ -519,4 +599,42 @@ func (t *Txn) ImportBlockSupport(src *Drawing) {
 		t.d.Preserved.Tables[a.table] = append(t.d.Preserved.Tables[a.table], RawRecord{Pairs: pairs})
 	}
 	t.invalidateInserts()
+}
+
+// importBlock defines src's block name, and the blocks it nests, in the destination when it
+// lacks them. A definition the destination rejects is left out.
+func (t *Txn) importBlock(src *Drawing, name string, depth int) {
+	key := strings.ToUpper(name)
+	b := src.blocks[key]
+	if b == nil || t.d.blocks[key] != nil || depth > MaxBlockDepth {
+		return
+	}
+	for _, e := range b.Entities {
+		if in, ok := e.(*Insert); ok {
+			t.importBlock(src, in.BlockName, depth+1)
+		}
+	}
+	_ = t.DefineBlock(b.clone())
+}
+
+// remapRecord returns a copy of a table record's groups with handle h in place of its own handle
+// and owner (5, 105, 330 dropped) and its pointers (320 to 369) remapped.
+func remapRecord(ps []Pair, remap map[Handle]Handle, h Handle) []Pair {
+	var out []Pair
+	for i, p := range ps {
+		if p.Code == 5 || p.Code == 105 || p.Code == 330 {
+			continue
+		}
+		if p.Code >= 320 && p.Code <= 369 {
+			old, _ := ParseHandle(p.Value)
+			if n := remap[old]; n != 0 {
+				p.Value = n.String()
+			}
+		}
+		out = append(out, p)
+		if i == 0 {
+			out = append(out, Pair{Code: 5, Value: h.String()})
+		}
+	}
+	return out
 }

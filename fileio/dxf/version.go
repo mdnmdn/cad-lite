@@ -18,18 +18,44 @@ const (
 	Version2000 = "AC1015"
 )
 
-// needs2000 reports whether d has content only AutoCAD 2000 holds: groups or preserved object
-// records. Without a version, the codec writes such a drawing as AC1015.
-func needs2000(d *doc.Drawing) bool { return len(d.Groups()) > 0 || len(d.Preserved.Objects) > 0 }
-
-// needsSymbols reports whether d needs the symbol writer (symbolwrite.go): blocks, attribute
-// definitions, groups, object records or dimensions (whose drawings are generated blocks).
-func needsSymbols(d *doc.Drawing) bool {
-	return len(d.Blocks()) > 0 || needs2000(d) || hasAttdef(d) || hasDimensions(d)
+// needs2000 reports whether d has content only AutoCAD 2000 holds: groups, preserved object
+// records, or lineweights and linetype scales (an entity's, in model space or a block, or
+// $CELWEIGHT and $CELTSCALE). Without a version, the codec writes such a drawing as AC1015.
+func needs2000(d *doc.Drawing) bool {
+	if len(d.Groups()) > 0 || len(d.Preserved.Objects) > 0 {
+		return true
+	}
+	if d.CurrentLineweight != doc.LineweightByLayer || doc.LinetypeScaleOf(d.CurrentLinetypeScale) != 1 {
+		return true
+	}
+	modern := func(e doc.Entity) bool {
+		c := e.Common()
+		return c.Lineweight != doc.LineweightByLayer || c.LtScale() != 1
+	}
+	for _, h := range d.Handles() {
+		if modern(d.Entity(h)) {
+			return true
+		}
+	}
+	for _, b := range d.Blocks() {
+		for _, e := range b.Entities {
+			if modern(e) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-// AutoVersion implements fileio.VersionWriter: AC1015 when the drawing has groups or object
-// records, which R12 cannot hold, else AC1009.
+// needsSymbols reports whether d needs the symbol writer (symbolwrite.go): blocks, attribute
+// definitions, groups, object records, dimensions (whose drawings are generated blocks) or
+// dimension styles with arrow blocks (which it generates).
+func needsSymbols(d *doc.Drawing) bool {
+	return len(d.Blocks()) > 0 || needs2000(d) || hasAttdef(d) || hasDimensions(d) || len(arrowNames(d)) > 0
+}
+
+// AutoVersion implements fileio.VersionWriter: AC1015 when the drawing has content R12 cannot
+// hold (needs2000), else AC1009.
 func (Codec) AutoVersion(d *doc.Drawing) string {
 	if needs2000(d) {
 		return Version2000

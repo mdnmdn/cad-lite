@@ -9,7 +9,7 @@ import (
 )
 
 func newDim(k doc.DimKind, a, b, dl geom.Vec2, rot float64) *doc.Dimension {
-	d := &doc.Dimension{Kind: k, Ext1: a, Ext2: b, DimLine: dl, Rotation: rot, Style: doc.DefaultDimStyle()}
+	d := &doc.Dimension{Kind: k, Ext1: a, Ext2: b, DimLine: dl, Rotation: rot}
 	d.Recompute()
 	return d
 }
@@ -58,7 +58,9 @@ func TestDimensionText(t *testing.T) {
 	for _, c := range cases {
 		d := newDim(doc.DimRotated, geom.V(0, 0), geom.V(c.length, 0), geom.V(0, 10), 0)
 		if c.mod != nil {
-			c.mod(&d.Style)
+			st := d.Style()
+			c.mod(&st)
+			d.SetStyle(nil, st)
 		}
 		d.Text = c.over
 		if got := d.MeasurementText(); got != c.want {
@@ -80,13 +82,16 @@ func TestDimensionLayoutHorizontal(t *testing.T) {
 		t.Fatalf("flipped %v, %d dim lines", l.Flipped, len(l.DimLine))
 	}
 	// Arrows point outward: tip at the extension line, base 2.5 inside, 1/3 as wide as long.
-	a := l.Arrows[0]
+	a := l.Arrows[0].Outline
+	if l.Arrows[0].Kind != doc.ArrowClosedFilled || !l.Arrows[0].Filled || len(a) != 3 {
+		t.Fatalf("arrow %+v", l.Arrows[0])
+	}
 	nearV(t, "arrow tip", a[0], geom.V(0, 15), 1e-12)
 	nearV(t, "arrow base", a[1].Lerp(a[2], 0.5), geom.V(2.5, 15), 1e-12)
 	if w := a[1].Dist(a[2]); math.Abs(w-2.5/3) > 1e-12 {
 		t.Fatalf("arrow width = %v", w)
 	}
-	nearV(t, "arrow2 base", l.Arrows[1][1].Lerp(l.Arrows[1][2], 0.5), geom.V(117.5, 15), 1e-12)
+	nearV(t, "arrow2 base", l.Arrows[1].Outline[1].Lerp(l.Arrows[1].Outline[2], 0.5), geom.V(117.5, 15), 1e-12)
 	// Text: middle at the line's middle, Gap + half the height above it.
 	nearV(t, "text pos", d.TextPos, geom.V(60, 15+0.625+1.25), 1e-12)
 	if l.Text.Value != "120" || l.Text.Rotation != 0 || l.Text.Height != 2.5 {
@@ -148,15 +153,17 @@ func TestDimensionTinyFlipsArrows(t *testing.T) {
 	if !l.Flipped || len(l.DimLine) != 3 {
 		t.Fatalf("flipped %v, %d lines", l.Flipped, len(l.DimLine))
 	}
-	nearV(t, "arrow1 base outside", l.Arrows[0][1].Lerp(l.Arrows[0][2], 0.5), geom.V(-2.5, 10), 1e-12)
-	nearV(t, "arrow2 base outside", l.Arrows[1][1].Lerp(l.Arrows[1][2], 0.5), geom.V(6.5, 10), 1e-12)
+	nearV(t, "arrow1 base outside", l.Arrows[0].Outline[1].Lerp(l.Arrows[0].Outline[2], 0.5), geom.V(-2.5, 10), 1e-12)
+	nearV(t, "arrow2 base outside", l.Arrows[1].Outline[1].Lerp(l.Arrows[1].Outline[2], 0.5), geom.V(6.5, 10), 1e-12)
 	nearV(t, "stub1 end", l.DimLine[1].B, geom.V(-5, 10), 1e-12)
 	nearV(t, "stub2 end", l.DimLine[2].B, geom.V(9, 10), 1e-12)
 }
 
 func TestDimensionScaleStyle(t *testing.T) {
 	d := newDim(doc.DimRotated, geom.V(0, 0), geom.V(100, 0), geom.V(0, 20), 0)
-	d.Style.Scale = 2
+	st := d.Style()
+	st.Scale = 2
+	d.SetStyle(nil, st)
 	d.Recompute()
 	l := d.Layout()
 	if l.Text.Height != 5 {
@@ -221,9 +228,9 @@ func TestDimensionClone(t *testing.T) {
 	d.H, d.Layer = 7, "DIM"
 	_ = d.Layout()
 	c := d.Clone().(*doc.Dimension)
-	c.Ext2, c.Style.TextHeight, c.Text = geom.V(20, 0), 5, "x<>"
+	c.Ext2, c.Overrides, c.Text = geom.V(20, 0), c.Overrides.With(doc.DimVarTextHeight, doc.DimStyle{TextHeight: 5}), "x<>"
 	c.Recompute()
-	if d.Ext2 != geom.V(10, 0) || d.Style.TextHeight != 2.5 || d.Text != "" || d.MeasurementText() != "10" {
+	if d.Ext2 != geom.V(10, 0) || d.Style().TextHeight != 2.5 || d.Text != "" || d.MeasurementText() != "10" {
 		t.Fatalf("original changed: %+v", d)
 	}
 	if c.MeasurementText() != "x20" || c.H != 7 || c.Layer != "DIM" {
@@ -249,7 +256,7 @@ func TestDimensionLayoutCache(t *testing.T) {
 func newArcDim(r, s, e, dl float64) *doc.Dimension {
 	mid := s + geom.NormAngle(e-s)/2
 	d := &doc.Dimension{Kind: doc.DimArcLength, Radius: r, StartAngle: s, EndAngle: e,
-		DimLine: geom.V(math.Cos(mid), math.Sin(mid)).Scale(dl), Style: doc.DefaultDimStyle()}
+		DimLine: geom.V(math.Cos(mid), math.Sin(mid)).Scale(dl)}
 	d.Recompute()
 	return d
 }
@@ -298,7 +305,7 @@ func TestArcDimensionLayout(t *testing.T) {
 	}
 	nearV(t, "ext1 start", l.ExtLines[0].A, geom.V(20, 20*math.Sqrt(3)+0.625), 1e-9)
 	// Arrow 1 points clockwise along the arc's tangent at its tip.
-	a := l.Arrows[0]
+	a := l.Arrows[0].Outline
 	tan := a[0].Sub(a[1].Lerp(a[2], 0.5)).Norm()
 	if want := geom.V(math.Cos(l.DimArc.Start), math.Sin(l.DimArc.Start)).Perp().Scale(-1); !tan.Near(want, 1e-9) {
 		t.Fatalf("arrow direction %v, want %v", tan, want)

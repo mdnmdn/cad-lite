@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: The on-demand docked chat panel that runs AI coding agents (opencode, Claude Code or Codex, plus the opt-in Harness cloud spike) against the open drawing, as several tabs on a model the user picks (free models first on opencode), with images dropped or pasted into the prompt, whose conversations are stored with the drawing in its project, and asks the user before anything beyond drawing is allowed.
 read_when: you are changing the agent panel, its model picker, image attachments, where its conversations are kept, its focus or permission behaviour, the agent flags, or what an agent may do to the drawing
-updated: 2026-10-17
+updated: 2026-10-25
 verified: 2026-10-17
 code_anchors: [ui/agent_model_overflow_test.go, ui/agent_basic_check.go, ui/agent_basic.go, settings/settings.go, agentmanager/internal/proc/hide_windows.go, agentmanager/internal/proc/proc.go, ui/harness_spike.go, harnessspike/config.go, harnessspike/session.go, ui/doctabs.go, ui/agent.go, ui/agent_markdown.go, ui/agent_markdown_view.go, ui/agent_message.go, ui/agent_queue.go, ui/agent_working.go, ui/agent_model.go, ui/agent_image.go, ui/agent_install.go, ui/terminal.go, ui/terminal_windows.go, agentinstall/agentinstall.go, ui/discovery.go, ui/agent_store.go, ui/agent_view.go, ui/agent_demo.go, ui/workspace.go, ui/layout.go, cmdsys/commands/agent.go, agentmanager/store/store.go, cmd/cad/main.go, cmdsys/command.go]
 depends_on: [tech-agent-integration, feat-command-line, tech-ui-framework]
@@ -17,8 +17,8 @@ review_cycle: monthly
 ## Purpose
 
 The user chats with an AI agent that draws for them. The agent edits the same drawing through the
-same commands the command line runs, so every change is one undo step and shows on the canvas as it
-happens. The panel is a transcript, a prompt field and the controls to start, stop and cancel.
+same commands the command line runs, so every change, a layer created or made current included, is one
+undo step and shows on the canvas as it happens. The panel is a transcript, a prompt field and the controls to start, stop and cancel.
 
 ## Behaviour
 

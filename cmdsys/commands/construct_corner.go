@@ -289,8 +289,8 @@ func (c *cornerCmd) second(ctx *cmdsys.Context, in cmdsys.Input) *cmdsys.Prompt 
 		ne = &doc.Line{Start: corner.Bevel.A, End: corner.Bevel.B}
 	}
 	if ne != nil {
-		ne.Common().Layer, ne.Common().Color = l1.Layer, l1.Color
-		rec.added = append(rec.added, tx.Add(ne))
+		*ne.Common() = sourceProps(l1)
+		rec.added = append(rec.added, tx.AddCopy(ne))
 	}
 	c.done = append(c.done, rec)
 	return c.finish(ctx)

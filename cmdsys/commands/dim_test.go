@@ -70,8 +70,8 @@ func TestDimLinearPromptsAndHorizontal(t *testing.T) {
 	if !strings.Contains(history(s), "Dimension text = 120") {
 		t.Fatalf("no echo:\n%s", history(s))
 	}
-	if d.Style != doc.DefaultDimStyle() {
-		t.Fatalf("style = %+v, want the ISO-25 defaults", d.Style)
+	if d.Style() != doc.DefaultDimStyle() {
+		t.Fatalf("style = %+v, want the ISO-25 defaults", d.Style())
 	}
 	s.Submit("U")
 	if len(dims(s)) != 0 {
@@ -147,10 +147,11 @@ func TestDimStyleFromVariables(t *testing.T) {
 	s.Script("DIMSCALE 10 DIMASZ 3 DIMTXT 3.5 DIMEXO 1 DIMEXE 2 DIMGAP 0.5 DIMDEC 3 DIMDSEP . DIMZIN 0 DIMTAD 0")
 	s.Script("DLI 0,0 10,0 5,5")
 	d := oneDim(t, s)
-	want := doc.DimStyle{Name: "ISO-25", Scale: 10, ArrowSize: 3, TextHeight: 3.5, ExtOffset: 1, ExtExtend: 2, Gap: 0.5,
-		Decimals: 3, DecSep: ".", ZeroSupp: 0, TextAbove: false}
-	if d.Style != want {
-		t.Fatalf("style = %+v, want %+v", d.Style, want)
+	want := doc.DefaultDimStyle()
+	want.Scale, want.ArrowSize, want.TextHeight, want.ExtOffset, want.ExtExtend, want.Gap = 10, 3, 3.5, 1, 2, 0.5
+	want.Decimals, want.DecSep, want.ZeroSupp, want.TextVertical = 3, ".", 0, 0
+	if d.Style() != want {
+		t.Fatalf("style = %+v, want %+v", d.Style(), want)
 	}
 	if d.MeasurementText() != "10.000" {
 		t.Fatalf("text = %q", d.MeasurementText())
@@ -158,8 +159,14 @@ func TestDimStyleFromVariables(t *testing.T) {
 	if got := s.Vars().Text("DIMSTYLE"); got != "ISO-25" {
 		t.Fatalf("DIMSTYLE = %q", got)
 	}
-	if err := s.Vars().Set("DIMSTYLE", "X"); !errors.Is(err, cmdsys.ErrVarReadOnly) {
-		t.Fatalf("DIMSTYLE set err = %v", err)
+	if d.Overrides.Set != 0 {
+		t.Fatalf("the DIM* variables are the current style's record: overrides %b", d.Overrides.Set)
+	}
+	if st, _ := s.Drawing().DimStyle("ISO-25"); st != want {
+		t.Fatalf("record = %+v", st)
+	}
+	if err := s.Vars().Set("DIMSTYLE", "X"); !errors.Is(err, cmdsys.ErrVarInvalid) {
+		t.Fatalf("DIMSTYLE set to a missing style: err = %v", err)
 	}
 	if err := s.Vars().Set("DIMDEC", 9); !errors.Is(err, cmdsys.ErrVarRange) {
 		t.Fatalf("DIMDEC 9 err = %v", err)
@@ -283,7 +290,7 @@ func TestDimContinueChain(t *testing.T) {
 
 func TestDimContinueSelectAndAligned(t *testing.T) {
 	s := newSession(t)
-	addEntities(t, s, &doc.Dimension{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(30, 40), DimLine: geom.V(-8, 6), Style: doc.DefaultDimStyle()})
+	addEntities(t, s, &doc.Dimension{Kind: doc.DimAligned, Ext1: geom.V(0, 0), Ext2: geom.V(30, 40), DimLine: geom.V(-8, 6)})
 	dims(s)[0].Recompute()
 	s.Run("DIMCONTINUE")
 	if want := "Select continued dimension:"; s.Prompt() != want {

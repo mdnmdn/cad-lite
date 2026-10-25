@@ -43,6 +43,7 @@ type TextInput struct {
 	onSubmit []func(string, *Window, *App)
 	onChange []func(string, *Window, *App)
 	onEscape []func(*Window, *App)
+	onBlur   []func(string, *Window, *App)
 	onKey    func(*KeyDownEvent, *Window, *App) bool
 
 	// Multi-line state: the row cap, the laid-out text area, the vertical
@@ -130,6 +131,22 @@ func (t *TextInput) OnEscape(f func(*Window, *App)) *TextInput {
 	return t
 }
 
+// fireBlur runs the blur callbacks with the current text.
+func (t *TextInput) fireBlur(w *Window, cx *App) {
+	for _, f := range t.onBlur {
+		f(t.Text(), w, cx)
+	}
+}
+
+// OnBlur registers a callback invoked with the current text once each time
+// the field held focus and loses it (another handle focused, Window.Blur, a
+// press elsewhere, Escape with no OnEscape callback). It does not run while
+// focus stays.
+func (t *TextInput) OnBlur(f func(text string, w *Window, cx *App)) *TextInput {
+	t.onBlur = append(t.onBlur, f)
+	return t
+}
+
 // OnKeyDown sets a listener that sees each non-character key press before
 // the field's own editing keys (Enter, Escape, Backspace, Delete, arrows).
 // Returning true consumes the press: the field does nothing with it and
@@ -156,6 +173,9 @@ func (t *TextInput) Render(w *Window, cx *App) IntoElement {
 		t.measurer = w.text
 		t.measurerVersion = w.textVersion
 		t.win = w
+		if len(t.onBlur) > 0 && t.focus != nil {
+			w.setBlurHook(t.focus.ID(), t.fireBlur)
+		}
 	}
 	if cx != nil {
 		t.app = cx

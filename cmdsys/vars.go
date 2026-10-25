@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"cad-lite/doc"
 	"cad-lite/geom"
 )
 
@@ -31,6 +32,12 @@ var (
 	ErrVarReadOnly = errors.New("variable is read-only")
 	ErrVarType     = errors.New("value has the wrong type")
 	ErrVarRange    = errors.New("value out of range")
+	// ErrVarInvalid is a value the drawing refuses for a drawing-backed variable (Var.Write): a
+	// layer, linetype or style it lacks, a frozen layer for CLAYER, a lineweight that is not one of
+	// AutoCAD's.
+	ErrVarInvalid = errors.New("value refused")
+	// ErrVarBusy is a drawing-backed variable set while another transaction holds the drawing.
+	ErrVarBusy = errors.New("drawing is busy")
 )
 
 // Var describes one system variable. Name is the upper-case AutoCAD name.
@@ -49,6 +56,11 @@ type Var struct {
 	// OnChange runs after a successful Set with the old and new value; a live variable writes
 	// its state here.
 	OnChange func(old, new any)
+	// Write, when set, makes the variable drawing-backed: Set writes the value into the drawing
+	// through a transaction (see Vars.SetTx for which one), so the change is undoable, and Read
+	// reads it back. An error refuses the value and Set returns it wrapped in ErrVarInvalid unless it
+	// already is a Vars error. OnChange is not called for such a variable.
+	Write func(tx *doc.Txn, value any) error
 }
 
 // Vars is the session's system-variable registry. Every value is session-owned, so two sessions
@@ -58,6 +70,9 @@ type Vars struct {
 	defs  map[string]*Var
 	vals  map[string]any
 	onSet []func(name string, old, new any)
+	// txn runs a drawing-backed variable's write inside the right transaction (Session.varTxn);
+	// nil in a registry without a session, where such a Set fails with ErrVarBusy.
+	txn func(name string, fn func(*doc.Txn) error) error
 }
 
 // NewVars returns an empty registry.
@@ -173,8 +188,72 @@ func (v *Vars) Set(name string, value any) error {
 	if err := checkRange(d, val); err != nil {
 		return fmt.Errorf("%w: %s", err, name)
 	}
+	if d.Write != nil {
+		if v.txn == nil {
+			return fmt.Errorf("%w: %s", ErrVarBusy, name)
+		}
+		old, _ := v.Get(name)
+		if err := v.txn(name, func(tx *doc.Txn) error { return d.Write(tx, val) }); err != nil {
+			return varWriteError(err, name)
+		}
+		v.written(d, old, val)
+		return nil
+	}
 	v.store(d, val, true)
 	return nil
+}
+
+// SetTx is Set inside the open transaction tx, for a host that groups several edits into one undo
+// step (the Properties panel): a drawing-backed variable writes into tx; any other variable is
+// set as Set sets it, outside the journal.
+func (v *Vars) SetTx(tx *doc.Txn, name string, value any) error {
+	name = strings.ToUpper(name)
+	d, ok := v.defs[name]
+	switch {
+	case !ok:
+		return fmt.Errorf("%w: %s", ErrVarUnknown, name)
+	case d.ReadOnly:
+		return fmt.Errorf("%w: %s", ErrVarReadOnly, name)
+	case d.Write == nil:
+		return v.Set(name, value)
+	}
+	val, err := coerce(d.Kind, value)
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, name)
+	}
+	if err := checkRange(d, val); err != nil {
+		return fmt.Errorf("%w: %s", err, name)
+	}
+	old, _ := v.Get(name)
+	if err := d.Write(tx, val); err != nil {
+		return varWriteError(err, name)
+	}
+	v.written(d, old, val)
+	return nil
+}
+
+// Undoable reports whether Set of name is journalled: the variable is drawing-backed (Var.Write).
+func (v *Vars) Undoable(name string) bool {
+	d, ok := v.defs[strings.ToUpper(name)]
+	return ok && d.Write != nil
+}
+
+// written records a drawing-backed variable's new value and tells the listeners.
+func (v *Vars) written(d *Var, old, val any) {
+	v.vals[d.Name] = val
+	now, _ := v.Get(d.Name)
+	for _, f := range v.onSet {
+		f(d.Name, old, now)
+	}
+}
+
+func varWriteError(err error, name string) error {
+	for _, known := range []error{ErrVarUnknown, ErrVarReadOnly, ErrVarType, ErrVarRange, ErrVarInvalid, ErrVarBusy} {
+		if errors.Is(err, known) {
+			return err
+		}
+	}
+	return fmt.Errorf("%w: %s: %v", ErrVarInvalid, name, err)
 }
 
 // Store assigns value without the read-only, range and OnChange handling: the owner of a
