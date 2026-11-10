@@ -109,6 +109,8 @@ var tables = map[string]map[string]bool{
 	"layout": {"side_width": true, "agent_width": true, "layers_height": true, "history_height": true,
 		"side_collapsed": true, "layers_collapsed": true, "properties_collapsed": true, "history_collapsed": true, "ribbon_collapsed": true},
 	"recent": {"files": true, "folders": true},
+	"plot": {"paper": true, "landscape": true, "style": true, "scale": true, "area": true, "center": true,
+		"offset_x": true, "offset_y": true, "lineweights": true, "printer": true, "copies": true},
 }
 
 // agentModelKey prefixes the agent table's per-harness model keys (model_claude, ...).
@@ -317,6 +319,61 @@ func Parse(data []byte) (Settings, []string, error) {
 				} else {
 					s.Recent.Folders = paths
 				}
+			case "plot.paper", "plot.style", "plot.scale", "plot.area", "plot.printer":
+				x, ok := v.(string)
+				if !ok {
+					bad(full, "a string", v)
+					break
+				}
+				switch k {
+				case "paper":
+					s.Plot.Paper = x
+				case "style":
+					s.Plot.Style = x
+				case "scale":
+					s.Plot.Scale = x
+				case "area":
+					s.Plot.Area = x
+				default:
+					s.Plot.Printer = x
+				}
+			case "plot.landscape", "plot.center", "plot.lineweights":
+				x, ok := v.(bool)
+				if !ok {
+					bad(full, "a boolean", v)
+					break
+				}
+				switch k {
+				case "landscape":
+					s.Plot.Landscape = x
+				case "center":
+					s.Plot.Center = x
+				default:
+					s.Plot.Lineweights = x
+				}
+			case "plot.offset_x", "plot.offset_y":
+				var x float64
+				switch n := v.(type) {
+				case float64:
+					x = n
+				case int64:
+					x = float64(n)
+				default:
+					bad(full, "a number", v)
+					continue
+				}
+				if k == "offset_x" {
+					s.Plot.OffsetX = x
+				} else {
+					s.Plot.OffsetY = x
+				}
+			case "plot.copies":
+				x, ok := v.(int64)
+				if !ok {
+					bad(full, "an integer", v)
+					break
+				}
+				s.Plot.Copies = int(min(max(x, math.MinInt32), math.MaxInt32))
 			case "display.renderer":
 				if x, ok := v.(string); ok {
 					s.Renderer = x
@@ -438,6 +495,19 @@ func Marshal(s Settings) []byte {
 		"properties_collapsed = "+strconv.FormatBool(l.PropsCollapsed),
 		"history_collapsed = "+strconv.FormatBool(l.HistoryCollapsed),
 		"ribbon_collapsed = "+strconv.FormatBool(l.RibbonCollapsed))
+	pl := s.Plot
+	section("plot", "the plot dialog's last options. paper: A4, A3, A2, A1, A0, Letter, Legal or Tabloid. style: color, gray or mono. scale: fit or a ratio like \"1:50\". area: extents or display. center: centre on the paper, else offset_x and offset_y in mm. printer: \"\" is the system default. copies: 1 to 99.",
+		"paper = "+quote(pl.Paper),
+		"landscape = "+strconv.FormatBool(pl.Landscape),
+		"style = "+quote(pl.Style),
+		"scale = "+quote(pl.Scale),
+		"area = "+quote(pl.Area),
+		"center = "+strconv.FormatBool(pl.Center),
+		"offset_x = "+formatValue(pl.OffsetX),
+		"offset_y = "+formatValue(pl.OffsetY),
+		"lineweights = "+strconv.FormatBool(pl.Lineweights),
+		"printer = "+quote(pl.Printer),
+		"copies = "+strconv.Itoa(pl.Copies))
 	section("recent", "drawings opened or saved lately and the folders used, newest first (written by the app).",
 		marshalPaths("files", s.Recent.Files),
 		marshalPaths("folders", s.Recent.Folders))

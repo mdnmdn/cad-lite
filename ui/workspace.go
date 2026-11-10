@@ -63,10 +63,13 @@ type Workspace struct {
 	// closeHooked is set once the window's close button asks windowClosing.
 	closeHooked bool
 	fb          *feedbackState
-	// plt is the plot dialog (plot.go), made on first use; printer replaces plot.Print in tests.
-	plt       *plotState
-	printer   Printer
-	analytics analytics.Recorder
+	// plt is the plot dialog (plot.go), made on first use; printer, printerList and viewer replace
+	// plot.Print, plot.Printers and plot.OpenViewer in tests.
+	plt         *plotState
+	printer     Printer
+	printerList PrinterLister
+	viewer      Viewer
+	analytics   analytics.Recorder
 	// pe is the Properties panel's editing state (propsgrid.go), made on first use.
 	pe *propsEdit
 	// frameN counts the frames built; building is set while Render builds one, when the

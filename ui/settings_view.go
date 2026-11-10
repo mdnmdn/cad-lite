@@ -423,6 +423,8 @@ func (ws *Workspace) settingsFooter() *gpui.Div {
 				// The renderer suits this machine's graphics driver, not a taste.
 				d.Renderer = s.Renderer
 				d.Recent = s.Recent
+				// The plot dialog owns its options (plot.go).
+				d.Plot = s.Plot
 				*s = d
 			})
 		}).Px_(12),

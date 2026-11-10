@@ -33,6 +33,8 @@ func TestRoundTrip(t *testing.T) {
 		Theme: "light", Language: LangItalian, UIScale: 1.25, Grid: false, OSnap: true, Ortho: true,
 		Wheel: WheelPan, Renderer: RendererSoftware, AgentMode: AgentAdvanced, DefaultAgent: "claude", Window: Window{Width: 1000, Height: 700},
 		AgentBinaries: map[string]string{"claude": `C:\Users\me\AppData\Roaming\npm\claude.cmd`, "codex": "/opt/codex/bin/codex"},
+		Plot: Plot{Paper: "A1", Style: PlotGray, Scale: "1:50", Area: PlotDisplay, OffsetX: 12.5, OffsetY: -3,
+			Printer: "Office \"Laser\"", Copies: 4},
 	}
 	if err := Save(path, want); err != nil {
 		t.Fatal(err)
@@ -374,5 +376,19 @@ future_key = 3
 	}
 	if s.Extra["layout.future_key"] != int64(3) || !strings.Contains(string(Marshal(s)), "future_key = 3") {
 		t.Fatalf("unknown layout key lost: %v", s.Extra)
+	}
+}
+
+func TestPlotSettingsAreNormalized(t *testing.T) {
+	s, w, err := Parse([]byte("[plot]\nstyle = \"sepia\"\narea = \"window\"\ncopies = 500\noffset_x = 1e9\noffset_y = 7\npaper = \"\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := s.Plot
+	if p.Style != PlotColor || p.Area != PlotExtents || p.Copies != MaxPlotCopy || p.OffsetX != MaxPlotShift || p.OffsetY != 7 || p.Paper != "A4" || len(w) != 3 {
+		t.Fatalf("plot %+v warnings %v", p, w)
+	}
+	if !p.Landscape || !p.Center || !p.Lineweights {
+		t.Fatalf("absent keys should keep the defaults: %+v", p)
 	}
 }

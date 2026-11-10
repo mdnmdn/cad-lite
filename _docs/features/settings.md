@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: The settings panel and its General, AI (Basic and Advanced) and Updates tabs (theme, UI scale, drawing defaults, mouse wheel, renderer, provider keys, default agent, updates) and the TOML file in the user config folder that keeps them.
 read_when: you are changing a setting, the settings file, the themes, the UI scale or the panel
-updated: 2026-10-24
+updated: 2026-11-10
 verified: 2026-10-24
 code_anchors: [ui/rendermode.go, ui/update.go, ui/agent_basic_check.go, ui/agent_basic.go, settings/settings.go, settings/file.go, settings/recent.go, ui/settings.go, ui/settings_view.go, ui/agent_binary.go, ui/discovery.go, ui/discovery_view.go, ui/terminal.go, ui/terminal_windows.go, ui/terminal_other.go, ui/agent_install.go, ui/update_view.go, ui/slider.go, ui/themes.go, ui/theme.go, ui/workspace.go, ui/layout.go, cmd/cad/main.go]
 depends_on: [tech-ui-framework, tech-operations, feat-canvas, feat-updates]
@@ -129,7 +129,7 @@ behaviour and the default agent and where agents are found. Changes apply at onc
   reopening captures a fresh one.
 - **Saving.** Every change is written about half a second after the last one, and on close, with the
   window's size. The panel footer shows where the file is, or that settings are kept in memory.
-  `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout, the recent lists, the last update check and the renderer (which suits the machine's graphics driver).
+  `Reset to defaults` restores every value but keeps unknown keys, the stored window size, the panel layout, the recent lists, the plot options, the last update check and the renderer (which suits the machine's graphics driver).
 - **Loading.** The file is read at startup. A missing file gives the defaults. A value of the wrong
   type or out of range is replaced (the UI scale is clamped to 0.75 to 2.0 and snapped to 0.05, window
   sides to 320 to 16384, panel sizes to 0 to 4096) and one warning per value shows in the panel footer. An unknown theme name falls back to `dark`.
@@ -164,13 +164,22 @@ The file is `cad-lite/settings.toml` in the OS user config folder (copied once f
 | `layout.side_width`, `layout.agent_width`, `layout.layers_height`, `layout.history_height` | logical pixels, 0 for automatic, at most 4096 | 0 |
 | `recent.files`, `recent.folders` | arrays of absolute paths, newest first, at most 10 each, written by the app | empty |
 | `layout.side_collapsed`, `layout.layers_collapsed`, `layout.properties_collapsed`, `layout.history_collapsed`, `layout.ribbon_collapsed` | boolean | false |
+| `plot.paper` | a paper name of the [plot dialog](plot.md) (`A4` ... `Tabloid`); an unknown one plots on A4 | `A4` |
+| `plot.landscape`, `plot.center`, `plot.lineweights` | boolean | true |
+| `plot.style` | `color`, `gray`, `mono` | `color` |
+| `plot.scale` | `fit` or a ratio such as `1:50`; one the dialog cannot read is fit | `fit` |
+| `plot.area` | `extents` or `display` (a picked window is not kept) | `extents` |
+| `plot.offset_x`, `plot.offset_y` | millimetres, -10000 to 10000 | 0 |
+| `plot.printer` | a printer name, `""` for the system default | `""` |
+| `plot.copies` | 1 to 99 | 1 |
 
 The `layout` table is the arrangement of the workspace panels, written by the app when the user drags a
 splitter or folds a panel (see [Drawing canvas](canvas.md)); a size of 0 is automatic, and a saved size is
-kept even when a smaller window cannot show it. The file starts with a comment header and a comment per table; comments a user adds are not kept.
+kept even when a smaller window cannot show it. The `plot` table is written by the plot dialog each time
+an option changes, not by the panel, and `Reset to defaults` leaves it alone. The file starts with a comment header and a comment per table; comments a user adds are not kept.
 API: package `settings` (`Settings`, `Default`, `Path`, `Load`, `LoadWarn`, `Parse`, `Marshal`, `Save`,
 `ClampUIScale`, `Renderers` and the `Renderer*` constants, `Recent` with `AddFile`, `AddFolder`, `RemoveFile`, `RemoveFolder`, `Clear`, `CleanPath`);
-`Workspace.RecentFiles`, `RecentFolders`, `ClearRecent`, `OpenMenuShown`, `StartPanelShown`; `Workspace.EnableAgentDiscovery`, `AgentDiscovery`, `SetAgentDiscoveryProbe`, `SetTerminalOpener` (`ui.TerminalOpener`), `ui.OpenTerminal`, `ui.OpenTerminalCommand`; `settings.Layout`; `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
+`Workspace.RecentFiles`, `RecentFolders`, `ClearRecent`, `OpenMenuShown`, `StartPanelShown`; `Workspace.EnableAgentDiscovery`, `AgentDiscovery`, `SetAgentDiscoveryProbe`, `SetTerminalOpener` (`ui.TerminalOpener`), `ui.OpenTerminal`, `ui.OpenTerminalCommand`; `settings.Layout`; `settings.Plot` and the `Plot*` constants; `Workspace.LoadSettings`, `LoadSettingsFrom`, `Settings`, `SetSettings`,
 `SaveSettings`, `SetLanguageHandler`, `Language`, `SetRenderInfo` (`ui.RenderInfo`), `RenderInfo`, `RenderNoticeShown`, `RequestRestart`, `RelaunchIfPending`, `OpenSettings` (on the last tab shown), `CloseSettings`, `ToggleSettings`, `WheelMode`; theme registry
 `ui.Themes`, `ThemeByName`, `ApplyTheme`; element `ui.NewSlider` with `SliderState`; action
 `cad-settings`.

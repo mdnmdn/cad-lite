@@ -3,12 +3,16 @@ package plot
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"errors"
 	"io"
 	"math"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"cad-lite/doc"
 	"cad-lite/geom"
@@ -112,7 +116,7 @@ func TestComposeSkipsLayersThatAreOffOrDoNotPlot(t *testing.T) {
 func TestComposeMonoPlotsBlack(t *testing.T) {
 	d, _ := sample(t)
 	a4, _ := PaperByName("A4")
-	s, _ := Compose(d, Options{Paper: a4, Mono: true})
+	s, _ := Compose(d, Options{Paper: a4, Style: StyleMono})
 	for _, it := range s.Items {
 		if it.Color != (render.Color{A: 255}) {
 			t.Fatalf("mono item in %+v", it.Color)
@@ -178,7 +182,7 @@ func TestRasterDrawsInkOnWhitePaper(t *testing.T) {
 	d, _ := sample(t)
 	a4, _ := PaperByName("A4")
 	hs := d.Handles()
-	s, _ := Compose(d, Options{Paper: a4, Mono: true, What: WhatSelection, Selection: hs[:4]})
+	s, _ := Compose(d, Options{Paper: a4, Style: StyleMono, What: WhatSelection, Selection: hs[:4]})
 	img := s.Raster(1)
 	if img.Bounds().Dx() != 210 || img.Bounds().Dy() != 297 {
 		t.Fatalf("raster %v, want 210x297", img.Bounds())
@@ -205,32 +209,166 @@ func TestRasterDrawsInkOnWhitePaper(t *testing.T) {
 func TestPrintCommandPerPlatform(t *testing.T) {
 	all := func(string) bool { return true }
 	none := func(string) bool { return false }
-	if n, args, _ := printCommand("linux", "/t/a.pdf", "a", all); n != "lp" || strings.Join(args, " ") != "-t a -- /t/a.pdf" {
+	if n, args, _ := printCommand("linux", "/t/a.pdf", Job{Title: "a"}, all); n != "lp" || strings.Join(args, " ") != "-t a -n 1 -- /t/a.pdf" {
 		t.Fatalf("linux: %s %v", n, args)
 	}
-	if n, _, _ := printCommand("darwin", "/t/a.pdf", "a", func(s string) bool { return s == "lpr" }); n != "lpr" {
-		t.Fatalf("lpr fallback: %s", n)
+	if n, args, _ := printCommand("linux", "/t/a.pdf", Job{Title: "a", Printer: "office", Copies: 3}, all); strings.Join(args, " ") != "-t a -n 3 -d office -- /t/a.pdf" {
+		t.Fatalf("linux, printer and copies: %s %v", n, args)
 	}
-	if _, _, err := printCommand("linux", "/t/a.pdf", "a", none); !errors.Is(err, ErrNoPrinting) {
+	if n, args, _ := printCommand("darwin", "/t/a.pdf", Job{Title: "a", Printer: "p", Copies: 500}, func(s string) bool { return s == "lpr" }); n != "lpr" || strings.Join(args, " ") != "-T a -# 99 -P p /t/a.pdf" {
+		t.Fatalf("lpr fallback: %s %v", n, args)
+	}
+	if _, _, err := printCommand("linux", "/t/a.pdf", Job{}, none); !errors.Is(err, ErrNoPrinting) {
 		t.Fatalf("no spooler: %v", err)
 	}
-	if n, args, _ := printCommand("windows", `C:\it's.pdf`, "a", none); n != "powershell" || !strings.Contains(args[len(args)-1], `'C:\it''s.pdf' -Verb Print`) {
+	n, args, _ := printCommand("windows", `C:\it's.pdf`, Job{Copies: 2}, none)
+	if n != "powershell" || !strings.Contains(args[len(args)-1], `'C:\it''s.pdf' -Verb Print`) || !strings.Contains(args[len(args)-1], "-lt 2;") {
 		t.Fatalf("windows: %s %v", n, args)
 	}
-	if _, _, err := printCommand("js", "a.pdf", "a", all); !errors.Is(err, ErrNoPrinting) {
+	_, args, _ = printCommand("windows", `C:\a.pdf`, Job{Printer: "Bob's HP"}, none)
+	if !strings.Contains(args[len(args)-1], `-Verb PrintTo -ArgumentList '"Bob''s HP"'`) {
+		t.Fatalf("windows PrintTo: %v", args)
+	}
+	if _, _, err := printCommand("js", "a.pdf", Job{}, all); !errors.Is(err, ErrNoPrinting) {
 		t.Fatalf("browser: %v", err)
 	}
 }
 
-// redItems are the sample's four red lines.
-func redItems(s *Sheet) []Item {
-	var out []Item
-	for _, it := range s.Items {
-		if it.Color == (render.Color{R: 255, A: 255}) {
-			out = append(out, it)
+func TestListPrintersReadsLpstat(t *testing.T) {
+	all := func(string) bool { return true }
+	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		switch strings.Join(args, " ") {
+		case "-e":
+			return []byte("Office_Laser\nPlotter_A0\n"), nil
+		case "-d":
+			return []byte("system default destination: Plotter_A0\n"), nil
+		}
+		return nil, errors.New("unexpected")
+	}
+	ps, err := listPrinters(context.Background(), "linux", all, run)
+	if err != nil || len(ps) != 2 || ps[0] != (Printer{"Office_Laser", false}) || ps[1] != (Printer{"Plotter_A0", true}) {
+		t.Fatalf("printers %+v, %v", ps, err)
+	}
+	old := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		switch strings.Join(args, " ") {
+		case "-a":
+			return []byte("hp accepting requests since Mon 01 Jan\n"), nil
+		case "-d":
+			return []byte("no system default destination\n"), nil
+		}
+		return nil, errors.New("lpstat: invalid option -e")
+	}
+	if ps, _ := listPrinters(context.Background(), "darwin", all, old); len(ps) != 1 || ps[0] != (Printer{"hp", false}) {
+		t.Fatalf("lpstat -a fallback: %+v", ps)
+	}
+	win := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		return []byte("Microsoft Print to PDF\tFalse\r\nHP LaserJet\tTrue\r\n"), nil
+	}
+	if ps, _ := listPrinters(context.Background(), "windows", all, win); len(ps) != 2 || ps[1] != (Printer{"HP LaserJet", true}) || ps[0].Name != "Microsoft Print to PDF" {
+		t.Fatalf("windows: %+v", ps)
+	}
+	if _, err := listPrinters(context.Background(), "linux", func(string) bool { return false }, run); !errors.Is(err, ErrNoPrinting) {
+		t.Fatalf("no CUPS: %v", err)
+	}
+}
+
+func TestViewerCommandPerPlatform(t *testing.T) {
+	for goos, want := range map[string]string{"linux": "xdg-open", "freebsd": "xdg-open", "darwin": "open", "windows": "rundll32"} {
+		if n, args, err := viewerCommand(goos, "/t/a.pdf"); err != nil || n != want || args[len(args)-1] != "/t/a.pdf" {
+			t.Fatalf("%s: %s %v %v", goos, n, args, err)
 		}
 	}
-	return out
+	if _, _, err := viewerCommand("js", "a"); !errors.Is(err, ErrNoPrinting) {
+		t.Fatal("the browser has no viewer")
+	}
+}
+
+func TestParseScale(t *testing.T) {
+	for in, want := range map[string]Scale{"fit": Fit, "": Fit, "1:50": {1, 50}, " 1 / 100 ": {1, 100}, "2=1": {2, 1}, "1:2.5": {1, 2.5}} {
+		if got, ok := ParseScale(in); !ok || got != want {
+			t.Fatalf("%q: %v %v, want %v", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"1:0", "-1:5", "abc", "1:x", "50", "1:inf", "1:NaN"} {
+		if _, ok := ParseScale(in); ok {
+			t.Fatalf("%q parsed", in)
+		}
+	}
+	if (Scale{1, 50}).String() != "1:50" || Fit.String() != "fit" {
+		t.Fatal("String")
+	}
+}
+
+func TestComposeFixedScaleUsesDrawingUnits(t *testing.T) {
+	d, hs := sample(t)
+	a4, _ := PaperByName("A4")
+	opt := Options{Paper: a4, Landscape: true, What: WhatSelection, Selection: hs[:4], Scale: Scale{1, 2}}
+	s, err := Compose(d, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Millimetre drawing at 1:2: 0.5 mm of paper per unit, the 100×50 rectangle centred.
+	if !near(s.Scale, 0.5) || s.Overflow {
+		t.Fatalf("scale %v overflow %v", s.Scale, s.Overflow)
+	}
+	if p := redItems(s)[0].Points[0]; !near(p.X, 297.0/2-25) || !near(p.Y, 105-12.5) {
+		t.Fatalf("origin at %v", p)
+	}
+	d.Header.InsUnits = 6 // metres: 1 unit is 1000 mm, so 1:100 is 10 mm per unit
+	opt.Scale = Scale{1, 100}
+	s, _ = Compose(d, opt)
+	if !near(s.Scale, 10) || !s.Overflow {
+		t.Fatalf("metres at 1:100: scale %v overflow %v", s.Scale, s.Overflow)
+	}
+}
+
+func TestComposeOffsetPlacesTheLowerLeftCorner(t *testing.T) {
+	d, hs := sample(t)
+	a4, _ := PaperByName("A4")
+	s, err := Compose(d, Options{Paper: a4, What: WhatSelection, Selection: hs[:4], Scale: Scale{1, 1}, NoCenter: true, Offset: geom.V(5, 20)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := redItems(s)[0].Points[0]; !near(p.X, 15) || !near(p.Y, 30) {
+		t.Fatalf("origin at %v, want 10 mm margin plus the offset", p)
+	}
+	if s.Overflow {
+		t.Fatal("100 mm wide at 15 mm fits on A4 portrait")
+	}
+	s, _ = Compose(d, Options{Paper: a4, What: WhatSelection, Selection: hs[:4], Scale: Scale{1, 1}, NoCenter: true, Offset: geom.V(150, 0)})
+	if !s.Overflow {
+		t.Fatal("an offset that pushes the plot off the paper should overflow")
+	}
+}
+
+func TestComposeGrayscaleAndThinLines(t *testing.T) {
+	d, hs := sample(t)
+	a4, _ := PaperByName("A4")
+	s, _ := Compose(d, Options{Paper: a4, Style: StyleGray, What: WhatSelection, Selection: hs[:4], NoLineweights: true})
+	it := s.Items[0]
+	if it.Color.R != it.Color.G || it.Color.G != it.Color.B || it.Color.R != 54 || it.Width != ThinWidth {
+		t.Fatalf("grey red line: %+v width %v", it.Color, it.Width)
+	}
+}
+
+func TestTempPDFRemovesOldFiles(t *testing.T) {
+	dir := t.TempDir()
+	old := filepath.Join(dir, "old.pdf")
+	fresh := filepath.Join(dir, "fresh.pdf")
+	for _, p := range []string{old, fresh} {
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := time.Now().Add(-48 * time.Hour)
+	os.Chtimes(old, past, past)
+	cleanTemp(dir, time.Now().Add(-tempAge))
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatal("the two-day-old file should be gone")
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatal("the fresh file should stay")
+	}
 }
 
 func atoi(s string) int {
@@ -246,4 +384,15 @@ func itoa(n int) string {
 		return string(rune('0' + n))
 	}
 	return itoa(n/10) + string(rune('0'+n%10))
+}
+
+// redItems are the sample's four red lines.
+func redItems(s *Sheet) []Item {
+	var out []Item
+	for _, it := range s.Items {
+		if it.Color == (render.Color{R: 255, A: 255}) {
+			out = append(out, it)
+		}
+	}
+	return out
 }

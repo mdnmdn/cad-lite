@@ -37,6 +37,18 @@ const (
 	AreaWindow
 )
 
+// Style is how colours plot, after AutoCAD's acad, grayscale and monochrome plot style tables.
+type Style int
+
+const (
+	// StyleColor plots each entity in its resolved colour.
+	StyleColor Style = iota
+	// StyleGray plots each colour as the grey of its luminance.
+	StyleGray
+	// StyleMono plots every line and fill black.
+	StyleMono
+)
+
 // DefaultMargin is the unprintable border kept on every side of the paper, in millimetres.
 const DefaultMargin = 10.0
 
@@ -49,8 +61,18 @@ type Options struct {
 	Paper Paper
 	// Landscape turns the paper so its long side is horizontal.
 	Landscape bool
-	// Mono plots every line and fill black, as AutoCAD's monochrome plot style does.
-	Mono bool
+	// Style is colour, grayscale or monochrome.
+	Style Style
+	// Scale is the plot scale; the zero value fits the area on the paper. A fixed scale converts
+	// drawing units to millimetres through the drawing's INSUNITS (UnitMM).
+	Scale Scale
+	// NoCenter places the area's lower-left corner Offset millimetres from the lower-left corner of
+	// the printable area instead of centring it on the paper.
+	NoCenter bool
+	// Offset is where the area starts with NoCenter, in millimetres; it may be negative.
+	Offset geom.Vec2
+	// NoLineweights plots every line at ThinWidth instead of its lineweight.
+	NoLineweights bool
 	// What is the whole drawing or the selection.
 	What What
 	// Selection is the entities WhatSelection plots.
@@ -72,6 +94,9 @@ type Sheet struct {
 	Clip geom.Box2
 	// Scale is millimetres of paper per drawing unit.
 	Scale float64
+	// Overflow is set when the area does not fit inside the printable part of the paper, so part
+	// of it is cut off (a fixed scale too large, or an offset).
+	Overflow bool
 	// Items are drawn first to last.
 	Items []Item
 }
@@ -95,6 +120,9 @@ type Item struct {
 // minWidth is the thinnest stroke a sheet asks for, in millimetres: a lineweight of 0 plots as the
 // finest line rather than not at all.
 const minWidth = 0.05
+
+// ThinWidth is the width every line plots at with Options.NoLineweights, in millimetres.
+const ThinWidth = 0.1
 
 // printTolerance is the chord error a sheet's curves are tessellated to, in millimetres of paper.
 const printTolerance = 0.02
@@ -188,13 +216,27 @@ func Compose(d *doc.Drawing, opt Options) (*Sheet, error) {
 	if ah > 0 {
 		k = min(k, ph/ah)
 	}
-	center := geom.V((area.Min.X+area.Max.X)/2, (area.Min.Y+area.Max.Y)/2)
-	toPaper := func(p geom.Vec2) geom.Vec2 {
-		return geom.V((p.X-center.X)*k+w/2, (p.Y-center.Y)*k+h/2)
+	if opt.Scale.Fixed() {
+		k = opt.Scale.Paper / opt.Scale.Drawing * UnitMM(d.Header.InsUnits)
 	}
-	s := &Sheet{Width: w, Height: h, Scale: k, Clip: geom.BoxOf(geom.V(m, m), geom.V(w-m, h-m))}
+	// The area's lower-left corner lands at (ox, oy) on the paper.
+	ox, oy := w/2-aw*k/2, h/2-ah*k/2
+	if opt.NoCenter {
+		ox, oy = m+opt.Offset.X, m+opt.Offset.Y
+	}
+	toPaper := func(p geom.Vec2) geom.Vec2 {
+		return geom.V((p.X-area.Min.X)*k+ox, (p.Y-area.Min.Y)*k+oy)
+	}
+	printable := geom.BoxOf(geom.V(m, m), geom.V(w-m, h-m))
+	s := &Sheet{Width: w, Height: h, Scale: k, Clip: printable}
+	placed := geom.BoxOf(toPaper(area.Min), toPaper(area.Max))
+	const slack = 1e-6
+	s.Overflow = !printable.Grow(slack).ContainsBox(placed)
 	if opt.Area != AreaExtents {
-		s.Clip = geom.BoxOf(toPaper(area.Min), toPaper(area.Max))
+		s.Clip = intersect(printable, placed)
+	}
+	if s.Clip.IsEmpty() {
+		return nil, ErrNothing
 	}
 
 	b := render.NewBuilder(d, render.Color{R: 255, G: 255, B: 255, A: 255})
@@ -208,10 +250,11 @@ func Compose(d *doc.Drawing, opt Options) (*Sheet, error) {
 			continue
 		}
 		col, out := it.Color, it.Outline
-		if opt.Mono {
-			col, out = mono(col), mono(out)
-		}
+		col, out = opt.Style.ink(col), opt.Style.ink(out)
 		width := max(minWidth, float64(it.Weight)*25.4/96)
+		if opt.NoLineweights {
+			width = ThinWidth
+		}
 		switch it.Kind {
 		case render.ItemRect:
 			if len(it.Points) < 2 {
@@ -242,8 +285,22 @@ func mapPoints(ps []geom.Vec2, f func(geom.Vec2) geom.Vec2) []geom.Vec2 {
 	return out
 }
 
-// mono is c in black, keeping its alpha.
-func mono(c render.Color) render.Color { return render.Color{A: c.A} }
+// ink is the colour c plots in, keeping its alpha.
+func (st Style) ink(c render.Color) render.Color {
+	switch st {
+	case StyleMono:
+		return render.Color{A: c.A}
+	case StyleGray:
+		g := uint8(math.Round(255 * (0.2126*float64(c.R) + 0.7152*float64(c.G) + 0.0722*float64(c.B)) / 255))
+		return render.Color{R: g, G: g, B: g, A: c.A}
+	}
+	return c
+}
+
+// intersect is the overlap of a and b, empty when they do not overlap.
+func intersect(a, b geom.Box2) geom.Box2 {
+	return geom.Box2{Min: geom.V(max(a.Min.X, b.Min.X), max(a.Min.Y, b.Min.Y)), Max: geom.V(min(a.Max.X, b.Max.X), min(a.Max.Y, b.Max.Y))}
+}
 
 func finite(b geom.Box2) bool {
 	for _, v := range []float64{b.Min.X, b.Min.Y, b.Max.X, b.Max.Y} {

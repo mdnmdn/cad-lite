@@ -111,6 +111,41 @@ type Layout struct {
 	RibbonCollapsed bool
 }
 
+// Plot styles and areas, the values of Plot.Style and Plot.Area.
+const (
+	PlotColor    = "color"
+	PlotGray     = "gray"
+	PlotMono     = "mono"
+	PlotExtents  = "extents"
+	PlotDisplay  = "display"
+	MaxPlotCopy  = 99
+	MaxPlotShift = 10000.0
+)
+
+// Plot is the plot dialog's options, kept from one plot to the next.
+type Plot struct {
+	// Paper names the paper size ("A4"); the dialog falls back to A4 for a name it does not offer.
+	Paper string
+	// Landscape turns the paper.
+	Landscape bool
+	// Style is PlotColor, PlotGray or PlotMono.
+	Style string
+	// Scale is "fit" or a ratio such as "1:50"; the dialog falls back to fit for one it cannot read.
+	Scale string
+	// Area is PlotExtents or PlotDisplay; a picked window is not kept.
+	Area string
+	// Center centres the plot on the paper; otherwise OffsetX and OffsetY (millimetres from the
+	// printable area's lower-left corner) place it.
+	Center           bool
+	OffsetX, OffsetY float64
+	// Lineweights plots lines as wide as their lineweights.
+	Lineweights bool
+	// Printer is the queue chosen last; "" is the system default.
+	Printer string
+	// Copies is 1 to MaxPlotCopy.
+	Copies int
+}
+
 // Agent modes separate managed OpenCode setup from custom CLI configuration.
 const (
 	// AgentBasic uses OpenCode with the app's saved provider keys.
@@ -162,6 +197,8 @@ type Settings struct {
 	Window Window
 	// Layout is the arrangement of the workspace panels.
 	Layout Layout
+	// Plot is the plot dialog's options.
+	Plot Plot
 	// Recent is the drawings and folders used lately, for the Open menu and
 	// the start panel.
 	Recent Recent
@@ -183,6 +220,8 @@ func Default() Settings {
 		Renderer:   RendererAuto,
 		AutoUpdate: true,
 		Window:     Window{Width: 1280, Height: 800},
+		Plot: Plot{Paper: "A4", Landscape: true, Style: PlotColor, Scale: "fit", Area: PlotExtents,
+			Center: true, Lineweights: true, Copies: 1},
 	}
 }
 
@@ -257,6 +296,7 @@ func (s *Settings) Normalize() []string {
 	s.OllamaKey = strings.TrimSpace(s.OllamaKey)
 	s.AgentBinaries = cleanBinaries(s.AgentBinaries)
 	s.AgentFavorites = cleanAgentFavorites(s.AgentFavorites)
+	s.Plot.normalize(&w)
 	s.Recent.normalize()
 	return w
 }
@@ -303,6 +343,35 @@ func contains(l []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// normalize puts the plot options back in range, appending one warning per value it changed.
+func (p *Plot) normalize(w *[]string) {
+	def := Default().Plot
+	if !contains([]string{PlotColor, PlotGray, PlotMono}, p.Style) {
+		*w = append(*w, i18n.T("settings.warn.plot", "plot.style", p.Style, def.Style))
+		p.Style = def.Style
+	}
+	if !contains([]string{PlotExtents, PlotDisplay}, p.Area) {
+		*w = append(*w, i18n.T("settings.warn.plot", "plot.area", p.Area, def.Area))
+		p.Area = def.Area
+	}
+	if strings.TrimSpace(p.Paper) == "" {
+		p.Paper = def.Paper
+	}
+	if strings.TrimSpace(p.Scale) == "" {
+		p.Scale = def.Scale
+	}
+	if c := min(max(p.Copies, 1), MaxPlotCopy); c != p.Copies {
+		*w = append(*w, i18n.T("settings.warn.out_of_range", "plot.copies", p.Copies, c))
+		p.Copies = c
+	}
+	for _, v := range []*float64{&p.OffsetX, &p.OffsetY} {
+		if math.IsNaN(*v) || math.IsInf(*v, 0) {
+			*v = 0
+		}
+		*v = min(max(*v, -MaxPlotShift), MaxPlotShift)
+	}
 }
 
 // Clone returns a copy that shares no map with s.
