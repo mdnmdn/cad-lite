@@ -213,6 +213,10 @@ categories:
     file-save:
       goal: write the drawing to its file, a floppy disk
       keywords: [save, floppy, disk, write, store]
+    file-print:
+      goal: print or plot the drawing on paper, a printer
+      source: adopted:printer
+      keywords: [print, plot, printer, paper, pdf]
 
   app:
     app-settings:

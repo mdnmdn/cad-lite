@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: The command line under the canvas — typing commands and answers, the prompt, AutoComplete suggestions, Up/Down recall, the resizable history and recent commands, Enter, Space, Escape and right-click, and the keyboard shortcuts.
 read_when: you are changing how the user types commands or answers prompts, or adding a shortcut
-updated: 2026-10-25
+updated: 2026-11-10
 verified: 2026-10-25
 code_anchors: [ui/workspace.go, ui/cmdarea.go, ui/cmdcomplete.go, ui/layout.go, cmdsys/session.go, cmdsys/input.go, cmdsys/names.go, cmdsys/transparent.go, cmdsys/script.go, cmdsys/sysvars.go, cmdsys/wording.go, cmdsys/commands/sysvar.go, cmdsys/commands/script.go, i18n/keyword.go, i18n/command.go, i18n/snap.go, i18n/locales/en.toml, i18n/locales/it.toml, ui/textedit_view.go]
 depends_on: [tech-command-system, tech-ui-framework]
@@ -141,6 +141,7 @@ Shortcuts, active anywhere in the window:
 | Ctrl+O, Cmd+O | OPEN, through the system file dialog when there is one |
 | Ctrl+S, Cmd+S | QSAVE; the save dialog first when the drawing has no file |
 | Ctrl+Shift+S, Cmd+Shift+S | SAVEAS, through the file format menu and the system file dialog when there is one |
+| Ctrl+P, Cmd+P | PLOT, the [plot dialog](plot.md) |
 | Ctrl+Tab, Ctrl+Shift+Tab | Next or previous [document tab](document-tabs.md) |
 | F2 | Agent panel on or off |
 | F3 | Object snap on or off |

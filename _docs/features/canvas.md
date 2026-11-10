@@ -5,7 +5,7 @@ kind: feature
 status: current
 summary: The canvas and the chrome around it — pan and zoom, grid, rulers, crosshair and pickbox, highlights, selection boxes, snap markers, the zoom buttons, the title bar, the ribbon, the layers and properties panels, the layer popover and properties HUD, resizing and collapsing the panels, and the status bar.
 read_when: you are changing pan, zoom, the crosshair, what the canvas draws, a panel or the status bar
-updated: 2026-10-25
+updated: 2026-11-10
 verified: 2026-10-25
 code_anchors: [ui/canvas.go, ui/ruler.go, ui/ruler_canvas.go, ui/workspace.go, ui/titlebar.go, ui/recent.go, ui/toolbar_layout.go, ui/tooltip.go, ui/sidepanel.go, ui/layerorder.go, ui/statusbar.go, ui/chrome.go, ui/layout.go, ui/cmdarea.go, ui/filedialog.go, ui/statusbar_zoom.go, ui/icon.go, ui/brand.go, ui/layerpop.go, ui/hud.go, ui/textedit.go, ui/textedit_view.go, ui/hud_drag.go]
 depends_on: [tech-rendering, tech-command-system, tech-ui-framework]
@@ -268,7 +268,8 @@ shortly after each change and when the app closes, and applied at startup.
 ### Title bar
 
 A 44 px row on the background colour. From the left: the brand, a divider, the document chip, a
-divider, Open with a small chevron beside it and Save, a divider, Undo and Redo; at the right end the
+divider, Open with a small chevron beside it, Save and Plot (a printer, which runs `PLOT`, see
+[Plot and print](plot.md)), a divider, Undo and Redo; at the right end the
 update button while a release this build can install waits (a click starts the update, see
 [Updates](updates.md)), the ribbon toggle (a chevron that hides and shows the ribbon's button groups), the agent panel toggle, Feedback and the gear
 `Settings` button, which opens the [settings](settings.md) panel (also Ctrl+, or `OPTIONS`). Every
@@ -279,7 +280,7 @@ open and carries a dot while a session is live (amber when a background tab want
 system file dialog first (see [DXF files](dxf-files.md)); right-clicking Save is Save as. The chevron opens the
 Open menu of recent files and folders, a dropdown under the Open button that closes on a choice, a press
 anywhere else or Escape. Undo and
-Redo run `U` and `REDO` and show the command tooltips (see Tooltips); Open, Save, Settings and the
+Redo run `U` and `REDO`, Plot runs `PLOT`, and they show the command tooltips (see Tooltips); Open, Save, Settings and the
 agent button show the same kind of tooltip, their description from `ui.toolbar.open_tip`, `save_tip`,
 `settings_tip` and `agent_tip` (Save's names Save as and its keys).
 

@@ -63,7 +63,10 @@ type Workspace struct {
 	// closeHooked is set once the window's close button asks windowClosing.
 	closeHooked bool
 	fb          *feedbackState
-	analytics   analytics.Recorder
+	// plt is the plot dialog (plot.go), made on first use; printer replaces plot.Print in tests.
+	plt       *plotState
+	printer   Printer
+	analytics analytics.Recorder
 	// pe is the Properties panel's editing state (propsgrid.go), made on first use.
 	pe *propsEdit
 	// frameN counts the frames built; building is set while Render builds one, when the
@@ -153,6 +156,7 @@ var (
 	actionAgent     = gpui.NewAction("cad-toggle-agent")
 	actionNextTab   = gpui.NewAction("cad-next-tab")
 	actionPrevTab   = gpui.NewAction("cad-prev-tab")
+	actionPlot      = gpui.NewAction("cad-plot")
 )
 
 // Bindings returns the workspace key bindings, to add to the app keymap.
@@ -167,6 +171,8 @@ func Bindings() []gpui.KeyBinding {
 		gpui.NewKeyBinding("ctrl-s", actionSave, "cad"),
 		gpui.NewKeyBinding("cmd-s", actionSave, "cad"),
 		gpui.NewKeyBinding("ctrl-shift-s", actionSaveAs, "cad"),
+		gpui.NewKeyBinding("ctrl-p", actionPlot, "cad"),
+		gpui.NewKeyBinding("cmd-p", actionPlot, "cad"),
 		gpui.NewKeyBinding("cmd-shift-s", actionSaveAs, "cad"),
 		gpui.NewKeyBinding("f3", actionSnap, "cad"),
 		gpui.NewKeyBinding("f7", actionGrid, "cad"),
@@ -191,7 +197,7 @@ func (ws *Workspace) Render(w *gpui.Window, cx *gpui.App) gpui.IntoElement {
 		ws.closeHooked = true
 		w.OnShouldClose(ws.windowClosing)
 	}
-	return ws.withDiscard(w, cx, ws.render(w, cx))
+	return ws.withDiscard(w, cx, ws.withPlot(w, cx, ws.render(w, cx)))
 }
 
 // render is Render without the unsaved-changes dialog.

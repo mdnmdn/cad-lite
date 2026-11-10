@@ -8,8 +8,8 @@ import (
 	"cad-lite/internal/gpui"
 )
 
-// titleBar is the window's top row: the brand, the document chip, Open (with its recent menu) and
-// Save, Undo and Redo,
+// titleBar is the window's top row: the brand, the document chip, Open (with its recent menu),
+// Save and Plot, Undo and Redo,
 // and at the right end the update button while a release waits, the ribbon toggle, the agent panel
 // toggle, Feedback and Settings. Every button is icon-only, so each
 // carries its tooltip.
@@ -24,6 +24,7 @@ func (ws *Workspace) titleBar() *gpui.Div {
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(
 			ws.openButtons(),
 			ws.saveButton(),
+			ws.commandIcon("plot", "PLOT", icons.FilePrint),
 		),
 		vDivider(20),
 		gpui.NewDiv().FlexRow().ItemsCenter().Gap(2).FlexShrink(0).Child(

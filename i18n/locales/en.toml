@@ -1855,6 +1855,18 @@ aliases = ["OP"]
 [cmd.options.msg]
 unavailable = "Settings are not available."
 
+[cmd.plot]
+name = "Plot"
+desc = "Prints the drawing or the selection, or saves it as a PDF"
+aliases = ["PRINT"]
+
+[cmd.plot.prompt]
+first_corner = "Specify first corner of plot window"
+other_corner = "Specify opposite corner"
+
+[cmd.plot.msg]
+unavailable = "Plotting is not available."
+
 [cmd.ortho.prompt]
 mode = "Enter mode"
 
@@ -2185,3 +2197,51 @@ fallback_keep = "Always use software rendering"
 fallback_keep_tip = "Always use software rendering — sets the renderer to Software in Settings, so Cad-lite no longer tries the graphics card"
 fallback_dismiss = "OK"
 fallback_dismiss_tip = "OK — hides this message; the next start tries the graphics card again"
+
+[ui.plot]
+heading = "Plot"
+what = "What to plot"
+what_all = "All"
+what_all_tip = "All — plots every object on the layers that are on and set to plot"
+what_selection = "Selection (%d)"
+what_selection_tip = "Selection — plots only the selected objects"
+what_selection_none_tip = "Selection — select objects before plotting to plot only them"
+area = "Plot area"
+area_extents = "Extents"
+area_extents_tip = "Extents — fits everything that is plotted onto the paper"
+area_display = "Display"
+area_display_tip = "Display — plots what the canvas shows"
+area_window = "Window"
+area_window_tip = "Window — plots the window you pick on the drawing"
+pick = "Pick window…"
+pick_tip = "Pick window — hides this dialog while you pick two corners on the drawing"
+paper = "Paper size"
+paper_tip = "%s, %s × %s mm"
+orientation = "Orientation"
+portrait = "Portrait"
+portrait_tip = "Portrait — the long side of the paper is vertical"
+landscape = "Landscape"
+landscape_tip = "Landscape — the long side of the paper is horizontal"
+ink = "Color"
+color = "Color"
+color_tip = "Color — plots each object in its own color"
+mono = "Black and white"
+mono_tip = "Black and white — plots every object in black"
+sheet = "%s %s, %s × %s mm"
+scale = "Fit to paper: 1 mm = %s drawing units"
+nothing = "Nothing to plot in this area."
+cancel = "Cancel"
+cancel_tip = "Cancel — closes the dialog without plotting (Esc)"
+save = "Save PDF…"
+save_tip = "Save PDF — writes the plot to a PDF file"
+print = "Print"
+print_tip = "Print — sends the plot to the default printer (Enter)"
+printing = "Sending to the printer…"
+saving = "Saving the PDF…"
+sent = "Plot sent to the printer (%s)."
+saved = "Plot saved to %s."
+save_title = "Save plot as PDF"
+pdf_files = "PDF files"
+print_failed = "Could not print: %s"
+save_failed = "Could not save the PDF: %s"
+no_printing = "Printing is not available on this system. Save a PDF instead."

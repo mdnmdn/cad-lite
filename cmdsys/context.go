@@ -34,6 +34,8 @@ type Context struct {
 	agent   func(string)
 	// settings opens the host's settings panel; nil when the host has none.
 	settings func()
+	// plot is the host's plot dialog; nil when the host has none.
+	plot     PlotHost
 	textEdit func(doc.Handle) bool
 
 	// vars, last and prev are the session's system variables and its Last and Previous

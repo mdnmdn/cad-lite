@@ -99,6 +99,9 @@ const (
 	// FileOpen: choose a drawing file to open, an open folder
 	FileOpen Name = "file-open"
 
+	// FilePrint: print or plot the drawing on paper, a printer
+	FilePrint Name = "file-print"
+
 	// FileSave: write the drawing to its file, a floppy disk
 	FileSave Name = "file-save"
 
@@ -257,6 +260,7 @@ var All = []Name{
 	EditRedo,
 	EditUndo,
 	FileOpen,
+	FilePrint,
 	FileSave,
 	LayerCurrent,
 	LayerFrozen,

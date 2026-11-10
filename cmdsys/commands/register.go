@@ -38,6 +38,7 @@ func Register(r *cmdsys.Registry) {
 	registerStretch(r)   // stretch.go: WP4
 	registerAgent(r)     // agent.go: host
 	registerSettings(r)  // settings.go: host
+	registerPlot(r)      // plot.go: host
 	r.LoadAliases(Aliases)
 	// English short aliases and the Italian names of every language, whatever the UI language.
 	i18n.RegisterAliases(r.Alias)

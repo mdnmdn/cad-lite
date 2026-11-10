@@ -30,6 +30,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `cad-lite/cmd/cad` | Command cad is the Cad-lite desktop application: an AutoCAD-style 2D drafting editor built on the gpui library and shown in an ebiten window. |
 | `cad-lite/cmdsys` | Package cmdsys is the command framework: AutoCAD-style commands as prompt state machines, typed-input parsing, object snaps, ortho and selection. |
 | `cad-lite/cmdsys/commands` | Package commands holds the built-in AutoCAD-style commands. |
+| `cad-lite/cmdsys/props` | Package props is the property model behind the Properties panel and structured agent edits: it builds a sheet of typed, categorised properties for a target (the selection, a layer, or the drawing's defaults), parses typed values in the drawing's units, and applies an edit as one undoable transaction. |
 | `cad-lite/doc` | Package doc is the document database. |
 | `cad-lite/feedback` | Package feedback sends application feedback to the intake service, keeps a private retry outbox, and edits screenshot annotations without depending on the UI framework. |
 | `cad-lite/filedialog` | Package filedialog shows the operating system's native open and save dialogs without cgo, by running the tool each platform ships: osascript on macOS, PowerShell with System.Windows.Forms on Windows, zenity or kdialog on Linux and the BSDs. |
@@ -42,6 +43,7 @@ The examples under `internal/gpui/examples/` are listed in that library's own do
 | `cad-lite/i18n/cmd/i18ncheck` | Command i18ncheck verifies Cad-lite's message catalogs and finds user-facing string literals that are not catalog keys yet. |
 | `cad-lite/internal/gpui` |  |
 | `cad-lite/internal/gpui/ebitenplatform` | Package ebitenplatform implements gpui.Platform on top of ebiten. |
+| `cad-lite/plot` | Package plot lays a drawing out on a sheet of paper and prints it: it chooses what to plot (the whole drawing or the selection) and which part of model space (the extents, the current view or a window), fits that onto a paper size in either orientation, in colour or monochrome, and then writes the sheet as a vector PDF, rasterises it for a preview, or hands the PDF to the system's print spooler. |
 | `cad-lite/render` | Package render turns document entities into a backend-neutral display list and owns the view (camera). |
 | `cad-lite/render/gpuirender` | Package gpuirender draws a render.DisplayList with the gpui library. |
 | `cad-lite/settings` | Package settings holds Cad-lite's user preferences and their TOML file. |

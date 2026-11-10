@@ -1884,6 +1884,18 @@ aliases = ["OPZIONI"]
 [cmd.options.msg]
 unavailable = "Le opzioni non sono disponibili."
 
+[cmd.plot]
+name = "Stampa"
+desc = "Stampa il disegno o la selezione, o lo salva come PDF"
+aliases = ["STAMPA"]
+
+[cmd.plot.prompt]
+first_corner = "Specificare primo angolo della finestra di stampa"
+other_corner = "Specificare angolo opposto"
+
+[cmd.plot.msg]
+unavailable = "La stampa non è disponibile."
+
 [cmd.ortho.prompt]
 mode = "Immettere modo"
 
@@ -2214,3 +2226,51 @@ fallback_keep = "Usa sempre il rendering software"
 fallback_keep_tip = "Usa sempre il rendering software — imposta il rendering su Software nelle Impostazioni, così Cad-lite non prova più la scheda grafica"
 fallback_dismiss = "OK"
 fallback_dismiss_tip = "OK — nasconde questo messaggio; il prossimo avvio riprova la scheda grafica"
+
+[ui.plot]
+heading = "Stampa"
+what = "Cosa stampare"
+what_all = "Tutto"
+what_all_tip = "Tutto — stampa tutti gli oggetti dei layer accesi e stampabili"
+what_selection = "Selezione (%d)"
+what_selection_tip = "Selezione — stampa solo gli oggetti selezionati"
+what_selection_none_tip = "Selezione — selezionare degli oggetti prima di stampare per stampare solo quelli"
+area = "Area di stampa"
+area_extents = "Estensioni"
+area_extents_tip = "Estensioni — adatta al foglio tutto ciò che viene stampato"
+area_display = "Schermo"
+area_display_tip = "Schermo — stampa ciò che mostra l'area di disegno"
+area_window = "Finestra"
+area_window_tip = "Finestra — stampa la finestra indicata sul disegno"
+pick = "Indica finestra…"
+pick_tip = "Indica finestra — nasconde questa finestra di dialogo mentre si indicano due angoli sul disegno"
+paper = "Formato carta"
+paper_tip = "%s, %s × %s mm"
+orientation = "Orientamento"
+portrait = "Verticale"
+portrait_tip = "Verticale — il lato lungo del foglio è verticale"
+landscape = "Orizzontale"
+landscape_tip = "Orizzontale — il lato lungo del foglio è orizzontale"
+ink = "Colore"
+color = "Colori"
+color_tip = "Colori — stampa ogni oggetto nel suo colore"
+mono = "Bianco e nero"
+mono_tip = "Bianco e nero — stampa tutti gli oggetti in nero"
+sheet = "%s %s, %s × %s mm"
+scale = "Adatta al foglio: 1 mm = %s unità di disegno"
+nothing = "Niente da stampare in quest'area."
+cancel = "Annulla"
+cancel_tip = "Annulla — chiude la finestra senza stampare (Esc)"
+save = "Salva PDF…"
+save_tip = "Salva PDF — scrive la stampa in un file PDF"
+print = "Stampa"
+print_tip = "Stampa — invia la stampa alla stampante predefinita (Invio)"
+printing = "Invio alla stampante…"
+saving = "Salvataggio del PDF…"
+sent = "Stampa inviata alla stampante (%s)."
+saved = "Stampa salvata in %s."
+save_title = "Salva la stampa come PDF"
+pdf_files = "File PDF"
+print_failed = "Impossibile stampare: %s"
+save_failed = "Impossibile salvare il PDF: %s"
+no_printing = "La stampa non è disponibile su questo sistema. Salvare un PDF."

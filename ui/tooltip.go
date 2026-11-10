@@ -16,7 +16,7 @@ import (
 
 // commandKeys maps each command a key binding runs to the binding's action. Render registers the
 // handlers from it and commandTip reads the shortcut back through it.
-var commandKeys = map[string]gpui.Action{"U": actionUndo, "REDO": actionRedo}
+var commandKeys = map[string]gpui.Action{"U": actionUndo, "REDO": actionRedo, "PLOT": actionPlot}
 
 // shortcutLabels maps an action's name to the display form of its binding on this platform.
 var shortcutLabels = sync.OnceValue(func() map[string]string {

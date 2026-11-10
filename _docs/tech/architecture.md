@@ -5,7 +5,7 @@ kind: tech
 status: current
 summary: The layers of Cad-lite, the dependency rule between them, where each layer lives, and how an edit flows from input to pixels.
 read_when: you are adding a package, wondering where code belongs, or tempted to import the UI from the core
-updated: 2026-10-24
+updated: 2026-11-10
 verified: 2026-10-17
 code_anchors: [go.mod, cadmcp/dispatcher.go, cmd/cad/main.go, ui/workspace.go, cmdsys/inflight.go, cmdsys/session.go, i18n/i18n.go]
 depends_on: [prod-overview]
@@ -53,6 +53,11 @@ The UI framework under the shell is `internal/gpui`, with `internal/gpui/ebitenp
 
 `appenv` is a third leaf: it reads the `CADLITE_*` environment variables, falling back to the old
 `GODRAW_*` names. `settings`, `updater`, `cmd/cad` and the tests use it.
+
+`plot` lays a drawing out on paper and prints it: it imports `doc`, `geom` and `render` (a builder of
+its own makes the items), rasterises its preview with `rasterx`, writes PDF with the standard library
+and runs the system print spooler. It never imports gpui; only `ui` imports it, and `cmdsys` reaches
+the dialog through the `PlotHost` interface. See [Plot and print](../features/plot.md).
 
 `updater` is a second stdlib-only leaf: it finds, downloads, verifies and installs GitHub releases and
 restarts the application. Only `ui`, `cmd/cad` and `agentinstall` use it; it imports nothing of the project but `appenv`. See

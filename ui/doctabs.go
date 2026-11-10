@@ -67,6 +67,7 @@ func (ws *Workspace) newDocTab(d *doc.Drawing) *docTab {
 		}
 	})
 	s.SetDocumentHost(tabHost{ws: ws, t: t})
+	s.SetPlotHost(plotHost{ws: ws})
 	if ws.quit.f != nil {
 		s.SetQuitHandler(func() { ws.quitFrom(t) })
 	}
