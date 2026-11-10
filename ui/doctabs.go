@@ -67,7 +67,7 @@ func (ws *Workspace) newDocTab(d *doc.Drawing) *docTab {
 		}
 	})
 	s.SetDocumentHost(tabHost{ws: ws, t: t})
-	s.SetPlotHost(plotHost{ws: ws})
+	s.SetPlotHost(plotHost{ws: ws, t: t})
 	if ws.quit.f != nil {
 		s.SetQuitHandler(func() { ws.quitFrom(t) })
 	}
@@ -186,6 +186,7 @@ func (ws *Workspace) activate(t *docTab) {
 	// The Properties panel's open field is committed in the tab it belongs to before that tab goes.
 	ws.flushPropEdit(ws.win)
 	ws.closeTextEditor(ws.win)
+	ws.abandonPlotPick(ws.docTab)
 	ws.status().hudDrag.active = false
 	if cur := ws.docTab; cur != nil {
 		c := &cur.canvas
@@ -214,6 +215,7 @@ func (ws *Workspace) removeTab(t *docTab) {
 	if ws.agent != nil {
 		ws.agent.closeDocument(t)
 	}
+	ws.abandonPlotPick(t)
 	if t == ws.docTab {
 		next := i + 1
 		if next == len(ws.tabs) {

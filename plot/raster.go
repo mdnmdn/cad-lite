@@ -19,8 +19,17 @@ func (s *Sheet) Raster(pxPerMM float64) *image.NRGBA {
 	h := max(1, int(math.Round(s.Height*pxPerMM)))
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	draw.Draw(img, img.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	// Compose keeps items near the paper; the clamp is a safety net that keeps a stray coordinate
+	// inside the rasteriser's 26.6 fixed-point range.
+	const limit = 1 << 20
+	px := func(v float64) fixed.Int26_6 {
+		if v != v {
+			v = 0
+		}
+		return fixed.Int26_6(min(max(v, -limit), limit) * 64)
+	}
 	to := func(p geom.Vec2) fixed.Point26_6 {
-		return fixed.Point26_6{X: fixed.Int26_6(p.X * pxPerMM * 64), Y: fixed.Int26_6((s.Height - p.Y) * pxPerMM * 64)}
+		return fixed.Point26_6{X: px(p.X * pxPerMM), Y: px((s.Height - p.Y) * pxPerMM)}
 	}
 	clip := image.Rect(
 		int(math.Floor(s.Clip.Min.X*pxPerMM)), int(math.Floor((s.Height-s.Clip.Max.Y)*pxPerMM)),

@@ -7,7 +7,7 @@ summary: The PLOT command and its dialog — all or the selection; extents, disp
 read_when: you are changing PLOT or PRINT, the plot dialog, its preview, paper sizes or scales, how a drawing is placed on paper, the PDF it writes, the printer list or how a job reaches the printer
 updated: 2026-11-10
 verified: 2026-11-10
-code_anchors: [plot/plot.go, plot/paper.go, plot/scale.go, plot/pdf.go, plot/raster.go, plot/spool.go, plot/temp.go, cmdsys/plot_hook.go, cmdsys/commands/plot.go, ui/plot.go, ui/plot_view.go, ui/titlebar.go, settings/settings.go, settings/file.go]
+code_anchors: [plot/plot.go, plot/clip.go, plot/paper.go, plot/scale.go, plot/pdf.go, plot/raster.go, plot/spool.go, plot/temp.go, cmdsys/plot_hook.go, cmdsys/commands/plot.go, ui/plot.go, ui/plot_view.go, ui/titlebar.go, settings/settings.go, settings/file.go]
 depends_on: [tech-architecture, tech-rendering, tech-command-system]
 review_cycle: quarterly
 ---
@@ -37,8 +37,10 @@ open it in their PDF viewer to print through the system print dialog, or save it
   before any window was picked, or *Pick window…*, hides the dialog and runs PLOT's two prompts,
   `Specify first corner of plot window` and `Specify opposite corner`, with a rubber-band rectangle
   and object snaps; the dialog comes back on Window with the new box. Escape during the pick brings
-  the dialog back as it was. A picked window lasts until the dialog is opened afresh. Display and
-  Window clip what crosses their edge.
+  the dialog back as it was; starting another command from a button or a shortcut, switching to
+  another tab or closing this one ends the pick and leaves the dialog closed. A picked window lasts
+  until the dialog is opened afresh. A window with no width or height has nothing to plot. Display
+  and Window clip what crosses their edge.
 - **Paper.** A4, A3, A2, A1, A0, Letter, Legal and Tabloid, portrait or landscape, with a 10 mm
   margin on every side; nothing prints in the margin.
 - **Plot scale.** *Fit* scales the area uniformly to fill the paper inside the margins. A fixed
@@ -96,14 +98,17 @@ open it in their PDF viewer to print through the system print dialog, or save it
 `ui/titlebar.go` and the `cad-plot` binding run `PLOT` (`cmdsys/commands/plot.go`), which calls the
 tab's `plotHost` (`ui/plot.go`). `plotHost.ShowPlot` either starts a fresh dialog
 (`Workspace.startPlot` takes the selection and `View.Visible` and starts `listPrinters`) or returns
-from a pick with the box. The state is made on first use from the settings (`loadPlotPrefs`);
+from a pick with the box. The pick belongs to the tab it started in (`plotState.pickTab`):
+`Workspace.escape` marks a user's Escape, the one cancel that reopens the dialog, and
+`abandonPlotPick` ends a pick when its tab is left or closed. The state is made on first use from the settings (`loadPlotPrefs`);
 `setPlot`, `setScale` and `setJob` change it and save it back through `Workspace.change`
 (`savePlotPrefs`). `ui/plot_view.go` mounts the dialog in `Workspace.Render` through `withPlot`;
 each frame `refreshPlot` composes the sheet again only after a change marked it stale.
 
 `plot.Compose` picks the plottable handles, works out the area and places it: fit or the fixed
 scale times `UnitMM(INSUNITS)`, centred or at the offset; `Sheet.Overflow` records that the placed
-area leaves the printable box. It builds the items with a `render.Builder` of its own on a white
+area leaves the printable box, and `Sheet.add` (`plot/clip.go`) drops the items outside the clip box
+and cuts the ones that cross it (Liang–Barsky for strokes, Sutherland–Hodgman for fills). It builds the items with a `render.Builder` of its own on a white
 background, with `Lineweights` on and `Weight` 0, so a resolved lineweight comes back as pixels at
 96 dpi and converts exactly to millimetres; the style maps the colours afterwards. The view scale
 handed to the builder tessellates curves to 0.02 mm on paper. Items are in millimetres from the
@@ -118,7 +123,9 @@ writing the PDF, the save dialog, the viewer and printing run on goroutines whos
 default) on Linux, the BSDs and macOS, and `Get-CimInstance Win32_Printer` on Windows. `Print` runs
 `lp -n copies -d printer` (or `lpr -# copies -P printer`), and on Windows PowerShell's
 `Start-Process -Verb Print`, or `-Verb PrintTo` with the printer, once per copy, which prints
-through the program registered for PDFs. `OpenViewer` runs `xdg-open`, `open` or `rundll32
+through the program registered for PDFs; the file and the printer reach that script in the
+`CADLITE_PLOT_FILE` and `CADLITE_PLOT_PRINTER` environment variables, never inside it, so no quote
+in a path or a printer name can change it. `lpstat` is read from its standard output only. `OpenViewer` runs `xdg-open`, `open` or `rundll32
 url.dll,FileProtocolHandler`. `plot/temp.go` writes job PDFs to `cad-lite-plot` in the temporary
 folder and removes the ones older than a day before each new one, since a spooler or a viewer may
 read the file after the call returns. The browser build has neither spooler nor viewer.
@@ -133,8 +140,11 @@ read the file after the call returns. The browser build has neither spooler nor 
 - The viewer cannot start: `Could not open the PDF viewer: …`.
 - A save that fails shows `Could not save the PDF: …`; a cancelled save dialog changes nothing.
 - Without a file dialog (the browser, tests) Save PDF is disabled.
-- A settings file with an unknown plot style or area, or copies out of range, loads with the default
-  and a warning; an unknown paper or scale falls back to A4 or Fit.
+- A settings file with an unknown plot style or area loads with the default and a warning; copies
+  out of range are clamped to 1 to 99 with a warning; an unknown paper or scale falls back to A4 or
+  Fit.
+- A typed scale past 1:100000 or 100000:1 is not read. Geometry far off the paper (a fixed scale on
+  a large drawing) is cut at the clip box, so the sheet and the PDF stay small.
 
 ## Related docs
 

@@ -43,6 +43,8 @@ func (f *fakePrinter) count() int { f.mu.Lock(); defer f.mu.Unlock(); return len
 // plotRig is a workspace with the demo-like drawing, a fake printer and fd as its file dialog.
 func plotRig(t *testing.T, fd *fakeDialog) (*sHarness, *fakePrinter) {
 	t.Helper()
+	// Job PDFs go to the temporary folder; keep them out of the system's.
+	t.Setenv("TMPDIR", t.TempDir())
 	h := dialogRig(t, fd)
 	fp := &fakePrinter{}
 	h.ws.SetPrinter(fp.print)
@@ -408,5 +410,44 @@ func TestPlotOptionsAreSavedInTheSettings(t *testing.T) {
 	if p.opt.Paper.Name != "A3" || p.opt.Style != plot.StyleMono || p.opt.Scale != (plot.Scale{Paper: 1, Drawing: 50}) ||
 		p.opt.Area != plot.AreaDisplay || p.printer != "Plotter" || p.copies != 2 {
 		t.Fatalf("loaded %+v printer %q copies %d", p.opt, p.printer, p.copies)
+	}
+}
+
+func TestPlotPickEndsQuietlyWhenAnotherCommandOrTabTakesOver(t *testing.T) {
+	h, _, _ := tabsRig(t)
+	t.Setenv("TMPDIR", t.TempDir())
+	h.ws.SetPrinterLister(func(context.Context) ([]plot.Printer, error) { return nil, nil })
+	h.ctrl("p")
+	h.plotShown()
+	h.clickID("plot-pick")
+	// A command started from the UI during the pick (a ribbon button) replaces PLOT; the dialog
+	// stays closed.
+	h.ws.run("LINE", h.hw.Window())
+	if h.plotShown() || h.ws.Session().Active() != "LINE" || h.ws.plotState().picking {
+		t.Fatalf("LINE during a pick: dialog %v active %q picking %v", h.ws.PlotOpen(), h.ws.Session().Active(), h.ws.plotState().picking)
+	}
+	h.key("escape")
+	// A pick left by switching tabs ends there, and Ctrl+P in the other tab opens the dialog on it.
+	h.ctrl("p")
+	h.plotShown()
+	h.clickID("plot-pick")
+	first := h.ws.Session()
+	h.clickID("doc-tab-0")
+	if first.Active() != "" || h.ws.plotState().picking || h.plotShown() {
+		t.Fatalf("switching tabs: left tab active %q picking %v", first.Active(), h.ws.plotState().picking)
+	}
+	h.ctrl("p")
+	if !h.plotShown() || h.ws.Session().Active() != "" {
+		t.Fatalf("Ctrl+P in the other tab should open the dialog, not a pick: active %q", h.ws.Session().Active())
+	}
+	if p := h.ws.plotState(); p.sheet == nil || p.opt.What != plot.WhatAll {
+		t.Fatalf("the dialog should plot the new tab's drawing: err %v", p.err)
+	}
+	// Closing the tab a pick runs in ends it too.
+	h.clickID("plot-pick")
+	h.clickID("doc-tab-close-0")
+	h.frame()
+	if h.ws.plotState().picking || h.plotShown() {
+		t.Fatal("closing the picking tab should end the pick")
 	}
 }

@@ -17,7 +17,7 @@ commit. Read `_docs/_meta/authoring.md` first; it is short and self-sufficient.*
 
 ## Rules
 
-1. **Dependency boundaries.** Core packages (`geom`, `doc`, `spatial`, `fileio`, `render`, `cmdsys`)
+1. **Dependency boundaries.** Core packages (`geom`, `doc`, `spatial`, `fileio`, `render`, `cmdsys`, `plot`)
    never import `internal/gpui` or ebiten. Only `render/gpuirender`, `ui` and `cmd/` import gpui;
    only `cmd/` imports `internal/gpui/ebitenplatform`. Details: `_docs/tech/architecture.md`.
 2. **Model space is `float64`.** Narrow to `float32` only at the gpui boundary, after subtracting
@@ -48,6 +48,6 @@ commit. Read `_docs/_meta/authoring.md` first; it is short and self-sufficient.*
 
 ## Layout
 
-`geom`, `doc`, `spatial`, `fileio` (+`dxf`), `filedialog`, `render` (+`gpuirender`), `cmdsys` (+`commands`), `ui`,
+`geom`, `doc`, `spatial`, `fileio` (+`dxf`), `filedialog`, `render` (+`gpuirender`), `cmdsys` (+`commands`), `plot`, `ui`,
 `cmd/cad`, `tools/docs` and `internal/gpui`. Each package's purpose is in `_docs/tech/code-map.md`;
 build, test and run commands are in `_docs/tech/operations.md`.

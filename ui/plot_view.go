@@ -245,14 +245,7 @@ func (ws *Workspace) plotOverlay(w *gpui.Window, cx *gpui.App) gpui.IntoElement 
 				ws.closePlot(w)
 			}
 		case "enter":
-			// Enter in a field only ends the typing.
-			for _, in := range []*gpui.TextInput{p.scaleIn, p.offX, p.offY} {
-				if fh := in.FocusHandle(); fh != nil && fh.IsFocused(w) {
-					w.RequestFocus(p.focus)
-					w.StopPropagation()
-					return
-				}
-			}
+			// A text field keeps its own Enter, so this is Enter on the dialog itself.
 			ws.printPlot(w)
 		}
 		w.StopPropagation()

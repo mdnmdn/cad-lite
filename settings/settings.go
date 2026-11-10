@@ -113,11 +113,16 @@ type Layout struct {
 
 // Plot styles and areas, the values of Plot.Style and Plot.Area.
 const (
-	PlotColor    = "color"
-	PlotGray     = "gray"
-	PlotMono     = "mono"
-	PlotExtents  = "extents"
-	PlotDisplay  = "display"
+	PlotColor   = "color"
+	PlotGray    = "gray"
+	PlotMono    = "mono"
+	PlotExtents = "extents"
+	PlotDisplay = "display"
+)
+
+// Bounds of the plot options: MaxPlotCopy is plot.MaxCopies (this leaf package does not import
+// plot), MaxPlotShift bounds each offset in millimetres.
+const (
 	MaxPlotCopy  = 99
 	MaxPlotShift = 10000.0
 )

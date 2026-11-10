@@ -49,9 +49,13 @@ type printerList struct {
 // preview of the sheet they make, the printers and the print or save job in flight.
 type plotState struct {
 	open bool
-	// picking is set while PLOT asks for the corners of a window, with the dialog hidden.
-	picking bool
-	opt     plot.Options
+	// picking is set while PLOT asks for the corners of a window in pickTab, with the dialog
+	// hidden; escaping is set while the user's Escape cancels a command, the one way out of a pick
+	// that brings the dialog back.
+	picking  bool
+	pickTab  *docTab
+	escaping bool
+	opt      plot.Options
 	// printer is the chosen queue, "" for the system default; copies is 1 to plot.MaxCopies.
 	printer string
 	copies  int
@@ -192,24 +196,35 @@ func (ws *Workspace) SetViewer(v Viewer) { ws.viewer = v }
 func (ws *Workspace) PlotOpen() bool { return ws.plt != nil && ws.plt.open }
 
 // plotHost is the cmdsys.PlotHost of one tab's session: PLOT reaches the dialog through it.
-type plotHost struct{ ws *Workspace }
+type plotHost struct {
+	ws *Workspace
+	t  *docTab
+}
 
-// PlotPicking reports whether the dialog asked for a window to be picked.
-func (h plotHost) PlotPicking() bool { return h.ws.plt != nil && h.ws.plt.picking }
+// PlotPicking reports whether the dialog asked this tab for a window to be picked.
+func (h plotHost) PlotPicking() bool {
+	p := h.ws.plt
+	return p != nil && p.picking && p.pickTab == h.t
+}
 
-// ShowPlot opens the dialog, afresh when window is nil and no pick was in progress, or back from a
-// pick with the picked window (nil when it was cancelled).
+// ShowPlot opens the dialog afresh when window is nil and no pick was in progress in this tab, or
+// ends a pick: with the picked window, or with nil when it was cancelled. A pick cancelled by the
+// user's Escape brings the dialog back as it was; one cancelled because another command started,
+// the tab was switched or closed, leaves it closed.
 func (h plotHost) ShowPlot(window *geom.Box2) {
 	ws := h.ws
 	p := ws.plotState()
 	switch {
-	case p.picking:
-		p.picking = false
+	case p.picking && p.pickTab == h.t:
+		p.picking, p.pickTab = false, nil
 		if window != nil {
 			p.window = *window
 			p.opt.Area = plot.AreaWindow
+		} else if !p.escaping {
+			return
 		}
 	default:
+		ws.abandonPlotPick(p.pickTab)
 		ws.startPlot()
 	}
 	p.open, p.stale, p.focusWanted, p.message = true, true, true, ""
@@ -325,16 +340,39 @@ func (ws *Workspace) setJob(w *gpui.Window, printer string, copies int) {
 	w.Refresh()
 }
 
-// pickPlotWindow hides the dialog and runs PLOT, which asks for the window's corners and brings
-// the dialog back.
+// pickPlotWindow hides the dialog and runs PLOT in the active tab, which asks for the window's
+// corners and brings the dialog back.
 func (ws *Workspace) pickPlotWindow(w *gpui.Window) {
 	p := ws.plotState()
 	if p.busy {
 		return
 	}
-	p.open, p.picking = false, true
+	p.open, p.picking, p.pickTab = false, true, ws.docTab
 	ws.focusCommandLine(w)
 	ws.run("PLOT", w)
+}
+
+// abandonPlotPick ends a window pick running in tab t, if there is one, without bringing the
+// dialog back: the tab is being left or closed.
+func (ws *Workspace) abandonPlotPick(t *docTab) {
+	p := ws.plt
+	if p == nil || !p.picking || p.pickTab != t || t == nil {
+		return
+	}
+	if t.session.Active() == "PLOT" {
+		t.session.Escape() // PLOT's Cancel ends the pick through ShowPlot, quietly
+	}
+	p.picking, p.pickTab = false, nil
+}
+
+// syncPlotFields shows the options in the text fields again, after typing that a job in flight
+// did not apply.
+func (p *plotState) syncPlotFields() {
+	if p.opt.Scale.Fixed() {
+		p.scaleIn.SetText(p.opt.Scale.String())
+	}
+	p.offX.SetText(mm(p.opt.Offset.X))
+	p.offY.SetText(mm(p.opt.Offset.Y))
 }
 
 // closePlot hides the dialog, keeping its options for the next time.
@@ -509,6 +547,7 @@ func (ws *Workspace) pollPlot(w *gpui.Window) {
 	select {
 	case r := <-p.results:
 		p.busy, p.message = false, ""
+		p.syncPlotFields()
 		switch {
 		case r.err != nil:
 			p.message = r.err.Error()

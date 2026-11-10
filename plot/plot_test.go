@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -209,27 +210,34 @@ func TestRasterDrawsInkOnWhitePaper(t *testing.T) {
 func TestPrintCommandPerPlatform(t *testing.T) {
 	all := func(string) bool { return true }
 	none := func(string) bool { return false }
-	if n, args, _ := printCommand("linux", "/t/a.pdf", Job{Title: "a"}, all); n != "lp" || strings.Join(args, " ") != "-t a -n 1 -- /t/a.pdf" {
+	if n, args, _, _ := printCommand("linux", "/t/a.pdf", Job{Title: "a"}, all); n != "lp" || strings.Join(args, " ") != "-t a -n 1 -- /t/a.pdf" {
 		t.Fatalf("linux: %s %v", n, args)
 	}
-	if n, args, _ := printCommand("linux", "/t/a.pdf", Job{Title: "a", Printer: "office", Copies: 3}, all); strings.Join(args, " ") != "-t a -n 3 -d office -- /t/a.pdf" {
+	if n, args, _, _ := printCommand("linux", "/t/a.pdf", Job{Title: "a", Printer: "office", Copies: 3}, all); strings.Join(args, " ") != "-t a -n 3 -d office -- /t/a.pdf" {
 		t.Fatalf("linux, printer and copies: %s %v", n, args)
 	}
-	if n, args, _ := printCommand("darwin", "/t/a.pdf", Job{Title: "a", Printer: "p", Copies: 500}, func(s string) bool { return s == "lpr" }); n != "lpr" || strings.Join(args, " ") != "-T a -# 99 -P p /t/a.pdf" {
+	if n, args, _, _ := printCommand("darwin", "/t/a.pdf", Job{Title: "a", Printer: "p", Copies: 500}, func(s string) bool { return s == "lpr" }); n != "lpr" || strings.Join(args, " ") != "-T a -# 99 -P p /t/a.pdf" {
 		t.Fatalf("lpr fallback: %s %v", n, args)
 	}
-	if _, _, err := printCommand("linux", "/t/a.pdf", Job{}, none); !errors.Is(err, ErrNoPrinting) {
+	if _, _, _, err := printCommand("linux", "/t/a.pdf", Job{}, none); !errors.Is(err, ErrNoPrinting) {
 		t.Fatalf("no spooler: %v", err)
 	}
-	n, args, _ := printCommand("windows", `C:\it's.pdf`, Job{Copies: 2}, none)
-	if n != "powershell" || !strings.Contains(args[len(args)-1], `'C:\it''s.pdf' -Verb Print`) || !strings.Contains(args[len(args)-1], "-lt 2;") {
-		t.Fatalf("windows: %s %v", n, args)
+	// Windows: the path and the printer travel in the environment, never in the script, so quotes
+	// of any kind in them cannot change it.
+	path, printer := `C:\Users\O’Brien's\a.pdf`, "Bob’s \"HP\"; Remove-Item x"
+	n, args, env, _ := printCommand("windows", path, Job{Copies: 2, Printer: printer}, none)
+	script := args[len(args)-1]
+	if n != "powershell" || strings.Contains(script, "Brien") || strings.Contains(script, "Bob") || !strings.Contains(script, "-lt 2;") ||
+		!strings.Contains(script, "-Verb PrintTo") {
+		t.Fatalf("windows script: %s", script)
 	}
-	_, args, _ = printCommand("windows", `C:\a.pdf`, Job{Printer: "Bob's HP"}, none)
-	if !strings.Contains(args[len(args)-1], `-Verb PrintTo -ArgumentList '"Bob''s HP"'`) {
-		t.Fatalf("windows PrintTo: %v", args)
+	if !slices.Contains(env, envPlotFile+"="+path) || !slices.Contains(env, envPlotPrinter+"=Bob’s HP; Remove-Item x") {
+		t.Fatalf("windows env: %v", env)
 	}
-	if _, _, err := printCommand("js", "a.pdf", Job{}, all); !errors.Is(err, ErrNoPrinting) {
+	if _, args, env, _ := printCommand("windows", path, Job{}, none); !strings.Contains(args[len(args)-1], "-Verb Print ") || strings.Contains(args[len(args)-1], "PrintTo") || len(env) != 1 {
+		t.Fatalf("windows default printer: %v %v", args, env)
+	}
+	if _, _, _, err := printCommand("js", "a.pdf", Job{}, all); !errors.Is(err, ErrNoPrinting) {
 		t.Fatalf("browser: %v", err)
 	}
 }
@@ -252,13 +260,13 @@ func TestListPrintersReadsLpstat(t *testing.T) {
 	old := func(_ context.Context, name string, args ...string) ([]byte, error) {
 		switch strings.Join(args, " ") {
 		case "-a":
-			return []byte("hp accepting requests since Mon 01 Jan\n"), nil
+			return []byte("hp accepting requests since Mon 01 Jan\nold not accepting requests since Tue\n\tPaused by admin\n"), nil
 		case "-d":
 			return []byte("no system default destination\n"), nil
 		}
 		return nil, errors.New("lpstat: invalid option -e")
 	}
-	if ps, _ := listPrinters(context.Background(), "darwin", all, old); len(ps) != 1 || ps[0] != (Printer{"hp", false}) {
+	if ps, _ := listPrinters(context.Background(), "darwin", all, old); len(ps) != 2 || ps[0] != (Printer{"hp", false}) || ps[1].Name != "old" {
 		t.Fatalf("lpstat -a fallback: %+v", ps)
 	}
 	win := func(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -395,4 +403,82 @@ func redItems(s *Sheet) []Item {
 		}
 	}
 	return out
+}
+
+// within reports whether every point of every item lies inside box.
+func within(s *Sheet, box geom.Box2) bool {
+	for _, it := range s.Items {
+		for _, p := range it.Points {
+			if !box.Contains(p) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func TestComposeAtExtremeScalesStaysOnThePaper(t *testing.T) {
+	d, _ := sample(t)
+	a4, _ := PaperByName("A4")
+	s, err := Compose(d, Options{Paper: a4, Scale: Scale{MaxRatio, 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Overflow || !within(s, s.Clip.Grow(5)) {
+		t.Fatal("items far off the paper should be cut at the clip box")
+	}
+	start := time.Now()
+	s.Raster(2)
+	if el := time.Since(start); el > 2*time.Second {
+		t.Fatalf("raster took %v", el)
+	}
+	// A georeferenced drawing in metres with a stray entity near the origin, at 1:100.
+	g := doc.New()
+	g.Header.InsUnits = 6
+	tx, _ := g.Begin()
+	tx.Add(&doc.Line{Start: geom.V(0, 0), End: geom.V(1, 1)})
+	tx.Add(&doc.Circle{Center: geom.V(500000, 5000000), Radius: 50})
+	tx.Commit()
+	s, err = Compose(g, Options{Paper: a4, Scale: Scale{1, 100}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !within(s, s.Clip.Grow(5)) {
+		t.Fatal("the georeferenced plot left the paper")
+	}
+	s.Raster(2)
+	if _, ok := ParseScale("1e7:1"); ok {
+		t.Fatal("a ratio past MaxRatio should be refused")
+	}
+}
+
+func TestComposeRefusesAWindowWithoutHeight(t *testing.T) {
+	d, _ := sample(t)
+	a4, _ := PaperByName("A4")
+	if _, err := Compose(d, Options{Paper: a4, Area: AreaWindow, Window: geom.BoxOf(geom.V(-10, 0), geom.V(110, 0))}); !errors.Is(err, ErrNothing) {
+		t.Fatalf("a window of no height: %v, want ErrNothing", err)
+	}
+}
+
+func TestClipCutsPolylinesAndPolygons(t *testing.T) {
+	box := geom.BoxOf(geom.V(0, 0), geom.V(10, 10))
+	// In, out and back in: two runs.
+	pts, starts := clipPolyline([]geom.Vec2{geom.V(5, 5), geom.V(20, 5), geom.V(20, 8), geom.V(5, 8)}, box, nil, nil)
+	if len(starts) != 2 || pts[1] != geom.V(10, 5) || pts[starts[1]] != geom.V(10, 8) || pts[len(pts)-1] != geom.V(5, 8) {
+		t.Fatalf("pts %v starts %v", pts, starts)
+	}
+	if pts, _ := clipPolyline([]geom.Vec2{geom.V(20, 20), geom.V(30, 30)}, box, nil, nil); len(pts) != 0 {
+		t.Fatalf("outside segment kept: %v", pts)
+	}
+	poly := clipPolygon([]geom.Vec2{geom.V(-5, -5), geom.V(5, -5), geom.V(5, 5), geom.V(-5, 5)}, box)
+	b := geom.BoxOf(poly...)
+	if b != geom.BoxOf(geom.V(0, 0), geom.V(5, 5)) {
+		t.Fatalf("clipped square %v", poly)
+	}
+	s := &Sheet{Clip: box}
+	s.add(Item{Points: []geom.Vec2{geom.V(1, 1), geom.V(9, 1), geom.V(9, 9)}, Closed: true, Width: 0.5})
+	s.add(Item{Points: []geom.Vec2{geom.V(1, 1), geom.V(1e9, 1)}, Closed: true, Width: 0.5})
+	if len(s.Items) != 2 || !s.Items[0].Closed || s.Items[1].Closed || !within(s, box.Grow(1.5)) {
+		t.Fatalf("items %+v", s.Items)
+	}
 }

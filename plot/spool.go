@@ -2,6 +2,7 @@ package plot
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -37,16 +38,24 @@ type Job struct {
 	Copies int
 }
 
-// runner runs a program and returns its output; tests replace it.
+// runner runs a program and returns its standard output; tests replace it.
 type runner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
 func runProgram(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return runWith(ctx, nil, name, args...)
+}
+
+// runWith runs a program with env added to the environment and returns its standard output; a
+// failure carries what it wrote on standard error.
+func runWith(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	// lpstat's messages are parsed: keep them in English.
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANG=C")
-	out, err := cmd.CombinedOutput()
+	cmd.Env = append(append(os.Environ(), "LC_ALL=C", "LANG=C"), env...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return out, fmt.Errorf("%s: %s", name, msg)
 		}
 		return out, fmt.Errorf("%s: %w", name, err)
@@ -60,34 +69,40 @@ func has(name string) bool { _, err := exec.LookPath(name); return err == nil }
 // each platform ships: lp (or lpr) through CUPS on Linux, the BSDs and macOS, and PowerShell's
 // PrintTo verb on Windows, which goes through the program registered to print PDFs.
 func Print(ctx context.Context, path string, job Job) error {
-	name, args, err := printCommand(runtime.GOOS, path, job, has)
+	name, args, env, err := printCommand(runtime.GOOS, path, job, has)
 	if err != nil {
 		return err
 	}
-	_, err = runProgram(ctx, name, args...)
+	_, err = runWith(ctx, env, name, args...)
 	return err
 }
 
 // copies clamps n to 1..MaxCopies.
 func copies(n int) int { return min(max(n, 1), MaxCopies) }
 
-// psQuote is s as a PowerShell single-quoted string.
-func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+// Environment variables that hand the file and the printer to the Windows print script, so no
+// name or path is ever parsed as PowerShell.
+const (
+	envPlotFile    = "CADLITE_PLOT_FILE"
+	envPlotPrinter = "CADLITE_PLOT_PRINTER"
+)
 
-// printCommand is the program and arguments that print path on goos; has reports whether a
-// program is installed.
-func printCommand(goos, path string, job Job, has func(string) bool) (string, []string, error) {
+// printCommand is the program, arguments and extra environment that print path on goos; has
+// reports whether a program is installed.
+func printCommand(goos, path string, job Job, has func(string) bool) (string, []string, []string, error) {
 	n := copies(job.Copies)
 	switch goos {
 	case "windows":
-		start := "Start-Process -FilePath " + psQuote(path) + " -Verb Print"
+		start := "Start-Process -FilePath $env:" + envPlotFile + " -Verb Print"
+		env := []string{envPlotFile + "=" + path}
 		if job.Printer != "" {
-			// PrintTo takes the printer as its argument, quoted for the program's command line.
-			start = "Start-Process -FilePath " + psQuote(path) + " -Verb PrintTo -ArgumentList " + psQuote(`"`+job.Printer+`"`)
+			// PrintTo takes the printer as its argument, quoted for the PDF program's command line.
+			start = "Start-Process -FilePath $env:" + envPlotFile + " -Verb PrintTo -ArgumentList ('\"' + $env:" + envPlotPrinter + " + '\"')"
+			env = append(env, envPlotPrinter+"="+strings.ReplaceAll(job.Printer, `"`, ""))
 		}
-		return "powershell", []string{"-NoProfile", "-NonInteractive", "-Command", "for ($i = 0; $i -lt " + strconv.Itoa(n) + "; $i++) { " + start + " }"}, nil
+		return "powershell", []string{"-NoProfile", "-NonInteractive", "-Command", "for ($i = 0; $i -lt " + strconv.Itoa(n) + "; $i++) { " + start + " }"}, env, nil
 	case "js", "wasip1", "ios", "android":
-		return "", nil, ErrNoPrinting
+		return "", nil, nil, ErrNoPrinting
 	}
 	switch {
 	case has("lp"):
@@ -95,15 +110,15 @@ func printCommand(goos, path string, job Job, has func(string) bool) (string, []
 		if job.Printer != "" {
 			args = append(args, "-d", job.Printer)
 		}
-		return "lp", append(args, "--", path), nil
+		return "lp", append(args, "--", path), nil, nil
 	case has("lpr"):
 		args := []string{"-T", job.Title, "-#", strconv.Itoa(n)}
 		if job.Printer != "" {
 			args = append(args, "-P", job.Printer)
 		}
-		return "lpr", append(args, path), nil
+		return "lpr", append(args, path), nil, nil
 	}
-	return "", nil, ErrNoPrinting
+	return "", nil, nil, ErrNoPrinting
 }
 
 // Printers lists the system's print queues, the default one marked, in the order the system gives.
@@ -139,8 +154,11 @@ func listPrinters(ctx context.Context, goos string, has func(string) bool, run r
 	if out, err := run(ctx, "lpstat", "-e"); err == nil {
 		names = lines(out)
 	} else if out, err := run(ctx, "lpstat", "-a"); err == nil {
-		for _, l := range lines(out) {
-			names = append(names, strings.Fields(l)[0])
+		// "name accepting requests since ..."; an indented line under it is a reason, not a queue.
+		for _, l := range strings.Split(string(out), "\n") {
+			if f := strings.Fields(l); len(f) > 0 && l[0] != ' ' && l[0] != '\t' {
+				names = append(names, f[0])
+			}
 		}
 	}
 	def := ""

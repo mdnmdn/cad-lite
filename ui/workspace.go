@@ -120,6 +120,11 @@ func (ws *Workspace) escape(w *gpui.Window) {
 	ws.recent.menu = false
 	ws.dismissStart()
 	ws.input.SetText("")
+	// Escape out of a plot window pick brings the plot dialog back (plotHost.ShowPlot).
+	if ws.plt != nil {
+		ws.plt.escaping = true
+		defer func() { ws.plt.escaping = false }()
+	}
 	ws.session.Escape()
 	w.Refresh()
 }

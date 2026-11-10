@@ -11,6 +11,9 @@ type Scale struct {
 	Paper, Drawing float64
 }
 
+// MaxRatio bounds a fixed scale: neither number, nor either over the other, may exceed it.
+const MaxRatio = 1e5
+
 // Fit is the scale that fits the area on the paper.
 var Fit = Scale{}
 
@@ -30,7 +33,8 @@ func (s Scale) String() string {
 
 func num1(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
-// ParseScale reads "fit", "1:50", "1/50" or "1=50"; both numbers must be positive and finite.
+// ParseScale reads "fit", "1:50", "1/50" or "1=50"; both numbers must be positive and within
+// MaxRatio, as must their ratio.
 func ParseScale(text string) (Scale, bool) {
 	t := strings.TrimSpace(strings.ToLower(text))
 	if t == "fit" || t == "" {
@@ -49,7 +53,7 @@ func ParseScale(text string) (Scale, bool) {
 	p, err1 := strconv.ParseFloat(strings.TrimSpace(a), 64)
 	d, err2 := strconv.ParseFloat(strings.TrimSpace(b), 64)
 	s := Scale{p, d}
-	if err1 != nil || err2 != nil || !s.Fixed() || p > 1e9 || d > 1e9 {
+	if err1 != nil || err2 != nil || !s.Fixed() || p > MaxRatio || d > MaxRatio || p/d > MaxRatio || d/p > MaxRatio {
 		return Scale{}, false
 	}
 	return s, true

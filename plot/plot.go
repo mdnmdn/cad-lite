@@ -205,7 +205,7 @@ func Compose(d *doc.Drawing, opt Options) (*Sheet, error) {
 	pw, ph := w-2*m, h-2*m
 	aw, ah := area.Max.X-area.Min.X, area.Max.Y-area.Min.Y
 	if aw <= 0 && ah <= 0 {
-		// One point (a lone dot, or a window of zero size): show a millimetre around it.
+		// One point (a lone dot, or a window of zero size): show half a drawing unit around it.
 		area = area.Grow(0.5)
 		aw, ah = 1, 1
 	}
@@ -235,7 +235,8 @@ func Compose(d *doc.Drawing, opt Options) (*Sheet, error) {
 	if opt.Area != AreaExtents {
 		s.Clip = intersect(printable, placed)
 	}
-	if s.Clip.IsEmpty() {
+	if s.Clip.Max.X-s.Clip.Min.X <= 0 || s.Clip.Max.Y-s.Clip.Min.Y <= 0 {
+		// Nothing of the area is on the paper, or it is a window with no width or height.
 		return nil, ErrNothing
 	}
 
@@ -263,15 +264,15 @@ func Compose(d *doc.Drawing, opt Options) (*Sheet, error) {
 			a, c := it.Points[0], it.Points[1]
 			box := []geom.Vec2{toPaper(a), toPaper(geom.V(c.X, a.Y)), toPaper(c), toPaper(geom.V(a.X, c.Y))}
 			if col.A > 0 {
-				s.Items = append(s.Items, Item{Points: box, Color: col, Fill: true})
+				s.add(Item{Points: box, Color: col, Fill: true})
 			}
 			if out.A > 0 {
-				s.Items = append(s.Items, Item{Points: box, Color: out, Width: width, Closed: true})
+				s.add(Item{Points: box, Color: out, Width: width, Closed: true})
 			}
 		case render.ItemFill:
-			s.Items = append(s.Items, Item{Points: mapPoints(it.Points, toPaper), Color: col, Fill: true})
+			s.add(Item{Points: mapPoints(it.Points, toPaper), Color: col, Fill: true})
 		default:
-			s.Items = append(s.Items, Item{Points: mapPoints(it.Points, toPaper), Starts: it.Starts, Color: col, Width: width, Closed: it.Closed})
+			s.add(Item{Points: mapPoints(it.Points, toPaper), Starts: it.Starts, Color: col, Width: width, Closed: it.Closed})
 		}
 	}
 	return s, nil
